@@ -109,3 +109,46 @@ Feature: Projects hold a body of work inside a workspace
     Given a project named "transcript"
     When the caller declares a job
     Then the job works in nothing, and the session doing it is asked for no pull request
+
+  # One argument was read as a repository and written to the project the operator was standing in.
+  # The answer was the sentence a read prints, so an overwrite came back as a confirmation that the
+  # setting was correct. A project address and a repository address are the same shape, so the
+  # command cannot tell them apart by looking. It can ask the system, and where the system holds a
+  # project by that address the command has two readings and takes neither.
+  Scenario: An address that also names a project is refused, and the setting it was checking survives
+    Given a project named "house-bills"
+    And a second project named "other"
+    And the system listens on an address the tool can dial
+    And the operator is standing in the project "other"
+    And the project the operator is standing in works in "forge/other-repo", which is private
+    When the operator types the address of the project "house-bills" as the whole command
+    Then the command fails
+    And the refusal says how to read that project and how to record it here
+    And reading the project "other" back through the tool says it works in "forge/other-repo", which is private
+    And reading the project "house-bills" back through the tool says it has no repository
+
+  # The intent in the fault had no spelling at all. Two arguments always record, and the tool takes
+  # no flags, so an operator who wanted to look at another project could only reach the form that
+  # overwrites one.
+  Scenario: A named project is read without recording anything
+    Given a project named "house-bills"
+    And a second project named "other"
+    And the system listens on an address the tool can dial
+    And the operator is standing in the project "other"
+    And the project the operator is standing in works in "forge/other-repo", which is private
+    When the operator reads the project "house-bills" through the tool
+    Then the command succeeds
+    And reading the project "other" back through the tool says it works in "forge/other-repo", which is private
+
+  # A read and a write printed one sentence between them. The write now says it wrote, and what it
+  # wrote over, and it keeps the kind rather than clearing it: correcting an address used to drop a
+  # project from private to public and say the minutes were free.
+  Scenario: A write says what it recorded and what it changed from, and keeps the kind
+    Given a project named "house-bills"
+    And the system listens on an address the tool can dial
+    And the operator is standing in the project "house-bills"
+    And the project the operator is standing in works in "forge/one", which is private
+    When the operator records "forge/two" as the repository, saying no kind
+    Then the command succeeds
+    And it says it recorded "forge/two", and that the project worked in "forge/one" before
+    And reading the project "house-bills" back through the tool says it works in "forge/two", which is private

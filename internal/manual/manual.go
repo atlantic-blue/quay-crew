@@ -45,10 +45,14 @@ commands:
   project create [<workspace>/]<name>     create a project and move into it
   project list [<workspace>]              list projects
   project repository [<address>]          say where this project's work lands, and what kind of
-    [<owner>/<name>] [public|private]     repository that is. On its own it reads it back. A job
-                                          declared here works in it and ends in a pull request
-                                          against it. Public unless you say otherwise, because a
-                                          pipeline's minutes are free on a public repository
+    [<owner>/<name>] [public|private]     repository that is. On its own it reads it back. One
+                                          address is a write, and it is refused where that address
+                                          also names a project. A job declared here works in it and
+                                          ends in a pull request against it. Public unless you say
+                                          otherwise, because a pipeline's minutes are free on a
+                                          public repository, and a kind you leave out is the kind
+                                          the project already holds
+  project repository show [<address>]     read where a project's work lands, recording nothing
   project delete [<workspace>/]<project>  remove it and the sessions inside it, confirmed the same way
   flow import <file>                      store an automation graph the system can run
   flow start [<address>] <graph>          begin a run of it in a project
