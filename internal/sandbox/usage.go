@@ -3,11 +3,14 @@ package sandbox
 import (
 	"bufio"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/atlantic-blue/krewe/internal/contextspend"
 )
 
 // Usage is what a conversation has cost, in tokens.
@@ -74,6 +77,9 @@ type transcriptLine struct {
 			CacheRead    int64 `json:"cache_read_input_tokens"`
 			CacheWritten int64 `json:"cache_creation_input_tokens"`
 		} `json:"usage"`
+		// Content is the message itself, left undecoded here because it is a string on some records
+		// and a list of blocks on others. spend.go reads it, and only the accounting needs it.
+		Content json.RawMessage `json:"content"`
 	} `json:"message"`
 }
 
@@ -115,6 +121,26 @@ func (s Storage) ConversationContext(cfg Config, conversation string) Usage {
 		return Usage{}
 	}
 	return usageCache.of(path).carried
+}
+
+// ConversationSpend is where this conversation's context went: the files it read, what every other
+// tool returned, its own words, and what it was told.
+//
+// It is what the share of a full window is missing. A session at eighty per cent says nothing about
+// what to change; this says which of the four to look at first.
+//
+// The whole conversation rather than only the live window, because compaction is invisible from
+// here: the transcript keeps every record and never says which of them the model still holds. So
+// this answers what filled the context over the session's life, and Check holds it against the
+// model's own count of the same span.
+//
+// Empty for a conversation nobody has spoken in, and for anything this cannot read.
+func (s Storage) ConversationSpend(cfg Config, conversation string) contextspend.Spend {
+	path, found := s.transcript(cfg, conversation)
+	if !found {
+		return contextspend.Spend{}
+	}
+	return usageCache.of(path).spend
 }
 
 // transcript is where the model keeps a conversation, and whether it is there. The working directory
@@ -169,8 +195,12 @@ type counted struct {
 	// carried is what the last answer in the conversation sent, which is how full the window is now
 	// rather than what the whole conversation has cost.
 	carried Usage
-	size    int64
-	when    int64
+	// spend is where the conversation's characters went, by category. It comes out of the same read
+	// as the two above, because a listing that asked for it separately would parse every transcript
+	// in the system a second time on every refresh.
+	spend contextspend.Spend
+	size  int64
+	when  int64
 }
 
 type transcripts struct {
@@ -191,35 +221,32 @@ func (t *transcripts) of(path string) counted {
 		return cached
 	}
 
-	total, carried := sum(path)
-	read := counted{usage: total, carried: carried, size: info.Size(), when: info.ModTime().UnixNano()}
+	total, carried, spent := sum(path)
+	read := counted{usage: total, carried: carried, spend: spent,
+		size: info.Size(), when: info.ModTime().UnixNano()}
 	t.mu.Lock()
 	t.read[path] = read
 	t.mu.Unlock()
 	return read
 }
 
-// sum reads a transcript once and answers two questions: what the whole conversation cost, and what
-// its last answer carried.
+// sum reads a transcript once and answers three questions: what the whole conversation cost, what
+// its last answer carried, and where its characters went.
 //
 // A line it cannot read is skipped rather than failing the file. The tool writes this as it goes, so
 // the last line of a live conversation is regularly half written, and refusing to count a whole
 // conversation because of that would mean the number only ever appeared when nothing was happening.
-func sum(path string) (total, carried Usage) {
+func sum(path string) (total, carried Usage, where contextspend.Spend) {
 	file, err := os.Open(path)
 	if err != nil {
-		return Usage{}, Usage{}
+		return Usage{}, Usage{}, contextspend.Spend{}
 	}
 	defer func() { _ = file.Close() }()
 
-	lines := bufio.NewScanner(file)
-	// A conversation record carries whole messages, so the default limit is not enough.
-	lines.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
-	for lines.Scan() {
-		var record transcriptLine
-		if err := json.Unmarshal(lines.Bytes(), &record); err != nil {
-			continue
-		}
+	// calls names each tool the session asked for, so the result that comes back can be read as a
+	// file read or as any other tool. The name is only ever on the call, never on the result.
+	calls := map[string]call{}
+	forEachRecord(file, func(record transcriptLine) {
 		spent := Usage{
 			Input:        record.Message.Usage.Input,
 			Output:       record.Message.Usage.Output,
@@ -233,8 +260,30 @@ func sum(path string) (total, carried Usage) {
 		if record.Type == assistantRecord && !record.IsSidechain && !spent.Empty() {
 			carried = spent
 		}
+		// A sub agent's messages fill its own window, so they are left out of this one for the same
+		// reason they are left out of the figure above.
+		if !record.IsSidechain {
+			countSpend(&where, record, calls)
+		}
+	})
+	return total, carried, where
+}
+
+// forEachRecord reads a transcript one record at a time.
+//
+// A line it cannot read is skipped rather than failing the file, for the reason sum gives: the tool
+// writes this as it goes, so the last line of a live conversation is regularly half written.
+func forEachRecord(from io.Reader, each func(transcriptLine)) {
+	lines := bufio.NewScanner(from)
+	// A conversation record carries whole messages, so the default limit is not enough.
+	lines.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	for lines.Scan() {
+		var record transcriptLine
+		if err := json.Unmarshal(lines.Bytes(), &record); err != nil {
+			continue
+		}
+		each(record)
 	}
-	return total, carried
 }
 
 // assistantRecord is the record type carrying what an answer cost. A user record and a summary carry

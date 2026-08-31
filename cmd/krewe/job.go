@@ -475,6 +475,7 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		fmt.Fprintf(out, "\nanswer:\n%s\n", one.GetAnswer())
 	}
 	if one.GetSession() != "" {
+		showContextSpend(ctx, client, one.GetSession(), out)
 		fmt.Fprintf(out, "\nread what it did with krewe task list %s\n", display.ShortID(one.GetSession()))
 	}
 	return nil
@@ -511,6 +512,38 @@ func escalatedTo(one *quaycrewv1.Job) string {
 		return "and stopped"
 	}
 	return job.Escalating(route)
+}
+
+// showContextSpend prints where the session this job ran in spent its context.
+//
+// It is on the job rather than only on the session listing because the job is what a person reads
+// after the work is over, and this is the number that says why it took what it took: whether the
+// session filled up on the code it had to read, on tool output it read once, or on its own repeated
+// attempts.
+//
+// The check under it holds the breakdown against the model's own count of the same context. A
+// breakdown whose parts do not add up to the model's total is a number that will be trusted and is
+// wrong, so the comparison is printed rather than kept.
+//
+// A session the system cannot read says nothing. A job whose work is elsewhere should not fail to
+// print because one number is missing.
+func showContextSpend(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
+	id string, out io.Writer,
+) {
+	resp, err := client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: id})
+	if err != nil {
+		return
+	}
+	session := resp.GetSession()
+	spent := display.Spend(session)
+	if spent.Empty() {
+		return
+	}
+	fmt.Fprintf(out, "\ncontext spent in session %s:\n", display.ShortID(session.GetId()))
+	for _, line := range spent.Lines() {
+		fmt.Fprintf(out, "  %s\n", line)
+	}
+	fmt.Fprintf(out, "  %s\n", spent.Against(session.GetContextWindow().GetUsed()).Line())
 }
 
 // runJobStop halts job that has not ended. The reason is what somebody reading it tomorrow has.

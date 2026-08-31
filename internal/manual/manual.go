@@ -96,7 +96,8 @@ commands:
     [--parent <job>] [--roots]            every project. Narrow it further with --phase, --label,
                                           --parent or --roots
   job show <job>                          one job whole: what it is, where it got to,
-                                          why it stopped, and what came back
+                                          why it stopped, what came back, and where its session
+                                          spent its context
   job stop <job> [<reason>]               halt a job that has not ended, keeping the reason
   job ask "<question>"                    put a question to a person about the job you are running,
                                           when a decision no measurement settles is in your way.
@@ -159,9 +160,12 @@ commands:
                                           status column says what is inside each sandbox: awake is a
                                           conversation running with nobody watching it, attached is
                                           somebody in it, idle is an empty container, and unknown is
-                                          the system asking the sandbox and not being told. Last
-                                          moved first, so the session you were last working in is at
-                                          the top and the age column reads down the list
+                                          the system asking the sandbox and not being told. The
+                                          spent on column says what filled the context: reads is
+                                          files, tools is what every other tool returned, turns is
+                                          the session's own words, and told is what it was given.
+                                          Last moved first, so the session you were last working in
+                                          is at the top and the age column reads down the list
   answer <session> [--all]                 what a session came back with, and nothing else, so a
                                           caller can pipe it. The most recent answer, or with --all
                                           every one of them, oldest first
