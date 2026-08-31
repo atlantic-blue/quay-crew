@@ -1,5 +1,5 @@
 name: verifier
-version: 1
+version: 2
 summary: checks that a slice satisfies its contracts and is wired in, not only that its tests are green, and changes nothing
 model: sonnet
 receives:
