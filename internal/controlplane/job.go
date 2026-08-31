@@ -27,8 +27,8 @@ import (
 // slice of its own. What this buys on its own is that the intent outlives the caller.
 func (s *Server) CreateJob(ctx context.Context, req *quaycrewv1.CreateJobRequest) (*quaycrewv1.CreateJobResponse, error) {
 	declaration := job.Declaration{
-		Project: req.GetProject(),
-		Title:   req.GetTitle(), Brief: req.GetBrief(), Role: req.GetRole(), Mode: req.GetMode(),
+		Project: req.GetProject(), Request: req.GetRequest(),
+		Title: req.GetTitle(), Brief: req.GetBrief(), Role: req.GetRole(), Mode: req.GetMode(),
 		ExpectFile: req.GetExpectFile(), ExpectContains: req.GetExpectContains(),
 		After: req.GetAfter(), BudgetTokens: req.GetBudgetTokens(), Labels: req.GetLabels(),
 		Requires: req.GetRequires(), Repository: req.GetRepository(), Product: req.GetProduct(),
@@ -69,7 +69,19 @@ func (s *Server) CreateJob(ctx context.Context, req *quaycrewv1.CreateJobRequest
 	if err != nil {
 		return nil, storeError(err, "job")
 	}
-	return &quaycrewv1.CreateJobResponse{Job: asJob(kept), LeftOut: s.jobLeftOut(ctx, declared)}, nil
+	return &quaycrewv1.CreateJobResponse{
+		Job: asJob(kept), LeftOut: s.jobLeftOut(ctx, declared),
+		// Said here, at the write, because this is the last moment somebody is looking at the
+		// declaration. It is empty for a brief that carries what was asked for, and empty is the point:
+		// a check that speaks about every brief puts a person in front of every job.
+		//
+		// The request this declaration stated, never the one it inherited. A child builds one slice of
+		// the work and cannot carry the whole sentence, so measuring an inherited request would fire on
+		// ordinary work, and a check that fires on ordinary work is the rule everybody words around.
+		// What is measured is the one hop this exists for: a person said a sentence, somebody wrote a
+		// brief from it, and the two are here together.
+		Drifted: job.Drifted(declaration.Tidied().Request, kept.Brief),
+	}, nil
 }
 
 // jobLeftOut is every skill the session running this job will be born without, because the workspace
@@ -142,7 +154,7 @@ func (s *Server) PrepareJob(ctx context.Context, under string, declaration job.D
 		ExpectFile: tidy.ExpectFile, ExpectContains: tidy.ExpectContains,
 		After: tidy.After, Deadline: tidy.Deadline, BudgetTokens: tidy.BudgetTokens,
 		Labels: tidy.Labels, Requires: tidy.Requires, Repository: tidy.Repository,
-		Product: tidy.Product, Claim: tidy.Claim, Escalation: tidy.Escalation,
+		Product: tidy.Product, Request: tidy.Request, Claim: tidy.Claim, Escalation: tidy.Escalation,
 		Version: 1, Phase: job.PhasePending,
 	}
 	// Where the work lands, when the declaration did not say. It is the project's, because a project
@@ -177,6 +189,9 @@ func (s *Server) PrepareJob(ctx context.Context, under string, declaration job.D
 	if err := carryTheSentence(declared, parent); err != nil {
 		return nil, nil, err
 	}
+	if err := carryTheRequest(declared, parent); err != nil {
+		return nil, nil, err
+	}
 	if err := s.pinRole(ctx, declared, tidy.Role); err != nil {
 		return nil, nil, err
 	}
@@ -208,6 +223,24 @@ func carryTheSentence(declared *job.Job, parent *job.Job) error {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
 	declared.Product = carried
+	return nil
+}
+
+// carryTheRequest gives a child the request its parent was asked in, and refuses a child that states
+// a different one.
+//
+// It is the rule carryTheSentence gives the product, and for the same reason: a tree with two
+// requests has none. The half that makes it worth having is that a session three levels down reads
+// what was asked for, in the words it was asked in, without anybody typing it again.
+func carryTheRequest(declared *job.Job, parent *job.Job) error {
+	if parent == nil {
+		return nil
+	}
+	carried, err := job.InheritedRequest(parent.Request, declared.Request)
+	if err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	declared.Request = carried
 	return nil
 }
 
@@ -385,7 +418,7 @@ func asJob(from *job.Job) *quaycrewv1.Job {
 		Mode: from.Mode, ExpectFile: from.ExpectFile, ExpectContains: from.ExpectContains,
 		After: from.After, BudgetTokens: from.BudgetTokens, Labels: from.Labels,
 		Requires: from.Requires, Repository: from.Repository, PullRequest: from.PullRequest, Claim: from.Claim,
-		Product: from.Product, Steers: int32(from.Steers),
+		Product: from.Product, Request: from.Request, Steers: int32(from.Steers),
 		Parent: from.Parent, Depth: int32(from.Depth), Version: int32(from.Version),
 		Phase: from.Phase, Session: from.Session, Attempts: int32(from.Attempts),
 		Answer: from.Answer, Reason: from.Reason, Question: from.Question, Resuming: from.Resuming,

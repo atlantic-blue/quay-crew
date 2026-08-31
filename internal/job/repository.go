@@ -117,6 +117,12 @@ func Asked(one *Job) string {
 	if one.Product != "" {
 		said = append(said, ServesAPerson(one.Product))
 	}
+	// The request goes above the brief, whole and unrewritten, because a summary of what was said is
+	// the same compression this exists to catch. Where the brief dropped words of it, the line names
+	// them, so the session reads the request again before it starts.
+	if asked := AskedInTheseWords(one.Request, one.Brief); asked != "" {
+		said = append(said, asked)
+	}
 	said = append(said, one.Brief)
 	if one.Repository != "" {
 		said = append(said, EndsInAPullRequest(one.Repository))

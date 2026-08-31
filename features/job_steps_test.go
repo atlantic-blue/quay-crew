@@ -26,6 +26,10 @@ type jobWorld struct {
 	// declared holds each job the scenario made, oldest first.
 	declared []*quaycrewv1.Job
 	listed   []*quaycrewv1.Job
+	// drifted is what the last declaration answered about its brief: the words of the request the
+	// brief never says, and empty where it says them. Kept rather than asserted at the call, because
+	// the silence is as much the behaviour as the sentence is.
+	drifted string
 	// leftOut is what the last declaration answered: the skills the session running that job will
 	// start without, because the workspace has not set the secrets they need.
 	leftOut []*quaycrewv1.Skill
@@ -493,6 +497,7 @@ func declareJob(ctx context.Context, request *quaycrewv1.CreateJobRequest) error
 	}
 	scenario.declared = append(scenario.declared, created.GetJob())
 	scenario.leftOut = created.GetLeftOut()
+	scenario.drifted = created.GetDrifted()
 	return nil
 }
 

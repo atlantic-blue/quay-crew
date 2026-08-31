@@ -355,6 +355,11 @@ func HandedOver(one *Job, at []Attempt) string {
 	if one.Product != "" {
 		said = append(said, ServesAPerson(one.Product))
 	}
+	// A handed job starts in a conversation of its own, so the request has to be written out here too:
+	// the session reading this never saw the one the job started in.
+	if asked := AskedInTheseWords(one.Request, one.Brief); asked != "" {
+		said = append(said, asked)
+	}
 	said = append(said,
 		fmt.Sprintf("This job was handed to you because the session doing it went in circles: %d attempts "+
 			"at one step that the system could not tell apart. You are starting in your own conversation, "+
