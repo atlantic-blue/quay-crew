@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/flow"
 	"github.com/atlantic-blue/krewe/internal/role"
 	"github.com/cucumber/godog"
 )
@@ -147,6 +148,79 @@ func initializeProductSteps(sc *godog.ScenarioContext) {
 			}
 			return says("standard output", toolFrom(ctx).stdout, "for a person: "+sentence)
 		})
+
+	// The second half: a run stops once at the first thing a person can open and asks whether it is
+	// the product.
+
+	sc.Step(`^the refusal says how to write what a person gets$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if w.lastErr == nil {
+			return fmt.Errorf("nothing was refused")
+		}
+		if !strings.Contains(w.lastErr.Error(), "product:") {
+			return fmt.Errorf("the refusal says %q, want it to name the line the author has to add", w.lastErr)
+		}
+		return nil
+	})
+
+	sc.Step(`^the flow run asks about the product, naming "([^"]*)" and "([^"]*)"$`,
+		func(ctx context.Context, address, sentence string) error {
+			w := worldFrom(ctx)
+			kept, err := w.store.GetFlowRun(ctx, w.flowRun.ID)
+			if err != nil {
+				return err
+			}
+			if kept.Status != flow.StatusAsking {
+				return fmt.Errorf("the run reads back as %q on node %q saying %q, want it asking",
+					kept.Status, kept.Node, kept.Reason)
+			}
+			for _, named := range []string{address, sentence} {
+				if !strings.Contains(kept.Question, named) {
+					return fmt.Errorf("the question is %q, want it to name %q", kept.Question, named)
+				}
+			}
+			return nil
+		})
+
+	sc.Step(`^the job carrying the run says a person "([^"]*)"$`, func(ctx context.Context, sentence string) error {
+		w := worldFrom(ctx)
+		carrier, err := runCarrier(ctx, w)
+		if err != nil {
+			return err
+		}
+		if carrier.Product != sentence {
+			return fmt.Errorf("the job carrying the run says a person %q, want %q", carrier.Product, sentence)
+		}
+		return nil
+	})
+
+	// Carried through to what the session doing the next step is handed, rather than stopping at the
+	// column. The column is where the sentence is kept; the task is where it does any work.
+	sc.Step(`^the step after the question was told a person "([^"]*)", and that the sentence wins$`,
+		func(ctx context.Context, sentence string) error {
+			asked := worldFrom(ctx).runner.lastRequest().Text
+			for _, phrase := range []string{sentence, "the sentence wins"} {
+				if !strings.Contains(asked, phrase) {
+					return fmt.Errorf("the step after the question was asked %q, want it to say %q", asked, phrase)
+				}
+			}
+			return nil
+		})
+
+	sc.Step(`^the flow run stopped because the step named no address$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		kept, err := w.store.GetFlowRun(ctx, w.flowRun.ID)
+		if err != nil {
+			return err
+		}
+		if kept.Status != flow.StatusStopped {
+			return fmt.Errorf("the run reads back as %q on node %q, want it stopped", kept.Status, kept.Node)
+		}
+		if !strings.Contains(kept.Reason, "address") {
+			return fmt.Errorf("the run stopped saying %q, want it to name what was missing", kept.Reason)
+		}
+		return nil
+	})
 
 	sc.Step(`^standard output says the sentence is missing and how to say it$`, func(ctx context.Context) error {
 		out := toolFrom(ctx).stdout

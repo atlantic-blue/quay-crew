@@ -21,5 +21,4 @@ says which skills a session starts without.
 
 This is the first half of [#520](https://github.com/atlantic-blue/quay-crew/issues/520). The second
 half, a run that stops at the first thing a person can open and asks whether it is what they wanted,
-is not built. Until it is, nothing measures the sentence against what was delivered: it reaches every
-session and no gate reads it back.
+is in the entry beside this one.

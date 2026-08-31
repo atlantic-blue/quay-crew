@@ -456,6 +456,26 @@ func (m *Memory) RecordJobSession(_ context.Context, id, session string) error {
 	return nil
 }
 
+// ReplaceJobProduct writes the one sentence a job serves over what it carried.
+//
+// The version rises with it, because the sentence is a declared field and a status has to be able to
+// tell a current reading from a stale one.
+func (m *Memory) ReplaceJobProduct(_ context.Context, id, product string, event *job.Event) (*job.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	found.Product = job.TidySentence(product)
+	found.Version, found.UpdatedAt = found.Version+1, time.Now().UTC()
+	if err := m.appendJobEvent(event); err != nil {
+		return nil, err
+	}
+	kept := cloneJob(*found)
+	return &kept, nil
+}
+
 // LandJob writes what came of the job. It applies only to a job that is still running, so what a
 // job ended as is written once.
 func (m *Memory) LandJob(_ context.Context, id string, landed job.Landing, event *job.Event) (*job.Job, error) {
