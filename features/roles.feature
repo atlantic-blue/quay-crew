@@ -267,3 +267,17 @@ Feature: A role is imported, pinned to a version, and attached at a level
     When that session declares a job running as the "implementer" role
     Then the new job hangs under the job that declared it, one level deeper
     And that session may not stop a job
+
+  # The writer is the one role that writes prose for a person outside the work. Before it, every
+  # writing job typed the method into its own brief: read the voice specification, read three
+  # existing pieces, do not use these words, state the cost, invent no number. The method is the
+  # role now, and a brief carries the subject and the material.
+  #
+  # It grants no verb. A role that could read the system's own records would hold a second source of
+  # figures, and the material would stop being the only one it may write from.
+  Scenario: The writer ships in the repository and may call nothing
+    Given the operator imports the "writer" role this build ships
+    Then the listing says the "writer" role runs on "opus"
+    And the listing says the "writer" role receives "context, job, skills"
+    When the operator reads the "writer" role back
+    Then the role comes back saying it may call ""

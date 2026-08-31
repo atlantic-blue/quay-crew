@@ -74,11 +74,14 @@ commands:
     [--expect-contains "..."]             names one is not done until its answer names a pull
     [--repository <owner>/<name>]         request against it. --product is one sentence in a
     [--product "..."]                     person's words: what somebody does with what gets built
-                                          and what they get back. Every job under this one carries
-                                          it, and it is what the design is read against. A brief
-                                          that asks the job to wait for the checks, or to merge on
-                                          the result, is refused: nothing wakes a job, so that
-                                          shape is a flow
+    [--claim <piece of work>]             and what they get back. Every job under this one carries
+                                          it, and it is what the design is read against. --claim is
+                                          the piece of work this job takes, an issue, a branch or a
+                                          name, and a second job claiming it is refused while this
+                                          one holds it, so two sessions cannot build the same slice.
+                                          A brief that asks the job to wait for the checks, or to
+                                          merge on the result, is refused: nothing wakes a job, so
+                                          that shape is a flow
   history [<address>|system]              what the system did over a window of time: what ran, what it
     [--since <date>] [--until <date>]     cost, and what failed and why. The read to make instead of
     [--limit <n>]                         being told. It prints the window added up, then one line
@@ -228,7 +231,7 @@ commands:
   role import <directory>                 take a role into the system from its directory. A role is a
                                           named way of working: a brief, the model it runs on, and
                                           the material it may receive
-                                          this build ships twelve in roles/ at the root of the
+                                          this build ships sixteen in roles/ at the root of the
                                           repository, and a fresh system is seeded with none of them
   role list [<workspace>]                 what roles the system holds, or what one workspace holds
   role show [<workspace>] <name>          read one role back whole: what it is, what it may do, who

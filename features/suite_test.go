@@ -283,6 +283,11 @@ type world struct {
 	// what came out of the sandbox. A double that hands back a canned error cannot say anything about
 	// an explanation built from a stream.
 	realRunner model.Runner
+	// alsoServing are the control planes a scenario stood up beside the world's own, over the same
+	// store. A task belongs to the process that dispatched it, so waiting for tasks has to cover all
+	// of them. serversMu guards the list, because a scenario builds one while tasks are in flight.
+	alsoServing []*controlplane.Server
+	serversMu   sync.Mutex
 	// reachable is the address a session is told to dial for the system, empty when it cannot reach it.
 	reachable string
 	// gitAuthor is who a commit made inside a sandbox is by.
@@ -422,14 +427,37 @@ func (w *world) eventLog() messaging.EventLog {
 
 // settled waits for every detached task to land, so a scenario asserting on what a task left behind
 // is never asserting on a task still running. The same wait the real shutdown does.
+//
+// Every control plane the scenario stood up, not only the world's own. A task belongs to the process
+// that dispatched it, so waiting on one process says nothing about a task another one is running, and
+// a scenario about a controller dying dispatches through a second control plane by design.
 func (w *world) settled(ctx context.Context) error {
 	waiting, giveUp := context.WithTimeout(ctx, 10*time.Second)
 	defer giveUp()
-	w.server.WaitForTasks(waiting)
-	if waiting.Err() != nil {
-		return fmt.Errorf("a detached task never landed")
+	for _, serving := range w.everyServer() {
+		serving.WaitForTasks(waiting)
+		if waiting.Err() != nil {
+			return fmt.Errorf("a detached task never landed")
+		}
 	}
 	return nil
+}
+
+// everyServer is the world's own control plane and every other one a scenario has stood up over the
+// same store.
+func (w *world) everyServer() []*controlplane.Server {
+	w.serversMu.Lock()
+	defer w.serversMu.Unlock()
+	return append([]*controlplane.Server{w.server}, w.alsoServing...)
+}
+
+// alsoServing records a control plane a scenario stood up beside the world's own, so a wait for tasks
+// covers the ones it dispatched.
+func (w *world) serving(also *controlplane.Server) *controlplane.Server {
+	w.serversMu.Lock()
+	defer w.serversMu.Unlock()
+	w.alsoServing = append(w.alsoServing, also)
+	return also
 }
 
 // restart tears the control plane down and stands a new one up over the same store, model and
@@ -699,6 +727,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeVersionSteps(sc)
 	initializeJobSteps(sc)
 	initializeJobMaterialSteps(sc)
+	initializeClaimSteps(sc)
 	initializeJobControllerSteps(sc)
 	initializeJobRepositorySteps(sc)
 	initializeJobWaitingSteps(sc)
