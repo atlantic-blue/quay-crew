@@ -565,7 +565,8 @@ func (r *rows) LoopJob(_ context.Context, id string, looped job.Loop, event *job
 	if looped.To != "" {
 		one.EscalatedTo = looped.To
 	}
-	one.Question, one.Reason, one.Resuming = looped.Question, looped.Reason, ""
+	one.Question, one.Reason = looped.Question, looped.Reason
+	one.Told, one.Resuming = "", ""
 	if looped.Handed {
 		one.Session = ""
 	}

@@ -38,9 +38,11 @@ func (m *Memory) LoopJob(_ context.Context, id string, looped job.Loop, event *j
 		found.EscalatedTo = looped.To
 	}
 	found.Question, found.Reason = looped.Question, looped.Reason
-	// The failure it was continuing past belongs to the attempt that has just ended, and this job is
-	// going somewhere else now, so it comes off with the rest of that attempt.
-	found.Resuming = ""
+	// What it was last told, and the failure it was continuing past, both belong to the attempt that
+	// has just ended. This job is going somewhere else now, so they come off with the rest of it: a
+	// handed session reading an answer to somebody else's question would be given that instead of what
+	// the attempts said, and a reader would take the old answer for the answer to the new question.
+	found.Told, found.Resuming = "", ""
 	if looped.Handed {
 		found.Session = ""
 	}

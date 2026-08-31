@@ -32,8 +32,9 @@ func (p *Postgres) LoopJob(ctx context.Context, id string, looped job.Loop, even
 			-- the first time, which is what a reader needs to see why this one stopped.
 			escalated_to = case when $4 <> '' then $4 else escalated_to end,
 			question = $5, reason = $6,
-			-- A job going somewhere else is not continuing past the failure of the attempt that ended.
-			resuming = '',
+			-- What it was last told, and the failure it was continuing past, both belong to the attempt
+			-- that has just ended, and this job is going somewhere else now.
+			told = '', resuming = '',
 			-- A job handed to another role starts a conversation of its own. What the conversation it
 			-- went in circles in was stays on the attempts it made there.
 			session = case when $7 then '' else session end,

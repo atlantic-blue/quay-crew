@@ -187,6 +187,36 @@ func runJobLoopConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	// What a person last told this job belongs to the attempt that has just ended. A handed session
+	// given an answer to somebody else's question reads it as its instruction, and a person reading a
+	// new question with an old answer under it takes the one for the other.
+	t.Run("a job that goes in circles forgets what it was last told", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		id := aRunningJob(t, s)
+		if _, err := s.AskJob(ctx, id, "which store?", loopedEvent(id)); err != nil {
+			t.Fatalf("AskJob: %v", err)
+		}
+		if _, err := s.AnswerJob(ctx, id, "the on demand one", loopedEvent(id)); err != nil {
+			t.Fatalf("AnswerJob: %v", err)
+		}
+		if _, err := s.StartJob(ctx, id, aLease("controller-1"), []*job.Event{startedEvent(id, "", "")}); err != nil {
+			t.Fatalf("StartJob: %v", err)
+		}
+
+		found, err := s.LoopJob(ctx, id, job.Loop{
+			Owner: "controller-1", Step: 1, To: "role:architect", Phase: job.PhasePending, Handed: true,
+			Attempt: &job.Attempt{Task: "task-4", Step: 1, Said: "still red"},
+		}, loopedEvent(id))
+		if err != nil {
+			t.Fatalf("LoopJob: %v", err)
+		}
+		if found.Told != "" {
+			t.Fatalf("the job still carries %q, which answered a question the attempt that just ended "+
+				"asked", found.Told)
+		}
+	})
+
 	// The compare and set. A controller that lost the row must not stop somebody else's job, and a
 	// job that has already ended must not be moved by a loop arriving late.
 	t.Run("a loop is refused for a controller that does not hold the job", func(t *testing.T) {
