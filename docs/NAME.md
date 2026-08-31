@@ -64,3 +64,16 @@ searches by hand, restricted to live marks in classes 9 and 42, and writes the a
 that line exists, treat the trademark position as unknown rather than as clear.
 
 The addresses are https://tmsearch.uspto.gov/ and https://www.search-for-trademark.service.gov.uk/ .
+
+## blue quay: decided on 31 August 2026
+
+The owner decided the name. The tool becomes blue quay. The recommendation above, that the tool
+keeps `krewe`, is overtaken.
+
+`docs/RENAME.md` is the plan for the rename: what a person settles, what must not break on a build
+that is installed now, and the order of the pull requests. It is waiting for approval, so nothing
+has moved yet.
+
+The name keeps the word quay, which is the word this file records as failing the first test. Whether
+that carries the Red Hat collision forward is being measured, and the answer belongs in this file.
+
