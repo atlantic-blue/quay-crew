@@ -11,6 +11,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/krewe/internal/display"
+	"github.com/atlantic-blue/krewe/internal/forge"
 	"github.com/atlantic-blue/krewe/internal/job"
 	"github.com/atlantic-blue/krewe/internal/workspace"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -470,6 +471,7 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	// the end, or opening a sandbox to find out.
 	if one.GetPullRequest() != "" {
 		fmt.Fprintf(out, "\npull request: %s\n", one.GetPullRequest())
+		fmt.Fprintf(out, "              %s\n", pullRequestState(one))
 	}
 	if one.GetAnswer() != "" {
 		fmt.Fprintf(out, "\nanswer:\n%s\n", one.GetAnswer())
@@ -820,4 +822,22 @@ func jobFlagsTaken() map[string]bool {
 		taken[name] = true
 	}
 	return taken
+}
+
+// pullRequestState is what the forge last said about a job's pull request, and when.
+//
+// It reads the row rather than a forge. A command that asked GitHub while it drew would wait as long
+// as GitHub takes, which is the rule the headroom and health views already hold.
+func pullRequestState(one *quaycrewv1.Job) string {
+	reading := forge.Reading{
+		Status: one.GetPullRequestStatus(), Checks: one.GetPullRequestChecks(),
+		FailedCheck: one.GetPullRequestCheck(), Review: one.GetPullRequestReview(),
+		Failed: one.GetPullRequestFailed(),
+	}
+	read := one.GetPullRequestReadAt()
+	if read == nil {
+		return reading.String()
+	}
+	reading.ReadAt = read.AsTime()
+	return fmt.Sprintf("%s, read %s ago", reading, display.Age(read))
 }

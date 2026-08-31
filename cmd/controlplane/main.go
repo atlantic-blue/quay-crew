@@ -19,6 +19,7 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/krewe/internal/auth"
 	"github.com/atlantic-blue/krewe/internal/controlplane"
+	"github.com/atlantic-blue/krewe/internal/forge"
 	"github.com/atlantic-blue/krewe/internal/headroom"
 	"github.com/atlantic-blue/krewe/internal/logging"
 	"github.com/atlantic-blue/krewe/internal/messaging"
@@ -173,6 +174,12 @@ func main() {
 		// sessions on the host has no daemon to ask, and it reports unknown rather than shelling out
 		// to a command that is not there.
 		Headroom: headroomSource(sandboxKind, logger),
+		// What reads back the pull requests the crew opened. The credential is the system's own secret,
+		// read at the moment it is needed: an operator sets one while the system runs, and a reader that
+		// read it once at startup would report unknown until somebody restarted the stack.
+		Forge: &forge.GitHub{Token: func(ctx context.Context) (string, error) {
+			return credentials.GetSystem(ctx, forge.TokenName)
+		}},
 		// What the system holds back for its own containers before it admits any sandbox. The control
 		// plane, the database and the event log are containers inside the same runtime the work
 		// fills, so a system that reserves nothing goes down with its own workload.
@@ -227,6 +234,11 @@ func main() {
 	// daemon, because reading the daemon takes as long as the daemon takes and the header redraws
 	// every second.
 	go server.RunHeadroom(ctx)
+
+	// And the pull requests those jobs opened, on a timer of their own. The crew used to keep the
+	// address and never look at it again, so a change that merged and a change whose checks went red
+	// an hour later read the same. Every page reads the row this writes and never the forge.
+	go server.RunPullRequests(ctx)
 
 	// And the parts the system has to write to before a dispatch starts, so a view of them reads a probe
 	// rather than a guess. The health check keeps this fresh wherever one runs; the timer is for a system

@@ -32,6 +32,7 @@ import (
 	"github.com/atlantic-blue/krewe/internal/auth"
 	"github.com/atlantic-blue/krewe/internal/controlplane"
 	"github.com/atlantic-blue/krewe/internal/flow"
+	"github.com/atlantic-blue/krewe/internal/forge"
 	"github.com/atlantic-blue/krewe/internal/headroom"
 	"github.com/atlantic-blue/krewe/internal/messaging"
 	"github.com/atlantic-blue/krewe/internal/model"
@@ -362,6 +363,13 @@ type world struct {
 	// which reports unknown. A scenario sets it and then asks the system to read it once, because a
 	// scenario that waited for the sampler's own timer would be a scenario with a clock in it.
 	machine headroom.Source
+	// forge is what the system reads a pull request back from. Nil is a system with no forge, which
+	// reports unknown. A scenario writes its answers and then asks the system to read once, because a
+	// scenario that waited for the reader's own timer would be a scenario with a clock in it.
+	forge *forge.Fake
+	// noForgeCredential runs the real reader with nothing to authenticate with, which is what a fresh
+	// crew is. The scenario about it has to reach the real refusal rather than a double repeating it.
+	noForgeCredential bool
 	// startWait and exportWait are the system's budgets. A scenario about a budget running out sets
 	// them short, because a scenario that waits the real minute out is a scenario nobody runs.
 	startWait  time.Duration
@@ -495,6 +503,7 @@ func (w *world) serve() error {
 		Skills: w.skills, SkillsHost: w.skillsDir, SandboxImage: "quaycrew-sandbox:test",
 		StartWait: w.startWait, ExportWait: w.exportWait,
 		Headroom: w.machine, HeadroomEvery: time.Hour,
+		Forge: forgeOf{w}, PullRequestEvery: time.Hour,
 	})
 	// The same options the real main builds the server with, so a scenario about tracing is about
 	// what the system does and not about what the harness added.
@@ -718,6 +727,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeFlowSteps(sc)
 	initializeFlowSurfaceSteps(sc)
 	initializePullRequestReviewSteps(sc)
+	initializePullRequestSteps(sc)
 	initializeFirstRunSteps(sc)
 	initializeInstallSteps(sc)
 	initializeFrontDoorSteps(sc)
@@ -1434,4 +1444,26 @@ func (w *world) dialAs(token string) quaycrewv1.ControlPlaneServiceClient {
 		return w.client
 	}
 	return quaycrewv1.NewControlPlaneServiceClient(conn)
+}
+
+// pullRequests is the forge this world reads a pull request back from, made on first use so every
+// scenario has one to write answers into. A world with no forge would report unknown, which is a
+// state the scenarios say something about rather than the state they all run in.
+func (w *world) pullRequests() *forge.Fake {
+	if w.forge == nil {
+		w.forge = forge.NewFake()
+	}
+	return w.forge
+}
+
+// forgeOf reads through whichever forge this scenario is running against, chosen at the moment of the
+// call. A system built with one of them would leave a scenario that swaps it afterwards talking to
+// the one the background made.
+type forgeOf struct{ w *world }
+
+func (f forgeOf) Read(ctx context.Context, at forge.Address) (forge.Reading, error) {
+	if f.w.noForgeCredential {
+		return (&forge.GitHub{}).Read(ctx, at)
+	}
+	return f.w.pullRequests().Read(ctx, at)
 }

@@ -460,6 +460,11 @@ type Store interface {
 	ReplaceJobProduct(ctx context.Context, id, product string, event *job.Event) (*job.Job, error)
 	// ListJobEvents returns one job's own history, oldest first.
 	ListJobEvents(ctx context.Context, id string) ([]*job.Event, error)
+	// What reads back the pull requests the crew opened. UnsettledPullRequests is the job whose pull
+	// request is still worth reading, longest unread first, and RecordPullRequest keeps what the forge
+	// said. Neither is a movement of the job: the job ended when it ended, and what happened to the
+	// work afterwards happened on the forge.
+	job.PullRequestStore
 	// RecordSteer writes one steer and adds it to the count on each job in counted, in one
 	// transaction. Counted is the job it landed on and every job above it, so the count on the job at
 	// the top is the score of the whole tree. The row and the counts are written together because a

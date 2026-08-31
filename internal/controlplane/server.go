@@ -26,6 +26,7 @@ import (
 	"github.com/atlantic-blue/krewe/internal/deploy"
 	"github.com/atlantic-blue/krewe/internal/display"
 	"github.com/atlantic-blue/krewe/internal/flow"
+	"github.com/atlantic-blue/krewe/internal/forge"
 	"github.com/atlantic-blue/krewe/internal/headroom"
 	"github.com/atlantic-blue/krewe/internal/job"
 	"github.com/atlantic-blue/krewe/internal/manual"
@@ -158,6 +159,11 @@ type Config struct {
 	// JobTickEvery is how often the job controller looks at the job the system holds. Zero takes
 	// job.DefaultTickEvery.
 	JobTickEvery time.Duration
+	// Forge reads back the pull requests the crew opened. Nil means the system has nothing to read one
+	// with, and every reading then says unknown, which is what a system with no forge should say.
+	Forge forge.Reader
+	// PullRequestEvery is how often those pull requests are read. Zero takes job.DefaultReadEvery.
+	PullRequestEvery time.Duration
 	// JobLease is how long a controller holds a job before another may take it. Zero takes
 	// job.DefaultLease, which is derived from what a tick costs rather than chosen.
 	JobLease time.Duration
@@ -239,6 +245,9 @@ type Server struct {
 	// headroom keeps the last reading of the machine. Everything that reports it reads the sampler
 	// and never the daemon, so a slow daemon slows the sampler and never a command.
 	headroom *headroom.Sampler
+	// pullRequests reads back the pull requests the crew opened, on its own timer, and keeps what the
+	// forge said on the job. Every page reads the row, so a slow forge slows this and never a command.
+	pullRequests *job.Watcher
 
 	// lastHealth is what the last probe of the parts a dispatch has to write to found. It is kept
 	// rather than taken on demand for the reason the headroom sample is: the part that is down is the
@@ -331,6 +340,10 @@ func NewServer(cfg Config) *Server {
 		// The signal that stops a reclaim closing a container an operator is typing into. Without it
 		// the controller reclaims nothing, whatever the workspace's times say.
 		Watching(server)
+	// And the pull requests those jobs opened are read back on a timer of their own. A job ends when
+	// its session answers; what happens to the work afterwards happens on a forge, which is why this
+	// is not part of the controller's tick.
+	server.pullRequests = job.NewWatcher(cfg.Store, cfg.Forge, cfg.PullRequestEvery)
 	return server
 }
 
