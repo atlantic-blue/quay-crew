@@ -2197,6 +2197,40 @@ deployment change and not a logic change, and it needs slices 1 and 5 first.
 **Nothing inside the container adopts the trace context.** Named in 8c. The system writes one span per
 attempt and the inside of the attempt is opaque.
 
+### What reads the plan before it runs, and what carries a run back into it
+
+The omission above is that the system generates no judgement. Two gaps sit either side of that
+sentence, and closing them does not close it. In each one the machine stops where judgement is
+absent, and a person supplies it.
+
+**Nothing checks the drawing before it runs, with more than one reader.**
+[#520](https://github.com/atlantic-blue/quay-crew/issues/520) states the sentence,
+[#576](https://github.com/atlantic-blue/quay-crew/issues/576) writes the plan and holds it for
+approval, [#577](https://github.com/atlantic-blue/quay-crew/issues/577) reads the words the brief
+dropped, [#580](https://github.com/atlantic-blue/quay-crew/issues/580) lists the claims the plan
+rests on, and [#532](https://github.com/atlantic-blue/quay-crew/issues/532) adds one role that reads
+the plan. All of them read the drawing once, with one reader, and none of them orders the work by
+what a wrong claim costs.
+
+**Nothing carries what a run learned back into the drawing.** A session found that the video
+platform refuses a request for captions from the function's own address. The fact stayed in that
+session's transcript. The plan still said fetch them there, and the issues still described the
+product as designed.
+
+Three issues cover the two gaps, in the order they should be built.
+
+1. [#587](https://github.com/atlantic-blue/quay-crew/issues/587) marks the claim that decides whether
+   to build at all, settles it with a spike job before the build starts, and repairs `after`, which
+   is declared and validated today and never released.
+2. [#586](https://github.com/atlantic-blue/quay-crew/issues/586) has several roles read the same
+   brief through different lenses, and puts only the questions none of them settled to a person.
+3. [#588](https://github.com/atlantic-blue/quay-crew/issues/588) carries a fact a run discovered back
+   onto the claim it disproves, stops the plan that rests on it, and reports it on the issues that
+   describe the product.
+
+None of the three writes a plan, ranks a claim, or decides that a question matters. Each one records
+a value, and stops.
+
 ## 11. The session lifecycle
 
 The question is when the system starts putting sessions away. The answer today is that it never does.

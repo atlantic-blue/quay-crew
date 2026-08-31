@@ -3483,3 +3483,10 @@ around them:
 - **Only the crew's own handling of a message is traced.** There is no span around a turn, a sandbox
   or the model, and the command line tool starts no trace, so a trace stops at the edge of the
   control plane. ([#3](https://github.com/atlantic-blue/quay-crew/issues/3))
+- **A job that waits for another job never starts.** `--after` is checked at the write, an
+  identifier that names nothing is refused and a cycle is refused, and nothing releases the wait.
+  `RunnableJob` reads a pending job whose `after` list is empty, at
+  `internal/store/memory_job.go:348` and `internal/store/postgres_job.go:444`, and no code empties
+  that list. Section 3 of [`docs/ORCHESTRATION.md`](docs/ORCHESTRATION.md) says a job waits until
+  every identifier in `after` reaches a terminal phase, whatever that phase is.
+  ([#587](https://github.com/atlantic-blue/quay-crew/issues/587))
