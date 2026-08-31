@@ -6,11 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/hook"
 	"github.com/cucumber/godog"
 )
 
@@ -83,7 +81,7 @@ func initializeMergeGateSteps(sc *godog.ScenarioContext) {
 
 // fireMergeGate runs the shipped entry point over one payload and records what it said.
 func fireMergeGate(ctx context.Context, payload string) error {
-	entry, err := mergeGateEntry()
+	entry, err := shippedEntry("merge-gate")
 	if err != nil {
 		return err
 	}
@@ -103,25 +101,6 @@ func fireMergeGate(ctx context.Context, payload string) error {
 	answer.said = said.String()
 	worldFrom(ctx).mergeGate = answer
 	return nil
-}
-
-// mergeGateEntry is the file the system would mount, found through the loader the control plane uses,
-// so a manifest that renamed its entry point cannot leave this pointing at the old path.
-func mergeGateEntry() (string, error) {
-	hooks, err := hook.Load("../hooks")
-	if err != nil {
-		return "", fmt.Errorf("loading the hooks this build ships (run `make hooks` first): %w", err)
-	}
-	for _, one := range hooks {
-		if one.Name != "merge-gate" {
-			continue
-		}
-		if len(one.Events) == 0 {
-			return "", errors.New("the merge gate is bound to nothing, so the runtime would never call it")
-		}
-		return filepath.Join("../hooks", one.Name, one.Events[0].Entry), nil
-	}
-	return "", errors.New("this build ships no merge gate, so these scenarios prove nothing")
 }
 
 // isExit says whether the command ended with this exit code, which is how a hook answers.
