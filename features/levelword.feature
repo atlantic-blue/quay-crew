@@ -83,3 +83,36 @@ Feature: One word for the level above every workspace, and the word it replaced 
     Then standard output says "krewe context set system"
     And standard output never says "crew"
     And the command succeeds
+
+  # A name is lowercase letters, digits and hyphens, so neither word can be capitalised and still be
+  # the name of anything. Whoever types the word with a capital means the word, and answering them
+  # with a workspace they do not have sends them looking for a workspace. One spelling refused and
+  # the next one waved through is the same quiet failure as the word being dropped.
+  Scenario Outline: The word that went refuses however it is typed
+    When the caller types "<gone>" through the tool
+    Then standard error says the word moved
+    And standard output is empty
+    And the command fails
+
+    Examples:
+      | gone             |
+      | secret list Crew |
+      | secret list CREW |
+      | job list Crew    |
+      | use Crew         |
+
+  # The refusal a capitalised reserved word used to get was the general one about names, whose advice
+  # is the typed name lowercased. It told the operator to type "system", which is the one name a
+  # workspace may not hold. Advice that cannot be followed reads as the rule not applying here.
+  Scenario Outline: A workspace cannot be called either word, however it is typed
+    When the caller types "workspace create <typed>" through the tool
+    Then standard error says "<because>"
+    And standard error never says "use lowercase letters"
+    And the command fails
+
+    Examples:
+      | typed  | because                                   |
+      | System | that word means the whole system          |
+      | SYSTEM | that word means the whole system          |
+      | Crew   | used to mean the level above every workspace |
+      | CREW   | used to mean the level above every workspace |
