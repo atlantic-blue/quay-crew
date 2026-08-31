@@ -169,3 +169,41 @@ func TestAJobInAProjectWithNoRepositoryClaimsNothing(t *testing.T) {
 		t.Fatalf("the job works in %q, and the project it is in works nowhere", got)
 	}
 }
+
+// Correcting an address is not a statement about the bill, and it used to be read as one. An omitted
+// kind cleared the kind the project held, so a project fell from private to public in the same
+// command that fixed its address, and the answer said its pipeline minutes were free.
+func TestAWriteWithNoKindKeepsTheKindTheProjectHolds(t *testing.T) {
+	s := newServer(&model.FakeRunner{})
+	_, project := newProject(t, s)
+	record(t, s, project, "atlantic-blue/transcript", "private")
+
+	moved := record(t, s, project, "atlantic-blue/videos", "")
+	if moved.GetVisibility() != "private" {
+		t.Fatalf("the project is %q after a write that said no kind, want private", moved.GetVisibility())
+	}
+	// Read back out of the system, because what a call answered and what the system holds are two
+	// things.
+	read, err := s.GetProject(context.Background(), &quaycrewv1.GetProjectRequest{Id: project})
+	if err != nil {
+		t.Fatalf("GetProject: %v", err)
+	}
+	if read.GetProject().GetVisibility() != "private" {
+		t.Fatalf("the system holds %q, want private", read.GetProject().GetVisibility())
+	}
+	// And the kind is still the operator's to change, in the word that changes it.
+	if back := record(t, s, project, "atlantic-blue/videos", "public").GetVisibility(); back != "public" {
+		t.Fatalf("the kind could not be said back to %q, want public", back)
+	}
+}
+
+// A project nobody has told is public, which is the case the keeping rule must not swallow: there is
+// no kind to keep, and free minutes are the cheaper of the two.
+func TestAWriteWithNoKindOnAProjectWithNoKindIsPublic(t *testing.T) {
+	s := newServer(&model.FakeRunner{})
+	_, project := newProject(t, s)
+
+	if kind := record(t, s, project, "atlantic-blue/transcript", "").GetVisibility(); kind != "public" {
+		t.Fatalf("a project nobody has told is %q, want public", kind)
+	}
+}

@@ -712,6 +712,13 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	}
 }
 
+// readVerb is how a read of another project is spelled. One argument is a write, so an operator who
+// wants to look at a project without touching it needs a word of its own: without one, the only
+// spelling within reach is the write, which is what turned a look into an overwrite.
+//
+// A repository address always carries a separator, so this word can never be mistaken for one.
+const readVerb = "show"
+
 // runProjectRepository says where a project's work lands, and records it when told.
 //
 // The address of a project and the address of a repository are both two words with a separator
@@ -719,10 +726,22 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 // the last one is the thing being named and anything in front of it says where.
 //
 //	krewe project repository                                              what this project works in
+//	krewe project repository show me/transcript                           what that project works in
 //	krewe project repository atlantic-blue/transcript                     record it here
 //	krewe project repository me/transcript atlantic-blue/transcript       record it there
 //	krewe project repository atlantic-blue/transcript private             and say what kind
+//
+// One argument stays a write. Every message in this tool teaches that form as the write, so a new
+// meaning for it would break the one spelling an operator learns first. Where that one argument also
+// names a project the system holds, the command has two readings and takes neither: it refuses and
+// prints the unambiguous spelling of each. Two arguments are unambiguous by position, so an address
+// that also names a project is recorded as a repository there, and that is the form the refusal
+// hands back.
 func runProjectRepository(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) > 0 && strings.EqualFold(strings.TrimSpace(args[0]), readVerb) {
+		return runProjectRepositoryShow(ctx, client, args[1:], out)
+	}
+
 	said := args
 	kind := ""
 	// The kind comes off the end first. It is one of two words and neither is an address, so nothing
@@ -733,15 +752,14 @@ func runProjectRepository(ctx context.Context, client quaycrewv1.ControlPlaneSer
 		}
 	}
 	if len(said) > 2 || (len(said) == 0 && kind != "") {
-		return fmt.Errorf("usage: krewe project repository [<address>] <owner>/<name> [public|private]")
+		return fmt.Errorf("usage: %s", writeUsage)
 	}
 	// A last word that is neither an address nor a kind the system knows. A forge has other kinds, and
 	// "internal" read as the repository leaves the system resolving atlantic-blue as a workspace and
 	// answering that it has no such thing, which sends the operator to fix the wrong half.
 	if len(said) == 2 && !strings.Contains(said[1], workspace.Separator) {
 		return fmt.Errorf("a repository is an owner and a name, and a kind is %s or %s, and %q is neither"+
-			"\n\nusage: krewe project repository [<address>] <owner>/<name> [public|private]",
-			repository.Public, repository.Private, said[1])
+			"\n\nusage: %s", repository.Public, repository.Private, said[1], writeUsage)
 	}
 
 	typed := ""
@@ -753,27 +771,135 @@ func runProjectRepository(ctx context.Context, client quaycrewv1.ControlPlaneSer
 		return err
 	}
 	if !located.HasProject() {
-		return fmt.Errorf("%s is a workspace, and a repository belongs to a project: "+
-			"krewe project repository <workspace>/<project> <owner>/<name>", located.Path)
+		return aRepositoryBelongsToAProject(located, "krewe project repository <workspace>/<project> <owner>/<name>")
 	}
 
 	if len(said) == 0 {
-		read, err := client.GetProject(ctx, &quaycrewv1.GetProjectRequest{Id: located.ProjectID})
-		if err != nil {
-			return err
-		}
-		writeRepository(out, "", read.GetProject())
-		return nil
+		return readRepository(ctx, client, located.ProjectID, out)
 	}
 
+	// The one argument the operator typed reads two ways whenever the system holds a project by that
+	// address, because a project address and a repository address have the same shape. Refused rather
+	// than guessed at: the guess wrote a project address into the repository of whichever project the
+	// operator happened to be standing in, and printed the sentence a read prints.
+	if len(said) == 1 {
+		if names, ok := alsoNamesAProject(ctx, client, said[0]); ok {
+			return twoReadings(said[0], kind, names, located)
+		}
+	}
+
+	// What the project held, read before the write, because the line a write prints says what it
+	// changed and what it changed from.
+	held, err := client.GetProject(ctx, &quaycrewv1.GetProjectRequest{Id: located.ProjectID})
+	if err != nil {
+		return err
+	}
 	resp, err := client.SetProjectRepository(ctx, &quaycrewv1.SetProjectRepositoryRequest{
 		Project: located.ProjectID, Repository: said[len(said)-1], Visibility: kind,
 	})
 	if err != nil {
 		return err
 	}
-	writeRepository(out, "", resp.GetProject())
+	writeRecorded(out, held.GetProject(), resp.GetProject())
 	return nil
+}
+
+// writeUsage is how the write is typed, named once so every refusal off this command offers the same
+// spelling.
+const writeUsage = "krewe project repository [<address>] <owner>/<name> [public|private]"
+
+// runProjectRepositoryShow reads where a project's work lands and writes nothing.
+//
+// It takes an address so another project can be read from where you are standing. Without it the
+// operator's only way to ask about another project was the form that records one, and the answer to
+// both is the same sentence.
+func runProjectRepositoryShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) > 1 {
+		return fmt.Errorf("a read takes one address and records nothing"+
+			"\n\nusage: krewe project repository show [<address>]"+
+			"\nto record one: %s", writeUsage)
+	}
+	typed := ""
+	if len(args) == 1 {
+		typed = args[0]
+	}
+	located, err := locate(ctx, client, typed)
+	if err != nil {
+		return err
+	}
+	if !located.HasProject() {
+		return aRepositoryBelongsToAProject(located, "krewe project repository show <workspace>/<project>")
+	}
+	return readRepository(ctx, client, located.ProjectID, out)
+}
+
+// readRepository says what one project works in, as the system holds it.
+func readRepository(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, projectID string, out io.Writer) error {
+	read, err := client.GetProject(ctx, &quaycrewv1.GetProjectRequest{Id: projectID})
+	if err != nil {
+		return err
+	}
+	writeRepository(out, "", read.GetProject())
+	return nil
+}
+
+// aRepositoryBelongsToAProject says which of the two levels the operator is holding, and how the
+// command is typed at the level that has a repository.
+func aRepositoryBelongsToAProject(located workspace.Location, spelling string) error {
+	return fmt.Errorf("%s is a workspace, and a repository belongs to a project: %s", located.Path, spelling)
+}
+
+// alsoNamesAProject asks the system whether an address is a project it holds.
+//
+// The two addresses cannot be told apart by shape, so the system is what tells them apart. Anything
+// that does not resolve is not a project, which is the ordinary case: a repository on a forge has
+// nothing to do with the names in here.
+func alsoNamesAProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, typed string) (workspace.Location, bool) {
+	path, err := workspace.ParsePath(typed)
+	if err != nil || path.Project == "" || path.Session != "" {
+		return workspace.Location{}, false
+	}
+	located, err := workspace.ResolvePath(ctx, client, path)
+	if err != nil {
+		return workspace.Location{}, false
+	}
+	return located, located.HasProject()
+}
+
+// twoReadings refuses the command that reads two ways, and gives the spelling of each.
+//
+// It names the project in scope as well as the argument. The damage landed on the project the
+// operator was standing in, which is the one the command never mentions, so a refusal that named
+// only the argument would leave out the project that was about to be overwritten.
+func twoReadings(typed, kind string, names, scope workspace.Location) error {
+	write := fmt.Sprintf("krewe project repository %s %s", scope.Path, typed)
+	if kind != "" {
+		write += " " + kind
+	}
+	return fmt.Errorf("%q is a repository address, and it is also a project this system holds. "+
+		"The command reads two ways, so it does neither."+
+		"\n\nto read what the project %s works in:\n    krewe project repository show %s"+
+		"\nto record %s as the repository of %s, where you are standing:\n    %s",
+		typed, names.Path, typed, typed, scope.Path, write)
+}
+
+// writeRecorded says what a write changed, and what it changed from.
+//
+// A read and a write printed one sentence between them, so a command that overwrote a setting read
+// as a command that had confirmed it. The line a write prints now carries the word recorded and the
+// state before it, which is the half a read has nothing to say about.
+func writeRecorded(out io.Writer, held, now *quaycrewv1.Project) {
+	fmt.Fprintf(out, "recorded: this project now works in %s, %s\n",
+		now.GetRepository(), repository.Costs(now.GetVisibility()))
+	switch {
+	case held.GetRepository() == "":
+		fmt.Fprintln(out, "it had no repository before this")
+	case held.GetRepository() == now.GetRepository() && held.GetVisibility() == now.GetVisibility():
+		fmt.Fprintln(out, "it held the same repository before this, so nothing moved")
+	default:
+		fmt.Fprintf(out, "it worked in %s, %s, before this\n",
+			held.GetRepository(), repository.Named(held.GetVisibility()))
+	}
 }
 
 // writeRepository says where a project's work lands, in one line, wherever a project is printed.
