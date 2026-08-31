@@ -196,7 +196,19 @@ func (p *Postgres) ListJobs(ctx context.Context, filter job.Filter) ([]*job.Job,
 			add(` and labels @> $%d`, labelJSON(filter.LabelKey, filter.LabelValue))
 		}
 	}
-	query += ` order by created_at desc, id desc`
+	// The window carries the order with it. A caller asking what finished lately is asking about the
+	// moment a job ended, and finished_at is not in step with created_at: a job declared this morning
+	// can finish after one declared last week. The index is on finished_at desc, so this read is the
+	// one the index was added for.
+	if filter.FinishedSince != nil {
+		add(` and finished_at >= $%d`, *filter.FinishedSince)
+		query += ` order by finished_at desc, id desc`
+	} else {
+		query += ` order by created_at desc, id desc`
+	}
+	if filter.Limit > 0 {
+		add(` limit $%d`, filter.Limit)
+	}
 
 	rows, err := p.pool.Query(ctx, query, args...)
 	if err != nil {

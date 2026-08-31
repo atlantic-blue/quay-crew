@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"net/http"
 	"sort"
 	"strconv"
@@ -8,7 +9,10 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/krewe/internal/display"
+	"github.com/atlantic-blue/krewe/internal/flow"
+	"github.com/atlantic-blue/krewe/internal/headroom"
 	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/krewe/internal/sandbox"
 	"github.com/atlantic-blue/krewe/internal/workspace"
 )
 
@@ -79,29 +83,44 @@ type block struct {
 	More string
 }
 
+// redrawSeconds is how often the browser draws the page again. A page that sits in a tab and looks
+// current is the failure this answers, and the moment it was drawn is only half of that: a reader who
+// has to remember to reload is a reader reading yesterday. A meta refresh needs no build step and no
+// library, which is what a system that ships as one binary can hold. Following a job as it moves,
+// rather than redrawing the lot, is issue 334, and this takes that road when it lands.
+const redrawSeconds = 15
+
 type briefingPage struct {
 	shell
+	// Header is the system in one line: what is running, what it spent, what the machine has left and
+	// what the last probe found. It sits above the blocks because it is a glance rather than a queue.
+	Header headerLine
 	Blocks []block
-	// DrawnAt is the moment this page was built. A page that sits in a tab and looks current is the
-	// failure this answers; following a job as it moves is issue 334.
+	// DrawnAt is the moment this page was built.
 	DrawnAt string
 }
 
 func (v *view) briefing(w http.ResponseWriter, r *http.Request) {
-	listed, err := v.reader.ListJobs(r.Context(), &quaycrewv1.ListJobsRequest{})
+	ctx := r.Context()
+	listed, err := v.reader.ListJobs(ctx, &quaycrewv1.ListJobsRequest{})
 	if err != nil {
 		http.Error(w, "the system did not answer: "+err.Error(), http.StatusBadGateway)
 		return
 	}
-	names, err := v.names(r.Context())
+	names, err := v.names(ctx)
 	if err != nil {
 		http.Error(w, "the system did not answer: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 
 	v.render(w, "briefing.html", briefingPage{
-		shell:   shell{Title: "briefing", Where: "what needs you, what is blocked, what the system produced"},
-		Blocks:  blocks(listed.GetJobs(), names),
+		shell: shell{
+			Title:   "briefing",
+			Where:   "what needs you, what is blocked, what the system produced",
+			Refresh: redrawSeconds,
+		},
+		Header:  v.header(ctx, listed.GetJobs()),
+		Blocks:  blocks(listed.GetJobs(), names, v.askingRuns(ctx, listed.GetJobs())),
 		DrawnAt: time.Now().Local().Format("15:04:05"),
 	})
 }
@@ -111,14 +130,16 @@ func (v *view) briefing(w http.ResponseWriter, r *http.Request) {
 // Only the produced block is capped. The other three are queues somebody is meant to empty, so a
 // briefing that hid part of one would hide the work it exists to surface; what landed grows for ever
 // and is a search rather than a briefing after the first screen.
-func blocks(jobs []*quaycrewv1.Job, names map[string]string) []block {
+//
+// runs is the flow run carried by each job that is asking, which decides the command its row offers.
+func blocks(jobs []*quaycrewv1.Job, names map[string]string, runs map[string]string) []block {
 	produced := tree(jobs, names, landed, ended, asLanded, landedAtMost)
 	return []block{
 		{
 			ID:      "waiting",
 			Heading: "waiting on you",
 			Says:    "Nothing is waiting on you.",
-			Rows:    tree(jobs, names, asking, since, asAsking, 0),
+			Rows:    tree(jobs, names, asking, since, answering(runs), 0),
 		},
 		{
 			ID:      "blocked",
@@ -185,10 +206,22 @@ func running(one *quaycrewv1.Job) bool {
 // itself. They are separate because a block that drew every field would be the wall of everything
 // this page exists not to be.
 
-func asAsking(row *jobRow, one *quaycrewv1.Job) {
-	row.Question = one.GetQuestion()
-	row.Waited = display.Age(one.GetUpdatedAt())
-	row.Answer = "krewe job answer " + display.ShortID(one.GetId()) + ` "..."`
+// answering says what an asking row waits for and what ends the wait.
+//
+// The command is the half that decides whether the page is worth opening: a briefing that says a job
+// is waiting and leaves the operator to work out what to type has moved the problem rather than
+// answered it. A job carrying a flow run takes the run's own command, because AnswerFlowRun refuses
+// anything that is not a run.
+func answering(runs map[string]string) func(*jobRow, *quaycrewv1.Job) {
+	return func(row *jobRow, one *quaycrewv1.Job) {
+		row.Question = one.GetQuestion()
+		row.Waited = display.Age(one.GetUpdatedAt())
+		if run, carried := runs[one.GetId()]; carried {
+			row.Answer = "krewe flow answer " + display.ShortID(run) + ` "..."`
+			return
+		}
+		row.Answer = "krewe job answer " + display.ShortID(one.GetId()) + ` "..."`
+	}
 }
 
 func asBlocked(row *jobRow, one *quaycrewv1.Job) {
@@ -416,4 +449,106 @@ func place(one *quaycrewv1.Job, names map[string]string) string {
 	return display.Name(names[one.GetWorkspace()], one.GetWorkspace()) +
 		workspace.Separator +
 		display.Name(names[one.GetProject()], one.GetProject())
+}
+
+// headerLine is the system in one line above the blocks: what is running now, what it has spent, what
+// the machine has left, and what the last probe of the system found.
+//
+// The words are the ones GetHeadroom and GetHealth already use, so this line, the console and
+// krewe header cannot say different things about one system. Every figure is optional: a system that
+// cannot say what the machine has left still has four blocks worth reading, so a call that does not
+// answer leaves its own figure empty rather than taking the page down.
+type headerLine struct {
+	Running int
+	Tokens  string
+	Room    string
+	// RoomState is the one word on its own, so the page can colour it: full has to be readable
+	// without reading the number beside it.
+	RoomState string
+	Health    string
+	// Degraded is a system with a part that is down, which is the other state that has to be readable
+	// at a glance.
+	Degraded bool
+}
+
+// header reads the four figures. Nothing here fails the page.
+func (v *view) header(ctx context.Context, jobs []*quaycrewv1.Job) headerLine {
+	line := headerLine{}
+	for _, one := range jobs {
+		if running(one) {
+			line.Running++
+		}
+	}
+	if spent, err := v.reader.GetUsage(ctx, &quaycrewv1.GetUsageRequest{}); err == nil {
+		line.Tokens = display.Tokens(sandbox.Usage{
+			Input:        spent.GetTotal().GetInput(),
+			Output:       spent.GetTotal().GetOutput(),
+			CacheRead:    spent.GetTotal().GetCacheRead(),
+			CacheWritten: spent.GetTotal().GetCacheWritten(),
+		}.Total())
+	}
+	if room, err := v.reader.GetHeadroom(ctx, &quaycrewv1.GetHeadroomRequest{}); err == nil {
+		line.RoomState = room.GetState()
+		// A system that measured nothing says unknown once and says nothing else, which is how the
+		// console draws it. A figure nobody measured, dressed as a figure, is what let eighteen
+		// sandboxes be killed with nothing said about it.
+		line.Room = headroom.StateUnknown
+		if state := room.GetState(); state != "" && state != headroom.StateUnknown {
+			line.Room = room.GetUsed() + " of " + room.GetLimit() + " " + state
+		}
+	}
+	line.Health, line.Degraded = v.health(ctx)
+	return line
+}
+
+// health is the system's own health in a few words, in the words the call already uses.
+//
+// A part that is down names itself, because that is the part somebody has to go and look at. A system
+// that has never probed says so rather than reading as serving: a part nobody checked must never read
+// the same as a part that answered.
+func (v *view) health(ctx context.Context) (string, bool) {
+	return healthOf(v.reader.GetHealth(ctx, &quaycrewv1.GetHealthRequest{}))
+}
+
+// healthOf is what the header says about a probe, and whether the system reads as degraded.
+func healthOf(answer *quaycrewv1.GetHealthResponse, err error) (string, bool) {
+	if err != nil || len(answer.GetComponents()) == 0 {
+		return display.HealthNotChecked, false
+	}
+	for _, component := range answer.GetComponents() {
+		if component.GetState() == display.HealthDown {
+			return component.GetName() + " is " + display.HealthDown, true
+		}
+	}
+	return display.HealthServing, false
+}
+
+// askingRuns is the run identifier for each job that carries an asking flow run.
+//
+// There are two answer commands and the page has to pick the right one. A job that asked for itself
+// takes krewe job answer. A job carrying a run takes the run's own call, because AnswerFlowRun refuses
+// anything that is not a run, so offering the other command would hand the operator a refusal. A read
+// that fails costs the flow commands and never the page: the job command is still an answer.
+func (v *view) askingRuns(ctx context.Context, jobs []*quaycrewv1.Job) map[string]string {
+	carried := map[string]string{}
+	waiting := false
+	for _, one := range jobs {
+		if asking(one) {
+			waiting = true
+			break
+		}
+	}
+	if !waiting {
+		return carried
+	}
+	listed, err := v.reader.ListFlowRuns(ctx, &quaycrewv1.ListFlowRunsRequest{})
+	if err != nil {
+		return carried
+	}
+	for _, run := range listed.GetRuns() {
+		if run.GetJob() != "" && run.GetStatus() == flow.StatusAsking {
+			carried[run.GetJob()] = run.GetId()
+		}
+	}
+	return carried
 }

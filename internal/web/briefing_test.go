@@ -16,7 +16,7 @@ import (
 // blockOf is one block of the page by name, and the failure when the page has no such block.
 func blockOf(t *testing.T, jobs []*quaycrewv1.Job, id string) block {
 	t.Helper()
-	for _, one := range blocks(jobs, map[string]string{}) {
+	for _, one := range blocksOf(jobs, map[string]string{}) {
 		if one.ID == id {
 			return one
 		}
@@ -29,7 +29,7 @@ func blockOf(t *testing.T, jobs []*quaycrewv1.Job, id string) block {
 // the one that decides whether the page is worth opening. A briefing that draws nothing when nothing
 // is blocked and a briefing that failed to read the system look identical, and one of them is a defect.
 func TestABlockWithNothingInItSaysSoRatherThanReadingAsBroken(t *testing.T) {
-	drawn := blocks(nil, map[string]string{})
+	drawn := blocksOf(nil, map[string]string{})
 	if len(drawn) == 0 {
 		t.Fatal("the briefing drew no blocks at all, so this test proves nothing")
 	}
@@ -48,7 +48,7 @@ func TestABlockWithNothingInItSaysSoRatherThanReadingAsBroken(t *testing.T) {
 // operator cares about least.
 func TestTheThreeQuestionsComeBeforeWhatIsRunning(t *testing.T) {
 	want := []string{"waiting", "blocked", "produced", "running"}
-	drawn := blocks(nil, map[string]string{})
+	drawn := blocksOf(nil, map[string]string{})
 	if len(drawn) != len(want) {
 		t.Fatalf("the briefing has %d blocks, want %d", len(drawn), len(want))
 	}
@@ -83,7 +83,7 @@ func TestEachQuestionKeepsOnlyTheJobsThatAnswerIt(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			jobs := []*quaycrewv1.Job{tc.one}
-			for _, one := range blocks(jobs, map[string]string{}) {
+			for _, one := range blocksOf(jobs, map[string]string{}) {
 				rows := len(one.Rows)
 				if one.ID == tc.where && rows != 1 {
 					t.Errorf("the %s block drew %d rows, want the job in it", one.ID, rows)
@@ -291,7 +291,7 @@ func TestARowSaysWhereTheJobWasDeclared(t *testing.T) {
 		t.Fatalf("the running block drew %d rows, want 1", len(rows))
 	}
 	names := map[string]string{"workspace-id": "me", "project-id": "house-bills"}
-	drawn := blocks([]*quaycrewv1.Job{one}, names)[3].Rows[0]
+	drawn := blocksOf([]*quaycrewv1.Job{one}, names)[3].Rows[0]
 	if drawn.Place != "me/house-bills" {
 		t.Errorf("the row says the job is in %q, want me/house-bills", drawn.Place)
 	}
@@ -341,4 +341,11 @@ func TestOneBigTreeIsDrawnWholeRatherThanCutToNothing(t *testing.T) {
 	if drawn.More != "" {
 		t.Errorf("the block says %q, and it left nothing out", drawn.More)
 	}
+}
+
+// blocksOf is the page's blocks with no flow runs behind them, which is what a table about how a
+// block is built needs: which command a waiting row offers where a run carries the job is its own
+// case, beside the reads that answer it.
+func blocksOf(jobs []*quaycrewv1.Job, names map[string]string) []block {
+	return blocks(jobs, names, nil)
 }

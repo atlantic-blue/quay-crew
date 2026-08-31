@@ -164,3 +164,45 @@ func tickUntilTheJobIs(ctx context.Context, phase string) error {
 	}
 	return fmt.Errorf("the job is %q saying %q, want %q", last.GetPhase(), last.GetReason(), phase)
 }
+
+// initializeBriefingHeaderSteps holds the line above the blocks, the command a row carries where a
+// flow run is behind the job, and the two things about the page itself that decide whether what is on
+// it can be trusted: when it was drawn, and that it draws itself again.
+func initializeBriefingHeaderSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^the briefing offers the run's own answer command, and not the job's$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		carrier, err := w.store.FlowRunCarrier(ctx, w.flowRun.ID)
+		if err != nil {
+			return fmt.Errorf("read the job carrying the run: %w", err)
+		}
+		if err := theBriefingSays("krewe flow answer " + display.ShortID(w.flowRun.ID))(ctx); err != nil {
+			return err
+		}
+		if strings.Contains(webFrom(ctx).body, "krewe job answer "+display.ShortID(carrier)) {
+			return fmt.Errorf("the row offers krewe job answer, which the system refuses for a run's own job:\n%s",
+				webFrom(ctx).body)
+		}
+		return nil
+	})
+
+	sc.Step(`^the briefing says the machine was not measured and the system was never probed$`,
+		func(ctx context.Context) error {
+			if err := theBriefingSays("unknown")(ctx); err != nil {
+				return err
+			}
+			if err := theBriefingSays("not checked")(ctx); err != nil {
+				return err
+			}
+			if strings.Contains(webFrom(ctx).body, "serving") {
+				return fmt.Errorf("a system that has never probed itself reads as serving:\n%s", webFrom(ctx).body)
+			}
+			return nil
+		})
+
+	sc.Step(`^the briefing counts (\d+) running$`, func(ctx context.Context, count int) error {
+		return theBriefingSays(fmt.Sprintf("%d running", count))(ctx)
+	})
+
+	sc.Step(`^the briefing draws itself again with nobody reloading$`, theBriefingSays(`http-equiv="refresh"`))
+	sc.Step(`^the briefing says when it was drawn$`, theBriefingSays("Drawn at"))
+}

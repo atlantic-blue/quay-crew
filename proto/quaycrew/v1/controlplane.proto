@@ -1545,6 +1545,14 @@ message ListJobsRequest {
   // labelled at all.
   string label_key = 6;
   string label_value = 7;
+  // finished_since keeps jobs whose finished_at is at or after it, and a job that has not finished
+  // is left out. Setting it also turns the order into most recently finished first, because a
+  // caller asking what finished lately is asking about the moment it ended and not the moment it
+  // was declared.
+  google.protobuf.Timestamp finished_since = 8;
+  // limit caps how many rows come back. Zero is every row, which is what a caller that sets nothing
+  // gets today. A negative number is refused rather than read as zero.
+  int32 limit = 9;
 }
 message ListJobsResponse {
   // Each job without its answer. Read one with GetJob to get the answer whole.

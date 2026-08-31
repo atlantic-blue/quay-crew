@@ -282,6 +282,92 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	// The window and the cap the briefing reads block three with. The order is the part that is easy
+	// to get wrong, so the jobs below are declared in the reverse of the order they finished in: a
+	// store that kept ordering by created_at answers this exactly backwards.
+	t.Run("a listing narrows to what finished lately, newest finished first, capped", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+
+		now := time.Now().UTC()
+		finished := func(title string, declared, ended time.Duration) string {
+			t.Helper()
+			at := now.Add(-ended)
+			one := &job.Job{
+				ID: store.NewID(), Workspace: workspace, Project: project, Title: title,
+				Brief: "one piece of work", Version: 1, Phase: job.PhaseDone,
+				CreatedAt: now.Add(-declared), UpdatedAt: now.Add(-declared), FinishedAt: &at,
+			}
+			if err := s.CreateJob(ctx, one, declaredEvent(one)); err != nil {
+				t.Fatalf("CreateJob %s: %v", title, err)
+			}
+			return one.ID
+		}
+		hourAgo := finished("finished an hour ago", 96*time.Hour, time.Hour)
+		yesterday := finished("finished yesterday", 72*time.Hour, 24*time.Hour)
+		lastWeek := finished("finished last week", 48*time.Hour, 168*time.Hour)
+		running := &job.Job{
+			ID: store.NewID(), Workspace: workspace, Project: project, Title: "still running",
+			Brief: "not finished at all", Version: 1, Phase: job.PhaseRunning,
+			CreatedAt: now.Add(-120 * time.Hour), UpdatedAt: now.Add(-120 * time.Hour),
+		}
+		if err := s.CreateJob(ctx, running, declaredEvent(running)); err != nil {
+			t.Fatalf("CreateJob: %v", err)
+		}
+
+		twoDays := now.Add(-48 * time.Hour)
+		listed, err := s.ListJobs(ctx, job.Filter{Project: project, FinishedSince: &twoDays})
+		if err != nil {
+			t.Fatalf("ListJobs: %v", err)
+		}
+		// What the window leaves out, first: a job with no moment it finished is not a late job, and
+		// a job that finished before the window is not in it.
+		for _, one := range listed {
+			if one.ID == running.ID {
+				t.Error("a job that has not finished is inside a window about jobs that finished")
+			}
+			if one.ID == lastWeek {
+				t.Error("a job that finished before the window is inside it")
+			}
+		}
+		if len(listed) != 2 {
+			t.Fatalf("the window holds %d jobs, want the two that finished inside it", len(listed))
+		}
+		if listed[0].ID != hourAgo || listed[1].ID != yesterday {
+			t.Fatalf("the window reads %q then %q, want the most recently finished first",
+				listed[0].Title, listed[1].Title)
+		}
+
+		capped, err := s.ListJobs(ctx, job.Filter{Project: project, FinishedSince: &twoDays, Limit: 1})
+		if err != nil {
+			t.Fatalf("ListJobs: %v", err)
+		}
+		if len(capped) != 1 || capped[0].ID != hourAgo {
+			t.Fatalf("a cap of one gave %d rows, want the most recently finished alone", len(capped))
+		}
+
+		// A cap on its own does not move the order. Everything the system holds, newest declared
+		// first, is what a listing has always answered, and the cap only says how far down to read.
+		byDeclaration, err := s.ListJobs(ctx, job.Filter{Project: project, Limit: 2})
+		if err != nil {
+			t.Fatalf("ListJobs: %v", err)
+		}
+		if len(byDeclaration) != 2 || byDeclaration[0].ID != lastWeek || byDeclaration[1].ID != yesterday {
+			t.Fatalf("a cap of two gave %d rows opening with %q, want the newest declared first",
+				len(byDeclaration), byDeclaration[0].Title)
+		}
+
+		// Neither set is what every caller sends today, and it still answers everything.
+		everything, err := s.ListJobs(ctx, job.Filter{Project: project})
+		if err != nil {
+			t.Fatalf("ListJobs: %v", err)
+		}
+		if len(everything) != 4 {
+			t.Fatalf("a listing that narrows by nothing holds %d jobs, want all 4", len(everything))
+		}
+	})
+
 	t.Run("a listing carries no answers and reading one job does", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()

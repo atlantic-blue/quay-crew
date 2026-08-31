@@ -276,6 +276,13 @@ type Filter struct {
 	// value, which is how a caller finds everything it labelled at all.
 	LabelKey   string
 	LabelValue string
+	// FinishedSince keeps jobs whose FinishedAt is at or after it, and drops a job that has not
+	// finished at all. Setting it also turns the order into most recently finished first: the whole
+	// question it answers is what ended lately, and the moment a job was declared says nothing about
+	// that.
+	FinishedSince *time.Time
+	// Limit caps how many rows come back, after the order is decided. Zero is every row.
+	Limit int
 }
 
 // Declaration is what a caller writes. Everything else on a job is the system's to assign.
