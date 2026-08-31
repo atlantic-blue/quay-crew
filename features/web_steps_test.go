@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 
 	"github.com/atlantic-blue/krewe/internal/web"
@@ -101,4 +102,99 @@ func initializeWebSteps(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+
+	// The refusal is read against the document, so a wall that stops naming one of the three fails
+	// here, and so does a document that quietly drops one.
+	sc.Step(`^the refusal names each thing a wider front door needs, as the architecture document lists them$`, func(ctx context.Context) error {
+		err := webFrom(ctx).err
+		if err == nil {
+			return fmt.Errorf("the web view served an address that is reachable from another machine")
+		}
+		needs, readErr := theThreeThingsAWiderDoorNeeds()
+		if readErr != nil {
+			return readErr
+		}
+		refusal := strings.ToLower(err.Error())
+		for _, need := range needs {
+			if !strings.Contains(refusal, need) {
+				return fmt.Errorf("the refusal does not name %q, so the operator cannot tell what is missing: %v", need, err)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^the refusal names the chat channel as the road taken instead$`, func(ctx context.Context) error {
+		err := webFrom(ctx).err
+		if err == nil {
+			return fmt.Errorf("the web view served an address that is reachable from another machine")
+		}
+		refusal := strings.ToLower(err.Error())
+		for _, want := range []string{"chat channel", "docs/architecture.md"} {
+			if !strings.Contains(refusal, want) {
+				return fmt.Errorf("the refusal does not name %q, so it refuses without saying where the work goes instead: %v", want, err)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^the architecture document records the decision, the three things and the road taken$`, func(_ context.Context) error {
+		text, err := os.ReadFile(theDecisionDocument)
+		if err != nil {
+			return fmt.Errorf("read the decision: %w", err)
+		}
+		written := string(text)
+		for _, want := range []string{
+			"Decided 31 August 2026",
+			"the front door stays on this machine",
+			"chat channel",
+			"https://github.com/atlantic-blue/quay-crew/issues/9",
+			"https://github.com/atlantic-blue/quay-crew/issues/10",
+		} {
+			if !strings.Contains(written, want) {
+				return fmt.Errorf("%s does not say %q, so the decision is not written where the next reader finds it", theDecisionDocument, want)
+			}
+		}
+		if _, err := theThreeThingsAWiderDoorNeeds(); err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+// theDecisionDocument is where the decision of 31 August 2026 is written, a directory up from here.
+const theDecisionDocument = "../docs/ARCHITECTURE.md"
+
+// theThreeThingsAWiderDoorNeeds reads them out of the architecture document rather than holding a
+// copy of them. The document is the record, and the refusal is measured against it, so the two cannot
+// drift apart in silence.
+//
+// It refuses to return a different number than three. A parse that finds nothing reads exactly like a
+// refusal that names everything, which is the shape of a check that passes while proving nothing.
+func theThreeThingsAWiderDoorNeeds() ([]string, error) {
+	text, err := os.ReadFile(theDecisionDocument)
+	if err != nil {
+		return nil, fmt.Errorf("read the decision: %w", err)
+	}
+	const opens = "A wider front door needs three things first"
+	_, after, found := strings.Cut(string(text), opens)
+	if !found {
+		return nil, fmt.Errorf("%s does not say what a wider front door needs, so nothing records this decision", theDecisionDocument)
+	}
+	// The rest of that sentence first, then the block under it, which is the list itself.
+	_, under, _ := strings.Cut(after, "\n\n")
+	block, _, _ := strings.Cut(under, "\n\n")
+
+	var needs []string
+	for _, line := range strings.Split(strings.TrimSpace(block), "\n") {
+		bullet, isOne := strings.CutPrefix(strings.TrimSpace(line), "- ")
+		if !isOne {
+			return nil, fmt.Errorf("%s does not list what a wider front door needs under the sentence that opens the list, it holds %q", theDecisionDocument, line)
+		}
+		need, _, _ := strings.Cut(bullet, ",")
+		needs = append(needs, strings.ToLower(strings.TrimSuffix(strings.TrimSpace(need), ".")))
+	}
+	if len(needs) != 3 {
+		return nil, fmt.Errorf("%s names %d things a wider front door needs, and the decision named three: %v", theDecisionDocument, len(needs), needs)
+	}
+	return needs, nil
 }

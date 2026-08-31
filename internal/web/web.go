@@ -73,13 +73,12 @@ func Serve(ctx context.Context, reader Reader, addr string, out io.Writer) error
 // loopbackOnly refuses to bind anywhere but this machine.
 //
 // The control plane listens on a local only port guarded by one shared token, and this server holds
-// that token. The briefing now carries what the system produced, what is blocked and what a person is
-// being asked, so an open port is a reading of the whole system rather than a listing of names.
+// that token. Serving it to a routable address hands the whole system to whatever can reach the port.
 //
-// Two things have to be true before anything here binds past loopback, and neither is built: a reader
-// who authenticates as themselves, with a credential that can be withdrawn from one device without
-// withdrawing it from the rest, and a transport that is encrypted, because a briefing crosses a
-// network somebody else runs. Until both exist this is a wall rather than a default. An address with
+// Decided 31 August 2026, and written in the authentication section of docs/ARCHITECTURE.md: the
+// front door stays on this machine, and the work reaches another device through a chat channel. A
+// wider front door needs three things the system does not hold, and the refusal below names all
+// three, so an operator who binds the wrong address reads which of them is missing. An address with
 // no host is refused too, because ":8080" binds every interface there is.
 func loopbackOnly(addr string) error {
 	host, _, err := net.SplitHostPort(addr)
@@ -92,11 +91,12 @@ func loopbackOnly(addr string) error {
 	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
 		return nil
 	}
-	return fmt.Errorf("krewe web serves this machine only, and %q is not on it: use %s. "+
-		"The briefing says what the system produced and what it was asked, so a wider address needs "+
-		"an authenticated reader and an encrypted transport first, and the system has neither. "+
-		"Reaching the system from another device is a separate decision, and a chat channel is the "+
-		"road planned for it", addr, DefaultAddress)
+	return fmt.Errorf("krewe web serves this machine only, and %q is not on it: use %s.\n"+
+		"A wider front door needs three things this system does not hold: a credential for each "+
+		"device, a way to withdraw one device, and a rule about encryption on the path.\n"+
+		"The work reaches another device through a chat channel instead, which needs none of the "+
+		"three. That was decided on 31 August 2026 and it is written in docs/ARCHITECTURE.md, under "+
+		"authentication", addr, DefaultAddress)
 }
 
 // Handler builds the routes. It parses the templates once, so a template that does not compile is a

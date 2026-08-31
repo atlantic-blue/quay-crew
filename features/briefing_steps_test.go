@@ -111,19 +111,6 @@ func initializeBriefingSteps(sc *godog.ScenarioContext) {
 		return theBriefingSays(w.tasks[len(w.tasks)-1].sessionID)(ctx)
 	})
 
-	sc.Step(`^the web view refuses, and says a reader would have to be authenticated first$`,
-		func(ctx context.Context) error {
-			err := webFrom(ctx).err
-			if err == nil {
-				return fmt.Errorf("the web view served an address that is reachable from another machine")
-			}
-			for _, wanted := range []string{"this machine only", "authenticated", "encrypted"} {
-				if !strings.Contains(err.Error(), wanted) {
-					return fmt.Errorf("the refusal does not say %q: %v", wanted, err)
-				}
-			}
-			return nil
-		})
 }
 
 // blockMark is how a block of the briefing is found in what the browser received.

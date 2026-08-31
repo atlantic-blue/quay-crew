@@ -22,10 +22,9 @@ is [#549](https://github.com/atlantic-blue/quay-crew/issues/549), and until that
 not a state this system can hold.
 
 **It still serves this machine and nowhere else.** The briefing carries more than a listing of names
-did, so the wall is worth more than it was. The refusal now names what would have to be true first: a
-reader who authenticates, with a credential that can be withdrawn from one device, and a transport
-that is encrypted. Neither exists, so nothing binds past loopback. Whether the briefing reaches a
-phone through a wider door or through a chat channel is
-[#550](https://github.com/atlantic-blue/quay-crew/issues/550).
+did, so the wall matters more than it did. Nothing here widens it. The wall, the three things a wider
+front door would need, and the decision behind them are
+[#550](https://github.com/atlantic-blue/quay-crew/issues/550), which landed first, and the refusal it
+wrote is what this page sits behind.
 
 See [#547](https://github.com/atlantic-blue/quay-crew/issues/547).

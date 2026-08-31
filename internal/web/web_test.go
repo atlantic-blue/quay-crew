@@ -69,18 +69,43 @@ func TestItServesThisMachineAndRefusesEverywhereElse(t *testing.T) {
 	}
 }
 
-// TestTheRefusalSaysWhatWouldHaveToBeTrueFirst. A wall with no reason on it gets taken down by
-// whoever meets it next, and the briefing is a stronger reason for the wall than the listing was: it
-// carries what the system produced, what it was asked and why it stopped. So the refusal names the two
-// things that do not exist yet, rather than only the address it will not take.
-func TestTheRefusalSaysWhatWouldHaveToBeTrueFirst(t *testing.T) {
+// theThreeThingsAWiderDoorNeeds is what the decision of 31 August 2026 requires before anything binds
+// past this machine. The system holds none of them.
+//
+// The list is here as well as in docs/ARCHITECTURE.md on purpose. A wall whose reason lives only in a
+// code comment drifts away from the document that decided it, and the scenario in features/web.feature
+// fails when the two stop naming the same three.
+var theThreeThingsAWiderDoorNeeds = []string{
+	"a credential for each device",
+	"a way to withdraw one device",
+	"a rule about encryption on the path",
+}
+
+// TestTheRefusalSaysWhichOfTheThreeIsMissing holds the refusal to naming what a wider front door would
+// need. An operator who binds the wrong address gets a decision he can read and argue with, rather
+// than a wall that says no. A refusal that only says no sends him to the source to find out why.
+func TestTheRefusalSaysWhichOfTheThreeIsMissing(t *testing.T) {
 	err := loopbackOnly("0.0.0.0:8080")
 	if err == nil {
-		t.Fatal("an address reachable from another machine was allowed")
+		t.Fatal("0.0.0.0:8080 was allowed, and every machine on the network can reach it")
 	}
-	for _, wanted := range []string{"authenticated", "encrypted"} {
-		if !strings.Contains(err.Error(), wanted) {
-			t.Errorf("the refusal does not say a reader must be %s: %v", wanted, err)
+	refusal := strings.ToLower(err.Error())
+
+	for _, needed := range theThreeThingsAWiderDoorNeeds {
+		if !strings.Contains(refusal, needed) {
+			t.Errorf("the refusal does not name %q, so the operator cannot tell what is missing:\n%s", needed, err)
+		}
+	}
+	// The road that was taken, and where the decision is written, so the reader has somewhere to go.
+	for _, want := range []string{"chat channel", "docs/architecture.md"} {
+		if !strings.Contains(refusal, want) {
+			t.Errorf("the refusal does not name %q:\n%s", want, err)
+		}
+	}
+	// What he typed and what to type instead. A refusal that names neither is a puzzle.
+	for _, want := range []string{"0.0.0.0:8080", DefaultAddress} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal does not name %q:\n%s", want, err)
 		}
 	}
 }

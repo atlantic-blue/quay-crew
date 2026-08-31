@@ -12,7 +12,9 @@ Feature: The briefing answers the operator's questions before it says what is ru
   Jobs are drawn as the tree the orchestration design describes, so a child that asked a question is
   drawn under the work it belongs to rather than as a row with nothing behind it.
 
-  Nothing here changes anything, and the page is still served to this machine and nowhere else.
+  Nothing here changes anything. The page is still served to this machine and nowhere else, which is
+  the decision written in the authentication section of `docs/ARCHITECTURE.md` and held by the
+  scenarios in the browser feature beside this one.
 
   Background:
     Given a running control plane
@@ -54,7 +56,3 @@ Feature: The briefing answers the operator's questions before it says what is ru
     And the operator opens the briefing
     Then the briefing lists no sessions
     And the session listing still carries that conversation
-
-  Scenario: The briefing is served to this machine and nowhere else
-    When the operator asks for the web view on "0.0.0.0:8080"
-    Then the web view refuses, and says a reader would have to be authenticated first
