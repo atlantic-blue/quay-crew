@@ -24,9 +24,9 @@ The gate is attached rather than seeded. `merge-gate` is seeded because it refus
 session is ever meant to do. This one refuses prose, and prose is what a role produces all day, so a
 workspace opts in with `krewe hook attach <workspace> prose-gate`.
 
-The number the issue asked for: the gate refuses 1296 of the 3795 paragraphs already in `docs/`,
-`README.md`, `CHANGELOG.md`, `changelog.d/` and `roles/`. That is 34 per cent, and it is not a false
-positive rate. Of 1514 refusals for length, 0 quote two sentences read as one. A sample of 20, read
+The number the issue asked for: the gate refuses 1492 of the 4143 paragraphs already in `docs/`,
+`README.md`, `CHANGELOG.md`, `changelog.d/` and `roles/`. That is 36 per cent, and it is not a false
+positive rate. Of 1736 refusals for length, 0 quote two sentences read as one. A sample of 20, read
 by hand, held 20 real long sentences. The dash rule refuses nothing in `docs/` at all.
 
 The prose here uses the house voice, which chooses long explanatory sentences, and most of it

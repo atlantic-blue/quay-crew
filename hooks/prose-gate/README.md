@@ -93,16 +93,16 @@ premise that the prose here is the standard the gate aims at.
 
 The premise is false, and the measurement says so. `corpus_test.go` runs the gate over `docs/`,
 `README.md`, `CHANGELOG.md`, `changelog.d/` and `roles/` on every test run, and prints the current
-figures. On 31 August 2026, against `f9b8062`:
+figures. On 31 August 2026, against `aafb6e8`:
 
-    64 documents, 3795 paragraphs, 1296 refused (34 per cent)
-    length 1514, paragraph 68, tense 458, dash 96
+    83 documents, 4143 paragraphs, 1492 refused (36 per cent)
+    length 1736, paragraph 78, tense 552, dash 96
 
 Those refusals are correct. Three measurements say so.
 
 - **The length rule refuses a real sentence every time.** A wrong refusal needs a sentence boundary
   the reader missed, which joins two sentences into one over the limit. A joined sentence keeps the
-  full stop between its halves, so every one is findable rather than a matter of sampling. Of 1514
+  full stop between its halves, so every one is findable rather than a matter of sampling. Of 1736
   refusals, 0 hold an inner full stop. `TestNoRefusalIsMadeOfTwoSentencesReadAsOne` gates on that
   number.
 - **A sample of 20 length refusals, read by hand, held 20 real sentences of more than 25 words.**
