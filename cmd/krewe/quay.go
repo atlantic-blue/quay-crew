@@ -149,11 +149,12 @@ var helpSpellings = map[string]bool{
 // The ones that remain say what shape the output takes, or which of two things a word does, rather
 // than where anything is.
 var takenFlags = map[string]map[string]bool{
-	"answer": {allAnswers: true},
-	"task":   {flagDispatch: true},
-	"job":    jobFlagsTaken(),
-	"limits": limitsFlagsTaken(),
-	"target": targetFlagsTaken(),
+	"answer":  {allAnswers: true},
+	"task":    {flagDispatch: true},
+	"job":     jobFlagsTaken(),
+	"history": historyFlagsTaken(),
+	"limits":  limitsFlagsTaken(),
+	"target":  targetFlagsTaken(),
 }
 
 // refuseFlags returns an error when an invocation uses a flag the command it names does not take. A
@@ -254,6 +255,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runSteer(ctx, client, args[1:], out)
 	case "steers":
 		return runSteers(ctx, client, args[1:], out)
+	case "history":
+		return runHistory(ctx, client, args[1:], out)
 	case "job":
 		return runJob(ctx, client, args[1:], out)
 	case "target":

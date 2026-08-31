@@ -693,6 +693,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeAnswerSteps(sc)
 	initializeTaskWordSteps(sc)
 	initializeJobWordSteps(sc)
+	initializeHistorySteps(sc)
 	initializeLevelWordSteps(sc)
 	initializeVersionSteps(sc)
 	initializeJobSteps(sc)

@@ -126,7 +126,10 @@ var jobVerbs = map[string]string{
 	quaycrewv1.ControlPlaneService_CreateJob_FullMethodName: role.VerbJobCreate,
 	quaycrewv1.ControlPlaneService_GetJob_FullMethodName:    role.VerbJobRead,
 	quaycrewv1.ControlPlaneService_ListJobs_FullMethodName:  role.VerbJobRead,
-	quaycrewv1.ControlPlaneService_StopJob_FullMethodName:   role.VerbJobStop,
+	// A history is a digest of jobs, which is strictly less than GetJob already returns, so it needs
+	// the verb that exists rather than a second one meaning the same thing.
+	quaycrewv1.ControlPlaneService_GetHistory_FullMethodName: role.VerbJobRead,
+	quaycrewv1.ControlPlaneService_StopJob_FullMethodName:    role.VerbJobStop,
 }
 
 // shortMethod is the call's own name, without the service in front of it.

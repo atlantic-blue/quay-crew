@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/atlantic-blue/krewe/internal/job"
 	"github.com/jackc/pgx/v5"
@@ -561,4 +562,67 @@ func (p *Postgres) LandJob(ctx context.Context, id string, landed job.Landing, e
 		return nil, fmt.Errorf("land job: %w", err)
 	}
 	return p.GetJob(ctx, id)
+}
+
+// digestColumns is the row a history reads, in one place beside jobColumns so the two cannot drift.
+//
+// It is deliberately short. A history never selects the brief, the answer or the steps, which is the
+// difference between a read a session can afford and one that fills its context before it starts.
+const digestColumns = `id, project, title, role, phase, spent_tokens, pull_request, reason, steers,
+	created_at, started_at, finished_at`
+
+// JobHistory returns every job declared inside a window, as digests, newest first.
+//
+// Bounded by the window rather than by a limit, because the caller adds these up before it cuts them
+// down: a total taken over a page would be a number that is wrong in the one way a reader cannot see.
+func (p *Postgres) JobHistory(ctx context.Context, query job.HistoryQuery) ([]*job.Digest, error) {
+	statement := `select ` + digestColumns + ` from jobs where created_at >= $1 and created_at < $2`
+	args := []any{query.Window.Since, query.Window.Until}
+	switch {
+	case query.Project != "":
+		args = append(args, query.Project)
+		statement += fmt.Sprintf(` and project = $%d`, len(args))
+	case query.Workspace != "":
+		args = append(args, query.Workspace)
+		statement += fmt.Sprintf(` and workspace = $%d`, len(args))
+	}
+	statement += ` order by created_at desc, id desc`
+
+	rows, err := p.pool.Query(ctx, statement, args...)
+	if err != nil {
+		return nil, fmt.Errorf("job history: %w", err)
+	}
+	defer rows.Close()
+
+	history := make([]*job.Digest, 0)
+	for rows.Next() {
+		one, err := scanDigest(rows)
+		if err != nil {
+			return nil, fmt.Errorf("job history: %w", err)
+		}
+		history = append(history, one)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("job history: %w", err)
+	}
+	return history, nil
+}
+
+// scanDigest reads one history row. The two moments a job may not have yet are nullable, and an
+// absent one stays the zero time, which is what the arithmetic reads as "not known".
+func scanDigest(row rowScanner) (*job.Digest, error) {
+	var one job.Digest
+	var started, finished *time.Time
+	if err := row.Scan(&one.ID, &one.Project, &one.Title, &one.Role, &one.Phase, &one.SpentToken,
+		&one.PullRequest, &one.Reason, &one.Steers, &one.CreatedAt, &started, &finished); err != nil {
+		return nil, err
+	}
+	if started != nil {
+		one.StartedAt = started.UTC()
+	}
+	if finished != nil {
+		one.FinishedAt = finished.UTC()
+	}
+	one.CreatedAt = one.CreatedAt.UTC()
+	return &one, nil
 }

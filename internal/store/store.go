@@ -393,6 +393,13 @@ type Store interface {
 	// ListJob returns what matches, newest first and without answers, because a listing of a hundred
 	// answers is a listing nobody can read. A caller that wants an answer asks for one job.
 	ListJobs(ctx context.Context, filter job.Filter) ([]*job.Job, error)
+	// JobHistory returns every job declared inside a window, as digests, newest first.
+	//
+	// Every job and not a page of them: the caller adds them up and then cuts them down, so the
+	// summary a reader trusts covers the window rather than the rows that fitted. Digests because a
+	// history that carried each brief and each answer would cost a reader the context it wanted the
+	// history in order to spend.
+	JobHistory(ctx context.Context, query job.HistoryQuery) ([]*job.Digest, error)
 	// StopJob halts job that has not ended, keeping the reason, and writes the record of the stop
 	// beside it. Job that already ended is refused rather than overwritten: how it ended is the
 	// useful part.
