@@ -1288,6 +1288,10 @@ message Job {
   // on the job the steer landed on and on every job above it. On the job at the top it is the score
   // of the whole tree.
   int32 steers = 37;
+  // claim is the piece of work this job is doing: an issue, a branch, or a name two people would
+  // both use for the same thing. A second job claiming it is refused while this one still holds it,
+  // so two sessions cannot build the same slice. Empty claims nothing.
+  string claim = 40;
 
   // What the system assigned, and the caller may not.
   // parent is which job asked for this one, read from the credential the caller presented
@@ -1387,6 +1391,9 @@ message CreateJobRequest {
   // back. A job declared under another inherits its parent's, and stating a second one where the
   // parent already carries one is refused rather than ignored.
   string product = 16;
+  // claim is the piece of work this job takes: an issue, a branch, or a named piece of work. The
+  // declaration is refused where another job holds the same one, and the refusal names that job.
+  string claim = 17;
   // id and parent are here to be refused rather than ignored. The system assigns the identifier, and
   // the parent is read from the credential the caller presented: a caller that could set its own
   // parent could set its own depth, and the depth limit would bound nothing.
