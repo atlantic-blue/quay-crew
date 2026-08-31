@@ -10,6 +10,46 @@ import (
 	"time"
 )
 
+// TestServeRefusesEveryOtherMachineBeforeItBindsAnything is the wall, driven the way the command
+// drives it: a whole control plane behind it, and Serve given an address every machine on the network
+// can reach.
+//
+// It is written before the test that serves, because a server that opens the port passes every case
+// about serving pages. The refusal is the part that keeps the system on this machine.
+//
+// Port zero is what makes this fail when the wall goes. Without the wall, Serve binds every interface
+// on a port the kernel picks, and there is nothing to collide with, so it comes up and serves until
+// the deadline below ends the test. With the wall it returns at once and says nothing aloud, which is
+// how this knows no socket was opened.
+func TestServeRefusesEveryOtherMachineBeforeItBindsAnything(t *testing.T) {
+	client := aSystem(t)
+
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+
+	said := &saidAloud{}
+	refused := make(chan error, 1)
+	go func() { refused <- Serve(ctx, client, "0.0.0.0:0", said) }()
+
+	select {
+	case err := <-refused:
+		if err == nil {
+			t.Fatal("Serve came up on an address every machine on the network can reach")
+		}
+		for _, needed := range theThreeThingsAWiderDoorNeeds {
+			if !strings.Contains(strings.ToLower(err.Error()), needed) {
+				t.Errorf("the refusal does not name %q:\n%s", needed, err)
+			}
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Serve neither refused nor returned, so it is serving an address off this machine")
+	}
+
+	if said.String() != "" {
+		t.Errorf("Serve said %q, so it reached the listen and bound a socket before refusing", said.String())
+	}
+}
+
 // TestServeAnswersARealRequestOnThisMachine drives the command's own path rather than the handler
 // alone: it binds a socket, says where it came up, answers a request over the network and stops when
 // the operator does. A handler that renders in a recorder proves none of that.

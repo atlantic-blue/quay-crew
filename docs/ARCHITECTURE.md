@@ -691,6 +691,31 @@ How it works today, in `internal/auth`:
   of it.
 - `quay` reads QC_TOKEN first, then the token file under the system's data directory.
 
+**Decided 31 August 2026: the front door stays on this machine, and the work reaches another device
+through a chat channel.** The operator asked for the briefing on a phone. A browser on a phone needs
+a listener that another machine can reach, and that reverses the decision recorded in
+[#302](https://github.com/atlantic-blue/quay-crew/issues/302). It is not reversed. `krewe web`
+refuses every address that is not this machine, and `internal/web` holds that refusal.
+
+A wider front door needs three things first, and the system holds none of them.
+
+- A credential for each device, so one phone is not every phone.
+- A way to withdraw one device, and to leave the other devices alone.
+- A rule about encryption on the path, which also says what the rule is on a private network.
+
+A chat channel needs none of the three. It also does the thing a page cannot do: it speaks first,
+instead of waiting for a person to open it. That road is
+[#9](https://github.com/atlantic-blue/quay-crew/issues/9), a channel inbound, and
+[#10](https://github.com/atlantic-blue/quay-crew/issues/10), outbound delivery gated on the
+operator's intent.
+
+The refusal in `internal/web` names the same three things, so an operator who binds the wrong
+address reads which of them the system lacks. A scenario in `features/web.feature` holds the refusal
+and this paragraph to each other. A wall whose reason lives only in a code comment drifts away from
+the document that decided it, and drift is how this decision would be reversed without anybody
+choosing to. A later proposal for a wider door is measured against the three. It is a decision for a
+person, in an issue, and never a widening of the bind.
+
 A driver session is a client like any other and gets less, not more. It is handed its own token at
 sandbox birth, minted into `driver.token` beside the system's, so the control plane can tell its
 calls apart and a token that leaks out of a driver sandbox grants strictly less than the operator
