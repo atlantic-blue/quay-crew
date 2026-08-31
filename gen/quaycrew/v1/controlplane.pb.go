@@ -528,7 +528,10 @@ type Session struct {
 	// moments about different things: the title names the job the session was made for, and the label
 	// is what the operator calls this conversation once they have seen it. A dispatch that has to be
 	// made again would put the job title back over a label the operator set in the meantime.
-	Title         string `protobuf:"bytes,21,opt,name=title,proto3" json:"title,omitempty"`
+	Title string `protobuf:"bytes,21,opt,name=title,proto3" json:"title,omitempty"`
+	// context_spend is where this session's context went, by category. Absent where the system cannot
+	// say, which is a conversation nobody has spoken in.
+	ContextSpend  *ContextSpend `protobuf:"bytes,22,opt,name=context_spend,json=contextSpend,proto3" json:"context_spend,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -710,6 +713,103 @@ func (x *Session) GetTitle() string {
 	return ""
 }
 
+func (x *Session) GetContextSpend() *ContextSpend {
+	if x != nil {
+		return x.ContextSpend
+	}
+	return nil
+}
+
+// ContextSpend is where a session's context went, in characters, by category.
+//
+// context_window says how full the window is, and a share on its own moves nothing: a session at
+// eighty per cent filled up on the code it had to read, on tool output it read once, or on its own
+// repeated attempts. This says which.
+//
+// Characters and not tokens. The transcript holds text, every model counts tokens its own way, and a
+// token count worked out here would be a made up number sitting beside the real one in
+// context_window. A reader that wants tokens has both numbers and the ratio measured in
+// docs/CONTEXT-SPEND.md.
+//
+// The four add up to the whole of what the accounting saw, so nothing is dropped between the parts
+// and the total. What no transcript holds, the system prompt and the definitions of every tool the
+// session carries, is in neither: the measurement in docs/CONTEXT-SPEND.md says how large that part
+// is.
+type ContextSpend struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// reads is the contents of files, however the session opened them: with a reading tool, or with a
+	// reading command in the shell.
+	Reads int64 `protobuf:"varint,1,opt,name=reads,proto3" json:"reads,omitempty"`
+	// tools is what every other tool returned: a search, a page fetched, the answer of a sub agent, and
+	// every shell command that was not printing a file.
+	Tools int64 `protobuf:"varint,2,opt,name=tools,proto3" json:"tools,omitempty"`
+	// turns is the session's own words: what it wrote, what it thought, and the calls it made.
+	Turns int64 `protobuf:"varint,3,opt,name=turns,proto3" json:"turns,omitempty"`
+	// told is what reached the session from outside a tool: the task it was given, and the answers to
+	// its questions.
+	Told          int64 `protobuf:"varint,4,opt,name=told,proto3" json:"told,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ContextSpend) Reset() {
+	*x = ContextSpend{}
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ContextSpend) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ContextSpend) ProtoMessage() {}
+
+func (x *ContextSpend) ProtoReflect() protoreflect.Message {
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ContextSpend.ProtoReflect.Descriptor instead.
+func (*ContextSpend) Descriptor() ([]byte, []int) {
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ContextSpend) GetReads() int64 {
+	if x != nil {
+		return x.Reads
+	}
+	return 0
+}
+
+func (x *ContextSpend) GetTools() int64 {
+	if x != nil {
+		return x.Tools
+	}
+	return 0
+}
+
+func (x *ContextSpend) GetTurns() int64 {
+	if x != nil {
+		return x.Turns
+	}
+	return 0
+}
+
+func (x *ContextSpend) GetTold() int64 {
+	if x != nil {
+		return x.Told
+	}
+	return 0
+}
+
 // ContextWindow is how full a conversation's context window is.
 //
 // This is the model's context window, not the system's context documents. It is the number that says
@@ -731,7 +831,7 @@ type ContextWindow struct {
 
 func (x *ContextWindow) Reset() {
 	*x = ContextWindow{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[5]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -743,7 +843,7 @@ func (x *ContextWindow) String() string {
 func (*ContextWindow) ProtoMessage() {}
 
 func (x *ContextWindow) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[5]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -756,7 +856,7 @@ func (x *ContextWindow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContextWindow.ProtoReflect.Descriptor instead.
 func (*ContextWindow) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{5}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ContextWindow) GetUsed() int64 {
@@ -794,7 +894,7 @@ type Usage struct {
 
 func (x *Usage) Reset() {
 	*x = Usage{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[6]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -806,7 +906,7 @@ func (x *Usage) String() string {
 func (*Usage) ProtoMessage() {}
 
 func (x *Usage) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[6]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -819,7 +919,7 @@ func (x *Usage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Usage.ProtoReflect.Descriptor instead.
 func (*Usage) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{6}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Usage) GetInput() int64 {
@@ -859,7 +959,7 @@ type CreateWorkspaceRequest struct {
 
 func (x *CreateWorkspaceRequest) Reset() {
 	*x = CreateWorkspaceRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[7]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -871,7 +971,7 @@ func (x *CreateWorkspaceRequest) String() string {
 func (*CreateWorkspaceRequest) ProtoMessage() {}
 
 func (x *CreateWorkspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[7]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -884,7 +984,7 @@ func (x *CreateWorkspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateWorkspaceRequest.ProtoReflect.Descriptor instead.
 func (*CreateWorkspaceRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{7}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *CreateWorkspaceRequest) GetName() string {
@@ -903,7 +1003,7 @@ type CreateWorkspaceResponse struct {
 
 func (x *CreateWorkspaceResponse) Reset() {
 	*x = CreateWorkspaceResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[8]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -915,7 +1015,7 @@ func (x *CreateWorkspaceResponse) String() string {
 func (*CreateWorkspaceResponse) ProtoMessage() {}
 
 func (x *CreateWorkspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[8]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -928,7 +1028,7 @@ func (x *CreateWorkspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateWorkspaceResponse.ProtoReflect.Descriptor instead.
 func (*CreateWorkspaceResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{8}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *CreateWorkspaceResponse) GetWorkspace() *Workspace {
@@ -947,7 +1047,7 @@ type GetWorkspaceRequest struct {
 
 func (x *GetWorkspaceRequest) Reset() {
 	*x = GetWorkspaceRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[9]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -959,7 +1059,7 @@ func (x *GetWorkspaceRequest) String() string {
 func (*GetWorkspaceRequest) ProtoMessage() {}
 
 func (x *GetWorkspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[9]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -972,7 +1072,7 @@ func (x *GetWorkspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorkspaceRequest.ProtoReflect.Descriptor instead.
 func (*GetWorkspaceRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{9}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *GetWorkspaceRequest) GetId() string {
@@ -991,7 +1091,7 @@ type GetWorkspaceResponse struct {
 
 func (x *GetWorkspaceResponse) Reset() {
 	*x = GetWorkspaceResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[10]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1003,7 +1103,7 @@ func (x *GetWorkspaceResponse) String() string {
 func (*GetWorkspaceResponse) ProtoMessage() {}
 
 func (x *GetWorkspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[10]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1016,7 +1116,7 @@ func (x *GetWorkspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorkspaceResponse.ProtoReflect.Descriptor instead.
 func (*GetWorkspaceResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{10}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *GetWorkspaceResponse) GetWorkspace() *Workspace {
@@ -1034,7 +1134,7 @@ type ListWorkspacesRequest struct {
 
 func (x *ListWorkspacesRequest) Reset() {
 	*x = ListWorkspacesRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[11]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1046,7 +1146,7 @@ func (x *ListWorkspacesRequest) String() string {
 func (*ListWorkspacesRequest) ProtoMessage() {}
 
 func (x *ListWorkspacesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[11]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1059,7 +1159,7 @@ func (x *ListWorkspacesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWorkspacesRequest.ProtoReflect.Descriptor instead.
 func (*ListWorkspacesRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{11}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{12}
 }
 
 type ListWorkspacesResponse struct {
@@ -1071,7 +1171,7 @@ type ListWorkspacesResponse struct {
 
 func (x *ListWorkspacesResponse) Reset() {
 	*x = ListWorkspacesResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[12]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1083,7 +1183,7 @@ func (x *ListWorkspacesResponse) String() string {
 func (*ListWorkspacesResponse) ProtoMessage() {}
 
 func (x *ListWorkspacesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[12]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1096,7 +1196,7 @@ func (x *ListWorkspacesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWorkspacesResponse.ProtoReflect.Descriptor instead.
 func (*ListWorkspacesResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{12}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ListWorkspacesResponse) GetWorkspaces() []*Workspace {
@@ -1115,7 +1215,7 @@ type DeleteWorkspaceRequest struct {
 
 func (x *DeleteWorkspaceRequest) Reset() {
 	*x = DeleteWorkspaceRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[13]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1127,7 +1227,7 @@ func (x *DeleteWorkspaceRequest) String() string {
 func (*DeleteWorkspaceRequest) ProtoMessage() {}
 
 func (x *DeleteWorkspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[13]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1140,7 +1240,7 @@ func (x *DeleteWorkspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteWorkspaceRequest.ProtoReflect.Descriptor instead.
 func (*DeleteWorkspaceRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{13}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *DeleteWorkspaceRequest) GetId() string {
@@ -1158,7 +1258,7 @@ type DeleteWorkspaceResponse struct {
 
 func (x *DeleteWorkspaceResponse) Reset() {
 	*x = DeleteWorkspaceResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[14]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1170,7 +1270,7 @@ func (x *DeleteWorkspaceResponse) String() string {
 func (*DeleteWorkspaceResponse) ProtoMessage() {}
 
 func (x *DeleteWorkspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[14]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1183,7 +1283,7 @@ func (x *DeleteWorkspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteWorkspaceResponse.ProtoReflect.Descriptor instead.
 func (*DeleteWorkspaceResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{14}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{15}
 }
 
 type CreateProjectRequest struct {
@@ -1196,7 +1296,7 @@ type CreateProjectRequest struct {
 
 func (x *CreateProjectRequest) Reset() {
 	*x = CreateProjectRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[15]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1208,7 +1308,7 @@ func (x *CreateProjectRequest) String() string {
 func (*CreateProjectRequest) ProtoMessage() {}
 
 func (x *CreateProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[15]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1221,7 +1321,7 @@ func (x *CreateProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProjectRequest.ProtoReflect.Descriptor instead.
 func (*CreateProjectRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{15}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *CreateProjectRequest) GetWorkspace() string {
@@ -1247,7 +1347,7 @@ type CreateProjectResponse struct {
 
 func (x *CreateProjectResponse) Reset() {
 	*x = CreateProjectResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[16]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1259,7 +1359,7 @@ func (x *CreateProjectResponse) String() string {
 func (*CreateProjectResponse) ProtoMessage() {}
 
 func (x *CreateProjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[16]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1272,7 +1372,7 @@ func (x *CreateProjectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProjectResponse.ProtoReflect.Descriptor instead.
 func (*CreateProjectResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{16}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *CreateProjectResponse) GetProject() *Project {
@@ -1291,7 +1391,7 @@ type GetProjectRequest struct {
 
 func (x *GetProjectRequest) Reset() {
 	*x = GetProjectRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[17]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1303,7 +1403,7 @@ func (x *GetProjectRequest) String() string {
 func (*GetProjectRequest) ProtoMessage() {}
 
 func (x *GetProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[17]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1316,7 +1416,7 @@ func (x *GetProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProjectRequest.ProtoReflect.Descriptor instead.
 func (*GetProjectRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{17}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GetProjectRequest) GetId() string {
@@ -1335,7 +1435,7 @@ type GetProjectResponse struct {
 
 func (x *GetProjectResponse) Reset() {
 	*x = GetProjectResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[18]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1347,7 +1447,7 @@ func (x *GetProjectResponse) String() string {
 func (*GetProjectResponse) ProtoMessage() {}
 
 func (x *GetProjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[18]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1360,7 +1460,7 @@ func (x *GetProjectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProjectResponse.ProtoReflect.Descriptor instead.
 func (*GetProjectResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{18}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetProjectResponse) GetProject() *Project {
@@ -1380,7 +1480,7 @@ type ListProjectsRequest struct {
 
 func (x *ListProjectsRequest) Reset() {
 	*x = ListProjectsRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[19]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1392,7 +1492,7 @@ func (x *ListProjectsRequest) String() string {
 func (*ListProjectsRequest) ProtoMessage() {}
 
 func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[19]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1405,7 +1505,7 @@ func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsRequest.ProtoReflect.Descriptor instead.
 func (*ListProjectsRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{19}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ListProjectsRequest) GetWorkspace() string {
@@ -1424,7 +1524,7 @@ type ListProjectsResponse struct {
 
 func (x *ListProjectsResponse) Reset() {
 	*x = ListProjectsResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[20]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1436,7 +1536,7 @@ func (x *ListProjectsResponse) String() string {
 func (*ListProjectsResponse) ProtoMessage() {}
 
 func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[20]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1449,7 +1549,7 @@ func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsResponse.ProtoReflect.Descriptor instead.
 func (*ListProjectsResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{20}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ListProjectsResponse) GetProjects() []*Project {
@@ -1471,7 +1571,7 @@ type SetDeployTargetRequest struct {
 
 func (x *SetDeployTargetRequest) Reset() {
 	*x = SetDeployTargetRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[21]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1483,7 +1583,7 @@ func (x *SetDeployTargetRequest) String() string {
 func (*SetDeployTargetRequest) ProtoMessage() {}
 
 func (x *SetDeployTargetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[21]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1496,7 +1596,7 @@ func (x *SetDeployTargetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetDeployTargetRequest.ProtoReflect.Descriptor instead.
 func (*SetDeployTargetRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{21}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *SetDeployTargetRequest) GetProject() string {
@@ -1522,7 +1622,7 @@ type SetDeployTargetResponse struct {
 
 func (x *SetDeployTargetResponse) Reset() {
 	*x = SetDeployTargetResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[22]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1534,7 +1634,7 @@ func (x *SetDeployTargetResponse) String() string {
 func (*SetDeployTargetResponse) ProtoMessage() {}
 
 func (x *SetDeployTargetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[22]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1547,7 +1647,7 @@ func (x *SetDeployTargetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetDeployTargetResponse.ProtoReflect.Descriptor instead.
 func (*SetDeployTargetResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{22}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *SetDeployTargetResponse) GetProject() *Project {
@@ -1593,7 +1693,7 @@ type FlowRun struct {
 
 func (x *FlowRun) Reset() {
 	*x = FlowRun{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[23]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1605,7 +1705,7 @@ func (x *FlowRun) String() string {
 func (*FlowRun) ProtoMessage() {}
 
 func (x *FlowRun) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[23]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1618,7 +1718,7 @@ func (x *FlowRun) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FlowRun.ProtoReflect.Descriptor instead.
 func (*FlowRun) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{23}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *FlowRun) GetId() string {
@@ -1737,7 +1837,7 @@ type ImportFlowRequest struct {
 
 func (x *ImportFlowRequest) Reset() {
 	*x = ImportFlowRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[24]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1749,7 +1849,7 @@ func (x *ImportFlowRequest) String() string {
 func (*ImportFlowRequest) ProtoMessage() {}
 
 func (x *ImportFlowRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[24]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1762,7 +1862,7 @@ func (x *ImportFlowRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportFlowRequest.ProtoReflect.Descriptor instead.
 func (*ImportFlowRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{24}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ImportFlowRequest) GetDefinition() string {
@@ -1782,7 +1882,7 @@ type ImportFlowResponse struct {
 
 func (x *ImportFlowResponse) Reset() {
 	*x = ImportFlowResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[25]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1794,7 +1894,7 @@ func (x *ImportFlowResponse) String() string {
 func (*ImportFlowResponse) ProtoMessage() {}
 
 func (x *ImportFlowResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[25]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1807,7 +1907,7 @@ func (x *ImportFlowResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportFlowResponse.ProtoReflect.Descriptor instead.
 func (*ImportFlowResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{25}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ImportFlowResponse) GetName() string {
@@ -1839,7 +1939,7 @@ type StartFlowRequest struct {
 
 func (x *StartFlowRequest) Reset() {
 	*x = StartFlowRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[26]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1851,7 +1951,7 @@ func (x *StartFlowRequest) String() string {
 func (*StartFlowRequest) ProtoMessage() {}
 
 func (x *StartFlowRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[26]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1864,7 +1964,7 @@ func (x *StartFlowRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartFlowRequest.ProtoReflect.Descriptor instead.
 func (*StartFlowRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{26}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *StartFlowRequest) GetGraph() string {
@@ -1897,7 +1997,7 @@ type StartFlowResponse struct {
 
 func (x *StartFlowResponse) Reset() {
 	*x = StartFlowResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[27]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1909,7 +2009,7 @@ func (x *StartFlowResponse) String() string {
 func (*StartFlowResponse) ProtoMessage() {}
 
 func (x *StartFlowResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[27]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1922,7 +2022,7 @@ func (x *StartFlowResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartFlowResponse.ProtoReflect.Descriptor instead.
 func (*StartFlowResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{27}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *StartFlowResponse) GetRun() *FlowRun {
@@ -1941,7 +2041,7 @@ type GetFlowRunRequest struct {
 
 func (x *GetFlowRunRequest) Reset() {
 	*x = GetFlowRunRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[28]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1953,7 +2053,7 @@ func (x *GetFlowRunRequest) String() string {
 func (*GetFlowRunRequest) ProtoMessage() {}
 
 func (x *GetFlowRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[28]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1966,7 +2066,7 @@ func (x *GetFlowRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFlowRunRequest.ProtoReflect.Descriptor instead.
 func (*GetFlowRunRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{28}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *GetFlowRunRequest) GetId() string {
@@ -1985,7 +2085,7 @@ type GetFlowRunResponse struct {
 
 func (x *GetFlowRunResponse) Reset() {
 	*x = GetFlowRunResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[29]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1997,7 +2097,7 @@ func (x *GetFlowRunResponse) String() string {
 func (*GetFlowRunResponse) ProtoMessage() {}
 
 func (x *GetFlowRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[29]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2010,7 +2110,7 @@ func (x *GetFlowRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFlowRunResponse.ProtoReflect.Descriptor instead.
 func (*GetFlowRunResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{29}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *GetFlowRunResponse) GetRun() *FlowRun {
@@ -2035,7 +2135,7 @@ type AnswerFlowRunRequest struct {
 
 func (x *AnswerFlowRunRequest) Reset() {
 	*x = AnswerFlowRunRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[30]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2047,7 +2147,7 @@ func (x *AnswerFlowRunRequest) String() string {
 func (*AnswerFlowRunRequest) ProtoMessage() {}
 
 func (x *AnswerFlowRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[30]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2060,7 +2160,7 @@ func (x *AnswerFlowRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnswerFlowRunRequest.ProtoReflect.Descriptor instead.
 func (*AnswerFlowRunRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{30}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *AnswerFlowRunRequest) GetId() string {
@@ -2086,7 +2186,7 @@ type AnswerFlowRunResponse struct {
 
 func (x *AnswerFlowRunResponse) Reset() {
 	*x = AnswerFlowRunResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[31]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2098,7 +2198,7 @@ func (x *AnswerFlowRunResponse) String() string {
 func (*AnswerFlowRunResponse) ProtoMessage() {}
 
 func (x *AnswerFlowRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[31]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2111,7 +2211,7 @@ func (x *AnswerFlowRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnswerFlowRunResponse.ProtoReflect.Descriptor instead.
 func (*AnswerFlowRunResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{31}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *AnswerFlowRunResponse) GetRun() *FlowRun {
@@ -2134,7 +2234,7 @@ type ScheduleFlowRequest struct {
 
 func (x *ScheduleFlowRequest) Reset() {
 	*x = ScheduleFlowRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[32]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2146,7 +2246,7 @@ func (x *ScheduleFlowRequest) String() string {
 func (*ScheduleFlowRequest) ProtoMessage() {}
 
 func (x *ScheduleFlowRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[32]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2159,7 +2259,7 @@ func (x *ScheduleFlowRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScheduleFlowRequest.ProtoReflect.Descriptor instead.
 func (*ScheduleFlowRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{32}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *ScheduleFlowRequest) GetGraph() string {
@@ -2186,7 +2286,7 @@ type ScheduleFlowResponse struct {
 
 func (x *ScheduleFlowResponse) Reset() {
 	*x = ScheduleFlowResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[33]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2198,7 +2298,7 @@ func (x *ScheduleFlowResponse) String() string {
 func (*ScheduleFlowResponse) ProtoMessage() {}
 
 func (x *ScheduleFlowResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[33]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2211,7 +2311,7 @@ func (x *ScheduleFlowResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScheduleFlowResponse.ProtoReflect.Descriptor instead.
 func (*ScheduleFlowResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{33}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ScheduleFlowResponse) GetEverySeconds() int64 {
@@ -2231,7 +2331,7 @@ type UnscheduleFlowRequest struct {
 
 func (x *UnscheduleFlowRequest) Reset() {
 	*x = UnscheduleFlowRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[34]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2243,7 +2343,7 @@ func (x *UnscheduleFlowRequest) String() string {
 func (*UnscheduleFlowRequest) ProtoMessage() {}
 
 func (x *UnscheduleFlowRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[34]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2256,7 +2356,7 @@ func (x *UnscheduleFlowRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnscheduleFlowRequest.ProtoReflect.Descriptor instead.
 func (*UnscheduleFlowRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{34}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *UnscheduleFlowRequest) GetGraph() string {
@@ -2281,7 +2381,7 @@ type UnscheduleFlowResponse struct {
 
 func (x *UnscheduleFlowResponse) Reset() {
 	*x = UnscheduleFlowResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[35]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2293,7 +2393,7 @@ func (x *UnscheduleFlowResponse) String() string {
 func (*UnscheduleFlowResponse) ProtoMessage() {}
 
 func (x *UnscheduleFlowResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[35]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2306,7 +2406,7 @@ func (x *UnscheduleFlowResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnscheduleFlowResponse.ProtoReflect.Descriptor instead.
 func (*UnscheduleFlowResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{35}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{36}
 }
 
 type StopFlowRunRequest struct {
@@ -2319,7 +2419,7 @@ type StopFlowRunRequest struct {
 
 func (x *StopFlowRunRequest) Reset() {
 	*x = StopFlowRunRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[36]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2331,7 +2431,7 @@ func (x *StopFlowRunRequest) String() string {
 func (*StopFlowRunRequest) ProtoMessage() {}
 
 func (x *StopFlowRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[36]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2344,7 +2444,7 @@ func (x *StopFlowRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopFlowRunRequest.ProtoReflect.Descriptor instead.
 func (*StopFlowRunRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{36}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *StopFlowRunRequest) GetId() string {
@@ -2370,7 +2470,7 @@ type StopFlowRunResponse struct {
 
 func (x *StopFlowRunResponse) Reset() {
 	*x = StopFlowRunResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[37]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2382,7 +2482,7 @@ func (x *StopFlowRunResponse) String() string {
 func (*StopFlowRunResponse) ProtoMessage() {}
 
 func (x *StopFlowRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[37]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2395,7 +2495,7 @@ func (x *StopFlowRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopFlowRunResponse.ProtoReflect.Descriptor instead.
 func (*StopFlowRunResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{37}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *StopFlowRunResponse) GetRun() *FlowRun {
@@ -2414,7 +2514,7 @@ type ListFlowRunsRequest struct {
 
 func (x *ListFlowRunsRequest) Reset() {
 	*x = ListFlowRunsRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[38]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2426,7 +2526,7 @@ func (x *ListFlowRunsRequest) String() string {
 func (*ListFlowRunsRequest) ProtoMessage() {}
 
 func (x *ListFlowRunsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[38]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2439,7 +2539,7 @@ func (x *ListFlowRunsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListFlowRunsRequest.ProtoReflect.Descriptor instead.
 func (*ListFlowRunsRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{38}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *ListFlowRunsRequest) GetProject() string {
@@ -2458,7 +2558,7 @@ type ListFlowRunsResponse struct {
 
 func (x *ListFlowRunsResponse) Reset() {
 	*x = ListFlowRunsResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[39]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2470,7 +2570,7 @@ func (x *ListFlowRunsResponse) String() string {
 func (*ListFlowRunsResponse) ProtoMessage() {}
 
 func (x *ListFlowRunsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[39]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2483,7 +2583,7 @@ func (x *ListFlowRunsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListFlowRunsResponse.ProtoReflect.Descriptor instead.
 func (*ListFlowRunsResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{39}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *ListFlowRunsResponse) GetRuns() []*FlowRun {
@@ -2502,7 +2602,7 @@ type DeleteProjectRequest struct {
 
 func (x *DeleteProjectRequest) Reset() {
 	*x = DeleteProjectRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[40]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2514,7 +2614,7 @@ func (x *DeleteProjectRequest) String() string {
 func (*DeleteProjectRequest) ProtoMessage() {}
 
 func (x *DeleteProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[40]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2527,7 +2627,7 @@ func (x *DeleteProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteProjectRequest.ProtoReflect.Descriptor instead.
 func (*DeleteProjectRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{40}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *DeleteProjectRequest) GetId() string {
@@ -2545,7 +2645,7 @@ type DeleteProjectResponse struct {
 
 func (x *DeleteProjectResponse) Reset() {
 	*x = DeleteProjectResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[41]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2557,7 +2657,7 @@ func (x *DeleteProjectResponse) String() string {
 func (*DeleteProjectResponse) ProtoMessage() {}
 
 func (x *DeleteProjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[41]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2570,7 +2670,7 @@ func (x *DeleteProjectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteProjectResponse.ProtoReflect.Descriptor instead.
 func (*DeleteProjectResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{41}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{42}
 }
 
 // SetProjectRepositoryRequest records where a project's work lands. Sending it again replaces what
@@ -2588,7 +2688,7 @@ type SetProjectRepositoryRequest struct {
 
 func (x *SetProjectRepositoryRequest) Reset() {
 	*x = SetProjectRepositoryRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[42]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2600,7 +2700,7 @@ func (x *SetProjectRepositoryRequest) String() string {
 func (*SetProjectRepositoryRequest) ProtoMessage() {}
 
 func (x *SetProjectRepositoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[42]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2613,7 +2713,7 @@ func (x *SetProjectRepositoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetProjectRepositoryRequest.ProtoReflect.Descriptor instead.
 func (*SetProjectRepositoryRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{42}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *SetProjectRepositoryRequest) GetProject() string {
@@ -2646,7 +2746,7 @@ type SetProjectRepositoryResponse struct {
 
 func (x *SetProjectRepositoryResponse) Reset() {
 	*x = SetProjectRepositoryResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[43]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2658,7 +2758,7 @@ func (x *SetProjectRepositoryResponse) String() string {
 func (*SetProjectRepositoryResponse) ProtoMessage() {}
 
 func (x *SetProjectRepositoryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[43]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2671,7 +2771,7 @@ func (x *SetProjectRepositoryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetProjectRepositoryResponse.ProtoReflect.Descriptor instead.
 func (*SetProjectRepositoryResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{43}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *SetProjectRepositoryResponse) GetProject() *Project {
@@ -2692,7 +2792,7 @@ type AttachChannelRequest struct {
 
 func (x *AttachChannelRequest) Reset() {
 	*x = AttachChannelRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[44]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2704,7 +2804,7 @@ func (x *AttachChannelRequest) String() string {
 func (*AttachChannelRequest) ProtoMessage() {}
 
 func (x *AttachChannelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[44]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2717,7 +2817,7 @@ func (x *AttachChannelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttachChannelRequest.ProtoReflect.Descriptor instead.
 func (*AttachChannelRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{44}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *AttachChannelRequest) GetWorkspace() string {
@@ -2750,7 +2850,7 @@ type AttachChannelResponse struct {
 
 func (x *AttachChannelResponse) Reset() {
 	*x = AttachChannelResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[45]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2762,7 +2862,7 @@ func (x *AttachChannelResponse) String() string {
 func (*AttachChannelResponse) ProtoMessage() {}
 
 func (x *AttachChannelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[45]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2775,7 +2875,7 @@ func (x *AttachChannelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttachChannelResponse.ProtoReflect.Descriptor instead.
 func (*AttachChannelResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{45}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *AttachChannelResponse) GetChannel() *Channel {
@@ -2804,7 +2904,7 @@ type SetSecretRequest struct {
 
 func (x *SetSecretRequest) Reset() {
 	*x = SetSecretRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[46]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2816,7 +2916,7 @@ func (x *SetSecretRequest) String() string {
 func (*SetSecretRequest) ProtoMessage() {}
 
 func (x *SetSecretRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[46]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2829,7 +2929,7 @@ func (x *SetSecretRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetSecretRequest.ProtoReflect.Descriptor instead.
 func (*SetSecretRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{46}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *SetSecretRequest) GetWorkspace() string {
@@ -2875,7 +2975,7 @@ type SetSecretResponse struct {
 
 func (x *SetSecretResponse) Reset() {
 	*x = SetSecretResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[47]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2887,7 +2987,7 @@ func (x *SetSecretResponse) String() string {
 func (*SetSecretResponse) ProtoMessage() {}
 
 func (x *SetSecretResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[47]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2900,7 +3000,7 @@ func (x *SetSecretResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetSecretResponse.ProtoReflect.Descriptor instead.
 func (*SetSecretResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{47}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{48}
 }
 
 // DispatchRequest starts a new session (handle empty) or continues an existing one.
@@ -2950,7 +3050,7 @@ type DispatchRequest struct {
 
 func (x *DispatchRequest) Reset() {
 	*x = DispatchRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[48]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2962,7 +3062,7 @@ func (x *DispatchRequest) String() string {
 func (*DispatchRequest) ProtoMessage() {}
 
 func (x *DispatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[48]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2975,7 +3075,7 @@ func (x *DispatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DispatchRequest.ProtoReflect.Descriptor instead.
 func (*DispatchRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{48}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *DispatchRequest) GetProject() string {
@@ -3047,7 +3147,7 @@ type DispatchResponse struct {
 
 func (x *DispatchResponse) Reset() {
 	*x = DispatchResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[49]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3059,7 +3159,7 @@ func (x *DispatchResponse) String() string {
 func (*DispatchResponse) ProtoMessage() {}
 
 func (x *DispatchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[49]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3072,7 +3172,7 @@ func (x *DispatchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DispatchResponse.ProtoReflect.Descriptor instead.
 func (*DispatchResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{49}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *DispatchResponse) GetId() string {
@@ -3107,7 +3207,7 @@ type OpenDriverRequest struct {
 
 func (x *OpenDriverRequest) Reset() {
 	*x = OpenDriverRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[50]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3119,7 +3219,7 @@ func (x *OpenDriverRequest) String() string {
 func (*OpenDriverRequest) ProtoMessage() {}
 
 func (x *OpenDriverRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[50]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3132,7 +3232,7 @@ func (x *OpenDriverRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenDriverRequest.ProtoReflect.Descriptor instead.
 func (*OpenDriverRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{50}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *OpenDriverRequest) GetProject() string {
@@ -3151,7 +3251,7 @@ type OpenDriverResponse struct {
 
 func (x *OpenDriverResponse) Reset() {
 	*x = OpenDriverResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[51]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3163,7 +3263,7 @@ func (x *OpenDriverResponse) String() string {
 func (*OpenDriverResponse) ProtoMessage() {}
 
 func (x *OpenDriverResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[51]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3176,7 +3276,7 @@ func (x *OpenDriverResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenDriverResponse.ProtoReflect.Descriptor instead.
 func (*OpenDriverResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{51}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *OpenDriverResponse) GetSession() *Session {
@@ -3207,7 +3307,7 @@ type ListSessionsRequest struct {
 
 func (x *ListSessionsRequest) Reset() {
 	*x = ListSessionsRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[52]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3219,7 +3319,7 @@ func (x *ListSessionsRequest) String() string {
 func (*ListSessionsRequest) ProtoMessage() {}
 
 func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[52]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3232,7 +3332,7 @@ func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionsRequest.ProtoReflect.Descriptor instead.
 func (*ListSessionsRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{52}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *ListSessionsRequest) GetWorkspace() string {
@@ -3272,7 +3372,7 @@ type ListSessionsResponse struct {
 
 func (x *ListSessionsResponse) Reset() {
 	*x = ListSessionsResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[53]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3284,7 +3384,7 @@ func (x *ListSessionsResponse) String() string {
 func (*ListSessionsResponse) ProtoMessage() {}
 
 func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[53]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3297,7 +3397,7 @@ func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionsResponse.ProtoReflect.Descriptor instead.
 func (*ListSessionsResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{53}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *ListSessionsResponse) GetSessions() []*Session {
@@ -3316,7 +3416,7 @@ type GetSessionRequest struct {
 
 func (x *GetSessionRequest) Reset() {
 	*x = GetSessionRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[54]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3328,7 +3428,7 @@ func (x *GetSessionRequest) String() string {
 func (*GetSessionRequest) ProtoMessage() {}
 
 func (x *GetSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[54]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3341,7 +3441,7 @@ func (x *GetSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSessionRequest.ProtoReflect.Descriptor instead.
 func (*GetSessionRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{54}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *GetSessionRequest) GetId() string {
@@ -3360,7 +3460,7 @@ type GetSessionResponse struct {
 
 func (x *GetSessionResponse) Reset() {
 	*x = GetSessionResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[55]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3372,7 +3472,7 @@ func (x *GetSessionResponse) String() string {
 func (*GetSessionResponse) ProtoMessage() {}
 
 func (x *GetSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[55]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3385,7 +3485,7 @@ func (x *GetSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSessionResponse.ProtoReflect.Descriptor instead.
 func (*GetSessionResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{55}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *GetSessionResponse) GetSession() *Session {
@@ -3405,7 +3505,7 @@ type AttachSessionRequest struct {
 
 func (x *AttachSessionRequest) Reset() {
 	*x = AttachSessionRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[56]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3417,7 +3517,7 @@ func (x *AttachSessionRequest) String() string {
 func (*AttachSessionRequest) ProtoMessage() {}
 
 func (x *AttachSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[56]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3430,7 +3530,7 @@ func (x *AttachSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttachSessionRequest.ProtoReflect.Descriptor instead.
 func (*AttachSessionRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{56}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *AttachSessionRequest) GetId() string {
@@ -3454,7 +3554,7 @@ type AttachSessionResponse struct {
 
 func (x *AttachSessionResponse) Reset() {
 	*x = AttachSessionResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[57]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3466,7 +3566,7 @@ func (x *AttachSessionResponse) String() string {
 func (*AttachSessionResponse) ProtoMessage() {}
 
 func (x *AttachSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[57]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3479,7 +3579,7 @@ func (x *AttachSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttachSessionResponse.ProtoReflect.Descriptor instead.
 func (*AttachSessionResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{57}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *AttachSessionResponse) GetSandbox() string {
@@ -3505,7 +3605,7 @@ type StopSessionRequest struct {
 
 func (x *StopSessionRequest) Reset() {
 	*x = StopSessionRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[58]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3517,7 +3617,7 @@ func (x *StopSessionRequest) String() string {
 func (*StopSessionRequest) ProtoMessage() {}
 
 func (x *StopSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[58]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3530,7 +3630,7 @@ func (x *StopSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopSessionRequest.ProtoReflect.Descriptor instead.
 func (*StopSessionRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{58}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *StopSessionRequest) GetId() string {
@@ -3548,7 +3648,7 @@ type StopSessionResponse struct {
 
 func (x *StopSessionResponse) Reset() {
 	*x = StopSessionResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[59]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3560,7 +3660,7 @@ func (x *StopSessionResponse) String() string {
 func (*StopSessionResponse) ProtoMessage() {}
 
 func (x *StopSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[59]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3573,7 +3673,7 @@ func (x *StopSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopSessionResponse.ProtoReflect.Descriptor instead.
 func (*StopSessionResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{59}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{60}
 }
 
 // DrainSessionsRequest puts every live session down, so whatever is about to take the containers
@@ -3591,7 +3691,7 @@ type DrainSessionsRequest struct {
 
 func (x *DrainSessionsRequest) Reset() {
 	*x = DrainSessionsRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[60]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3603,7 +3703,7 @@ func (x *DrainSessionsRequest) String() string {
 func (*DrainSessionsRequest) ProtoMessage() {}
 
 func (x *DrainSessionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[60]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3616,7 +3716,7 @@ func (x *DrainSessionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainSessionsRequest.ProtoReflect.Descriptor instead.
 func (*DrainSessionsRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{60}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *DrainSessionsRequest) GetForce() bool {
@@ -3638,7 +3738,7 @@ type DrainSessionsResponse struct {
 
 func (x *DrainSessionsResponse) Reset() {
 	*x = DrainSessionsResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[61]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3650,7 +3750,7 @@ func (x *DrainSessionsResponse) String() string {
 func (*DrainSessionsResponse) ProtoMessage() {}
 
 func (x *DrainSessionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[61]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3663,7 +3763,7 @@ func (x *DrainSessionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainSessionsResponse.ProtoReflect.Descriptor instead.
 func (*DrainSessionsResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{61}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *DrainSessionsResponse) GetStopped() []*Session {
@@ -3690,7 +3790,7 @@ type RestartSessionRequest struct {
 
 func (x *RestartSessionRequest) Reset() {
 	*x = RestartSessionRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[62]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3702,7 +3802,7 @@ func (x *RestartSessionRequest) String() string {
 func (*RestartSessionRequest) ProtoMessage() {}
 
 func (x *RestartSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[62]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3715,7 +3815,7 @@ func (x *RestartSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestartSessionRequest.ProtoReflect.Descriptor instead.
 func (*RestartSessionRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{62}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *RestartSessionRequest) GetId() string {
@@ -3736,7 +3836,7 @@ type RestartSessionResponse struct {
 
 func (x *RestartSessionResponse) Reset() {
 	*x = RestartSessionResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[63]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3748,7 +3848,7 @@ func (x *RestartSessionResponse) String() string {
 func (*RestartSessionResponse) ProtoMessage() {}
 
 func (x *RestartSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[63]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3761,7 +3861,7 @@ func (x *RestartSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestartSessionResponse.ProtoReflect.Descriptor instead.
 func (*RestartSessionResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{63}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *RestartSessionResponse) GetSession() *Session {
@@ -3782,7 +3882,7 @@ type ArchiveSessionRequest struct {
 
 func (x *ArchiveSessionRequest) Reset() {
 	*x = ArchiveSessionRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[64]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3794,7 +3894,7 @@ func (x *ArchiveSessionRequest) String() string {
 func (*ArchiveSessionRequest) ProtoMessage() {}
 
 func (x *ArchiveSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[64]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3807,7 +3907,7 @@ func (x *ArchiveSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArchiveSessionRequest.ProtoReflect.Descriptor instead.
 func (*ArchiveSessionRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{64}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *ArchiveSessionRequest) GetId() string {
@@ -3826,7 +3926,7 @@ type ArchiveSessionResponse struct {
 
 func (x *ArchiveSessionResponse) Reset() {
 	*x = ArchiveSessionResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[65]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3838,7 +3938,7 @@ func (x *ArchiveSessionResponse) String() string {
 func (*ArchiveSessionResponse) ProtoMessage() {}
 
 func (x *ArchiveSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[65]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3851,7 +3951,7 @@ func (x *ArchiveSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArchiveSessionResponse.ProtoReflect.Descriptor instead.
 func (*ArchiveSessionResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{65}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *ArchiveSessionResponse) GetSession() *Session {
@@ -3878,7 +3978,7 @@ type ReclaimSessionRequest struct {
 
 func (x *ReclaimSessionRequest) Reset() {
 	*x = ReclaimSessionRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[66]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3890,7 +3990,7 @@ func (x *ReclaimSessionRequest) String() string {
 func (*ReclaimSessionRequest) ProtoMessage() {}
 
 func (x *ReclaimSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[66]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3903,7 +4003,7 @@ func (x *ReclaimSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReclaimSessionRequest.ProtoReflect.Descriptor instead.
 func (*ReclaimSessionRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{66}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *ReclaimSessionRequest) GetId() string {
@@ -3922,7 +4022,7 @@ type ReclaimSessionResponse struct {
 
 func (x *ReclaimSessionResponse) Reset() {
 	*x = ReclaimSessionResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[67]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3934,7 +4034,7 @@ func (x *ReclaimSessionResponse) String() string {
 func (*ReclaimSessionResponse) ProtoMessage() {}
 
 func (x *ReclaimSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[67]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3947,7 +4047,7 @@ func (x *ReclaimSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReclaimSessionResponse.ProtoReflect.Descriptor instead.
 func (*ReclaimSessionResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{67}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *ReclaimSessionResponse) GetSession() *Session {
@@ -3977,7 +4077,7 @@ type StopTaskRequest struct {
 
 func (x *StopTaskRequest) Reset() {
 	*x = StopTaskRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[68]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3989,7 +4089,7 @@ func (x *StopTaskRequest) String() string {
 func (*StopTaskRequest) ProtoMessage() {}
 
 func (x *StopTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[68]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4002,7 +4102,7 @@ func (x *StopTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopTaskRequest.ProtoReflect.Descriptor instead.
 func (*StopTaskRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{68}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *StopTaskRequest) GetId() string {
@@ -4032,7 +4132,7 @@ type StopTaskResponse struct {
 
 func (x *StopTaskResponse) Reset() {
 	*x = StopTaskResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[69]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4044,7 +4144,7 @@ func (x *StopTaskResponse) String() string {
 func (*StopTaskResponse) ProtoMessage() {}
 
 func (x *StopTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[69]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4057,7 +4157,7 @@ func (x *StopTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopTaskResponse.ProtoReflect.Descriptor instead.
 func (*StopTaskResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{69}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *StopTaskResponse) GetStopped() bool {
@@ -4103,7 +4203,7 @@ type ContextDir struct {
 
 func (x *ContextDir) Reset() {
 	*x = ContextDir{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[70]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4115,7 +4215,7 @@ func (x *ContextDir) String() string {
 func (*ContextDir) ProtoMessage() {}
 
 func (x *ContextDir) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[70]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4128,7 +4228,7 @@ func (x *ContextDir) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContextDir.ProtoReflect.Descriptor instead.
 func (*ContextDir) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{70}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *ContextDir) GetScope() string {
@@ -4201,7 +4301,7 @@ type SetContextRequest struct {
 
 func (x *SetContextRequest) Reset() {
 	*x = SetContextRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[71]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4213,7 +4313,7 @@ func (x *SetContextRequest) String() string {
 func (*SetContextRequest) ProtoMessage() {}
 
 func (x *SetContextRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[71]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4226,7 +4326,7 @@ func (x *SetContextRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetContextRequest.ProtoReflect.Descriptor instead.
 func (*SetContextRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{71}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *SetContextRequest) GetScope() string {
@@ -4259,7 +4359,7 @@ type SetContextResponse struct {
 
 func (x *SetContextResponse) Reset() {
 	*x = SetContextResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[72]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4271,7 +4371,7 @@ func (x *SetContextResponse) String() string {
 func (*SetContextResponse) ProtoMessage() {}
 
 func (x *SetContextResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[72]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4284,7 +4384,7 @@ func (x *SetContextResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetContextResponse.ProtoReflect.Descriptor instead.
 func (*SetContextResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{72}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *SetContextResponse) GetDir() *ContextDir {
@@ -4316,7 +4416,7 @@ type SecretRef struct {
 
 func (x *SecretRef) Reset() {
 	*x = SecretRef{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[73]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4328,7 +4428,7 @@ func (x *SecretRef) String() string {
 func (*SecretRef) ProtoMessage() {}
 
 func (x *SecretRef) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[73]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4341,7 +4441,7 @@ func (x *SecretRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SecretRef.ProtoReflect.Descriptor instead.
 func (*SecretRef) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{73}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *SecretRef) GetWorkspace() string {
@@ -4397,7 +4497,7 @@ type ListSecretsRequest struct {
 
 func (x *ListSecretsRequest) Reset() {
 	*x = ListSecretsRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[74]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4409,7 +4509,7 @@ func (x *ListSecretsRequest) String() string {
 func (*ListSecretsRequest) ProtoMessage() {}
 
 func (x *ListSecretsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[74]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4422,7 +4522,7 @@ func (x *ListSecretsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSecretsRequest.ProtoReflect.Descriptor instead.
 func (*ListSecretsRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{74}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *ListSecretsRequest) GetWorkspace() string {
@@ -4441,7 +4541,7 @@ type ListSecretsResponse struct {
 
 func (x *ListSecretsResponse) Reset() {
 	*x = ListSecretsResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[75]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4453,7 +4553,7 @@ func (x *ListSecretsResponse) String() string {
 func (*ListSecretsResponse) ProtoMessage() {}
 
 func (x *ListSecretsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[75]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4466,7 +4566,7 @@ func (x *ListSecretsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSecretsResponse.ProtoReflect.Descriptor instead.
 func (*ListSecretsResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{75}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *ListSecretsResponse) GetSecrets() []*SecretRef {
@@ -4505,7 +4605,7 @@ type Skill struct {
 
 func (x *Skill) Reset() {
 	*x = Skill{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[76]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4517,7 +4617,7 @@ func (x *Skill) String() string {
 func (*Skill) ProtoMessage() {}
 
 func (x *Skill) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[76]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4530,7 +4630,7 @@ func (x *Skill) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Skill.ProtoReflect.Descriptor instead.
 func (*Skill) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{76}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *Skill) GetName() string {
@@ -4602,7 +4702,7 @@ type SkillSecret struct {
 
 func (x *SkillSecret) Reset() {
 	*x = SkillSecret{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[77]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4614,7 +4714,7 @@ func (x *SkillSecret) String() string {
 func (*SkillSecret) ProtoMessage() {}
 
 func (x *SkillSecret) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[77]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4627,7 +4727,7 @@ func (x *SkillSecret) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SkillSecret.ProtoReflect.Descriptor instead.
 func (*SkillSecret) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{77}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *SkillSecret) GetName() string {
@@ -4659,7 +4759,7 @@ type SkillFile struct {
 
 func (x *SkillFile) Reset() {
 	*x = SkillFile{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[78]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4671,7 +4771,7 @@ func (x *SkillFile) String() string {
 func (*SkillFile) ProtoMessage() {}
 
 func (x *SkillFile) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[78]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4684,7 +4784,7 @@ func (x *SkillFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SkillFile.ProtoReflect.Descriptor instead.
 func (*SkillFile) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{78}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *SkillFile) GetPath() string {
@@ -4722,7 +4822,7 @@ type ImportSkillRequest struct {
 
 func (x *ImportSkillRequest) Reset() {
 	*x = ImportSkillRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[79]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4734,7 +4834,7 @@ func (x *ImportSkillRequest) String() string {
 func (*ImportSkillRequest) ProtoMessage() {}
 
 func (x *ImportSkillRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[79]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4747,7 +4847,7 @@ func (x *ImportSkillRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportSkillRequest.ProtoReflect.Descriptor instead.
 func (*ImportSkillRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{79}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *ImportSkillRequest) GetFiles() []*SkillFile {
@@ -4766,7 +4866,7 @@ type ImportSkillResponse struct {
 
 func (x *ImportSkillResponse) Reset() {
 	*x = ImportSkillResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[80]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4778,7 +4878,7 @@ func (x *ImportSkillResponse) String() string {
 func (*ImportSkillResponse) ProtoMessage() {}
 
 func (x *ImportSkillResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[80]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4791,7 +4891,7 @@ func (x *ImportSkillResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportSkillResponse.ProtoReflect.Descriptor instead.
 func (*ImportSkillResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{80}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *ImportSkillResponse) GetSkill() *Skill {
@@ -4815,7 +4915,7 @@ type ListSkillsRequest struct {
 
 func (x *ListSkillsRequest) Reset() {
 	*x = ListSkillsRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[81]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4827,7 +4927,7 @@ func (x *ListSkillsRequest) String() string {
 func (*ListSkillsRequest) ProtoMessage() {}
 
 func (x *ListSkillsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[81]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4840,7 +4940,7 @@ func (x *ListSkillsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSkillsRequest.ProtoReflect.Descriptor instead.
 func (*ListSkillsRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{81}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *ListSkillsRequest) GetWorkspace() string {
@@ -4866,7 +4966,7 @@ type ListSkillsResponse struct {
 
 func (x *ListSkillsResponse) Reset() {
 	*x = ListSkillsResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[82]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4878,7 +4978,7 @@ func (x *ListSkillsResponse) String() string {
 func (*ListSkillsResponse) ProtoMessage() {}
 
 func (x *ListSkillsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[82]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4891,7 +4991,7 @@ func (x *ListSkillsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSkillsResponse.ProtoReflect.Descriptor instead.
 func (*ListSkillsResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{82}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *ListSkillsResponse) GetSkills() []*Skill {
@@ -4918,7 +5018,7 @@ type AttachSkillRequest struct {
 
 func (x *AttachSkillRequest) Reset() {
 	*x = AttachSkillRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[83]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4930,7 +5030,7 @@ func (x *AttachSkillRequest) String() string {
 func (*AttachSkillRequest) ProtoMessage() {}
 
 func (x *AttachSkillRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[83]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4943,7 +5043,7 @@ func (x *AttachSkillRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttachSkillRequest.ProtoReflect.Descriptor instead.
 func (*AttachSkillRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{83}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *AttachSkillRequest) GetWorkspace() string {
@@ -4976,7 +5076,7 @@ type AttachSkillResponse struct {
 
 func (x *AttachSkillResponse) Reset() {
 	*x = AttachSkillResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[84]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4988,7 +5088,7 @@ func (x *AttachSkillResponse) String() string {
 func (*AttachSkillResponse) ProtoMessage() {}
 
 func (x *AttachSkillResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[84]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5001,7 +5101,7 @@ func (x *AttachSkillResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttachSkillResponse.ProtoReflect.Descriptor instead.
 func (*AttachSkillResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{84}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *AttachSkillResponse) GetSkill() *Skill {
@@ -5025,7 +5125,7 @@ type DetachSkillRequest struct {
 
 func (x *DetachSkillRequest) Reset() {
 	*x = DetachSkillRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[85]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5037,7 +5137,7 @@ func (x *DetachSkillRequest) String() string {
 func (*DetachSkillRequest) ProtoMessage() {}
 
 func (x *DetachSkillRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[85]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5050,7 +5150,7 @@ func (x *DetachSkillRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DetachSkillRequest.ProtoReflect.Descriptor instead.
 func (*DetachSkillRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{85}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *DetachSkillRequest) GetWorkspace() string {
@@ -5082,7 +5182,7 @@ type DetachSkillResponse struct {
 
 func (x *DetachSkillResponse) Reset() {
 	*x = DetachSkillResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[86]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5094,7 +5194,7 @@ func (x *DetachSkillResponse) String() string {
 func (*DetachSkillResponse) ProtoMessage() {}
 
 func (x *DetachSkillResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[86]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5107,7 +5207,7 @@ func (x *DetachSkillResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DetachSkillResponse.ProtoReflect.Descriptor instead.
 func (*DetachSkillResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{86}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{87}
 }
 
 // Hook is a constraint a session runs under: what it may not do, checked when it tries. It is never
@@ -5140,7 +5240,7 @@ type Hook struct {
 
 func (x *Hook) Reset() {
 	*x = Hook{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[87]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5152,7 +5252,7 @@ func (x *Hook) String() string {
 func (*Hook) ProtoMessage() {}
 
 func (x *Hook) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[87]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5165,7 +5265,7 @@ func (x *Hook) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Hook.ProtoReflect.Descriptor instead.
 func (*Hook) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{87}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *Hook) GetName() string {
@@ -5251,7 +5351,7 @@ type HookBinding struct {
 
 func (x *HookBinding) Reset() {
 	*x = HookBinding{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[88]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5263,7 +5363,7 @@ func (x *HookBinding) String() string {
 func (*HookBinding) ProtoMessage() {}
 
 func (x *HookBinding) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[88]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5276,7 +5376,7 @@ func (x *HookBinding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HookBinding.ProtoReflect.Descriptor instead.
 func (*HookBinding) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{88}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *HookBinding) GetOn() string {
@@ -5321,7 +5421,7 @@ type HookFile struct {
 
 func (x *HookFile) Reset() {
 	*x = HookFile{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[89]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5333,7 +5433,7 @@ func (x *HookFile) String() string {
 func (*HookFile) ProtoMessage() {}
 
 func (x *HookFile) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[89]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5346,7 +5446,7 @@ func (x *HookFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HookFile.ProtoReflect.Descriptor instead.
 func (*HookFile) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{89}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *HookFile) GetPath() string {
@@ -5381,7 +5481,7 @@ type ImportHookRequest struct {
 
 func (x *ImportHookRequest) Reset() {
 	*x = ImportHookRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[90]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5393,7 +5493,7 @@ func (x *ImportHookRequest) String() string {
 func (*ImportHookRequest) ProtoMessage() {}
 
 func (x *ImportHookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[90]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5406,7 +5506,7 @@ func (x *ImportHookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportHookRequest.ProtoReflect.Descriptor instead.
 func (*ImportHookRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{90}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *ImportHookRequest) GetFiles() []*HookFile {
@@ -5425,7 +5525,7 @@ type ImportHookResponse struct {
 
 func (x *ImportHookResponse) Reset() {
 	*x = ImportHookResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[91]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5437,7 +5537,7 @@ func (x *ImportHookResponse) String() string {
 func (*ImportHookResponse) ProtoMessage() {}
 
 func (x *ImportHookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[91]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5450,7 +5550,7 @@ func (x *ImportHookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportHookResponse.ProtoReflect.Descriptor instead.
 func (*ImportHookResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{91}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *ImportHookResponse) GetHook() *Hook {
@@ -5472,7 +5572,7 @@ type ListHooksRequest struct {
 
 func (x *ListHooksRequest) Reset() {
 	*x = ListHooksRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[92]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5484,7 +5584,7 @@ func (x *ListHooksRequest) String() string {
 func (*ListHooksRequest) ProtoMessage() {}
 
 func (x *ListHooksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[92]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5497,7 +5597,7 @@ func (x *ListHooksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListHooksRequest.ProtoReflect.Descriptor instead.
 func (*ListHooksRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{92}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *ListHooksRequest) GetWorkspace() string {
@@ -5523,7 +5623,7 @@ type ListHooksResponse struct {
 
 func (x *ListHooksResponse) Reset() {
 	*x = ListHooksResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[93]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5535,7 +5635,7 @@ func (x *ListHooksResponse) String() string {
 func (*ListHooksResponse) ProtoMessage() {}
 
 func (x *ListHooksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[93]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5548,7 +5648,7 @@ func (x *ListHooksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListHooksResponse.ProtoReflect.Descriptor instead.
 func (*ListHooksResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{93}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *ListHooksResponse) GetHooks() []*Hook {
@@ -5572,7 +5672,7 @@ type AttachHookRequest struct {
 
 func (x *AttachHookRequest) Reset() {
 	*x = AttachHookRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[94]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5584,7 +5684,7 @@ func (x *AttachHookRequest) String() string {
 func (*AttachHookRequest) ProtoMessage() {}
 
 func (x *AttachHookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[94]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5597,7 +5697,7 @@ func (x *AttachHookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttachHookRequest.ProtoReflect.Descriptor instead.
 func (*AttachHookRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{94}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *AttachHookRequest) GetWorkspace() string {
@@ -5630,7 +5730,7 @@ type AttachHookResponse struct {
 
 func (x *AttachHookResponse) Reset() {
 	*x = AttachHookResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[95]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5642,7 +5742,7 @@ func (x *AttachHookResponse) String() string {
 func (*AttachHookResponse) ProtoMessage() {}
 
 func (x *AttachHookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[95]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5655,7 +5755,7 @@ func (x *AttachHookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttachHookResponse.ProtoReflect.Descriptor instead.
 func (*AttachHookResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{95}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *AttachHookResponse) GetHook() *Hook {
@@ -5679,7 +5779,7 @@ type DetachHookRequest struct {
 
 func (x *DetachHookRequest) Reset() {
 	*x = DetachHookRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[96]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5691,7 +5791,7 @@ func (x *DetachHookRequest) String() string {
 func (*DetachHookRequest) ProtoMessage() {}
 
 func (x *DetachHookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[96]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5704,7 +5804,7 @@ func (x *DetachHookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DetachHookRequest.ProtoReflect.Descriptor instead.
 func (*DetachHookRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{96}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *DetachHookRequest) GetWorkspace() string {
@@ -5736,7 +5836,7 @@ type DetachHookResponse struct {
 
 func (x *DetachHookResponse) Reset() {
 	*x = DetachHookResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[97]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5748,7 +5848,7 @@ func (x *DetachHookResponse) String() string {
 func (*DetachHookResponse) ProtoMessage() {}
 
 func (x *DetachHookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[97]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5761,7 +5861,7 @@ func (x *DetachHookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DetachHookResponse.ProtoReflect.Descriptor instead.
 func (*DetachHookResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{97}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{98}
 }
 
 // Role is a named way of working a session is given: a brief the model reads, the model it runs on,
@@ -5795,7 +5895,7 @@ type Role struct {
 
 func (x *Role) Reset() {
 	*x = Role{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[98]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5807,7 +5907,7 @@ func (x *Role) String() string {
 func (*Role) ProtoMessage() {}
 
 func (x *Role) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[98]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5820,7 +5920,7 @@ func (x *Role) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Role.ProtoReflect.Descriptor instead.
 func (*Role) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{98}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *Role) GetName() string {
@@ -5905,7 +6005,7 @@ type RoleOrigin struct {
 
 func (x *RoleOrigin) Reset() {
 	*x = RoleOrigin{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[99]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5917,7 +6017,7 @@ func (x *RoleOrigin) String() string {
 func (*RoleOrigin) ProtoMessage() {}
 
 func (x *RoleOrigin) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[99]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5930,7 +6030,7 @@ func (x *RoleOrigin) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleOrigin.ProtoReflect.Descriptor instead.
 func (*RoleOrigin) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{99}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *RoleOrigin) GetRepository() string {
@@ -5980,7 +6080,7 @@ type RoleFile struct {
 
 func (x *RoleFile) Reset() {
 	*x = RoleFile{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[100]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5992,7 +6092,7 @@ func (x *RoleFile) String() string {
 func (*RoleFile) ProtoMessage() {}
 
 func (x *RoleFile) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[100]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6005,7 +6105,7 @@ func (x *RoleFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleFile.ProtoReflect.Descriptor instead.
 func (*RoleFile) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{100}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *RoleFile) GetPath() string {
@@ -6036,7 +6136,7 @@ type ImportRoleRequest struct {
 
 func (x *ImportRoleRequest) Reset() {
 	*x = ImportRoleRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[101]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6048,7 +6148,7 @@ func (x *ImportRoleRequest) String() string {
 func (*ImportRoleRequest) ProtoMessage() {}
 
 func (x *ImportRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[101]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6061,7 +6161,7 @@ func (x *ImportRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportRoleRequest.ProtoReflect.Descriptor instead.
 func (*ImportRoleRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{101}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *ImportRoleRequest) GetFiles() []*RoleFile {
@@ -6087,7 +6187,7 @@ type ImportRoleResponse struct {
 
 func (x *ImportRoleResponse) Reset() {
 	*x = ImportRoleResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[102]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6099,7 +6199,7 @@ func (x *ImportRoleResponse) String() string {
 func (*ImportRoleResponse) ProtoMessage() {}
 
 func (x *ImportRoleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[102]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6112,7 +6212,7 @@ func (x *ImportRoleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportRoleResponse.ProtoReflect.Descriptor instead.
 func (*ImportRoleResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{102}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *ImportRoleResponse) GetRole() *Role {
@@ -6133,7 +6233,7 @@ type ListRolesRequest struct {
 
 func (x *ListRolesRequest) Reset() {
 	*x = ListRolesRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[103]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6145,7 +6245,7 @@ func (x *ListRolesRequest) String() string {
 func (*ListRolesRequest) ProtoMessage() {}
 
 func (x *ListRolesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[103]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6158,7 +6258,7 @@ func (x *ListRolesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRolesRequest.ProtoReflect.Descriptor instead.
 func (*ListRolesRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{103}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *ListRolesRequest) GetWorkspace() string {
@@ -6177,7 +6277,7 @@ type ListRolesResponse struct {
 
 func (x *ListRolesResponse) Reset() {
 	*x = ListRolesResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[104]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6189,7 +6289,7 @@ func (x *ListRolesResponse) String() string {
 func (*ListRolesResponse) ProtoMessage() {}
 
 func (x *ListRolesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[104]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6202,7 +6302,7 @@ func (x *ListRolesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRolesResponse.ProtoReflect.Descriptor instead.
 func (*ListRolesResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{104}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{105}
 }
 
 func (x *ListRolesResponse) GetRoles() []*Role {
@@ -6226,7 +6326,7 @@ type AttachRoleRequest struct {
 
 func (x *AttachRoleRequest) Reset() {
 	*x = AttachRoleRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[105]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6238,7 +6338,7 @@ func (x *AttachRoleRequest) String() string {
 func (*AttachRoleRequest) ProtoMessage() {}
 
 func (x *AttachRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[105]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6251,7 +6351,7 @@ func (x *AttachRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttachRoleRequest.ProtoReflect.Descriptor instead.
 func (*AttachRoleRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{105}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *AttachRoleRequest) GetWorkspace() string {
@@ -6284,7 +6384,7 @@ type AttachRoleResponse struct {
 
 func (x *AttachRoleResponse) Reset() {
 	*x = AttachRoleResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[106]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[107]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6296,7 +6396,7 @@ func (x *AttachRoleResponse) String() string {
 func (*AttachRoleResponse) ProtoMessage() {}
 
 func (x *AttachRoleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[106]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[107]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6309,7 +6409,7 @@ func (x *AttachRoleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttachRoleResponse.ProtoReflect.Descriptor instead.
 func (*AttachRoleResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{106}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{107}
 }
 
 func (x *AttachRoleResponse) GetRole() *Role {
@@ -6333,7 +6433,7 @@ type DetachRoleRequest struct {
 
 func (x *DetachRoleRequest) Reset() {
 	*x = DetachRoleRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[107]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[108]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6345,7 +6445,7 @@ func (x *DetachRoleRequest) String() string {
 func (*DetachRoleRequest) ProtoMessage() {}
 
 func (x *DetachRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[107]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[108]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6358,7 +6458,7 @@ func (x *DetachRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DetachRoleRequest.ProtoReflect.Descriptor instead.
 func (*DetachRoleRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{107}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{108}
 }
 
 func (x *DetachRoleRequest) GetWorkspace() string {
@@ -6390,7 +6490,7 @@ type DetachRoleResponse struct {
 
 func (x *DetachRoleResponse) Reset() {
 	*x = DetachRoleResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[108]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[109]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6402,7 +6502,7 @@ func (x *DetachRoleResponse) String() string {
 func (*DetachRoleResponse) ProtoMessage() {}
 
 func (x *DetachRoleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[108]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[109]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6415,7 +6515,7 @@ func (x *DetachRoleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DetachRoleResponse.ProtoReflect.Descriptor instead.
 func (*DetachRoleResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{108}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{109}
 }
 
 // GetRoleRequest asks for one role whole, the brief included, so what a session running as it is
@@ -6431,7 +6531,7 @@ type GetRoleRequest struct {
 
 func (x *GetRoleRequest) Reset() {
 	*x = GetRoleRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[109]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[110]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6443,7 +6543,7 @@ func (x *GetRoleRequest) String() string {
 func (*GetRoleRequest) ProtoMessage() {}
 
 func (x *GetRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[109]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[110]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6456,7 +6556,7 @@ func (x *GetRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoleRequest.ProtoReflect.Descriptor instead.
 func (*GetRoleRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{109}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{110}
 }
 
 func (x *GetRoleRequest) GetWorkspace() string {
@@ -6491,7 +6591,7 @@ type GetRoleResponse struct {
 
 func (x *GetRoleResponse) Reset() {
 	*x = GetRoleResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[110]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[111]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6503,7 +6603,7 @@ func (x *GetRoleResponse) String() string {
 func (*GetRoleResponse) ProtoMessage() {}
 
 func (x *GetRoleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[110]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[111]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6516,7 +6616,7 @@ func (x *GetRoleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoleResponse.ProtoReflect.Descriptor instead.
 func (*GetRoleResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{110}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{111}
 }
 
 func (x *GetRoleResponse) GetRole() *Role {
@@ -6557,7 +6657,7 @@ type ListContextsRequest struct {
 
 func (x *ListContextsRequest) Reset() {
 	*x = ListContextsRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[111]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[112]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6569,7 +6669,7 @@ func (x *ListContextsRequest) String() string {
 func (*ListContextsRequest) ProtoMessage() {}
 
 func (x *ListContextsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[111]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[112]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6582,7 +6682,7 @@ func (x *ListContextsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListContextsRequest.ProtoReflect.Descriptor instead.
 func (*ListContextsRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{111}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{112}
 }
 
 func (x *ListContextsRequest) GetProject() string {
@@ -6601,7 +6701,7 @@ type ListContextsResponse struct {
 
 func (x *ListContextsResponse) Reset() {
 	*x = ListContextsResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[112]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[113]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6613,7 +6713,7 @@ func (x *ListContextsResponse) String() string {
 func (*ListContextsResponse) ProtoMessage() {}
 
 func (x *ListContextsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[112]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[113]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6626,7 +6726,7 @@ func (x *ListContextsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListContextsResponse.ProtoReflect.Descriptor instead.
 func (*ListContextsResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{112}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{113}
 }
 
 func (x *ListContextsResponse) GetDirs() []*ContextDir {
@@ -6649,7 +6749,7 @@ type SetSessionPermissionModeRequest struct {
 
 func (x *SetSessionPermissionModeRequest) Reset() {
 	*x = SetSessionPermissionModeRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[113]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[114]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6661,7 +6761,7 @@ func (x *SetSessionPermissionModeRequest) String() string {
 func (*SetSessionPermissionModeRequest) ProtoMessage() {}
 
 func (x *SetSessionPermissionModeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[113]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[114]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6674,7 +6774,7 @@ func (x *SetSessionPermissionModeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetSessionPermissionModeRequest.ProtoReflect.Descriptor instead.
 func (*SetSessionPermissionModeRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{113}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{114}
 }
 
 func (x *SetSessionPermissionModeRequest) GetId() string {
@@ -6700,7 +6800,7 @@ type SetSessionPermissionModeResponse struct {
 
 func (x *SetSessionPermissionModeResponse) Reset() {
 	*x = SetSessionPermissionModeResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[114]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[115]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6712,7 +6812,7 @@ func (x *SetSessionPermissionModeResponse) String() string {
 func (*SetSessionPermissionModeResponse) ProtoMessage() {}
 
 func (x *SetSessionPermissionModeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[114]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[115]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6725,7 +6825,7 @@ func (x *SetSessionPermissionModeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetSessionPermissionModeResponse.ProtoReflect.Descriptor instead.
 func (*SetSessionPermissionModeResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{114}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{115}
 }
 
 func (x *SetSessionPermissionModeResponse) GetSession() *Session {
@@ -6747,7 +6847,7 @@ type SetSessionLabelRequest struct {
 
 func (x *SetSessionLabelRequest) Reset() {
 	*x = SetSessionLabelRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[115]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[116]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6759,7 +6859,7 @@ func (x *SetSessionLabelRequest) String() string {
 func (*SetSessionLabelRequest) ProtoMessage() {}
 
 func (x *SetSessionLabelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[115]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[116]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6772,7 +6872,7 @@ func (x *SetSessionLabelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetSessionLabelRequest.ProtoReflect.Descriptor instead.
 func (*SetSessionLabelRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{115}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{116}
 }
 
 func (x *SetSessionLabelRequest) GetId() string {
@@ -6798,7 +6898,7 @@ type SetSessionLabelResponse struct {
 
 func (x *SetSessionLabelResponse) Reset() {
 	*x = SetSessionLabelResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[116]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[117]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6810,7 +6910,7 @@ func (x *SetSessionLabelResponse) String() string {
 func (*SetSessionLabelResponse) ProtoMessage() {}
 
 func (x *SetSessionLabelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[116]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[117]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6823,7 +6923,7 @@ func (x *SetSessionLabelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetSessionLabelResponse.ProtoReflect.Descriptor instead.
 func (*SetSessionLabelResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{116}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{117}
 }
 
 func (x *SetSessionLabelResponse) GetSession() *Session {
@@ -6843,7 +6943,7 @@ type RestoreSessionRequest struct {
 
 func (x *RestoreSessionRequest) Reset() {
 	*x = RestoreSessionRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[117]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[118]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6855,7 +6955,7 @@ func (x *RestoreSessionRequest) String() string {
 func (*RestoreSessionRequest) ProtoMessage() {}
 
 func (x *RestoreSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[117]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[118]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6868,7 +6968,7 @@ func (x *RestoreSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreSessionRequest.ProtoReflect.Descriptor instead.
 func (*RestoreSessionRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{117}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{118}
 }
 
 func (x *RestoreSessionRequest) GetId() string {
@@ -6887,7 +6987,7 @@ type RestoreSessionResponse struct {
 
 func (x *RestoreSessionResponse) Reset() {
 	*x = RestoreSessionResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[118]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[119]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6899,7 +6999,7 @@ func (x *RestoreSessionResponse) String() string {
 func (*RestoreSessionResponse) ProtoMessage() {}
 
 func (x *RestoreSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[118]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[119]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6912,7 +7012,7 @@ func (x *RestoreSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreSessionResponse.ProtoReflect.Descriptor instead.
 func (*RestoreSessionResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{118}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{119}
 }
 
 func (x *RestoreSessionResponse) GetSession() *Session {
@@ -6931,7 +7031,7 @@ type GetInfoRequest struct {
 
 func (x *GetInfoRequest) Reset() {
 	*x = GetInfoRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[119]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[120]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6943,7 +7043,7 @@ func (x *GetInfoRequest) String() string {
 func (*GetInfoRequest) ProtoMessage() {}
 
 func (x *GetInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[119]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[120]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6956,7 +7056,7 @@ func (x *GetInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetInfoRequest.ProtoReflect.Descriptor instead.
 func (*GetInfoRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{119}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{120}
 }
 
 // GetInfoResponse says what a task dispatched here would actually do.
@@ -7004,7 +7104,7 @@ type GetInfoResponse struct {
 
 func (x *GetInfoResponse) Reset() {
 	*x = GetInfoResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[120]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[121]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7016,7 +7116,7 @@ func (x *GetInfoResponse) String() string {
 func (*GetInfoResponse) ProtoMessage() {}
 
 func (x *GetInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[120]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[121]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7029,7 +7129,7 @@ func (x *GetInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetInfoResponse.ProtoReflect.Descriptor instead.
 func (*GetInfoResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{120}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{121}
 }
 
 func (x *GetInfoResponse) GetModel() string {
@@ -7097,7 +7197,7 @@ type GetHeadroomRequest struct {
 
 func (x *GetHeadroomRequest) Reset() {
 	*x = GetHeadroomRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[121]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[122]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7109,7 +7209,7 @@ func (x *GetHeadroomRequest) String() string {
 func (*GetHeadroomRequest) ProtoMessage() {}
 
 func (x *GetHeadroomRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[121]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[122]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7122,7 +7222,7 @@ func (x *GetHeadroomRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHeadroomRequest.ProtoReflect.Descriptor instead.
 func (*GetHeadroomRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{121}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{122}
 }
 
 // GetHeadroomResponse is the system's last reading of the machine it runs on.
@@ -7172,7 +7272,7 @@ type GetHeadroomResponse struct {
 
 func (x *GetHeadroomResponse) Reset() {
 	*x = GetHeadroomResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[122]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[123]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7184,7 +7284,7 @@ func (x *GetHeadroomResponse) String() string {
 func (*GetHeadroomResponse) ProtoMessage() {}
 
 func (x *GetHeadroomResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[122]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[123]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7197,7 +7297,7 @@ func (x *GetHeadroomResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHeadroomResponse.ProtoReflect.Descriptor instead.
 func (*GetHeadroomResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{122}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{123}
 }
 
 func (x *GetHeadroomResponse) GetUsed() string {
@@ -7321,7 +7421,7 @@ type HeadroomSandbox struct {
 
 func (x *HeadroomSandbox) Reset() {
 	*x = HeadroomSandbox{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[123]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[124]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7333,7 +7433,7 @@ func (x *HeadroomSandbox) String() string {
 func (*HeadroomSandbox) ProtoMessage() {}
 
 func (x *HeadroomSandbox) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[123]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[124]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7346,7 +7446,7 @@ func (x *HeadroomSandbox) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeadroomSandbox.ProtoReflect.Descriptor instead.
 func (*HeadroomSandbox) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{123}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{124}
 }
 
 func (x *HeadroomSandbox) GetSession() string {
@@ -7401,7 +7501,7 @@ type GetHealthRequest struct {
 
 func (x *GetHealthRequest) Reset() {
 	*x = GetHealthRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[124]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[125]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7413,7 +7513,7 @@ func (x *GetHealthRequest) String() string {
 func (*GetHealthRequest) ProtoMessage() {}
 
 func (x *GetHealthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[124]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[125]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7426,7 +7526,7 @@ func (x *GetHealthRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHealthRequest.ProtoReflect.Descriptor instead.
 func (*GetHealthRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{124}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{125}
 }
 
 // GetHealthResponse is that probe's last reading, one entry per part.
@@ -7454,7 +7554,7 @@ type GetHealthResponse struct {
 
 func (x *GetHealthResponse) Reset() {
 	*x = GetHealthResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[125]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[126]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7466,7 +7566,7 @@ func (x *GetHealthResponse) String() string {
 func (*GetHealthResponse) ProtoMessage() {}
 
 func (x *GetHealthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[125]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[126]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7479,7 +7579,7 @@ func (x *GetHealthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHealthResponse.ProtoReflect.Descriptor instead.
 func (*GetHealthResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{125}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{126}
 }
 
 func (x *GetHealthResponse) GetComponents() []*HealthComponent {
@@ -7514,7 +7614,7 @@ type HealthComponent struct {
 
 func (x *HealthComponent) Reset() {
 	*x = HealthComponent{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[126]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[127]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7526,7 +7626,7 @@ func (x *HealthComponent) String() string {
 func (*HealthComponent) ProtoMessage() {}
 
 func (x *HealthComponent) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[126]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[127]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7539,7 +7639,7 @@ func (x *HealthComponent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthComponent.ProtoReflect.Descriptor instead.
 func (*HealthComponent) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{126}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{127}
 }
 
 func (x *HealthComponent) GetName() string {
@@ -7572,7 +7672,7 @@ type GetUsageRequest struct {
 
 func (x *GetUsageRequest) Reset() {
 	*x = GetUsageRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[127]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[128]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7584,7 +7684,7 @@ func (x *GetUsageRequest) String() string {
 func (*GetUsageRequest) ProtoMessage() {}
 
 func (x *GetUsageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[127]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[128]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7597,7 +7697,7 @@ func (x *GetUsageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUsageRequest.ProtoReflect.Descriptor instead.
 func (*GetUsageRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{127}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{128}
 }
 
 // GetUsageResponse is every conversation the system holds, added up.
@@ -7613,7 +7713,7 @@ type GetUsageResponse struct {
 
 func (x *GetUsageResponse) Reset() {
 	*x = GetUsageResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[128]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[129]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7625,7 +7725,7 @@ func (x *GetUsageResponse) String() string {
 func (*GetUsageResponse) ProtoMessage() {}
 
 func (x *GetUsageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[128]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[129]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7638,7 +7738,7 @@ func (x *GetUsageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUsageResponse.ProtoReflect.Descriptor instead.
 func (*GetUsageResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{128}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{129}
 }
 
 func (x *GetUsageResponse) GetTotal() *Usage {
@@ -7682,7 +7782,7 @@ type GetHistoryRequest struct {
 
 func (x *GetHistoryRequest) Reset() {
 	*x = GetHistoryRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[129]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[130]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7694,7 +7794,7 @@ func (x *GetHistoryRequest) String() string {
 func (*GetHistoryRequest) ProtoMessage() {}
 
 func (x *GetHistoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[129]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[130]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7707,7 +7807,7 @@ func (x *GetHistoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHistoryRequest.ProtoReflect.Descriptor instead.
 func (*GetHistoryRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{129}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{130}
 }
 
 func (x *GetHistoryRequest) GetWorkspace() string {
@@ -7765,7 +7865,7 @@ type GetHistoryResponse struct {
 
 func (x *GetHistoryResponse) Reset() {
 	*x = GetHistoryResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[130]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[131]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7777,7 +7877,7 @@ func (x *GetHistoryResponse) String() string {
 func (*GetHistoryResponse) ProtoMessage() {}
 
 func (x *GetHistoryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[130]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[131]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7790,7 +7890,7 @@ func (x *GetHistoryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetHistoryResponse.ProtoReflect.Descriptor instead.
 func (*GetHistoryResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{130}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{131}
 }
 
 func (x *GetHistoryResponse) GetTotal() *HistoryTotals {
@@ -7855,7 +7955,7 @@ type HistoryTotals struct {
 
 func (x *HistoryTotals) Reset() {
 	*x = HistoryTotals{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[131]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[132]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7867,7 +7967,7 @@ func (x *HistoryTotals) String() string {
 func (*HistoryTotals) ProtoMessage() {}
 
 func (x *HistoryTotals) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[131]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[132]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7880,7 +7980,7 @@ func (x *HistoryTotals) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HistoryTotals.ProtoReflect.Descriptor instead.
 func (*HistoryTotals) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{131}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{132}
 }
 
 func (x *HistoryTotals) GetJobs() int32 {
@@ -7974,7 +8074,7 @@ type JobDigest struct {
 
 func (x *JobDigest) Reset() {
 	*x = JobDigest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[132]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[133]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7986,7 +8086,7 @@ func (x *JobDigest) String() string {
 func (*JobDigest) ProtoMessage() {}
 
 func (x *JobDigest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[132]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[133]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7999,7 +8099,7 @@ func (x *JobDigest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JobDigest.ProtoReflect.Descriptor instead.
 func (*JobDigest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{132}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{133}
 }
 
 func (x *JobDigest) GetId() string {
@@ -8109,7 +8209,7 @@ type Task struct {
 
 func (x *Task) Reset() {
 	*x = Task{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[133]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[134]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8121,7 +8221,7 @@ func (x *Task) String() string {
 func (*Task) ProtoMessage() {}
 
 func (x *Task) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[133]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[134]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8134,7 +8234,7 @@ func (x *Task) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Task.ProtoReflect.Descriptor instead.
 func (*Task) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{133}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{134}
 }
 
 func (x *Task) GetId() string {
@@ -8207,7 +8307,7 @@ type ListTasksRequest struct {
 
 func (x *ListTasksRequest) Reset() {
 	*x = ListTasksRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[134]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[135]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8219,7 +8319,7 @@ func (x *ListTasksRequest) String() string {
 func (*ListTasksRequest) ProtoMessage() {}
 
 func (x *ListTasksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[134]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[135]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8232,7 +8332,7 @@ func (x *ListTasksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTasksRequest.ProtoReflect.Descriptor instead.
 func (*ListTasksRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{134}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{135}
 }
 
 func (x *ListTasksRequest) GetSession() string {
@@ -8258,7 +8358,7 @@ type ListTasksResponse struct {
 
 func (x *ListTasksResponse) Reset() {
 	*x = ListTasksResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[135]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[136]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8270,7 +8370,7 @@ func (x *ListTasksResponse) String() string {
 func (*ListTasksResponse) ProtoMessage() {}
 
 func (x *ListTasksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[135]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[136]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8283,7 +8383,7 @@ func (x *ListTasksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTasksResponse.ProtoReflect.Descriptor instead.
 func (*ListTasksResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{135}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{136}
 }
 
 func (x *ListTasksResponse) GetTasks() []*Task {
@@ -8407,7 +8507,7 @@ type Job struct {
 
 func (x *Job) Reset() {
 	*x = Job{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[136]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[137]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8419,7 +8519,7 @@ func (x *Job) String() string {
 func (*Job) ProtoMessage() {}
 
 func (x *Job) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[136]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[137]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8432,7 +8532,7 @@ func (x *Job) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Job.ProtoReflect.Descriptor instead.
 func (*Job) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{136}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{137}
 }
 
 func (x *Job) GetId() string {
@@ -8735,7 +8835,7 @@ type JobStep struct {
 
 func (x *JobStep) Reset() {
 	*x = JobStep{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[137]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[138]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8747,7 +8847,7 @@ func (x *JobStep) String() string {
 func (*JobStep) ProtoMessage() {}
 
 func (x *JobStep) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[137]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[138]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8760,7 +8860,7 @@ func (x *JobStep) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JobStep.ProtoReflect.Descriptor instead.
 func (*JobStep) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{137}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{138}
 }
 
 func (x *JobStep) GetSeq() int32 {
@@ -8824,7 +8924,7 @@ type CreateJobRequest struct {
 
 func (x *CreateJobRequest) Reset() {
 	*x = CreateJobRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[138]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[139]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8836,7 +8936,7 @@ func (x *CreateJobRequest) String() string {
 func (*CreateJobRequest) ProtoMessage() {}
 
 func (x *CreateJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[138]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[139]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8849,7 +8949,7 @@ func (x *CreateJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateJobRequest.ProtoReflect.Descriptor instead.
 func (*CreateJobRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{138}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{139}
 }
 
 func (x *CreateJobRequest) GetProject() string {
@@ -8988,7 +9088,7 @@ type CreateJobResponse struct {
 
 func (x *CreateJobResponse) Reset() {
 	*x = CreateJobResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[139]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[140]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9000,7 +9100,7 @@ func (x *CreateJobResponse) String() string {
 func (*CreateJobResponse) ProtoMessage() {}
 
 func (x *CreateJobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[139]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[140]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9013,7 +9113,7 @@ func (x *CreateJobResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateJobResponse.ProtoReflect.Descriptor instead.
 func (*CreateJobResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{139}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{140}
 }
 
 func (x *CreateJobResponse) GetJob() *Job {
@@ -9039,7 +9139,7 @@ type GetJobRequest struct {
 
 func (x *GetJobRequest) Reset() {
 	*x = GetJobRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[140]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[141]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9051,7 +9151,7 @@ func (x *GetJobRequest) String() string {
 func (*GetJobRequest) ProtoMessage() {}
 
 func (x *GetJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[140]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[141]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9064,7 +9164,7 @@ func (x *GetJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetJobRequest.ProtoReflect.Descriptor instead.
 func (*GetJobRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{140}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{141}
 }
 
 func (x *GetJobRequest) GetId() string {
@@ -9083,7 +9183,7 @@ type GetJobResponse struct {
 
 func (x *GetJobResponse) Reset() {
 	*x = GetJobResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[141]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[142]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9095,7 +9195,7 @@ func (x *GetJobResponse) String() string {
 func (*GetJobResponse) ProtoMessage() {}
 
 func (x *GetJobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[141]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[142]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9108,7 +9208,7 @@ func (x *GetJobResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetJobResponse.ProtoReflect.Descriptor instead.
 func (*GetJobResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{141}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{142}
 }
 
 func (x *GetJobResponse) GetJob() *Job {
@@ -9139,7 +9239,7 @@ type ListJobsRequest struct {
 
 func (x *ListJobsRequest) Reset() {
 	*x = ListJobsRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[142]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[143]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9151,7 +9251,7 @@ func (x *ListJobsRequest) String() string {
 func (*ListJobsRequest) ProtoMessage() {}
 
 func (x *ListJobsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[142]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[143]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9164,7 +9264,7 @@ func (x *ListJobsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListJobsRequest.ProtoReflect.Descriptor instead.
 func (*ListJobsRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{142}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{143}
 }
 
 func (x *ListJobsRequest) GetWorkspace() string {
@@ -9226,7 +9326,7 @@ type ListJobsResponse struct {
 
 func (x *ListJobsResponse) Reset() {
 	*x = ListJobsResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[143]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[144]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9238,7 +9338,7 @@ func (x *ListJobsResponse) String() string {
 func (*ListJobsResponse) ProtoMessage() {}
 
 func (x *ListJobsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[143]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[144]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9251,7 +9351,7 @@ func (x *ListJobsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListJobsResponse.ProtoReflect.Descriptor instead.
 func (*ListJobsResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{143}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{144}
 }
 
 func (x *ListJobsResponse) GetJobs() []*Job {
@@ -9273,7 +9373,7 @@ type StopJobRequest struct {
 
 func (x *StopJobRequest) Reset() {
 	*x = StopJobRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[144]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[145]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9285,7 +9385,7 @@ func (x *StopJobRequest) String() string {
 func (*StopJobRequest) ProtoMessage() {}
 
 func (x *StopJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[144]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[145]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9298,7 +9398,7 @@ func (x *StopJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopJobRequest.ProtoReflect.Descriptor instead.
 func (*StopJobRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{144}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{145}
 }
 
 func (x *StopJobRequest) GetId() string {
@@ -9324,7 +9424,7 @@ type StopJobResponse struct {
 
 func (x *StopJobResponse) Reset() {
 	*x = StopJobResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[145]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[146]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9336,7 +9436,7 @@ func (x *StopJobResponse) String() string {
 func (*StopJobResponse) ProtoMessage() {}
 
 func (x *StopJobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[145]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[146]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9349,7 +9449,7 @@ func (x *StopJobResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopJobResponse.ProtoReflect.Descriptor instead.
 func (*StopJobResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{145}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{146}
 }
 
 func (x *StopJobResponse) GetJob() *Job {
@@ -9379,7 +9479,7 @@ type AskJobRequest struct {
 
 func (x *AskJobRequest) Reset() {
 	*x = AskJobRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[146]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[147]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9391,7 +9491,7 @@ func (x *AskJobRequest) String() string {
 func (*AskJobRequest) ProtoMessage() {}
 
 func (x *AskJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[146]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[147]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9404,7 +9504,7 @@ func (x *AskJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AskJobRequest.ProtoReflect.Descriptor instead.
 func (*AskJobRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{146}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{147}
 }
 
 func (x *AskJobRequest) GetQuestion() string {
@@ -9430,7 +9530,7 @@ type AskJobResponse struct {
 
 func (x *AskJobResponse) Reset() {
 	*x = AskJobResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[147]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[148]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9442,7 +9542,7 @@ func (x *AskJobResponse) String() string {
 func (*AskJobResponse) ProtoMessage() {}
 
 func (x *AskJobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[147]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[148]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9455,7 +9555,7 @@ func (x *AskJobResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AskJobResponse.ProtoReflect.Descriptor instead.
 func (*AskJobResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{147}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{148}
 }
 
 func (x *AskJobResponse) GetJob() *Job {
@@ -9482,7 +9582,7 @@ type AnswerJobRequest struct {
 
 func (x *AnswerJobRequest) Reset() {
 	*x = AnswerJobRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[148]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[149]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9494,7 +9594,7 @@ func (x *AnswerJobRequest) String() string {
 func (*AnswerJobRequest) ProtoMessage() {}
 
 func (x *AnswerJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[148]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[149]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9507,7 +9607,7 @@ func (x *AnswerJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnswerJobRequest.ProtoReflect.Descriptor instead.
 func (*AnswerJobRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{148}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{149}
 }
 
 func (x *AnswerJobRequest) GetId() string {
@@ -9533,7 +9633,7 @@ type AnswerJobResponse struct {
 
 func (x *AnswerJobResponse) Reset() {
 	*x = AnswerJobResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[149]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[150]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9545,7 +9645,7 @@ func (x *AnswerJobResponse) String() string {
 func (*AnswerJobResponse) ProtoMessage() {}
 
 func (x *AnswerJobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[149]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[150]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9558,7 +9658,7 @@ func (x *AnswerJobResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnswerJobResponse.ProtoReflect.Descriptor instead.
 func (*AnswerJobResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{149}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{150}
 }
 
 func (x *AnswerJobResponse) GetJob() *Job {
@@ -9587,7 +9687,7 @@ type RecordJobStepRequest struct {
 
 func (x *RecordJobStepRequest) Reset() {
 	*x = RecordJobStepRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[150]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[151]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9599,7 +9699,7 @@ func (x *RecordJobStepRequest) String() string {
 func (*RecordJobStepRequest) ProtoMessage() {}
 
 func (x *RecordJobStepRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[150]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[151]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9612,7 +9712,7 @@ func (x *RecordJobStepRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordJobStepRequest.ProtoReflect.Descriptor instead.
 func (*RecordJobStepRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{150}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{151}
 }
 
 func (x *RecordJobStepRequest) GetSummary() string {
@@ -9638,7 +9738,7 @@ type RecordJobStepResponse struct {
 
 func (x *RecordJobStepResponse) Reset() {
 	*x = RecordJobStepResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[151]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[152]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9650,7 +9750,7 @@ func (x *RecordJobStepResponse) String() string {
 func (*RecordJobStepResponse) ProtoMessage() {}
 
 func (x *RecordJobStepResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[151]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[152]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9663,7 +9763,7 @@ func (x *RecordJobStepResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordJobStepResponse.ProtoReflect.Descriptor instead.
 func (*RecordJobStepResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{151}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{152}
 }
 
 func (x *RecordJobStepResponse) GetJob() *Job {
@@ -9687,7 +9787,7 @@ type ResumeJobRequest struct {
 
 func (x *ResumeJobRequest) Reset() {
 	*x = ResumeJobRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[152]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[153]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9699,7 +9799,7 @@ func (x *ResumeJobRequest) String() string {
 func (*ResumeJobRequest) ProtoMessage() {}
 
 func (x *ResumeJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[152]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[153]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9712,7 +9812,7 @@ func (x *ResumeJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResumeJobRequest.ProtoReflect.Descriptor instead.
 func (*ResumeJobRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{152}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{153}
 }
 
 func (x *ResumeJobRequest) GetId() string {
@@ -9731,7 +9831,7 @@ type ResumeJobResponse struct {
 
 func (x *ResumeJobResponse) Reset() {
 	*x = ResumeJobResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[153]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[154]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9743,7 +9843,7 @@ func (x *ResumeJobResponse) String() string {
 func (*ResumeJobResponse) ProtoMessage() {}
 
 func (x *ResumeJobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[153]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[154]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9756,7 +9856,7 @@ func (x *ResumeJobResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResumeJobResponse.ProtoReflect.Descriptor instead.
 func (*ResumeJobResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{153}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{154}
 }
 
 func (x *ResumeJobResponse) GetJob() *Job {
@@ -9783,7 +9883,7 @@ type RefuseJobRequest struct {
 
 func (x *RefuseJobRequest) Reset() {
 	*x = RefuseJobRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[154]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[155]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9795,7 +9895,7 @@ func (x *RefuseJobRequest) String() string {
 func (*RefuseJobRequest) ProtoMessage() {}
 
 func (x *RefuseJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[154]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[155]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9808,7 +9908,7 @@ func (x *RefuseJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefuseJobRequest.ProtoReflect.Descriptor instead.
 func (*RefuseJobRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{154}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{155}
 }
 
 func (x *RefuseJobRequest) GetId() string {
@@ -9834,7 +9934,7 @@ type RefuseJobResponse struct {
 
 func (x *RefuseJobResponse) Reset() {
 	*x = RefuseJobResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[155]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[156]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9846,7 +9946,7 @@ func (x *RefuseJobResponse) String() string {
 func (*RefuseJobResponse) ProtoMessage() {}
 
 func (x *RefuseJobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[155]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[156]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9859,7 +9959,7 @@ func (x *RefuseJobResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefuseJobResponse.ProtoReflect.Descriptor instead.
 func (*RefuseJobResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{155}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{156}
 }
 
 func (x *RefuseJobResponse) GetJob() *Job {
@@ -9891,7 +9991,7 @@ type Steer struct {
 
 func (x *Steer) Reset() {
 	*x = Steer{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[156]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[157]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9903,7 +10003,7 @@ func (x *Steer) String() string {
 func (*Steer) ProtoMessage() {}
 
 func (x *Steer) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[156]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[157]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9916,7 +10016,7 @@ func (x *Steer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Steer.ProtoReflect.Descriptor instead.
 func (*Steer) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{156}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{157}
 }
 
 func (x *Steer) GetId() string {
@@ -9984,7 +10084,7 @@ type RecordSteerRequest struct {
 
 func (x *RecordSteerRequest) Reset() {
 	*x = RecordSteerRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[157]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[158]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9996,7 +10096,7 @@ func (x *RecordSteerRequest) String() string {
 func (*RecordSteerRequest) ProtoMessage() {}
 
 func (x *RecordSteerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[157]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[158]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10009,7 +10109,7 @@ func (x *RecordSteerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordSteerRequest.ProtoReflect.Descriptor instead.
 func (*RecordSteerRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{157}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{158}
 }
 
 func (x *RecordSteerRequest) GetJob() string {
@@ -10037,7 +10137,7 @@ type RecordSteerResponse struct {
 
 func (x *RecordSteerResponse) Reset() {
 	*x = RecordSteerResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[158]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[159]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10049,7 +10149,7 @@ func (x *RecordSteerResponse) String() string {
 func (*RecordSteerResponse) ProtoMessage() {}
 
 func (x *RecordSteerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[158]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[159]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10062,7 +10162,7 @@ func (x *RecordSteerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordSteerResponse.ProtoReflect.Descriptor instead.
 func (*RecordSteerResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{158}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{159}
 }
 
 func (x *RecordSteerResponse) GetSteer() *Steer {
@@ -10091,7 +10191,7 @@ type ListSteersRequest struct {
 
 func (x *ListSteersRequest) Reset() {
 	*x = ListSteersRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[159]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[160]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10103,7 +10203,7 @@ func (x *ListSteersRequest) String() string {
 func (*ListSteersRequest) ProtoMessage() {}
 
 func (x *ListSteersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[159]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[160]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10116,7 +10216,7 @@ func (x *ListSteersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSteersRequest.ProtoReflect.Descriptor instead.
 func (*ListSteersRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{159}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{160}
 }
 
 func (x *ListSteersRequest) GetJob() string {
@@ -10136,7 +10236,7 @@ type ListSteersResponse struct {
 
 func (x *ListSteersResponse) Reset() {
 	*x = ListSteersResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[160]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[161]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10148,7 +10248,7 @@ func (x *ListSteersResponse) String() string {
 func (*ListSteersResponse) ProtoMessage() {}
 
 func (x *ListSteersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[160]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[161]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10161,7 +10261,7 @@ func (x *ListSteersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSteersResponse.ProtoReflect.Descriptor instead.
 func (*ListSteersResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{160}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{161}
 }
 
 func (x *ListSteersResponse) GetSteers() []*Steer {
@@ -10221,7 +10321,7 @@ type WorkspaceLimits struct {
 
 func (x *WorkspaceLimits) Reset() {
 	*x = WorkspaceLimits{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[161]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[162]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10233,7 +10333,7 @@ func (x *WorkspaceLimits) String() string {
 func (*WorkspaceLimits) ProtoMessage() {}
 
 func (x *WorkspaceLimits) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[161]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[162]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10246,7 +10346,7 @@ func (x *WorkspaceLimits) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkspaceLimits.ProtoReflect.Descriptor instead.
 func (*WorkspaceLimits) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{161}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{162}
 }
 
 func (x *WorkspaceLimits) GetWorkspace() string {
@@ -10321,7 +10421,7 @@ type GetWorkspaceLimitsRequest struct {
 
 func (x *GetWorkspaceLimitsRequest) Reset() {
 	*x = GetWorkspaceLimitsRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[162]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[163]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10333,7 +10433,7 @@ func (x *GetWorkspaceLimitsRequest) String() string {
 func (*GetWorkspaceLimitsRequest) ProtoMessage() {}
 
 func (x *GetWorkspaceLimitsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[162]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[163]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10346,7 +10446,7 @@ func (x *GetWorkspaceLimitsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorkspaceLimitsRequest.ProtoReflect.Descriptor instead.
 func (*GetWorkspaceLimitsRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{162}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{163}
 }
 
 func (x *GetWorkspaceLimitsRequest) GetWorkspace() string {
@@ -10365,7 +10465,7 @@ type GetWorkspaceLimitsResponse struct {
 
 func (x *GetWorkspaceLimitsResponse) Reset() {
 	*x = GetWorkspaceLimitsResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[163]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[164]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10377,7 +10477,7 @@ func (x *GetWorkspaceLimitsResponse) String() string {
 func (*GetWorkspaceLimitsResponse) ProtoMessage() {}
 
 func (x *GetWorkspaceLimitsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[163]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[164]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10390,7 +10490,7 @@ func (x *GetWorkspaceLimitsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorkspaceLimitsResponse.ProtoReflect.Descriptor instead.
 func (*GetWorkspaceLimitsResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{163}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{164}
 }
 
 func (x *GetWorkspaceLimitsResponse) GetLimits() *WorkspaceLimits {
@@ -10411,7 +10511,7 @@ type SetWorkspaceLimitsRequest struct {
 
 func (x *SetWorkspaceLimitsRequest) Reset() {
 	*x = SetWorkspaceLimitsRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[164]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[165]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10423,7 +10523,7 @@ func (x *SetWorkspaceLimitsRequest) String() string {
 func (*SetWorkspaceLimitsRequest) ProtoMessage() {}
 
 func (x *SetWorkspaceLimitsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[164]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[165]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10436,7 +10536,7 @@ func (x *SetWorkspaceLimitsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetWorkspaceLimitsRequest.ProtoReflect.Descriptor instead.
 func (*SetWorkspaceLimitsRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{164}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{165}
 }
 
 func (x *SetWorkspaceLimitsRequest) GetLimits() *WorkspaceLimits {
@@ -10455,7 +10555,7 @@ type SetWorkspaceLimitsResponse struct {
 
 func (x *SetWorkspaceLimitsResponse) Reset() {
 	*x = SetWorkspaceLimitsResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[165]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[166]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10467,7 +10567,7 @@ func (x *SetWorkspaceLimitsResponse) String() string {
 func (*SetWorkspaceLimitsResponse) ProtoMessage() {}
 
 func (x *SetWorkspaceLimitsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[165]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[166]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10480,7 +10580,7 @@ func (x *SetWorkspaceLimitsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetWorkspaceLimitsResponse.ProtoReflect.Descriptor instead.
 func (*SetWorkspaceLimitsResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{165}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{166}
 }
 
 func (x *SetWorkspaceLimitsResponse) GetLimits() *WorkspaceLimits {
@@ -10503,7 +10603,7 @@ type ListSessionEventsRequest struct {
 
 func (x *ListSessionEventsRequest) Reset() {
 	*x = ListSessionEventsRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[166]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[167]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10515,7 +10615,7 @@ func (x *ListSessionEventsRequest) String() string {
 func (*ListSessionEventsRequest) ProtoMessage() {}
 
 func (x *ListSessionEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[166]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[167]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10528,7 +10628,7 @@ func (x *ListSessionEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionEventsRequest.ProtoReflect.Descriptor instead.
 func (*ListSessionEventsRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{166}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{167}
 }
 
 func (x *ListSessionEventsRequest) GetSession() string {
@@ -10554,7 +10654,7 @@ type ListSessionEventsResponse struct {
 
 func (x *ListSessionEventsResponse) Reset() {
 	*x = ListSessionEventsResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[167]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[168]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10566,7 +10666,7 @@ func (x *ListSessionEventsResponse) String() string {
 func (*ListSessionEventsResponse) ProtoMessage() {}
 
 func (x *ListSessionEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[167]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[168]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10579,7 +10679,7 @@ func (x *ListSessionEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionEventsResponse.ProtoReflect.Descriptor instead.
 func (*ListSessionEventsResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{167}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{168}
 }
 
 func (x *ListSessionEventsResponse) GetEvents() []*SessionEvent {
@@ -10619,7 +10719,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\fDeployTarget\x12\x18\n" +
 	"\aaccount\x18\x01 \x01(\tR\aaccount\x12\x16\n" +
 	"\x06region\x18\x02 \x01(\tR\x06region\x12\x1a\n" +
-	"\bidentity\x18\x03 \x01(\tR\bidentity\"\xa9\x06\n" +
+	"\bidentity\x18\x03 \x01(\tR\bidentity\"\xe9\x06\n" +
 	"\aSession\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x16\n" +
@@ -10645,7 +10745,13 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x04role\x18\x12 \x01(\tR\x04role\x12=\n" +
 	"\freclaimed_at\x18\x13 \x01(\v2\x1a.google.protobuf.TimestampR\vreclaimedAt\x128\n" +
 	"\bpresence\x18\x14 \x01(\x0e2\x1c.quaycrew.v1.SessionPresenceR\bpresence\x12\x14\n" +
-	"\x05title\x18\x15 \x01(\tR\x05title\"7\n" +
+	"\x05title\x18\x15 \x01(\tR\x05title\x12>\n" +
+	"\rcontext_spend\x18\x16 \x01(\v2\x19.quaycrew.v1.ContextSpendR\fcontextSpend\"d\n" +
+	"\fContextSpend\x12\x14\n" +
+	"\x05reads\x18\x01 \x01(\x03R\x05reads\x12\x14\n" +
+	"\x05tools\x18\x02 \x01(\x03R\x05tools\x12\x14\n" +
+	"\x05turns\x18\x03 \x01(\x03R\x05turns\x12\x12\n" +
+	"\x04told\x18\x04 \x01(\x03R\x04told\"7\n" +
 	"\rContextWindow\x12\x12\n" +
 	"\x04used\x18\x01 \x01(\x03R\x04used\x12\x12\n" +
 	"\x04size\x18\x02 \x01(\x03R\x04size\"y\n" +
@@ -11418,7 +11524,7 @@ func file_quaycrew_v1_controlplane_proto_rawDescGZIP() []byte {
 }
 
 var file_quaycrew_v1_controlplane_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_quaycrew_v1_controlplane_proto_msgTypes = make([]protoimpl.MessageInfo, 172)
+var file_quaycrew_v1_controlplane_proto_msgTypes = make([]protoimpl.MessageInfo, 173)
 var file_quaycrew_v1_controlplane_proto_goTypes = []any{
 	(SessionPresence)(0),                     // 0: quaycrew.v1.SessionPresence
 	(SecretProjection)(0),                    // 1: quaycrew.v1.SecretProjection
@@ -11427,435 +11533,437 @@ var file_quaycrew_v1_controlplane_proto_goTypes = []any{
 	(*Project)(nil),                          // 4: quaycrew.v1.Project
 	(*DeployTarget)(nil),                     // 5: quaycrew.v1.DeployTarget
 	(*Session)(nil),                          // 6: quaycrew.v1.Session
-	(*ContextWindow)(nil),                    // 7: quaycrew.v1.ContextWindow
-	(*Usage)(nil),                            // 8: quaycrew.v1.Usage
-	(*CreateWorkspaceRequest)(nil),           // 9: quaycrew.v1.CreateWorkspaceRequest
-	(*CreateWorkspaceResponse)(nil),          // 10: quaycrew.v1.CreateWorkspaceResponse
-	(*GetWorkspaceRequest)(nil),              // 11: quaycrew.v1.GetWorkspaceRequest
-	(*GetWorkspaceResponse)(nil),             // 12: quaycrew.v1.GetWorkspaceResponse
-	(*ListWorkspacesRequest)(nil),            // 13: quaycrew.v1.ListWorkspacesRequest
-	(*ListWorkspacesResponse)(nil),           // 14: quaycrew.v1.ListWorkspacesResponse
-	(*DeleteWorkspaceRequest)(nil),           // 15: quaycrew.v1.DeleteWorkspaceRequest
-	(*DeleteWorkspaceResponse)(nil),          // 16: quaycrew.v1.DeleteWorkspaceResponse
-	(*CreateProjectRequest)(nil),             // 17: quaycrew.v1.CreateProjectRequest
-	(*CreateProjectResponse)(nil),            // 18: quaycrew.v1.CreateProjectResponse
-	(*GetProjectRequest)(nil),                // 19: quaycrew.v1.GetProjectRequest
-	(*GetProjectResponse)(nil),               // 20: quaycrew.v1.GetProjectResponse
-	(*ListProjectsRequest)(nil),              // 21: quaycrew.v1.ListProjectsRequest
-	(*ListProjectsResponse)(nil),             // 22: quaycrew.v1.ListProjectsResponse
-	(*SetDeployTargetRequest)(nil),           // 23: quaycrew.v1.SetDeployTargetRequest
-	(*SetDeployTargetResponse)(nil),          // 24: quaycrew.v1.SetDeployTargetResponse
-	(*FlowRun)(nil),                          // 25: quaycrew.v1.FlowRun
-	(*ImportFlowRequest)(nil),                // 26: quaycrew.v1.ImportFlowRequest
-	(*ImportFlowResponse)(nil),               // 27: quaycrew.v1.ImportFlowResponse
-	(*StartFlowRequest)(nil),                 // 28: quaycrew.v1.StartFlowRequest
-	(*StartFlowResponse)(nil),                // 29: quaycrew.v1.StartFlowResponse
-	(*GetFlowRunRequest)(nil),                // 30: quaycrew.v1.GetFlowRunRequest
-	(*GetFlowRunResponse)(nil),               // 31: quaycrew.v1.GetFlowRunResponse
-	(*AnswerFlowRunRequest)(nil),             // 32: quaycrew.v1.AnswerFlowRunRequest
-	(*AnswerFlowRunResponse)(nil),            // 33: quaycrew.v1.AnswerFlowRunResponse
-	(*ScheduleFlowRequest)(nil),              // 34: quaycrew.v1.ScheduleFlowRequest
-	(*ScheduleFlowResponse)(nil),             // 35: quaycrew.v1.ScheduleFlowResponse
-	(*UnscheduleFlowRequest)(nil),            // 36: quaycrew.v1.UnscheduleFlowRequest
-	(*UnscheduleFlowResponse)(nil),           // 37: quaycrew.v1.UnscheduleFlowResponse
-	(*StopFlowRunRequest)(nil),               // 38: quaycrew.v1.StopFlowRunRequest
-	(*StopFlowRunResponse)(nil),              // 39: quaycrew.v1.StopFlowRunResponse
-	(*ListFlowRunsRequest)(nil),              // 40: quaycrew.v1.ListFlowRunsRequest
-	(*ListFlowRunsResponse)(nil),             // 41: quaycrew.v1.ListFlowRunsResponse
-	(*DeleteProjectRequest)(nil),             // 42: quaycrew.v1.DeleteProjectRequest
-	(*DeleteProjectResponse)(nil),            // 43: quaycrew.v1.DeleteProjectResponse
-	(*SetProjectRepositoryRequest)(nil),      // 44: quaycrew.v1.SetProjectRepositoryRequest
-	(*SetProjectRepositoryResponse)(nil),     // 45: quaycrew.v1.SetProjectRepositoryResponse
-	(*AttachChannelRequest)(nil),             // 46: quaycrew.v1.AttachChannelRequest
-	(*AttachChannelResponse)(nil),            // 47: quaycrew.v1.AttachChannelResponse
-	(*SetSecretRequest)(nil),                 // 48: quaycrew.v1.SetSecretRequest
-	(*SetSecretResponse)(nil),                // 49: quaycrew.v1.SetSecretResponse
-	(*DispatchRequest)(nil),                  // 50: quaycrew.v1.DispatchRequest
-	(*DispatchResponse)(nil),                 // 51: quaycrew.v1.DispatchResponse
-	(*OpenDriverRequest)(nil),                // 52: quaycrew.v1.OpenDriverRequest
-	(*OpenDriverResponse)(nil),               // 53: quaycrew.v1.OpenDriverResponse
-	(*ListSessionsRequest)(nil),              // 54: quaycrew.v1.ListSessionsRequest
-	(*ListSessionsResponse)(nil),             // 55: quaycrew.v1.ListSessionsResponse
-	(*GetSessionRequest)(nil),                // 56: quaycrew.v1.GetSessionRequest
-	(*GetSessionResponse)(nil),               // 57: quaycrew.v1.GetSessionResponse
-	(*AttachSessionRequest)(nil),             // 58: quaycrew.v1.AttachSessionRequest
-	(*AttachSessionResponse)(nil),            // 59: quaycrew.v1.AttachSessionResponse
-	(*StopSessionRequest)(nil),               // 60: quaycrew.v1.StopSessionRequest
-	(*StopSessionResponse)(nil),              // 61: quaycrew.v1.StopSessionResponse
-	(*DrainSessionsRequest)(nil),             // 62: quaycrew.v1.DrainSessionsRequest
-	(*DrainSessionsResponse)(nil),            // 63: quaycrew.v1.DrainSessionsResponse
-	(*RestartSessionRequest)(nil),            // 64: quaycrew.v1.RestartSessionRequest
-	(*RestartSessionResponse)(nil),           // 65: quaycrew.v1.RestartSessionResponse
-	(*ArchiveSessionRequest)(nil),            // 66: quaycrew.v1.ArchiveSessionRequest
-	(*ArchiveSessionResponse)(nil),           // 67: quaycrew.v1.ArchiveSessionResponse
-	(*ReclaimSessionRequest)(nil),            // 68: quaycrew.v1.ReclaimSessionRequest
-	(*ReclaimSessionResponse)(nil),           // 69: quaycrew.v1.ReclaimSessionResponse
-	(*StopTaskRequest)(nil),                  // 70: quaycrew.v1.StopTaskRequest
-	(*StopTaskResponse)(nil),                 // 71: quaycrew.v1.StopTaskResponse
-	(*ContextDir)(nil),                       // 72: quaycrew.v1.ContextDir
-	(*SetContextRequest)(nil),                // 73: quaycrew.v1.SetContextRequest
-	(*SetContextResponse)(nil),               // 74: quaycrew.v1.SetContextResponse
-	(*SecretRef)(nil),                        // 75: quaycrew.v1.SecretRef
-	(*ListSecretsRequest)(nil),               // 76: quaycrew.v1.ListSecretsRequest
-	(*ListSecretsResponse)(nil),              // 77: quaycrew.v1.ListSecretsResponse
-	(*Skill)(nil),                            // 78: quaycrew.v1.Skill
-	(*SkillSecret)(nil),                      // 79: quaycrew.v1.SkillSecret
-	(*SkillFile)(nil),                        // 80: quaycrew.v1.SkillFile
-	(*ImportSkillRequest)(nil),               // 81: quaycrew.v1.ImportSkillRequest
-	(*ImportSkillResponse)(nil),              // 82: quaycrew.v1.ImportSkillResponse
-	(*ListSkillsRequest)(nil),                // 83: quaycrew.v1.ListSkillsRequest
-	(*ListSkillsResponse)(nil),               // 84: quaycrew.v1.ListSkillsResponse
-	(*AttachSkillRequest)(nil),               // 85: quaycrew.v1.AttachSkillRequest
-	(*AttachSkillResponse)(nil),              // 86: quaycrew.v1.AttachSkillResponse
-	(*DetachSkillRequest)(nil),               // 87: quaycrew.v1.DetachSkillRequest
-	(*DetachSkillResponse)(nil),              // 88: quaycrew.v1.DetachSkillResponse
-	(*Hook)(nil),                             // 89: quaycrew.v1.Hook
-	(*HookBinding)(nil),                      // 90: quaycrew.v1.HookBinding
-	(*HookFile)(nil),                         // 91: quaycrew.v1.HookFile
-	(*ImportHookRequest)(nil),                // 92: quaycrew.v1.ImportHookRequest
-	(*ImportHookResponse)(nil),               // 93: quaycrew.v1.ImportHookResponse
-	(*ListHooksRequest)(nil),                 // 94: quaycrew.v1.ListHooksRequest
-	(*ListHooksResponse)(nil),                // 95: quaycrew.v1.ListHooksResponse
-	(*AttachHookRequest)(nil),                // 96: quaycrew.v1.AttachHookRequest
-	(*AttachHookResponse)(nil),               // 97: quaycrew.v1.AttachHookResponse
-	(*DetachHookRequest)(nil),                // 98: quaycrew.v1.DetachHookRequest
-	(*DetachHookResponse)(nil),               // 99: quaycrew.v1.DetachHookResponse
-	(*Role)(nil),                             // 100: quaycrew.v1.Role
-	(*RoleOrigin)(nil),                       // 101: quaycrew.v1.RoleOrigin
-	(*RoleFile)(nil),                         // 102: quaycrew.v1.RoleFile
-	(*ImportRoleRequest)(nil),                // 103: quaycrew.v1.ImportRoleRequest
-	(*ImportRoleResponse)(nil),               // 104: quaycrew.v1.ImportRoleResponse
-	(*ListRolesRequest)(nil),                 // 105: quaycrew.v1.ListRolesRequest
-	(*ListRolesResponse)(nil),                // 106: quaycrew.v1.ListRolesResponse
-	(*AttachRoleRequest)(nil),                // 107: quaycrew.v1.AttachRoleRequest
-	(*AttachRoleResponse)(nil),               // 108: quaycrew.v1.AttachRoleResponse
-	(*DetachRoleRequest)(nil),                // 109: quaycrew.v1.DetachRoleRequest
-	(*DetachRoleResponse)(nil),               // 110: quaycrew.v1.DetachRoleResponse
-	(*GetRoleRequest)(nil),                   // 111: quaycrew.v1.GetRoleRequest
-	(*GetRoleResponse)(nil),                  // 112: quaycrew.v1.GetRoleResponse
-	(*ListContextsRequest)(nil),              // 113: quaycrew.v1.ListContextsRequest
-	(*ListContextsResponse)(nil),             // 114: quaycrew.v1.ListContextsResponse
-	(*SetSessionPermissionModeRequest)(nil),  // 115: quaycrew.v1.SetSessionPermissionModeRequest
-	(*SetSessionPermissionModeResponse)(nil), // 116: quaycrew.v1.SetSessionPermissionModeResponse
-	(*SetSessionLabelRequest)(nil),           // 117: quaycrew.v1.SetSessionLabelRequest
-	(*SetSessionLabelResponse)(nil),          // 118: quaycrew.v1.SetSessionLabelResponse
-	(*RestoreSessionRequest)(nil),            // 119: quaycrew.v1.RestoreSessionRequest
-	(*RestoreSessionResponse)(nil),           // 120: quaycrew.v1.RestoreSessionResponse
-	(*GetInfoRequest)(nil),                   // 121: quaycrew.v1.GetInfoRequest
-	(*GetInfoResponse)(nil),                  // 122: quaycrew.v1.GetInfoResponse
-	(*GetHeadroomRequest)(nil),               // 123: quaycrew.v1.GetHeadroomRequest
-	(*GetHeadroomResponse)(nil),              // 124: quaycrew.v1.GetHeadroomResponse
-	(*HeadroomSandbox)(nil),                  // 125: quaycrew.v1.HeadroomSandbox
-	(*GetHealthRequest)(nil),                 // 126: quaycrew.v1.GetHealthRequest
-	(*GetHealthResponse)(nil),                // 127: quaycrew.v1.GetHealthResponse
-	(*HealthComponent)(nil),                  // 128: quaycrew.v1.HealthComponent
-	(*GetUsageRequest)(nil),                  // 129: quaycrew.v1.GetUsageRequest
-	(*GetUsageResponse)(nil),                 // 130: quaycrew.v1.GetUsageResponse
-	(*GetHistoryRequest)(nil),                // 131: quaycrew.v1.GetHistoryRequest
-	(*GetHistoryResponse)(nil),               // 132: quaycrew.v1.GetHistoryResponse
-	(*HistoryTotals)(nil),                    // 133: quaycrew.v1.HistoryTotals
-	(*JobDigest)(nil),                        // 134: quaycrew.v1.JobDigest
-	(*Task)(nil),                             // 135: quaycrew.v1.Task
-	(*ListTasksRequest)(nil),                 // 136: quaycrew.v1.ListTasksRequest
-	(*ListTasksResponse)(nil),                // 137: quaycrew.v1.ListTasksResponse
-	(*Job)(nil),                              // 138: quaycrew.v1.Job
-	(*JobStep)(nil),                          // 139: quaycrew.v1.JobStep
-	(*CreateJobRequest)(nil),                 // 140: quaycrew.v1.CreateJobRequest
-	(*CreateJobResponse)(nil),                // 141: quaycrew.v1.CreateJobResponse
-	(*GetJobRequest)(nil),                    // 142: quaycrew.v1.GetJobRequest
-	(*GetJobResponse)(nil),                   // 143: quaycrew.v1.GetJobResponse
-	(*ListJobsRequest)(nil),                  // 144: quaycrew.v1.ListJobsRequest
-	(*ListJobsResponse)(nil),                 // 145: quaycrew.v1.ListJobsResponse
-	(*StopJobRequest)(nil),                   // 146: quaycrew.v1.StopJobRequest
-	(*StopJobResponse)(nil),                  // 147: quaycrew.v1.StopJobResponse
-	(*AskJobRequest)(nil),                    // 148: quaycrew.v1.AskJobRequest
-	(*AskJobResponse)(nil),                   // 149: quaycrew.v1.AskJobResponse
-	(*AnswerJobRequest)(nil),                 // 150: quaycrew.v1.AnswerJobRequest
-	(*AnswerJobResponse)(nil),                // 151: quaycrew.v1.AnswerJobResponse
-	(*RecordJobStepRequest)(nil),             // 152: quaycrew.v1.RecordJobStepRequest
-	(*RecordJobStepResponse)(nil),            // 153: quaycrew.v1.RecordJobStepResponse
-	(*ResumeJobRequest)(nil),                 // 154: quaycrew.v1.ResumeJobRequest
-	(*ResumeJobResponse)(nil),                // 155: quaycrew.v1.ResumeJobResponse
-	(*RefuseJobRequest)(nil),                 // 156: quaycrew.v1.RefuseJobRequest
-	(*RefuseJobResponse)(nil),                // 157: quaycrew.v1.RefuseJobResponse
-	(*Steer)(nil),                            // 158: quaycrew.v1.Steer
-	(*RecordSteerRequest)(nil),               // 159: quaycrew.v1.RecordSteerRequest
-	(*RecordSteerResponse)(nil),              // 160: quaycrew.v1.RecordSteerResponse
-	(*ListSteersRequest)(nil),                // 161: quaycrew.v1.ListSteersRequest
-	(*ListSteersResponse)(nil),               // 162: quaycrew.v1.ListSteersResponse
-	(*WorkspaceLimits)(nil),                  // 163: quaycrew.v1.WorkspaceLimits
-	(*GetWorkspaceLimitsRequest)(nil),        // 164: quaycrew.v1.GetWorkspaceLimitsRequest
-	(*GetWorkspaceLimitsResponse)(nil),       // 165: quaycrew.v1.GetWorkspaceLimitsResponse
-	(*SetWorkspaceLimitsRequest)(nil),        // 166: quaycrew.v1.SetWorkspaceLimitsRequest
-	(*SetWorkspaceLimitsResponse)(nil),       // 167: quaycrew.v1.SetWorkspaceLimitsResponse
-	(*ListSessionEventsRequest)(nil),         // 168: quaycrew.v1.ListSessionEventsRequest
-	(*ListSessionEventsResponse)(nil),        // 169: quaycrew.v1.ListSessionEventsResponse
-	nil,                                      // 170: quaycrew.v1.FlowRun.StateEntry
-	nil,                                      // 171: quaycrew.v1.StartFlowRequest.StateEntry
-	nil,                                      // 172: quaycrew.v1.Job.LabelsEntry
-	nil,                                      // 173: quaycrew.v1.CreateJobRequest.LabelsEntry
-	(*timestamppb.Timestamp)(nil),            // 174: google.protobuf.Timestamp
-	(*SessionEvent)(nil),                     // 175: quaycrew.v1.SessionEvent
+	(*ContextSpend)(nil),                     // 7: quaycrew.v1.ContextSpend
+	(*ContextWindow)(nil),                    // 8: quaycrew.v1.ContextWindow
+	(*Usage)(nil),                            // 9: quaycrew.v1.Usage
+	(*CreateWorkspaceRequest)(nil),           // 10: quaycrew.v1.CreateWorkspaceRequest
+	(*CreateWorkspaceResponse)(nil),          // 11: quaycrew.v1.CreateWorkspaceResponse
+	(*GetWorkspaceRequest)(nil),              // 12: quaycrew.v1.GetWorkspaceRequest
+	(*GetWorkspaceResponse)(nil),             // 13: quaycrew.v1.GetWorkspaceResponse
+	(*ListWorkspacesRequest)(nil),            // 14: quaycrew.v1.ListWorkspacesRequest
+	(*ListWorkspacesResponse)(nil),           // 15: quaycrew.v1.ListWorkspacesResponse
+	(*DeleteWorkspaceRequest)(nil),           // 16: quaycrew.v1.DeleteWorkspaceRequest
+	(*DeleteWorkspaceResponse)(nil),          // 17: quaycrew.v1.DeleteWorkspaceResponse
+	(*CreateProjectRequest)(nil),             // 18: quaycrew.v1.CreateProjectRequest
+	(*CreateProjectResponse)(nil),            // 19: quaycrew.v1.CreateProjectResponse
+	(*GetProjectRequest)(nil),                // 20: quaycrew.v1.GetProjectRequest
+	(*GetProjectResponse)(nil),               // 21: quaycrew.v1.GetProjectResponse
+	(*ListProjectsRequest)(nil),              // 22: quaycrew.v1.ListProjectsRequest
+	(*ListProjectsResponse)(nil),             // 23: quaycrew.v1.ListProjectsResponse
+	(*SetDeployTargetRequest)(nil),           // 24: quaycrew.v1.SetDeployTargetRequest
+	(*SetDeployTargetResponse)(nil),          // 25: quaycrew.v1.SetDeployTargetResponse
+	(*FlowRun)(nil),                          // 26: quaycrew.v1.FlowRun
+	(*ImportFlowRequest)(nil),                // 27: quaycrew.v1.ImportFlowRequest
+	(*ImportFlowResponse)(nil),               // 28: quaycrew.v1.ImportFlowResponse
+	(*StartFlowRequest)(nil),                 // 29: quaycrew.v1.StartFlowRequest
+	(*StartFlowResponse)(nil),                // 30: quaycrew.v1.StartFlowResponse
+	(*GetFlowRunRequest)(nil),                // 31: quaycrew.v1.GetFlowRunRequest
+	(*GetFlowRunResponse)(nil),               // 32: quaycrew.v1.GetFlowRunResponse
+	(*AnswerFlowRunRequest)(nil),             // 33: quaycrew.v1.AnswerFlowRunRequest
+	(*AnswerFlowRunResponse)(nil),            // 34: quaycrew.v1.AnswerFlowRunResponse
+	(*ScheduleFlowRequest)(nil),              // 35: quaycrew.v1.ScheduleFlowRequest
+	(*ScheduleFlowResponse)(nil),             // 36: quaycrew.v1.ScheduleFlowResponse
+	(*UnscheduleFlowRequest)(nil),            // 37: quaycrew.v1.UnscheduleFlowRequest
+	(*UnscheduleFlowResponse)(nil),           // 38: quaycrew.v1.UnscheduleFlowResponse
+	(*StopFlowRunRequest)(nil),               // 39: quaycrew.v1.StopFlowRunRequest
+	(*StopFlowRunResponse)(nil),              // 40: quaycrew.v1.StopFlowRunResponse
+	(*ListFlowRunsRequest)(nil),              // 41: quaycrew.v1.ListFlowRunsRequest
+	(*ListFlowRunsResponse)(nil),             // 42: quaycrew.v1.ListFlowRunsResponse
+	(*DeleteProjectRequest)(nil),             // 43: quaycrew.v1.DeleteProjectRequest
+	(*DeleteProjectResponse)(nil),            // 44: quaycrew.v1.DeleteProjectResponse
+	(*SetProjectRepositoryRequest)(nil),      // 45: quaycrew.v1.SetProjectRepositoryRequest
+	(*SetProjectRepositoryResponse)(nil),     // 46: quaycrew.v1.SetProjectRepositoryResponse
+	(*AttachChannelRequest)(nil),             // 47: quaycrew.v1.AttachChannelRequest
+	(*AttachChannelResponse)(nil),            // 48: quaycrew.v1.AttachChannelResponse
+	(*SetSecretRequest)(nil),                 // 49: quaycrew.v1.SetSecretRequest
+	(*SetSecretResponse)(nil),                // 50: quaycrew.v1.SetSecretResponse
+	(*DispatchRequest)(nil),                  // 51: quaycrew.v1.DispatchRequest
+	(*DispatchResponse)(nil),                 // 52: quaycrew.v1.DispatchResponse
+	(*OpenDriverRequest)(nil),                // 53: quaycrew.v1.OpenDriverRequest
+	(*OpenDriverResponse)(nil),               // 54: quaycrew.v1.OpenDriverResponse
+	(*ListSessionsRequest)(nil),              // 55: quaycrew.v1.ListSessionsRequest
+	(*ListSessionsResponse)(nil),             // 56: quaycrew.v1.ListSessionsResponse
+	(*GetSessionRequest)(nil),                // 57: quaycrew.v1.GetSessionRequest
+	(*GetSessionResponse)(nil),               // 58: quaycrew.v1.GetSessionResponse
+	(*AttachSessionRequest)(nil),             // 59: quaycrew.v1.AttachSessionRequest
+	(*AttachSessionResponse)(nil),            // 60: quaycrew.v1.AttachSessionResponse
+	(*StopSessionRequest)(nil),               // 61: quaycrew.v1.StopSessionRequest
+	(*StopSessionResponse)(nil),              // 62: quaycrew.v1.StopSessionResponse
+	(*DrainSessionsRequest)(nil),             // 63: quaycrew.v1.DrainSessionsRequest
+	(*DrainSessionsResponse)(nil),            // 64: quaycrew.v1.DrainSessionsResponse
+	(*RestartSessionRequest)(nil),            // 65: quaycrew.v1.RestartSessionRequest
+	(*RestartSessionResponse)(nil),           // 66: quaycrew.v1.RestartSessionResponse
+	(*ArchiveSessionRequest)(nil),            // 67: quaycrew.v1.ArchiveSessionRequest
+	(*ArchiveSessionResponse)(nil),           // 68: quaycrew.v1.ArchiveSessionResponse
+	(*ReclaimSessionRequest)(nil),            // 69: quaycrew.v1.ReclaimSessionRequest
+	(*ReclaimSessionResponse)(nil),           // 70: quaycrew.v1.ReclaimSessionResponse
+	(*StopTaskRequest)(nil),                  // 71: quaycrew.v1.StopTaskRequest
+	(*StopTaskResponse)(nil),                 // 72: quaycrew.v1.StopTaskResponse
+	(*ContextDir)(nil),                       // 73: quaycrew.v1.ContextDir
+	(*SetContextRequest)(nil),                // 74: quaycrew.v1.SetContextRequest
+	(*SetContextResponse)(nil),               // 75: quaycrew.v1.SetContextResponse
+	(*SecretRef)(nil),                        // 76: quaycrew.v1.SecretRef
+	(*ListSecretsRequest)(nil),               // 77: quaycrew.v1.ListSecretsRequest
+	(*ListSecretsResponse)(nil),              // 78: quaycrew.v1.ListSecretsResponse
+	(*Skill)(nil),                            // 79: quaycrew.v1.Skill
+	(*SkillSecret)(nil),                      // 80: quaycrew.v1.SkillSecret
+	(*SkillFile)(nil),                        // 81: quaycrew.v1.SkillFile
+	(*ImportSkillRequest)(nil),               // 82: quaycrew.v1.ImportSkillRequest
+	(*ImportSkillResponse)(nil),              // 83: quaycrew.v1.ImportSkillResponse
+	(*ListSkillsRequest)(nil),                // 84: quaycrew.v1.ListSkillsRequest
+	(*ListSkillsResponse)(nil),               // 85: quaycrew.v1.ListSkillsResponse
+	(*AttachSkillRequest)(nil),               // 86: quaycrew.v1.AttachSkillRequest
+	(*AttachSkillResponse)(nil),              // 87: quaycrew.v1.AttachSkillResponse
+	(*DetachSkillRequest)(nil),               // 88: quaycrew.v1.DetachSkillRequest
+	(*DetachSkillResponse)(nil),              // 89: quaycrew.v1.DetachSkillResponse
+	(*Hook)(nil),                             // 90: quaycrew.v1.Hook
+	(*HookBinding)(nil),                      // 91: quaycrew.v1.HookBinding
+	(*HookFile)(nil),                         // 92: quaycrew.v1.HookFile
+	(*ImportHookRequest)(nil),                // 93: quaycrew.v1.ImportHookRequest
+	(*ImportHookResponse)(nil),               // 94: quaycrew.v1.ImportHookResponse
+	(*ListHooksRequest)(nil),                 // 95: quaycrew.v1.ListHooksRequest
+	(*ListHooksResponse)(nil),                // 96: quaycrew.v1.ListHooksResponse
+	(*AttachHookRequest)(nil),                // 97: quaycrew.v1.AttachHookRequest
+	(*AttachHookResponse)(nil),               // 98: quaycrew.v1.AttachHookResponse
+	(*DetachHookRequest)(nil),                // 99: quaycrew.v1.DetachHookRequest
+	(*DetachHookResponse)(nil),               // 100: quaycrew.v1.DetachHookResponse
+	(*Role)(nil),                             // 101: quaycrew.v1.Role
+	(*RoleOrigin)(nil),                       // 102: quaycrew.v1.RoleOrigin
+	(*RoleFile)(nil),                         // 103: quaycrew.v1.RoleFile
+	(*ImportRoleRequest)(nil),                // 104: quaycrew.v1.ImportRoleRequest
+	(*ImportRoleResponse)(nil),               // 105: quaycrew.v1.ImportRoleResponse
+	(*ListRolesRequest)(nil),                 // 106: quaycrew.v1.ListRolesRequest
+	(*ListRolesResponse)(nil),                // 107: quaycrew.v1.ListRolesResponse
+	(*AttachRoleRequest)(nil),                // 108: quaycrew.v1.AttachRoleRequest
+	(*AttachRoleResponse)(nil),               // 109: quaycrew.v1.AttachRoleResponse
+	(*DetachRoleRequest)(nil),                // 110: quaycrew.v1.DetachRoleRequest
+	(*DetachRoleResponse)(nil),               // 111: quaycrew.v1.DetachRoleResponse
+	(*GetRoleRequest)(nil),                   // 112: quaycrew.v1.GetRoleRequest
+	(*GetRoleResponse)(nil),                  // 113: quaycrew.v1.GetRoleResponse
+	(*ListContextsRequest)(nil),              // 114: quaycrew.v1.ListContextsRequest
+	(*ListContextsResponse)(nil),             // 115: quaycrew.v1.ListContextsResponse
+	(*SetSessionPermissionModeRequest)(nil),  // 116: quaycrew.v1.SetSessionPermissionModeRequest
+	(*SetSessionPermissionModeResponse)(nil), // 117: quaycrew.v1.SetSessionPermissionModeResponse
+	(*SetSessionLabelRequest)(nil),           // 118: quaycrew.v1.SetSessionLabelRequest
+	(*SetSessionLabelResponse)(nil),          // 119: quaycrew.v1.SetSessionLabelResponse
+	(*RestoreSessionRequest)(nil),            // 120: quaycrew.v1.RestoreSessionRequest
+	(*RestoreSessionResponse)(nil),           // 121: quaycrew.v1.RestoreSessionResponse
+	(*GetInfoRequest)(nil),                   // 122: quaycrew.v1.GetInfoRequest
+	(*GetInfoResponse)(nil),                  // 123: quaycrew.v1.GetInfoResponse
+	(*GetHeadroomRequest)(nil),               // 124: quaycrew.v1.GetHeadroomRequest
+	(*GetHeadroomResponse)(nil),              // 125: quaycrew.v1.GetHeadroomResponse
+	(*HeadroomSandbox)(nil),                  // 126: quaycrew.v1.HeadroomSandbox
+	(*GetHealthRequest)(nil),                 // 127: quaycrew.v1.GetHealthRequest
+	(*GetHealthResponse)(nil),                // 128: quaycrew.v1.GetHealthResponse
+	(*HealthComponent)(nil),                  // 129: quaycrew.v1.HealthComponent
+	(*GetUsageRequest)(nil),                  // 130: quaycrew.v1.GetUsageRequest
+	(*GetUsageResponse)(nil),                 // 131: quaycrew.v1.GetUsageResponse
+	(*GetHistoryRequest)(nil),                // 132: quaycrew.v1.GetHistoryRequest
+	(*GetHistoryResponse)(nil),               // 133: quaycrew.v1.GetHistoryResponse
+	(*HistoryTotals)(nil),                    // 134: quaycrew.v1.HistoryTotals
+	(*JobDigest)(nil),                        // 135: quaycrew.v1.JobDigest
+	(*Task)(nil),                             // 136: quaycrew.v1.Task
+	(*ListTasksRequest)(nil),                 // 137: quaycrew.v1.ListTasksRequest
+	(*ListTasksResponse)(nil),                // 138: quaycrew.v1.ListTasksResponse
+	(*Job)(nil),                              // 139: quaycrew.v1.Job
+	(*JobStep)(nil),                          // 140: quaycrew.v1.JobStep
+	(*CreateJobRequest)(nil),                 // 141: quaycrew.v1.CreateJobRequest
+	(*CreateJobResponse)(nil),                // 142: quaycrew.v1.CreateJobResponse
+	(*GetJobRequest)(nil),                    // 143: quaycrew.v1.GetJobRequest
+	(*GetJobResponse)(nil),                   // 144: quaycrew.v1.GetJobResponse
+	(*ListJobsRequest)(nil),                  // 145: quaycrew.v1.ListJobsRequest
+	(*ListJobsResponse)(nil),                 // 146: quaycrew.v1.ListJobsResponse
+	(*StopJobRequest)(nil),                   // 147: quaycrew.v1.StopJobRequest
+	(*StopJobResponse)(nil),                  // 148: quaycrew.v1.StopJobResponse
+	(*AskJobRequest)(nil),                    // 149: quaycrew.v1.AskJobRequest
+	(*AskJobResponse)(nil),                   // 150: quaycrew.v1.AskJobResponse
+	(*AnswerJobRequest)(nil),                 // 151: quaycrew.v1.AnswerJobRequest
+	(*AnswerJobResponse)(nil),                // 152: quaycrew.v1.AnswerJobResponse
+	(*RecordJobStepRequest)(nil),             // 153: quaycrew.v1.RecordJobStepRequest
+	(*RecordJobStepResponse)(nil),            // 154: quaycrew.v1.RecordJobStepResponse
+	(*ResumeJobRequest)(nil),                 // 155: quaycrew.v1.ResumeJobRequest
+	(*ResumeJobResponse)(nil),                // 156: quaycrew.v1.ResumeJobResponse
+	(*RefuseJobRequest)(nil),                 // 157: quaycrew.v1.RefuseJobRequest
+	(*RefuseJobResponse)(nil),                // 158: quaycrew.v1.RefuseJobResponse
+	(*Steer)(nil),                            // 159: quaycrew.v1.Steer
+	(*RecordSteerRequest)(nil),               // 160: quaycrew.v1.RecordSteerRequest
+	(*RecordSteerResponse)(nil),              // 161: quaycrew.v1.RecordSteerResponse
+	(*ListSteersRequest)(nil),                // 162: quaycrew.v1.ListSteersRequest
+	(*ListSteersResponse)(nil),               // 163: quaycrew.v1.ListSteersResponse
+	(*WorkspaceLimits)(nil),                  // 164: quaycrew.v1.WorkspaceLimits
+	(*GetWorkspaceLimitsRequest)(nil),        // 165: quaycrew.v1.GetWorkspaceLimitsRequest
+	(*GetWorkspaceLimitsResponse)(nil),       // 166: quaycrew.v1.GetWorkspaceLimitsResponse
+	(*SetWorkspaceLimitsRequest)(nil),        // 167: quaycrew.v1.SetWorkspaceLimitsRequest
+	(*SetWorkspaceLimitsResponse)(nil),       // 168: quaycrew.v1.SetWorkspaceLimitsResponse
+	(*ListSessionEventsRequest)(nil),         // 169: quaycrew.v1.ListSessionEventsRequest
+	(*ListSessionEventsResponse)(nil),        // 170: quaycrew.v1.ListSessionEventsResponse
+	nil,                                      // 171: quaycrew.v1.FlowRun.StateEntry
+	nil,                                      // 172: quaycrew.v1.StartFlowRequest.StateEntry
+	nil,                                      // 173: quaycrew.v1.Job.LabelsEntry
+	nil,                                      // 174: quaycrew.v1.CreateJobRequest.LabelsEntry
+	(*timestamppb.Timestamp)(nil),            // 175: google.protobuf.Timestamp
+	(*SessionEvent)(nil),                     // 176: quaycrew.v1.SessionEvent
 }
 var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
-	174, // 0: quaycrew.v1.Workspace.created_at:type_name -> google.protobuf.Timestamp
-	174, // 1: quaycrew.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	175, // 0: quaycrew.v1.Workspace.created_at:type_name -> google.protobuf.Timestamp
+	175, // 1: quaycrew.v1.Project.created_at:type_name -> google.protobuf.Timestamp
 	5,   // 2: quaycrew.v1.Project.deploy_target:type_name -> quaycrew.v1.DeployTarget
-	174, // 3: quaycrew.v1.Session.created_at:type_name -> google.protobuf.Timestamp
-	174, // 4: quaycrew.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
-	174, // 5: quaycrew.v1.Session.archived_at:type_name -> google.protobuf.Timestamp
-	8,   // 6: quaycrew.v1.Session.usage:type_name -> quaycrew.v1.Usage
-	7,   // 7: quaycrew.v1.Session.context_window:type_name -> quaycrew.v1.ContextWindow
-	174, // 8: quaycrew.v1.Session.reclaimed_at:type_name -> google.protobuf.Timestamp
+	175, // 3: quaycrew.v1.Session.created_at:type_name -> google.protobuf.Timestamp
+	175, // 4: quaycrew.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
+	175, // 5: quaycrew.v1.Session.archived_at:type_name -> google.protobuf.Timestamp
+	9,   // 6: quaycrew.v1.Session.usage:type_name -> quaycrew.v1.Usage
+	8,   // 7: quaycrew.v1.Session.context_window:type_name -> quaycrew.v1.ContextWindow
+	175, // 8: quaycrew.v1.Session.reclaimed_at:type_name -> google.protobuf.Timestamp
 	0,   // 9: quaycrew.v1.Session.presence:type_name -> quaycrew.v1.SessionPresence
-	2,   // 10: quaycrew.v1.CreateWorkspaceResponse.workspace:type_name -> quaycrew.v1.Workspace
-	2,   // 11: quaycrew.v1.GetWorkspaceResponse.workspace:type_name -> quaycrew.v1.Workspace
-	2,   // 12: quaycrew.v1.ListWorkspacesResponse.workspaces:type_name -> quaycrew.v1.Workspace
-	4,   // 13: quaycrew.v1.CreateProjectResponse.project:type_name -> quaycrew.v1.Project
-	4,   // 14: quaycrew.v1.GetProjectResponse.project:type_name -> quaycrew.v1.Project
-	4,   // 15: quaycrew.v1.ListProjectsResponse.projects:type_name -> quaycrew.v1.Project
-	5,   // 16: quaycrew.v1.SetDeployTargetRequest.target:type_name -> quaycrew.v1.DeployTarget
-	4,   // 17: quaycrew.v1.SetDeployTargetResponse.project:type_name -> quaycrew.v1.Project
-	170, // 18: quaycrew.v1.FlowRun.state:type_name -> quaycrew.v1.FlowRun.StateEntry
-	174, // 19: quaycrew.v1.FlowRun.created_at:type_name -> google.protobuf.Timestamp
-	174, // 20: quaycrew.v1.FlowRun.updated_at:type_name -> google.protobuf.Timestamp
-	171, // 21: quaycrew.v1.StartFlowRequest.state:type_name -> quaycrew.v1.StartFlowRequest.StateEntry
-	25,  // 22: quaycrew.v1.StartFlowResponse.run:type_name -> quaycrew.v1.FlowRun
-	25,  // 23: quaycrew.v1.GetFlowRunResponse.run:type_name -> quaycrew.v1.FlowRun
-	25,  // 24: quaycrew.v1.AnswerFlowRunResponse.run:type_name -> quaycrew.v1.FlowRun
-	25,  // 25: quaycrew.v1.StopFlowRunResponse.run:type_name -> quaycrew.v1.FlowRun
-	25,  // 26: quaycrew.v1.ListFlowRunsResponse.runs:type_name -> quaycrew.v1.FlowRun
-	4,   // 27: quaycrew.v1.SetProjectRepositoryResponse.project:type_name -> quaycrew.v1.Project
-	3,   // 28: quaycrew.v1.AttachChannelResponse.channel:type_name -> quaycrew.v1.Channel
-	1,   // 29: quaycrew.v1.SetSecretRequest.projection:type_name -> quaycrew.v1.SecretProjection
-	6,   // 30: quaycrew.v1.OpenDriverResponse.session:type_name -> quaycrew.v1.Session
-	6,   // 31: quaycrew.v1.ListSessionsResponse.sessions:type_name -> quaycrew.v1.Session
-	6,   // 32: quaycrew.v1.GetSessionResponse.session:type_name -> quaycrew.v1.Session
-	6,   // 33: quaycrew.v1.DrainSessionsResponse.stopped:type_name -> quaycrew.v1.Session
-	6,   // 34: quaycrew.v1.DrainSessionsResponse.working:type_name -> quaycrew.v1.Session
-	6,   // 35: quaycrew.v1.RestartSessionResponse.session:type_name -> quaycrew.v1.Session
-	6,   // 36: quaycrew.v1.ArchiveSessionResponse.session:type_name -> quaycrew.v1.Session
-	6,   // 37: quaycrew.v1.ReclaimSessionResponse.session:type_name -> quaycrew.v1.Session
-	6,   // 38: quaycrew.v1.StopTaskResponse.session:type_name -> quaycrew.v1.Session
-	72,  // 39: quaycrew.v1.SetContextResponse.dir:type_name -> quaycrew.v1.ContextDir
-	174, // 40: quaycrew.v1.SecretRef.updated_at:type_name -> google.protobuf.Timestamp
-	1,   // 41: quaycrew.v1.SecretRef.projection:type_name -> quaycrew.v1.SecretProjection
-	75,  // 42: quaycrew.v1.ListSecretsResponse.secrets:type_name -> quaycrew.v1.SecretRef
-	79,  // 43: quaycrew.v1.Skill.secrets:type_name -> quaycrew.v1.SkillSecret
-	174, // 44: quaycrew.v1.Skill.imported_at:type_name -> google.protobuf.Timestamp
-	80,  // 45: quaycrew.v1.ImportSkillRequest.files:type_name -> quaycrew.v1.SkillFile
-	78,  // 46: quaycrew.v1.ImportSkillResponse.skill:type_name -> quaycrew.v1.Skill
-	78,  // 47: quaycrew.v1.ListSkillsResponse.skills:type_name -> quaycrew.v1.Skill
-	78,  // 48: quaycrew.v1.AttachSkillResponse.skill:type_name -> quaycrew.v1.Skill
-	90,  // 49: quaycrew.v1.Hook.events:type_name -> quaycrew.v1.HookBinding
-	79,  // 50: quaycrew.v1.Hook.secrets:type_name -> quaycrew.v1.SkillSecret
-	174, // 51: quaycrew.v1.Hook.imported_at:type_name -> google.protobuf.Timestamp
-	91,  // 52: quaycrew.v1.ImportHookRequest.files:type_name -> quaycrew.v1.HookFile
-	89,  // 53: quaycrew.v1.ImportHookResponse.hook:type_name -> quaycrew.v1.Hook
-	89,  // 54: quaycrew.v1.ListHooksResponse.hooks:type_name -> quaycrew.v1.Hook
-	89,  // 55: quaycrew.v1.AttachHookResponse.hook:type_name -> quaycrew.v1.Hook
-	174, // 56: quaycrew.v1.Role.imported_at:type_name -> google.protobuf.Timestamp
-	101, // 57: quaycrew.v1.Role.origin:type_name -> quaycrew.v1.RoleOrigin
-	102, // 58: quaycrew.v1.ImportRoleRequest.files:type_name -> quaycrew.v1.RoleFile
-	101, // 59: quaycrew.v1.ImportRoleRequest.origin:type_name -> quaycrew.v1.RoleOrigin
-	100, // 60: quaycrew.v1.ImportRoleResponse.role:type_name -> quaycrew.v1.Role
-	100, // 61: quaycrew.v1.ListRolesResponse.roles:type_name -> quaycrew.v1.Role
-	100, // 62: quaycrew.v1.AttachRoleResponse.role:type_name -> quaycrew.v1.Role
-	100, // 63: quaycrew.v1.GetRoleResponse.role:type_name -> quaycrew.v1.Role
-	72,  // 64: quaycrew.v1.ListContextsResponse.dirs:type_name -> quaycrew.v1.ContextDir
-	6,   // 65: quaycrew.v1.SetSessionPermissionModeResponse.session:type_name -> quaycrew.v1.Session
-	6,   // 66: quaycrew.v1.SetSessionLabelResponse.session:type_name -> quaycrew.v1.Session
-	6,   // 67: quaycrew.v1.RestoreSessionResponse.session:type_name -> quaycrew.v1.Session
-	125, // 68: quaycrew.v1.GetHeadroomResponse.sandboxes:type_name -> quaycrew.v1.HeadroomSandbox
-	174, // 69: quaycrew.v1.GetHeadroomResponse.taken_at:type_name -> google.protobuf.Timestamp
-	128, // 70: quaycrew.v1.GetHealthResponse.components:type_name -> quaycrew.v1.HealthComponent
-	174, // 71: quaycrew.v1.GetHealthResponse.checked_at:type_name -> google.protobuf.Timestamp
-	8,   // 72: quaycrew.v1.GetUsageResponse.total:type_name -> quaycrew.v1.Usage
-	174, // 73: quaycrew.v1.GetHistoryRequest.since:type_name -> google.protobuf.Timestamp
-	174, // 74: quaycrew.v1.GetHistoryRequest.until:type_name -> google.protobuf.Timestamp
-	133, // 75: quaycrew.v1.GetHistoryResponse.total:type_name -> quaycrew.v1.HistoryTotals
-	134, // 76: quaycrew.v1.GetHistoryResponse.jobs:type_name -> quaycrew.v1.JobDigest
-	174, // 77: quaycrew.v1.GetHistoryResponse.since:type_name -> google.protobuf.Timestamp
-	174, // 78: quaycrew.v1.GetHistoryResponse.until:type_name -> google.protobuf.Timestamp
-	174, // 79: quaycrew.v1.JobDigest.created_at:type_name -> google.protobuf.Timestamp
-	174, // 80: quaycrew.v1.JobDigest.started_at:type_name -> google.protobuf.Timestamp
-	174, // 81: quaycrew.v1.JobDigest.finished_at:type_name -> google.protobuf.Timestamp
-	174, // 82: quaycrew.v1.Task.occurred_at:type_name -> google.protobuf.Timestamp
-	135, // 83: quaycrew.v1.ListTasksResponse.tasks:type_name -> quaycrew.v1.Task
-	174, // 84: quaycrew.v1.Job.deadline:type_name -> google.protobuf.Timestamp
-	172, // 85: quaycrew.v1.Job.labels:type_name -> quaycrew.v1.Job.LabelsEntry
-	139, // 86: quaycrew.v1.Job.steps:type_name -> quaycrew.v1.JobStep
-	174, // 87: quaycrew.v1.Job.created_at:type_name -> google.protobuf.Timestamp
-	174, // 88: quaycrew.v1.Job.updated_at:type_name -> google.protobuf.Timestamp
-	174, // 89: quaycrew.v1.Job.started_at:type_name -> google.protobuf.Timestamp
-	174, // 90: quaycrew.v1.Job.finished_at:type_name -> google.protobuf.Timestamp
-	174, // 91: quaycrew.v1.JobStep.finished_at:type_name -> google.protobuf.Timestamp
-	174, // 92: quaycrew.v1.CreateJobRequest.deadline:type_name -> google.protobuf.Timestamp
-	173, // 93: quaycrew.v1.CreateJobRequest.labels:type_name -> quaycrew.v1.CreateJobRequest.LabelsEntry
-	138, // 94: quaycrew.v1.CreateJobResponse.job:type_name -> quaycrew.v1.Job
-	78,  // 95: quaycrew.v1.CreateJobResponse.left_out:type_name -> quaycrew.v1.Skill
-	138, // 96: quaycrew.v1.GetJobResponse.job:type_name -> quaycrew.v1.Job
-	138, // 97: quaycrew.v1.ListJobsResponse.jobs:type_name -> quaycrew.v1.Job
-	138, // 98: quaycrew.v1.StopJobResponse.job:type_name -> quaycrew.v1.Job
-	138, // 99: quaycrew.v1.AskJobResponse.job:type_name -> quaycrew.v1.Job
-	138, // 100: quaycrew.v1.AnswerJobResponse.job:type_name -> quaycrew.v1.Job
-	138, // 101: quaycrew.v1.RecordJobStepResponse.job:type_name -> quaycrew.v1.Job
-	138, // 102: quaycrew.v1.ResumeJobResponse.job:type_name -> quaycrew.v1.Job
-	138, // 103: quaycrew.v1.RefuseJobResponse.job:type_name -> quaycrew.v1.Job
-	174, // 104: quaycrew.v1.Steer.occurred_at:type_name -> google.protobuf.Timestamp
-	158, // 105: quaycrew.v1.RecordSteerResponse.steer:type_name -> quaycrew.v1.Steer
-	138, // 106: quaycrew.v1.RecordSteerResponse.root:type_name -> quaycrew.v1.Job
-	158, // 107: quaycrew.v1.ListSteersResponse.steers:type_name -> quaycrew.v1.Steer
-	138, // 108: quaycrew.v1.ListSteersResponse.root:type_name -> quaycrew.v1.Job
-	163, // 109: quaycrew.v1.GetWorkspaceLimitsResponse.limits:type_name -> quaycrew.v1.WorkspaceLimits
-	163, // 110: quaycrew.v1.SetWorkspaceLimitsRequest.limits:type_name -> quaycrew.v1.WorkspaceLimits
-	163, // 111: quaycrew.v1.SetWorkspaceLimitsResponse.limits:type_name -> quaycrew.v1.WorkspaceLimits
-	175, // 112: quaycrew.v1.ListSessionEventsResponse.events:type_name -> quaycrew.v1.SessionEvent
-	9,   // 113: quaycrew.v1.ControlPlaneService.CreateWorkspace:input_type -> quaycrew.v1.CreateWorkspaceRequest
-	11,  // 114: quaycrew.v1.ControlPlaneService.GetWorkspace:input_type -> quaycrew.v1.GetWorkspaceRequest
-	13,  // 115: quaycrew.v1.ControlPlaneService.ListWorkspaces:input_type -> quaycrew.v1.ListWorkspacesRequest
-	15,  // 116: quaycrew.v1.ControlPlaneService.DeleteWorkspace:input_type -> quaycrew.v1.DeleteWorkspaceRequest
-	17,  // 117: quaycrew.v1.ControlPlaneService.CreateProject:input_type -> quaycrew.v1.CreateProjectRequest
-	19,  // 118: quaycrew.v1.ControlPlaneService.GetProject:input_type -> quaycrew.v1.GetProjectRequest
-	21,  // 119: quaycrew.v1.ControlPlaneService.ListProjects:input_type -> quaycrew.v1.ListProjectsRequest
-	42,  // 120: quaycrew.v1.ControlPlaneService.DeleteProject:input_type -> quaycrew.v1.DeleteProjectRequest
-	23,  // 121: quaycrew.v1.ControlPlaneService.SetDeployTarget:input_type -> quaycrew.v1.SetDeployTargetRequest
-	44,  // 122: quaycrew.v1.ControlPlaneService.SetProjectRepository:input_type -> quaycrew.v1.SetProjectRepositoryRequest
-	26,  // 123: quaycrew.v1.ControlPlaneService.ImportFlow:input_type -> quaycrew.v1.ImportFlowRequest
-	28,  // 124: quaycrew.v1.ControlPlaneService.StartFlow:input_type -> quaycrew.v1.StartFlowRequest
-	30,  // 125: quaycrew.v1.ControlPlaneService.GetFlowRun:input_type -> quaycrew.v1.GetFlowRunRequest
-	40,  // 126: quaycrew.v1.ControlPlaneService.ListFlowRuns:input_type -> quaycrew.v1.ListFlowRunsRequest
-	38,  // 127: quaycrew.v1.ControlPlaneService.StopFlowRun:input_type -> quaycrew.v1.StopFlowRunRequest
-	32,  // 128: quaycrew.v1.ControlPlaneService.AnswerFlowRun:input_type -> quaycrew.v1.AnswerFlowRunRequest
-	34,  // 129: quaycrew.v1.ControlPlaneService.ScheduleFlow:input_type -> quaycrew.v1.ScheduleFlowRequest
-	36,  // 130: quaycrew.v1.ControlPlaneService.UnscheduleFlow:input_type -> quaycrew.v1.UnscheduleFlowRequest
-	46,  // 131: quaycrew.v1.ControlPlaneService.AttachChannel:input_type -> quaycrew.v1.AttachChannelRequest
-	48,  // 132: quaycrew.v1.ControlPlaneService.SetSecret:input_type -> quaycrew.v1.SetSecretRequest
-	76,  // 133: quaycrew.v1.ControlPlaneService.ListSecrets:input_type -> quaycrew.v1.ListSecretsRequest
-	50,  // 134: quaycrew.v1.ControlPlaneService.Dispatch:input_type -> quaycrew.v1.DispatchRequest
-	52,  // 135: quaycrew.v1.ControlPlaneService.OpenDriver:input_type -> quaycrew.v1.OpenDriverRequest
-	54,  // 136: quaycrew.v1.ControlPlaneService.ListSessions:input_type -> quaycrew.v1.ListSessionsRequest
-	56,  // 137: quaycrew.v1.ControlPlaneService.GetSession:input_type -> quaycrew.v1.GetSessionRequest
-	58,  // 138: quaycrew.v1.ControlPlaneService.AttachSession:input_type -> quaycrew.v1.AttachSessionRequest
-	60,  // 139: quaycrew.v1.ControlPlaneService.StopSession:input_type -> quaycrew.v1.StopSessionRequest
-	70,  // 140: quaycrew.v1.ControlPlaneService.StopTask:input_type -> quaycrew.v1.StopTaskRequest
-	68,  // 141: quaycrew.v1.ControlPlaneService.ReclaimSession:input_type -> quaycrew.v1.ReclaimSessionRequest
-	62,  // 142: quaycrew.v1.ControlPlaneService.DrainSessions:input_type -> quaycrew.v1.DrainSessionsRequest
-	64,  // 143: quaycrew.v1.ControlPlaneService.RestartSession:input_type -> quaycrew.v1.RestartSessionRequest
-	66,  // 144: quaycrew.v1.ControlPlaneService.ArchiveSession:input_type -> quaycrew.v1.ArchiveSessionRequest
-	119, // 145: quaycrew.v1.ControlPlaneService.RestoreSession:input_type -> quaycrew.v1.RestoreSessionRequest
-	115, // 146: quaycrew.v1.ControlPlaneService.SetSessionPermissionMode:input_type -> quaycrew.v1.SetSessionPermissionModeRequest
-	117, // 147: quaycrew.v1.ControlPlaneService.SetSessionLabel:input_type -> quaycrew.v1.SetSessionLabelRequest
-	113, // 148: quaycrew.v1.ControlPlaneService.ListContexts:input_type -> quaycrew.v1.ListContextsRequest
-	73,  // 149: quaycrew.v1.ControlPlaneService.SetContext:input_type -> quaycrew.v1.SetContextRequest
-	81,  // 150: quaycrew.v1.ControlPlaneService.ImportSkill:input_type -> quaycrew.v1.ImportSkillRequest
-	83,  // 151: quaycrew.v1.ControlPlaneService.ListSkills:input_type -> quaycrew.v1.ListSkillsRequest
-	85,  // 152: quaycrew.v1.ControlPlaneService.AttachSkill:input_type -> quaycrew.v1.AttachSkillRequest
-	87,  // 153: quaycrew.v1.ControlPlaneService.DetachSkill:input_type -> quaycrew.v1.DetachSkillRequest
-	92,  // 154: quaycrew.v1.ControlPlaneService.ImportHook:input_type -> quaycrew.v1.ImportHookRequest
-	94,  // 155: quaycrew.v1.ControlPlaneService.ListHooks:input_type -> quaycrew.v1.ListHooksRequest
-	96,  // 156: quaycrew.v1.ControlPlaneService.AttachHook:input_type -> quaycrew.v1.AttachHookRequest
-	98,  // 157: quaycrew.v1.ControlPlaneService.DetachHook:input_type -> quaycrew.v1.DetachHookRequest
-	103, // 158: quaycrew.v1.ControlPlaneService.ImportRole:input_type -> quaycrew.v1.ImportRoleRequest
-	105, // 159: quaycrew.v1.ControlPlaneService.ListRoles:input_type -> quaycrew.v1.ListRolesRequest
-	107, // 160: quaycrew.v1.ControlPlaneService.AttachRole:input_type -> quaycrew.v1.AttachRoleRequest
-	109, // 161: quaycrew.v1.ControlPlaneService.DetachRole:input_type -> quaycrew.v1.DetachRoleRequest
-	111, // 162: quaycrew.v1.ControlPlaneService.GetRole:input_type -> quaycrew.v1.GetRoleRequest
-	136, // 163: quaycrew.v1.ControlPlaneService.ListTasks:input_type -> quaycrew.v1.ListTasksRequest
-	140, // 164: quaycrew.v1.ControlPlaneService.CreateJob:input_type -> quaycrew.v1.CreateJobRequest
-	142, // 165: quaycrew.v1.ControlPlaneService.GetJob:input_type -> quaycrew.v1.GetJobRequest
-	144, // 166: quaycrew.v1.ControlPlaneService.ListJobs:input_type -> quaycrew.v1.ListJobsRequest
-	146, // 167: quaycrew.v1.ControlPlaneService.StopJob:input_type -> quaycrew.v1.StopJobRequest
-	148, // 168: quaycrew.v1.ControlPlaneService.AskJob:input_type -> quaycrew.v1.AskJobRequest
-	150, // 169: quaycrew.v1.ControlPlaneService.AnswerJob:input_type -> quaycrew.v1.AnswerJobRequest
-	152, // 170: quaycrew.v1.ControlPlaneService.RecordJobStep:input_type -> quaycrew.v1.RecordJobStepRequest
-	154, // 171: quaycrew.v1.ControlPlaneService.ResumeJob:input_type -> quaycrew.v1.ResumeJobRequest
-	156, // 172: quaycrew.v1.ControlPlaneService.RefuseJob:input_type -> quaycrew.v1.RefuseJobRequest
-	159, // 173: quaycrew.v1.ControlPlaneService.RecordSteer:input_type -> quaycrew.v1.RecordSteerRequest
-	161, // 174: quaycrew.v1.ControlPlaneService.ListSteers:input_type -> quaycrew.v1.ListSteersRequest
-	164, // 175: quaycrew.v1.ControlPlaneService.GetWorkspaceLimits:input_type -> quaycrew.v1.GetWorkspaceLimitsRequest
-	166, // 176: quaycrew.v1.ControlPlaneService.SetWorkspaceLimits:input_type -> quaycrew.v1.SetWorkspaceLimitsRequest
-	168, // 177: quaycrew.v1.ControlPlaneService.ListSessionEvents:input_type -> quaycrew.v1.ListSessionEventsRequest
-	121, // 178: quaycrew.v1.ControlPlaneService.GetInfo:input_type -> quaycrew.v1.GetInfoRequest
-	129, // 179: quaycrew.v1.ControlPlaneService.GetUsage:input_type -> quaycrew.v1.GetUsageRequest
-	131, // 180: quaycrew.v1.ControlPlaneService.GetHistory:input_type -> quaycrew.v1.GetHistoryRequest
-	123, // 181: quaycrew.v1.ControlPlaneService.GetHeadroom:input_type -> quaycrew.v1.GetHeadroomRequest
-	126, // 182: quaycrew.v1.ControlPlaneService.GetHealth:input_type -> quaycrew.v1.GetHealthRequest
-	10,  // 183: quaycrew.v1.ControlPlaneService.CreateWorkspace:output_type -> quaycrew.v1.CreateWorkspaceResponse
-	12,  // 184: quaycrew.v1.ControlPlaneService.GetWorkspace:output_type -> quaycrew.v1.GetWorkspaceResponse
-	14,  // 185: quaycrew.v1.ControlPlaneService.ListWorkspaces:output_type -> quaycrew.v1.ListWorkspacesResponse
-	16,  // 186: quaycrew.v1.ControlPlaneService.DeleteWorkspace:output_type -> quaycrew.v1.DeleteWorkspaceResponse
-	18,  // 187: quaycrew.v1.ControlPlaneService.CreateProject:output_type -> quaycrew.v1.CreateProjectResponse
-	20,  // 188: quaycrew.v1.ControlPlaneService.GetProject:output_type -> quaycrew.v1.GetProjectResponse
-	22,  // 189: quaycrew.v1.ControlPlaneService.ListProjects:output_type -> quaycrew.v1.ListProjectsResponse
-	43,  // 190: quaycrew.v1.ControlPlaneService.DeleteProject:output_type -> quaycrew.v1.DeleteProjectResponse
-	24,  // 191: quaycrew.v1.ControlPlaneService.SetDeployTarget:output_type -> quaycrew.v1.SetDeployTargetResponse
-	45,  // 192: quaycrew.v1.ControlPlaneService.SetProjectRepository:output_type -> quaycrew.v1.SetProjectRepositoryResponse
-	27,  // 193: quaycrew.v1.ControlPlaneService.ImportFlow:output_type -> quaycrew.v1.ImportFlowResponse
-	29,  // 194: quaycrew.v1.ControlPlaneService.StartFlow:output_type -> quaycrew.v1.StartFlowResponse
-	31,  // 195: quaycrew.v1.ControlPlaneService.GetFlowRun:output_type -> quaycrew.v1.GetFlowRunResponse
-	41,  // 196: quaycrew.v1.ControlPlaneService.ListFlowRuns:output_type -> quaycrew.v1.ListFlowRunsResponse
-	39,  // 197: quaycrew.v1.ControlPlaneService.StopFlowRun:output_type -> quaycrew.v1.StopFlowRunResponse
-	33,  // 198: quaycrew.v1.ControlPlaneService.AnswerFlowRun:output_type -> quaycrew.v1.AnswerFlowRunResponse
-	35,  // 199: quaycrew.v1.ControlPlaneService.ScheduleFlow:output_type -> quaycrew.v1.ScheduleFlowResponse
-	37,  // 200: quaycrew.v1.ControlPlaneService.UnscheduleFlow:output_type -> quaycrew.v1.UnscheduleFlowResponse
-	47,  // 201: quaycrew.v1.ControlPlaneService.AttachChannel:output_type -> quaycrew.v1.AttachChannelResponse
-	49,  // 202: quaycrew.v1.ControlPlaneService.SetSecret:output_type -> quaycrew.v1.SetSecretResponse
-	77,  // 203: quaycrew.v1.ControlPlaneService.ListSecrets:output_type -> quaycrew.v1.ListSecretsResponse
-	51,  // 204: quaycrew.v1.ControlPlaneService.Dispatch:output_type -> quaycrew.v1.DispatchResponse
-	53,  // 205: quaycrew.v1.ControlPlaneService.OpenDriver:output_type -> quaycrew.v1.OpenDriverResponse
-	55,  // 206: quaycrew.v1.ControlPlaneService.ListSessions:output_type -> quaycrew.v1.ListSessionsResponse
-	57,  // 207: quaycrew.v1.ControlPlaneService.GetSession:output_type -> quaycrew.v1.GetSessionResponse
-	59,  // 208: quaycrew.v1.ControlPlaneService.AttachSession:output_type -> quaycrew.v1.AttachSessionResponse
-	61,  // 209: quaycrew.v1.ControlPlaneService.StopSession:output_type -> quaycrew.v1.StopSessionResponse
-	71,  // 210: quaycrew.v1.ControlPlaneService.StopTask:output_type -> quaycrew.v1.StopTaskResponse
-	69,  // 211: quaycrew.v1.ControlPlaneService.ReclaimSession:output_type -> quaycrew.v1.ReclaimSessionResponse
-	63,  // 212: quaycrew.v1.ControlPlaneService.DrainSessions:output_type -> quaycrew.v1.DrainSessionsResponse
-	65,  // 213: quaycrew.v1.ControlPlaneService.RestartSession:output_type -> quaycrew.v1.RestartSessionResponse
-	67,  // 214: quaycrew.v1.ControlPlaneService.ArchiveSession:output_type -> quaycrew.v1.ArchiveSessionResponse
-	120, // 215: quaycrew.v1.ControlPlaneService.RestoreSession:output_type -> quaycrew.v1.RestoreSessionResponse
-	116, // 216: quaycrew.v1.ControlPlaneService.SetSessionPermissionMode:output_type -> quaycrew.v1.SetSessionPermissionModeResponse
-	118, // 217: quaycrew.v1.ControlPlaneService.SetSessionLabel:output_type -> quaycrew.v1.SetSessionLabelResponse
-	114, // 218: quaycrew.v1.ControlPlaneService.ListContexts:output_type -> quaycrew.v1.ListContextsResponse
-	74,  // 219: quaycrew.v1.ControlPlaneService.SetContext:output_type -> quaycrew.v1.SetContextResponse
-	82,  // 220: quaycrew.v1.ControlPlaneService.ImportSkill:output_type -> quaycrew.v1.ImportSkillResponse
-	84,  // 221: quaycrew.v1.ControlPlaneService.ListSkills:output_type -> quaycrew.v1.ListSkillsResponse
-	86,  // 222: quaycrew.v1.ControlPlaneService.AttachSkill:output_type -> quaycrew.v1.AttachSkillResponse
-	88,  // 223: quaycrew.v1.ControlPlaneService.DetachSkill:output_type -> quaycrew.v1.DetachSkillResponse
-	93,  // 224: quaycrew.v1.ControlPlaneService.ImportHook:output_type -> quaycrew.v1.ImportHookResponse
-	95,  // 225: quaycrew.v1.ControlPlaneService.ListHooks:output_type -> quaycrew.v1.ListHooksResponse
-	97,  // 226: quaycrew.v1.ControlPlaneService.AttachHook:output_type -> quaycrew.v1.AttachHookResponse
-	99,  // 227: quaycrew.v1.ControlPlaneService.DetachHook:output_type -> quaycrew.v1.DetachHookResponse
-	104, // 228: quaycrew.v1.ControlPlaneService.ImportRole:output_type -> quaycrew.v1.ImportRoleResponse
-	106, // 229: quaycrew.v1.ControlPlaneService.ListRoles:output_type -> quaycrew.v1.ListRolesResponse
-	108, // 230: quaycrew.v1.ControlPlaneService.AttachRole:output_type -> quaycrew.v1.AttachRoleResponse
-	110, // 231: quaycrew.v1.ControlPlaneService.DetachRole:output_type -> quaycrew.v1.DetachRoleResponse
-	112, // 232: quaycrew.v1.ControlPlaneService.GetRole:output_type -> quaycrew.v1.GetRoleResponse
-	137, // 233: quaycrew.v1.ControlPlaneService.ListTasks:output_type -> quaycrew.v1.ListTasksResponse
-	141, // 234: quaycrew.v1.ControlPlaneService.CreateJob:output_type -> quaycrew.v1.CreateJobResponse
-	143, // 235: quaycrew.v1.ControlPlaneService.GetJob:output_type -> quaycrew.v1.GetJobResponse
-	145, // 236: quaycrew.v1.ControlPlaneService.ListJobs:output_type -> quaycrew.v1.ListJobsResponse
-	147, // 237: quaycrew.v1.ControlPlaneService.StopJob:output_type -> quaycrew.v1.StopJobResponse
-	149, // 238: quaycrew.v1.ControlPlaneService.AskJob:output_type -> quaycrew.v1.AskJobResponse
-	151, // 239: quaycrew.v1.ControlPlaneService.AnswerJob:output_type -> quaycrew.v1.AnswerJobResponse
-	153, // 240: quaycrew.v1.ControlPlaneService.RecordJobStep:output_type -> quaycrew.v1.RecordJobStepResponse
-	155, // 241: quaycrew.v1.ControlPlaneService.ResumeJob:output_type -> quaycrew.v1.ResumeJobResponse
-	157, // 242: quaycrew.v1.ControlPlaneService.RefuseJob:output_type -> quaycrew.v1.RefuseJobResponse
-	160, // 243: quaycrew.v1.ControlPlaneService.RecordSteer:output_type -> quaycrew.v1.RecordSteerResponse
-	162, // 244: quaycrew.v1.ControlPlaneService.ListSteers:output_type -> quaycrew.v1.ListSteersResponse
-	165, // 245: quaycrew.v1.ControlPlaneService.GetWorkspaceLimits:output_type -> quaycrew.v1.GetWorkspaceLimitsResponse
-	167, // 246: quaycrew.v1.ControlPlaneService.SetWorkspaceLimits:output_type -> quaycrew.v1.SetWorkspaceLimitsResponse
-	169, // 247: quaycrew.v1.ControlPlaneService.ListSessionEvents:output_type -> quaycrew.v1.ListSessionEventsResponse
-	122, // 248: quaycrew.v1.ControlPlaneService.GetInfo:output_type -> quaycrew.v1.GetInfoResponse
-	130, // 249: quaycrew.v1.ControlPlaneService.GetUsage:output_type -> quaycrew.v1.GetUsageResponse
-	132, // 250: quaycrew.v1.ControlPlaneService.GetHistory:output_type -> quaycrew.v1.GetHistoryResponse
-	124, // 251: quaycrew.v1.ControlPlaneService.GetHeadroom:output_type -> quaycrew.v1.GetHeadroomResponse
-	127, // 252: quaycrew.v1.ControlPlaneService.GetHealth:output_type -> quaycrew.v1.GetHealthResponse
-	183, // [183:253] is the sub-list for method output_type
-	113, // [113:183] is the sub-list for method input_type
-	113, // [113:113] is the sub-list for extension type_name
-	113, // [113:113] is the sub-list for extension extendee
-	0,   // [0:113] is the sub-list for field type_name
+	7,   // 10: quaycrew.v1.Session.context_spend:type_name -> quaycrew.v1.ContextSpend
+	2,   // 11: quaycrew.v1.CreateWorkspaceResponse.workspace:type_name -> quaycrew.v1.Workspace
+	2,   // 12: quaycrew.v1.GetWorkspaceResponse.workspace:type_name -> quaycrew.v1.Workspace
+	2,   // 13: quaycrew.v1.ListWorkspacesResponse.workspaces:type_name -> quaycrew.v1.Workspace
+	4,   // 14: quaycrew.v1.CreateProjectResponse.project:type_name -> quaycrew.v1.Project
+	4,   // 15: quaycrew.v1.GetProjectResponse.project:type_name -> quaycrew.v1.Project
+	4,   // 16: quaycrew.v1.ListProjectsResponse.projects:type_name -> quaycrew.v1.Project
+	5,   // 17: quaycrew.v1.SetDeployTargetRequest.target:type_name -> quaycrew.v1.DeployTarget
+	4,   // 18: quaycrew.v1.SetDeployTargetResponse.project:type_name -> quaycrew.v1.Project
+	171, // 19: quaycrew.v1.FlowRun.state:type_name -> quaycrew.v1.FlowRun.StateEntry
+	175, // 20: quaycrew.v1.FlowRun.created_at:type_name -> google.protobuf.Timestamp
+	175, // 21: quaycrew.v1.FlowRun.updated_at:type_name -> google.protobuf.Timestamp
+	172, // 22: quaycrew.v1.StartFlowRequest.state:type_name -> quaycrew.v1.StartFlowRequest.StateEntry
+	26,  // 23: quaycrew.v1.StartFlowResponse.run:type_name -> quaycrew.v1.FlowRun
+	26,  // 24: quaycrew.v1.GetFlowRunResponse.run:type_name -> quaycrew.v1.FlowRun
+	26,  // 25: quaycrew.v1.AnswerFlowRunResponse.run:type_name -> quaycrew.v1.FlowRun
+	26,  // 26: quaycrew.v1.StopFlowRunResponse.run:type_name -> quaycrew.v1.FlowRun
+	26,  // 27: quaycrew.v1.ListFlowRunsResponse.runs:type_name -> quaycrew.v1.FlowRun
+	4,   // 28: quaycrew.v1.SetProjectRepositoryResponse.project:type_name -> quaycrew.v1.Project
+	3,   // 29: quaycrew.v1.AttachChannelResponse.channel:type_name -> quaycrew.v1.Channel
+	1,   // 30: quaycrew.v1.SetSecretRequest.projection:type_name -> quaycrew.v1.SecretProjection
+	6,   // 31: quaycrew.v1.OpenDriverResponse.session:type_name -> quaycrew.v1.Session
+	6,   // 32: quaycrew.v1.ListSessionsResponse.sessions:type_name -> quaycrew.v1.Session
+	6,   // 33: quaycrew.v1.GetSessionResponse.session:type_name -> quaycrew.v1.Session
+	6,   // 34: quaycrew.v1.DrainSessionsResponse.stopped:type_name -> quaycrew.v1.Session
+	6,   // 35: quaycrew.v1.DrainSessionsResponse.working:type_name -> quaycrew.v1.Session
+	6,   // 36: quaycrew.v1.RestartSessionResponse.session:type_name -> quaycrew.v1.Session
+	6,   // 37: quaycrew.v1.ArchiveSessionResponse.session:type_name -> quaycrew.v1.Session
+	6,   // 38: quaycrew.v1.ReclaimSessionResponse.session:type_name -> quaycrew.v1.Session
+	6,   // 39: quaycrew.v1.StopTaskResponse.session:type_name -> quaycrew.v1.Session
+	73,  // 40: quaycrew.v1.SetContextResponse.dir:type_name -> quaycrew.v1.ContextDir
+	175, // 41: quaycrew.v1.SecretRef.updated_at:type_name -> google.protobuf.Timestamp
+	1,   // 42: quaycrew.v1.SecretRef.projection:type_name -> quaycrew.v1.SecretProjection
+	76,  // 43: quaycrew.v1.ListSecretsResponse.secrets:type_name -> quaycrew.v1.SecretRef
+	80,  // 44: quaycrew.v1.Skill.secrets:type_name -> quaycrew.v1.SkillSecret
+	175, // 45: quaycrew.v1.Skill.imported_at:type_name -> google.protobuf.Timestamp
+	81,  // 46: quaycrew.v1.ImportSkillRequest.files:type_name -> quaycrew.v1.SkillFile
+	79,  // 47: quaycrew.v1.ImportSkillResponse.skill:type_name -> quaycrew.v1.Skill
+	79,  // 48: quaycrew.v1.ListSkillsResponse.skills:type_name -> quaycrew.v1.Skill
+	79,  // 49: quaycrew.v1.AttachSkillResponse.skill:type_name -> quaycrew.v1.Skill
+	91,  // 50: quaycrew.v1.Hook.events:type_name -> quaycrew.v1.HookBinding
+	80,  // 51: quaycrew.v1.Hook.secrets:type_name -> quaycrew.v1.SkillSecret
+	175, // 52: quaycrew.v1.Hook.imported_at:type_name -> google.protobuf.Timestamp
+	92,  // 53: quaycrew.v1.ImportHookRequest.files:type_name -> quaycrew.v1.HookFile
+	90,  // 54: quaycrew.v1.ImportHookResponse.hook:type_name -> quaycrew.v1.Hook
+	90,  // 55: quaycrew.v1.ListHooksResponse.hooks:type_name -> quaycrew.v1.Hook
+	90,  // 56: quaycrew.v1.AttachHookResponse.hook:type_name -> quaycrew.v1.Hook
+	175, // 57: quaycrew.v1.Role.imported_at:type_name -> google.protobuf.Timestamp
+	102, // 58: quaycrew.v1.Role.origin:type_name -> quaycrew.v1.RoleOrigin
+	103, // 59: quaycrew.v1.ImportRoleRequest.files:type_name -> quaycrew.v1.RoleFile
+	102, // 60: quaycrew.v1.ImportRoleRequest.origin:type_name -> quaycrew.v1.RoleOrigin
+	101, // 61: quaycrew.v1.ImportRoleResponse.role:type_name -> quaycrew.v1.Role
+	101, // 62: quaycrew.v1.ListRolesResponse.roles:type_name -> quaycrew.v1.Role
+	101, // 63: quaycrew.v1.AttachRoleResponse.role:type_name -> quaycrew.v1.Role
+	101, // 64: quaycrew.v1.GetRoleResponse.role:type_name -> quaycrew.v1.Role
+	73,  // 65: quaycrew.v1.ListContextsResponse.dirs:type_name -> quaycrew.v1.ContextDir
+	6,   // 66: quaycrew.v1.SetSessionPermissionModeResponse.session:type_name -> quaycrew.v1.Session
+	6,   // 67: quaycrew.v1.SetSessionLabelResponse.session:type_name -> quaycrew.v1.Session
+	6,   // 68: quaycrew.v1.RestoreSessionResponse.session:type_name -> quaycrew.v1.Session
+	126, // 69: quaycrew.v1.GetHeadroomResponse.sandboxes:type_name -> quaycrew.v1.HeadroomSandbox
+	175, // 70: quaycrew.v1.GetHeadroomResponse.taken_at:type_name -> google.protobuf.Timestamp
+	129, // 71: quaycrew.v1.GetHealthResponse.components:type_name -> quaycrew.v1.HealthComponent
+	175, // 72: quaycrew.v1.GetHealthResponse.checked_at:type_name -> google.protobuf.Timestamp
+	9,   // 73: quaycrew.v1.GetUsageResponse.total:type_name -> quaycrew.v1.Usage
+	175, // 74: quaycrew.v1.GetHistoryRequest.since:type_name -> google.protobuf.Timestamp
+	175, // 75: quaycrew.v1.GetHistoryRequest.until:type_name -> google.protobuf.Timestamp
+	134, // 76: quaycrew.v1.GetHistoryResponse.total:type_name -> quaycrew.v1.HistoryTotals
+	135, // 77: quaycrew.v1.GetHistoryResponse.jobs:type_name -> quaycrew.v1.JobDigest
+	175, // 78: quaycrew.v1.GetHistoryResponse.since:type_name -> google.protobuf.Timestamp
+	175, // 79: quaycrew.v1.GetHistoryResponse.until:type_name -> google.protobuf.Timestamp
+	175, // 80: quaycrew.v1.JobDigest.created_at:type_name -> google.protobuf.Timestamp
+	175, // 81: quaycrew.v1.JobDigest.started_at:type_name -> google.protobuf.Timestamp
+	175, // 82: quaycrew.v1.JobDigest.finished_at:type_name -> google.protobuf.Timestamp
+	175, // 83: quaycrew.v1.Task.occurred_at:type_name -> google.protobuf.Timestamp
+	136, // 84: quaycrew.v1.ListTasksResponse.tasks:type_name -> quaycrew.v1.Task
+	175, // 85: quaycrew.v1.Job.deadline:type_name -> google.protobuf.Timestamp
+	173, // 86: quaycrew.v1.Job.labels:type_name -> quaycrew.v1.Job.LabelsEntry
+	140, // 87: quaycrew.v1.Job.steps:type_name -> quaycrew.v1.JobStep
+	175, // 88: quaycrew.v1.Job.created_at:type_name -> google.protobuf.Timestamp
+	175, // 89: quaycrew.v1.Job.updated_at:type_name -> google.protobuf.Timestamp
+	175, // 90: quaycrew.v1.Job.started_at:type_name -> google.protobuf.Timestamp
+	175, // 91: quaycrew.v1.Job.finished_at:type_name -> google.protobuf.Timestamp
+	175, // 92: quaycrew.v1.JobStep.finished_at:type_name -> google.protobuf.Timestamp
+	175, // 93: quaycrew.v1.CreateJobRequest.deadline:type_name -> google.protobuf.Timestamp
+	174, // 94: quaycrew.v1.CreateJobRequest.labels:type_name -> quaycrew.v1.CreateJobRequest.LabelsEntry
+	139, // 95: quaycrew.v1.CreateJobResponse.job:type_name -> quaycrew.v1.Job
+	79,  // 96: quaycrew.v1.CreateJobResponse.left_out:type_name -> quaycrew.v1.Skill
+	139, // 97: quaycrew.v1.GetJobResponse.job:type_name -> quaycrew.v1.Job
+	139, // 98: quaycrew.v1.ListJobsResponse.jobs:type_name -> quaycrew.v1.Job
+	139, // 99: quaycrew.v1.StopJobResponse.job:type_name -> quaycrew.v1.Job
+	139, // 100: quaycrew.v1.AskJobResponse.job:type_name -> quaycrew.v1.Job
+	139, // 101: quaycrew.v1.AnswerJobResponse.job:type_name -> quaycrew.v1.Job
+	139, // 102: quaycrew.v1.RecordJobStepResponse.job:type_name -> quaycrew.v1.Job
+	139, // 103: quaycrew.v1.ResumeJobResponse.job:type_name -> quaycrew.v1.Job
+	139, // 104: quaycrew.v1.RefuseJobResponse.job:type_name -> quaycrew.v1.Job
+	175, // 105: quaycrew.v1.Steer.occurred_at:type_name -> google.protobuf.Timestamp
+	159, // 106: quaycrew.v1.RecordSteerResponse.steer:type_name -> quaycrew.v1.Steer
+	139, // 107: quaycrew.v1.RecordSteerResponse.root:type_name -> quaycrew.v1.Job
+	159, // 108: quaycrew.v1.ListSteersResponse.steers:type_name -> quaycrew.v1.Steer
+	139, // 109: quaycrew.v1.ListSteersResponse.root:type_name -> quaycrew.v1.Job
+	164, // 110: quaycrew.v1.GetWorkspaceLimitsResponse.limits:type_name -> quaycrew.v1.WorkspaceLimits
+	164, // 111: quaycrew.v1.SetWorkspaceLimitsRequest.limits:type_name -> quaycrew.v1.WorkspaceLimits
+	164, // 112: quaycrew.v1.SetWorkspaceLimitsResponse.limits:type_name -> quaycrew.v1.WorkspaceLimits
+	176, // 113: quaycrew.v1.ListSessionEventsResponse.events:type_name -> quaycrew.v1.SessionEvent
+	10,  // 114: quaycrew.v1.ControlPlaneService.CreateWorkspace:input_type -> quaycrew.v1.CreateWorkspaceRequest
+	12,  // 115: quaycrew.v1.ControlPlaneService.GetWorkspace:input_type -> quaycrew.v1.GetWorkspaceRequest
+	14,  // 116: quaycrew.v1.ControlPlaneService.ListWorkspaces:input_type -> quaycrew.v1.ListWorkspacesRequest
+	16,  // 117: quaycrew.v1.ControlPlaneService.DeleteWorkspace:input_type -> quaycrew.v1.DeleteWorkspaceRequest
+	18,  // 118: quaycrew.v1.ControlPlaneService.CreateProject:input_type -> quaycrew.v1.CreateProjectRequest
+	20,  // 119: quaycrew.v1.ControlPlaneService.GetProject:input_type -> quaycrew.v1.GetProjectRequest
+	22,  // 120: quaycrew.v1.ControlPlaneService.ListProjects:input_type -> quaycrew.v1.ListProjectsRequest
+	43,  // 121: quaycrew.v1.ControlPlaneService.DeleteProject:input_type -> quaycrew.v1.DeleteProjectRequest
+	24,  // 122: quaycrew.v1.ControlPlaneService.SetDeployTarget:input_type -> quaycrew.v1.SetDeployTargetRequest
+	45,  // 123: quaycrew.v1.ControlPlaneService.SetProjectRepository:input_type -> quaycrew.v1.SetProjectRepositoryRequest
+	27,  // 124: quaycrew.v1.ControlPlaneService.ImportFlow:input_type -> quaycrew.v1.ImportFlowRequest
+	29,  // 125: quaycrew.v1.ControlPlaneService.StartFlow:input_type -> quaycrew.v1.StartFlowRequest
+	31,  // 126: quaycrew.v1.ControlPlaneService.GetFlowRun:input_type -> quaycrew.v1.GetFlowRunRequest
+	41,  // 127: quaycrew.v1.ControlPlaneService.ListFlowRuns:input_type -> quaycrew.v1.ListFlowRunsRequest
+	39,  // 128: quaycrew.v1.ControlPlaneService.StopFlowRun:input_type -> quaycrew.v1.StopFlowRunRequest
+	33,  // 129: quaycrew.v1.ControlPlaneService.AnswerFlowRun:input_type -> quaycrew.v1.AnswerFlowRunRequest
+	35,  // 130: quaycrew.v1.ControlPlaneService.ScheduleFlow:input_type -> quaycrew.v1.ScheduleFlowRequest
+	37,  // 131: quaycrew.v1.ControlPlaneService.UnscheduleFlow:input_type -> quaycrew.v1.UnscheduleFlowRequest
+	47,  // 132: quaycrew.v1.ControlPlaneService.AttachChannel:input_type -> quaycrew.v1.AttachChannelRequest
+	49,  // 133: quaycrew.v1.ControlPlaneService.SetSecret:input_type -> quaycrew.v1.SetSecretRequest
+	77,  // 134: quaycrew.v1.ControlPlaneService.ListSecrets:input_type -> quaycrew.v1.ListSecretsRequest
+	51,  // 135: quaycrew.v1.ControlPlaneService.Dispatch:input_type -> quaycrew.v1.DispatchRequest
+	53,  // 136: quaycrew.v1.ControlPlaneService.OpenDriver:input_type -> quaycrew.v1.OpenDriverRequest
+	55,  // 137: quaycrew.v1.ControlPlaneService.ListSessions:input_type -> quaycrew.v1.ListSessionsRequest
+	57,  // 138: quaycrew.v1.ControlPlaneService.GetSession:input_type -> quaycrew.v1.GetSessionRequest
+	59,  // 139: quaycrew.v1.ControlPlaneService.AttachSession:input_type -> quaycrew.v1.AttachSessionRequest
+	61,  // 140: quaycrew.v1.ControlPlaneService.StopSession:input_type -> quaycrew.v1.StopSessionRequest
+	71,  // 141: quaycrew.v1.ControlPlaneService.StopTask:input_type -> quaycrew.v1.StopTaskRequest
+	69,  // 142: quaycrew.v1.ControlPlaneService.ReclaimSession:input_type -> quaycrew.v1.ReclaimSessionRequest
+	63,  // 143: quaycrew.v1.ControlPlaneService.DrainSessions:input_type -> quaycrew.v1.DrainSessionsRequest
+	65,  // 144: quaycrew.v1.ControlPlaneService.RestartSession:input_type -> quaycrew.v1.RestartSessionRequest
+	67,  // 145: quaycrew.v1.ControlPlaneService.ArchiveSession:input_type -> quaycrew.v1.ArchiveSessionRequest
+	120, // 146: quaycrew.v1.ControlPlaneService.RestoreSession:input_type -> quaycrew.v1.RestoreSessionRequest
+	116, // 147: quaycrew.v1.ControlPlaneService.SetSessionPermissionMode:input_type -> quaycrew.v1.SetSessionPermissionModeRequest
+	118, // 148: quaycrew.v1.ControlPlaneService.SetSessionLabel:input_type -> quaycrew.v1.SetSessionLabelRequest
+	114, // 149: quaycrew.v1.ControlPlaneService.ListContexts:input_type -> quaycrew.v1.ListContextsRequest
+	74,  // 150: quaycrew.v1.ControlPlaneService.SetContext:input_type -> quaycrew.v1.SetContextRequest
+	82,  // 151: quaycrew.v1.ControlPlaneService.ImportSkill:input_type -> quaycrew.v1.ImportSkillRequest
+	84,  // 152: quaycrew.v1.ControlPlaneService.ListSkills:input_type -> quaycrew.v1.ListSkillsRequest
+	86,  // 153: quaycrew.v1.ControlPlaneService.AttachSkill:input_type -> quaycrew.v1.AttachSkillRequest
+	88,  // 154: quaycrew.v1.ControlPlaneService.DetachSkill:input_type -> quaycrew.v1.DetachSkillRequest
+	93,  // 155: quaycrew.v1.ControlPlaneService.ImportHook:input_type -> quaycrew.v1.ImportHookRequest
+	95,  // 156: quaycrew.v1.ControlPlaneService.ListHooks:input_type -> quaycrew.v1.ListHooksRequest
+	97,  // 157: quaycrew.v1.ControlPlaneService.AttachHook:input_type -> quaycrew.v1.AttachHookRequest
+	99,  // 158: quaycrew.v1.ControlPlaneService.DetachHook:input_type -> quaycrew.v1.DetachHookRequest
+	104, // 159: quaycrew.v1.ControlPlaneService.ImportRole:input_type -> quaycrew.v1.ImportRoleRequest
+	106, // 160: quaycrew.v1.ControlPlaneService.ListRoles:input_type -> quaycrew.v1.ListRolesRequest
+	108, // 161: quaycrew.v1.ControlPlaneService.AttachRole:input_type -> quaycrew.v1.AttachRoleRequest
+	110, // 162: quaycrew.v1.ControlPlaneService.DetachRole:input_type -> quaycrew.v1.DetachRoleRequest
+	112, // 163: quaycrew.v1.ControlPlaneService.GetRole:input_type -> quaycrew.v1.GetRoleRequest
+	137, // 164: quaycrew.v1.ControlPlaneService.ListTasks:input_type -> quaycrew.v1.ListTasksRequest
+	141, // 165: quaycrew.v1.ControlPlaneService.CreateJob:input_type -> quaycrew.v1.CreateJobRequest
+	143, // 166: quaycrew.v1.ControlPlaneService.GetJob:input_type -> quaycrew.v1.GetJobRequest
+	145, // 167: quaycrew.v1.ControlPlaneService.ListJobs:input_type -> quaycrew.v1.ListJobsRequest
+	147, // 168: quaycrew.v1.ControlPlaneService.StopJob:input_type -> quaycrew.v1.StopJobRequest
+	149, // 169: quaycrew.v1.ControlPlaneService.AskJob:input_type -> quaycrew.v1.AskJobRequest
+	151, // 170: quaycrew.v1.ControlPlaneService.AnswerJob:input_type -> quaycrew.v1.AnswerJobRequest
+	153, // 171: quaycrew.v1.ControlPlaneService.RecordJobStep:input_type -> quaycrew.v1.RecordJobStepRequest
+	155, // 172: quaycrew.v1.ControlPlaneService.ResumeJob:input_type -> quaycrew.v1.ResumeJobRequest
+	157, // 173: quaycrew.v1.ControlPlaneService.RefuseJob:input_type -> quaycrew.v1.RefuseJobRequest
+	160, // 174: quaycrew.v1.ControlPlaneService.RecordSteer:input_type -> quaycrew.v1.RecordSteerRequest
+	162, // 175: quaycrew.v1.ControlPlaneService.ListSteers:input_type -> quaycrew.v1.ListSteersRequest
+	165, // 176: quaycrew.v1.ControlPlaneService.GetWorkspaceLimits:input_type -> quaycrew.v1.GetWorkspaceLimitsRequest
+	167, // 177: quaycrew.v1.ControlPlaneService.SetWorkspaceLimits:input_type -> quaycrew.v1.SetWorkspaceLimitsRequest
+	169, // 178: quaycrew.v1.ControlPlaneService.ListSessionEvents:input_type -> quaycrew.v1.ListSessionEventsRequest
+	122, // 179: quaycrew.v1.ControlPlaneService.GetInfo:input_type -> quaycrew.v1.GetInfoRequest
+	130, // 180: quaycrew.v1.ControlPlaneService.GetUsage:input_type -> quaycrew.v1.GetUsageRequest
+	132, // 181: quaycrew.v1.ControlPlaneService.GetHistory:input_type -> quaycrew.v1.GetHistoryRequest
+	124, // 182: quaycrew.v1.ControlPlaneService.GetHeadroom:input_type -> quaycrew.v1.GetHeadroomRequest
+	127, // 183: quaycrew.v1.ControlPlaneService.GetHealth:input_type -> quaycrew.v1.GetHealthRequest
+	11,  // 184: quaycrew.v1.ControlPlaneService.CreateWorkspace:output_type -> quaycrew.v1.CreateWorkspaceResponse
+	13,  // 185: quaycrew.v1.ControlPlaneService.GetWorkspace:output_type -> quaycrew.v1.GetWorkspaceResponse
+	15,  // 186: quaycrew.v1.ControlPlaneService.ListWorkspaces:output_type -> quaycrew.v1.ListWorkspacesResponse
+	17,  // 187: quaycrew.v1.ControlPlaneService.DeleteWorkspace:output_type -> quaycrew.v1.DeleteWorkspaceResponse
+	19,  // 188: quaycrew.v1.ControlPlaneService.CreateProject:output_type -> quaycrew.v1.CreateProjectResponse
+	21,  // 189: quaycrew.v1.ControlPlaneService.GetProject:output_type -> quaycrew.v1.GetProjectResponse
+	23,  // 190: quaycrew.v1.ControlPlaneService.ListProjects:output_type -> quaycrew.v1.ListProjectsResponse
+	44,  // 191: quaycrew.v1.ControlPlaneService.DeleteProject:output_type -> quaycrew.v1.DeleteProjectResponse
+	25,  // 192: quaycrew.v1.ControlPlaneService.SetDeployTarget:output_type -> quaycrew.v1.SetDeployTargetResponse
+	46,  // 193: quaycrew.v1.ControlPlaneService.SetProjectRepository:output_type -> quaycrew.v1.SetProjectRepositoryResponse
+	28,  // 194: quaycrew.v1.ControlPlaneService.ImportFlow:output_type -> quaycrew.v1.ImportFlowResponse
+	30,  // 195: quaycrew.v1.ControlPlaneService.StartFlow:output_type -> quaycrew.v1.StartFlowResponse
+	32,  // 196: quaycrew.v1.ControlPlaneService.GetFlowRun:output_type -> quaycrew.v1.GetFlowRunResponse
+	42,  // 197: quaycrew.v1.ControlPlaneService.ListFlowRuns:output_type -> quaycrew.v1.ListFlowRunsResponse
+	40,  // 198: quaycrew.v1.ControlPlaneService.StopFlowRun:output_type -> quaycrew.v1.StopFlowRunResponse
+	34,  // 199: quaycrew.v1.ControlPlaneService.AnswerFlowRun:output_type -> quaycrew.v1.AnswerFlowRunResponse
+	36,  // 200: quaycrew.v1.ControlPlaneService.ScheduleFlow:output_type -> quaycrew.v1.ScheduleFlowResponse
+	38,  // 201: quaycrew.v1.ControlPlaneService.UnscheduleFlow:output_type -> quaycrew.v1.UnscheduleFlowResponse
+	48,  // 202: quaycrew.v1.ControlPlaneService.AttachChannel:output_type -> quaycrew.v1.AttachChannelResponse
+	50,  // 203: quaycrew.v1.ControlPlaneService.SetSecret:output_type -> quaycrew.v1.SetSecretResponse
+	78,  // 204: quaycrew.v1.ControlPlaneService.ListSecrets:output_type -> quaycrew.v1.ListSecretsResponse
+	52,  // 205: quaycrew.v1.ControlPlaneService.Dispatch:output_type -> quaycrew.v1.DispatchResponse
+	54,  // 206: quaycrew.v1.ControlPlaneService.OpenDriver:output_type -> quaycrew.v1.OpenDriverResponse
+	56,  // 207: quaycrew.v1.ControlPlaneService.ListSessions:output_type -> quaycrew.v1.ListSessionsResponse
+	58,  // 208: quaycrew.v1.ControlPlaneService.GetSession:output_type -> quaycrew.v1.GetSessionResponse
+	60,  // 209: quaycrew.v1.ControlPlaneService.AttachSession:output_type -> quaycrew.v1.AttachSessionResponse
+	62,  // 210: quaycrew.v1.ControlPlaneService.StopSession:output_type -> quaycrew.v1.StopSessionResponse
+	72,  // 211: quaycrew.v1.ControlPlaneService.StopTask:output_type -> quaycrew.v1.StopTaskResponse
+	70,  // 212: quaycrew.v1.ControlPlaneService.ReclaimSession:output_type -> quaycrew.v1.ReclaimSessionResponse
+	64,  // 213: quaycrew.v1.ControlPlaneService.DrainSessions:output_type -> quaycrew.v1.DrainSessionsResponse
+	66,  // 214: quaycrew.v1.ControlPlaneService.RestartSession:output_type -> quaycrew.v1.RestartSessionResponse
+	68,  // 215: quaycrew.v1.ControlPlaneService.ArchiveSession:output_type -> quaycrew.v1.ArchiveSessionResponse
+	121, // 216: quaycrew.v1.ControlPlaneService.RestoreSession:output_type -> quaycrew.v1.RestoreSessionResponse
+	117, // 217: quaycrew.v1.ControlPlaneService.SetSessionPermissionMode:output_type -> quaycrew.v1.SetSessionPermissionModeResponse
+	119, // 218: quaycrew.v1.ControlPlaneService.SetSessionLabel:output_type -> quaycrew.v1.SetSessionLabelResponse
+	115, // 219: quaycrew.v1.ControlPlaneService.ListContexts:output_type -> quaycrew.v1.ListContextsResponse
+	75,  // 220: quaycrew.v1.ControlPlaneService.SetContext:output_type -> quaycrew.v1.SetContextResponse
+	83,  // 221: quaycrew.v1.ControlPlaneService.ImportSkill:output_type -> quaycrew.v1.ImportSkillResponse
+	85,  // 222: quaycrew.v1.ControlPlaneService.ListSkills:output_type -> quaycrew.v1.ListSkillsResponse
+	87,  // 223: quaycrew.v1.ControlPlaneService.AttachSkill:output_type -> quaycrew.v1.AttachSkillResponse
+	89,  // 224: quaycrew.v1.ControlPlaneService.DetachSkill:output_type -> quaycrew.v1.DetachSkillResponse
+	94,  // 225: quaycrew.v1.ControlPlaneService.ImportHook:output_type -> quaycrew.v1.ImportHookResponse
+	96,  // 226: quaycrew.v1.ControlPlaneService.ListHooks:output_type -> quaycrew.v1.ListHooksResponse
+	98,  // 227: quaycrew.v1.ControlPlaneService.AttachHook:output_type -> quaycrew.v1.AttachHookResponse
+	100, // 228: quaycrew.v1.ControlPlaneService.DetachHook:output_type -> quaycrew.v1.DetachHookResponse
+	105, // 229: quaycrew.v1.ControlPlaneService.ImportRole:output_type -> quaycrew.v1.ImportRoleResponse
+	107, // 230: quaycrew.v1.ControlPlaneService.ListRoles:output_type -> quaycrew.v1.ListRolesResponse
+	109, // 231: quaycrew.v1.ControlPlaneService.AttachRole:output_type -> quaycrew.v1.AttachRoleResponse
+	111, // 232: quaycrew.v1.ControlPlaneService.DetachRole:output_type -> quaycrew.v1.DetachRoleResponse
+	113, // 233: quaycrew.v1.ControlPlaneService.GetRole:output_type -> quaycrew.v1.GetRoleResponse
+	138, // 234: quaycrew.v1.ControlPlaneService.ListTasks:output_type -> quaycrew.v1.ListTasksResponse
+	142, // 235: quaycrew.v1.ControlPlaneService.CreateJob:output_type -> quaycrew.v1.CreateJobResponse
+	144, // 236: quaycrew.v1.ControlPlaneService.GetJob:output_type -> quaycrew.v1.GetJobResponse
+	146, // 237: quaycrew.v1.ControlPlaneService.ListJobs:output_type -> quaycrew.v1.ListJobsResponse
+	148, // 238: quaycrew.v1.ControlPlaneService.StopJob:output_type -> quaycrew.v1.StopJobResponse
+	150, // 239: quaycrew.v1.ControlPlaneService.AskJob:output_type -> quaycrew.v1.AskJobResponse
+	152, // 240: quaycrew.v1.ControlPlaneService.AnswerJob:output_type -> quaycrew.v1.AnswerJobResponse
+	154, // 241: quaycrew.v1.ControlPlaneService.RecordJobStep:output_type -> quaycrew.v1.RecordJobStepResponse
+	156, // 242: quaycrew.v1.ControlPlaneService.ResumeJob:output_type -> quaycrew.v1.ResumeJobResponse
+	158, // 243: quaycrew.v1.ControlPlaneService.RefuseJob:output_type -> quaycrew.v1.RefuseJobResponse
+	161, // 244: quaycrew.v1.ControlPlaneService.RecordSteer:output_type -> quaycrew.v1.RecordSteerResponse
+	163, // 245: quaycrew.v1.ControlPlaneService.ListSteers:output_type -> quaycrew.v1.ListSteersResponse
+	166, // 246: quaycrew.v1.ControlPlaneService.GetWorkspaceLimits:output_type -> quaycrew.v1.GetWorkspaceLimitsResponse
+	168, // 247: quaycrew.v1.ControlPlaneService.SetWorkspaceLimits:output_type -> quaycrew.v1.SetWorkspaceLimitsResponse
+	170, // 248: quaycrew.v1.ControlPlaneService.ListSessionEvents:output_type -> quaycrew.v1.ListSessionEventsResponse
+	123, // 249: quaycrew.v1.ControlPlaneService.GetInfo:output_type -> quaycrew.v1.GetInfoResponse
+	131, // 250: quaycrew.v1.ControlPlaneService.GetUsage:output_type -> quaycrew.v1.GetUsageResponse
+	133, // 251: quaycrew.v1.ControlPlaneService.GetHistory:output_type -> quaycrew.v1.GetHistoryResponse
+	125, // 252: quaycrew.v1.ControlPlaneService.GetHeadroom:output_type -> quaycrew.v1.GetHeadroomResponse
+	128, // 253: quaycrew.v1.ControlPlaneService.GetHealth:output_type -> quaycrew.v1.GetHealthResponse
+	184, // [184:254] is the sub-list for method output_type
+	114, // [114:184] is the sub-list for method input_type
+	114, // [114:114] is the sub-list for extension type_name
+	114, // [114:114] is the sub-list for extension extendee
+	0,   // [0:114] is the sub-list for field type_name
 }
 
 func init() { file_quaycrew_v1_controlplane_proto_init() }
@@ -11870,7 +11978,7 @@ func file_quaycrew_v1_controlplane_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_quaycrew_v1_controlplane_proto_rawDesc), len(file_quaycrew_v1_controlplane_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   172,
+			NumMessages:   173,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
