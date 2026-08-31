@@ -416,6 +416,68 @@ repository and says it asked twice, and what the attempt produced stays on the r
 an attempt is not the end of its work. A job that names no repository is not held to it, since the
 system knows of no base it was away from.
 
+### How a job ends: the outcome, which is one word from a fixed set
+
+**This is the one place the set is written down.** The tool, the flow schema and the console all read
+the same four words out of `internal/job/outcome.go`, so nothing can offer a fifth.
+
+Jobs on the acceptance run of 30 August 2026 reported "done", "complete", "the pull request is open"
+and "I could not finish because the credential expired". All four settled the same way, because the
+system read the prose to decide the job was over. A job that could not do its work and a job that did
+it read identically to anything downstream, so the operator opened each one to tell them apart and
+nothing could be counted. Two readings of one sentence give two outcomes. See
+[#537](https://github.com/atlantic-blue/quay-crew/issues/537).
+
+So a session ends its task with one word on a line of its own, and the prose sits under it as the
+explanation rather than as the signal.
+
+**`outcome`, text, written by the controller.** One of four words, and empty on a job nothing has
+settled.
+
+- `proved`, the work is done and something the session ran proves it.
+- `unproved`, the work is done and nothing proves it. Its own word rather than a missing one: work
+  nobody checked and work that was checked must never read the same.
+- `blocked`, the work cannot be done, and the reason is under the line.
+- `decide`, a person has to decide before this goes any further.
+
+**The word is read off the answer, never reported.** The same mechanism the pull request address and
+the base line already use, for the same reason: the model reporting on its own job is what this exists
+to stop. The line carries the marker `Outcome:` and one of the four words and nothing else, so
+`Outcome: proved, once the deploy is checked` states no outcome and neither does "the tests proved
+it". Both are prose, and prose is what was being read before.
+
+**A session that states none has not finished the job.** It stops, with a reason saying what line was
+missing, and what the session said stays on the row. It is not asked again, which is the difference
+between this and a pull request: an address is work that was done and not published, so asking buys
+the work back, and an outcome is one line the session was told to write in the task it has just
+answered.
+
+**The outcome is not the phase, and neither replaces the other.** The phase is the system's account of
+the attempt: whether a session existed, whether a task landed, whether anybody halted it. The outcome
+is the work's own account. Both are on the row because a job that is `done` and `blocked` is a real
+job, and it is exactly the row a listing of phases cannot find.
+
+```mermaid
+flowchart LR
+    A["a session answers"] --> B{"does the answer state<br/>one of the four words?"}
+    B -->|"yes"| C["done, carrying the word"]
+    B -->|"no"| D["stopped, saying which line was missing"]
+    C --> E["a flow branches on it,<br/>a listing filters by it,<br/>a count is made of it"]
+```
+
+**What reads it.** `krewe job list --outcome blocked` narrows a listing, and a word that is not one of
+the four is refused with the four offered back. A flow's choice node branches on `result.outcome`,
+which arrives beside `result.reply` rather than inside it: the line comes out of the reply a graph
+reads, so a node comparing a reply is comparing what the session wrote. A choice waiting for a word
+the system does not hand out is refused at import. The console carries an `outcome` column beside the
+phase.
+
+**What this does not do.** Nothing independent has to agree with the word. A session that states
+`proved` is still the only witness, which is
+[#536](https://github.com/atlantic-blue/quay-crew/issues/536) and not this. Nothing moves the phase on
+the strength of the outcome either: a job that ends `blocked` is `done` with `blocked` on it, so a
+resume still applies to a job that failed and to nothing else.
+
 **`session`, text, empty until a session exists.** The session the job runs in. This is how a
 reader gets from the job to the conversation, and it is what `quay attach` takes.
 
@@ -477,7 +539,11 @@ purpose. The list, so a test can be written against it:
   numbers.
 - A job with 17 labels is refused.
 - A job with a label value of 64 characters is refused.
-- A caller that is not the controller cannot write `phase`, `answer`, `reason` or `session`.
+- A job whose answer states no outcome does not settle, and the reason says which line was missing.
+- A job whose answer states a word the system does not hand out states no outcome.
+- A listing asked for a word that is not an outcome is refused, with the four offered back.
+- A choice node waiting for a word that is not an outcome is refused at import.
+- A caller that is not the controller cannot write `phase`, `answer`, `outcome`, `reason` or `session`.
 
 ### The lifecycle
 
@@ -1057,8 +1123,8 @@ removed.
 
 **Three, the calls.** `CreateJob`, `GetJob`, `ListJobs`, `AskJob`, `AnswerJob`, `StopJob` on
 `ControlPlaneService`. `GetJob` returns the whole record including the answer. `ListJobs` filters by
-workspace, project, parent, phase and label, and returns records without their answers, because a
-listing of a hundred answers is a listing nobody can read. A caller that wants an answer asks for one
+workspace, project, parent, phase, outcome and label, and returns records without their answers,
+because a listing of a hundred answers is a listing nobody can read. A caller that wants an answer asks for one
 job.
 
 ### Why the answer belongs on the job and not only on the task

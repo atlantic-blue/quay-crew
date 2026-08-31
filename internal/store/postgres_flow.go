@@ -272,10 +272,11 @@ func (p *Postgres) AdvanceFlowRun(ctx context.Context, run *flow.Run, transition
 			update jobs set phase = $2, question = $3,
 			    answer = case when $4 = '' then answer else $4 end,
 			    reason = case when $5 = '' then reason else $5 end,
+			    outcome = case when $7 = '' then outcome else $7 end,
 			    finished_at = case when $6 then coalesce(finished_at, now()) else finished_at end,
 			    updated_at = now()
 			where id = $1`,
-			on.Job, on.Phase, on.Question, on.Answer, on.Reason, job.Terminal(on.Phase)); err != nil {
+			on.Job, on.Phase, on.Question, on.Answer, on.Reason, job.Terminal(on.Phase), on.Outcome); err != nil {
 			return fmt.Errorf("advance the job carrying a flow run: %w", err)
 		}
 	}

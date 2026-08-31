@@ -33,6 +33,7 @@ import (
 	"github.com/atlantic-blue/krewe/internal/controlplane"
 	"github.com/atlantic-blue/krewe/internal/flow"
 	"github.com/atlantic-blue/krewe/internal/headroom"
+	"github.com/atlantic-blue/krewe/internal/job"
 	"github.com/atlantic-blue/krewe/internal/messaging"
 	"github.com/atlantic-blue/krewe/internal/model"
 	"github.com/atlantic-blue/krewe/internal/sandbox"
@@ -114,6 +115,10 @@ type recordingRunner struct {
 	// has to be able to say what it answers the second time. The last one repeats rather than the
 	// queue running dry, so a scenario that means "and it keeps saying that" says it once.
 	says []string
+	// exact marks the answers a scenario means literally, so the double leaves them as they are. It is
+	// how a scenario about an answer that states no outcome is written: everything else gets the line a
+	// session that read its task would have written.
+	exact []bool
 }
 
 // failTheNextTask makes the next task the model is asked to run fail. Under the lock, because a
@@ -129,17 +134,47 @@ func (r *recordingRunner) willSay(answer string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.says = append(r.says, answer)
+	r.exact = append(r.exact, false)
+}
+
+// willSayExactly adds one answer the double must not add anything to, which is what a scenario about
+// an answer that states no outcome needs: the double follows its task otherwise, so an answer meant
+// to be missing the line would arrive carrying one.
+func (r *recordingRunner) willSayExactly(answer string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.says = append(r.says, answer)
+	r.exact = append(r.exact, true)
 }
 
 // answerFor is what the double says to the nth task, one indexed. The caller holds the lock.
 func (r *recordingRunner) answerFor(asked int, text string) string {
 	if len(r.says) == 0 {
-		return "you said: " + text
+		return statingTheOutcome("you said: "+text, text)
 	}
 	if asked > len(r.says) {
 		asked = len(r.says)
 	}
-	return r.says[asked-1]
+	if r.exact[asked-1] {
+		return r.says[asked-1]
+	}
+	return statingTheOutcome(r.says[asked-1], text)
+}
+
+// statingTheOutcome ends an answer the way a session that read its task ends one.
+//
+// Every job tells its session to state an outcome on a line of its own, and a job whose answer states
+// none does not settle. A double that ignored the instruction would be looser than the thing it
+// stands in for, and every scenario about a job would quietly become a scenario about that. A reply
+// that already states one is left alone, which is how a scenario says the word it means, and a
+// scenario about an answer that states nothing is written with the answer it means.
+func statingTheOutcome(reply, asked string) string {
+	// Read rather than searched, because the double echoes the task it was given and the task carries
+	// the instruction. A substring check would find the word in the instruction and answer nothing.
+	if !strings.Contains(asked, job.OutcomeMarker) || job.OutcomeIn(reply) != "" {
+		return reply
+	}
+	return reply + "\n\n" + job.OutcomeMarker + " " + job.OutcomeProved
 }
 
 // hold makes every task wait, and returns the func that lets them go.
@@ -700,6 +735,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeJobMaterialSteps(sc)
 	initializeJobControllerSteps(sc)
 	initializeJobRepositorySteps(sc)
+	initializeOutcomeSteps(sc)
 	initializeJobWaitingSteps(sc)
 	initializeFlowStepSteps(sc)
 	initializeJobRoleSteps(sc)

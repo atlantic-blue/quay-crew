@@ -83,7 +83,7 @@ func TestDeclaredJobRunsAndItsAnswerIsOnTheRowInPostgres(t *testing.T) {
 
 	done := waitForJob(t, s, declared.GetJob().GetId(), job.PhaseDone)
 
-	if done.GetAnswer() != "the bill is due on the 14th" {
+	if !strings.Contains(done.GetAnswer(), "the bill is due on the 14th") {
 		t.Fatalf("the answer on the row is %q", done.GetAnswer())
 	}
 	if done.GetSession() == "" {
@@ -251,7 +251,7 @@ func TestJobTheSystemCouldNotGiveASandboxWaitsAndRunsLaterInPostgres(t *testing.
 	close(provider.Hold)
 
 	done := waitForJob(t, s, id, job.PhaseDone)
-	if done.GetAnswer() != "the bill is due on the 14th" {
+	if !strings.Contains(done.GetAnswer(), "the bill is due on the 14th") {
 		t.Fatalf("the answer on the row is %q", done.GetAnswer())
 	}
 	if done.GetAttempts() < 2 {

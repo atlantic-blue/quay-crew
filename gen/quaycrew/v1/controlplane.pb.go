@@ -8362,6 +8362,12 @@ type Job struct {
 	// answer is what came back, whole. A listing leaves it out, because a listing of a hundred answers
 	// is a listing nobody can read.
 	Answer string `protobuf:"bytes,21,opt,name=answer,proto3" json:"answer,omitempty"`
+	// outcome is the one word the session ended its task with: proved, unproved, blocked or decide.
+	// It is read off the answer rather than reported by the model, and it is what a caller branches on,
+	// what a listing filters by and what a count of jobs is made of. The answer above it is the
+	// explanation rather than the signal. Empty on a job nothing has settled, and a job whose answer
+	// states no outcome does not settle at all.
+	Outcome string `protobuf:"bytes,40,opt,name=outcome,proto3" json:"outcome,omitempty"`
 	// reason says why a stopped or failed job ended. question is what an asking job waits to be told.
 	Reason   string `protobuf:"bytes,22,opt,name=reason,proto3" json:"reason,omitempty"`
 	Question string `protobuf:"bytes,23,opt,name=question,proto3" json:"question,omitempty"`
@@ -8602,6 +8608,13 @@ func (x *Job) GetAttempts() int32 {
 func (x *Job) GetAnswer() string {
 	if x != nil {
 		return x.Answer
+	}
+	return ""
+}
+
+func (x *Job) GetOutcome() string {
+	if x != nil {
+		return x.Outcome
 	}
 	return ""
 }
@@ -9108,6 +9121,9 @@ type ListJobsRequest struct {
 	Parent    string `protobuf:"bytes,3,opt,name=parent,proto3" json:"parent,omitempty"`
 	RootsOnly bool   `protobuf:"varint,4,opt,name=roots_only,json=rootsOnly,proto3" json:"roots_only,omitempty"`
 	Phase     string `protobuf:"bytes,5,opt,name=phase,proto3" json:"phase,omitempty"`
+	// outcome narrows to jobs that ended on one word from the fixed set. It is the filter the phase
+	// cannot be: two jobs are done and one of them could not do its work.
+	Outcome string `protobuf:"bytes,8,opt,name=outcome,proto3" json:"outcome,omitempty"`
 	// label_key with no label_value matches any value, which is how a caller finds everything it
 	// labelled at all.
 	LabelKey      string `protobuf:"bytes,6,opt,name=label_key,json=labelKey,proto3" json:"label_key,omitempty"`
@@ -9177,6 +9193,13 @@ func (x *ListJobsRequest) GetRootsOnly() bool {
 func (x *ListJobsRequest) GetPhase() string {
 	if x != nil {
 		return x.Phase
+	}
+	return ""
+}
+
+func (x *ListJobsRequest) GetOutcome() string {
+	if x != nil {
+		return x.Outcome
 	}
 	return ""
 }
@@ -11110,7 +11133,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xbc\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xd6\n" +
 	"\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
@@ -11141,7 +11164,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x05phase\x18\x12 \x01(\tR\x05phase\x12\x18\n" +
 	"\asession\x18\x13 \x01(\tR\asession\x12\x1a\n" +
 	"\battempts\x18\x14 \x01(\x05R\battempts\x12\x16\n" +
-	"\x06answer\x18\x15 \x01(\tR\x06answer\x12\x16\n" +
+	"\x06answer\x18\x15 \x01(\tR\x06answer\x12\x18\n" +
+	"\aoutcome\x18( \x01(\tR\aoutcome\x12\x16\n" +
 	"\x06reason\x18\x16 \x01(\tR\x06reason\x12\x1a\n" +
 	"\bquestion\x18\x17 \x01(\tR\bquestion\x12\x12\n" +
 	"\x04told\x18# \x01(\tR\x04told\x12!\n" +
@@ -11198,14 +11222,15 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\rGetJobRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"4\n" +
 	"\x0eGetJobResponse\x12\"\n" +
-	"\x03job\x18\x01 \x01(\v2\x10.quaycrew.v1.JobR\x03job\"\xd4\x01\n" +
+	"\x03job\x18\x01 \x01(\v2\x10.quaycrew.v1.JobR\x03job\"\xee\x01\n" +
 	"\x0fListJobsRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x18\n" +
 	"\aproject\x18\x02 \x01(\tR\aproject\x12\x16\n" +
 	"\x06parent\x18\x03 \x01(\tR\x06parent\x12\x1d\n" +
 	"\n" +
 	"roots_only\x18\x04 \x01(\bR\trootsOnly\x12\x14\n" +
-	"\x05phase\x18\x05 \x01(\tR\x05phase\x12\x1b\n" +
+	"\x05phase\x18\x05 \x01(\tR\x05phase\x12\x18\n" +
+	"\aoutcome\x18\b \x01(\tR\aoutcome\x12\x1b\n" +
 	"\tlabel_key\x18\x06 \x01(\tR\blabelKey\x12\x1f\n" +
 	"\vlabel_value\x18\a \x01(\tR\n" +
 	"labelValue\"8\n" +

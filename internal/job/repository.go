@@ -96,27 +96,31 @@ func EndsInAPullRequest(repository string) string {
 // The session asked a question, waited in its container, and is being started again to be given the
 // answer: sending it the brief a second time would ask it to do the whole job over.
 func Asked(one *Job) string {
+	said := []string{}
+	switch {
 	// A job being continued goes first. It is the newest thing an operator decided about this job, and
 	// what it was told belongs to an attempt that is over: a resume is cleared the moment the job asks
 	// a question, so only one of the two is ever the instruction in hand.
-	if one.Resuming != "" {
-		return Continued(one)
+	case one.Resuming != "":
+		said = append(said, Continued(one))
+	case one.Told != "":
+		said = append(said, CarryOn(one))
+	default:
+		if one.Product != "" {
+			said = append(said, ServesAPerson(one.Product))
+		}
+		said = append(said, one.Brief)
+		if one.Repository != "" {
+			said = append(said, EndsInAPullRequest(one.Repository))
+		}
+		// Here rather than in a brief because a brief that forgets it produces a job that can only ever
+		// be started again from nothing.
+		said = append(said, RecordEachStep())
 	}
-	if one.Told != "" {
-		return CarryOn(one)
-	}
-	said := []string{}
-	if one.Product != "" {
-		said = append(said, ServesAPerson(one.Product))
-	}
-	said = append(said, one.Brief)
-	if one.Repository != "" {
-		said = append(said, EndsInAPullRequest(one.Repository))
-	}
-	// Last, because it is the system's line about how the job is done rather than part of what it is.
-	// It is here rather than in a brief because a brief that forgets it produces a job that can only
-	// ever be started again from nothing.
-	said = append(said, RecordEachStep())
+	// Last on every road into a session, because it is the line the answer ends on and because every
+	// one of these tasks can be the one that ends the job. A task sent without it would be a session
+	// held to a rule it was never given.
+	said = append(said, EndsWithAnOutcome())
 	return strings.Join(said, "\n\n")
 }
 
@@ -126,7 +130,8 @@ func Asked(one *Job) string {
 func AskedForThePullRequest(repository string) string {
 	return fmt.Sprintf("This job works in %s and its answer named no pull request against it, so the work is "+
 		"nowhere anybody can read it. Push your branch, open the pull request, and answer with its "+
-		"address. Do not merge it. If you cannot push, say what stopped you.", repository)
+		"address. Do not merge it. If you cannot push, say what stopped you. This answer ends the job, "+
+		"so state its outcome in it as well. %s", repository, EndsWithAnOutcome())
 }
 
 // NoPullRequest is why a job that names a repository stopped without one. It is written after the

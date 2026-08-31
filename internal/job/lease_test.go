@@ -84,7 +84,7 @@ func TestAControllerThatDiedMidTaskLeavesTheAnswerToBeAdoptedOnce(t *testing.T) 
 	if got.Phase != job.PhaseDone {
 		t.Fatalf("the job is %q saying %q, want done", got.Phase, got.Reason)
 	}
-	if got.Answer != "the bill is due on the 14th" {
+	if got.Answer != landed("the bill is due on the 14th") {
 		t.Fatalf("the answer is %q, want the one the dead controller's task left behind", got.Answer)
 	}
 	if plane.sent() != 1 {
@@ -122,7 +122,7 @@ func TestAControllerThatDiedWhileTheTaskRunsTakesTheLeaseAndWaits(t *testing.T) 
 	// And when the task does answer, the controller that took it over writes what came back.
 	plane.lands("the bill is due on the 14th")
 	next.Tick(ctx)
-	if got := kept.get(one.ID); got.Phase != job.PhaseDone || got.Answer != "the bill is due on the 14th" {
+	if got := kept.get(one.ID); got.Phase != job.PhaseDone || got.Answer != landed("the bill is due on the 14th") {
 		t.Fatalf("the job is %q saying %q", got.Phase, got.Answer)
 	}
 }
@@ -172,7 +172,7 @@ func TestJobDispatchedButNeverRecordedIsAdoptedRatherThanSentAgain(t *testing.T)
 	if got.Phase != job.PhaseDone {
 		t.Fatalf("the job is %q, want done from the answer that was already there", got.Phase)
 	}
-	if got.Answer != "the bill is due on the 14th" {
+	if got.Answer != landed("the bill is due on the 14th") {
 		t.Fatalf("the answer is %q", got.Answer)
 	}
 }

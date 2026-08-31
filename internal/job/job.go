@@ -117,7 +117,12 @@ type Job struct {
 	Attempts int
 	// Answer is what came back, whole. This field is the read path: it is the difference between an
 	// answer that lives in a conversation and an answer a caller can read.
-	Answer   string
+	Answer string
+	// Outcome is the one word the session ended its task with, from the fixed set in outcome.go, and
+	// empty on a job nothing has settled. It is what a flow branches on, what a listing filters by and
+	// what a count of jobs is made of, and the answer above it is the explanation rather than the
+	// signal. A job whose answer states none does not settle, so this is never a reading.
+	Outcome  string
 	Reason   string
 	Question string
 	// Told is the last thing a person told this job, and it is what the system sends the session when
@@ -241,6 +246,9 @@ type Filter struct {
 	Parent string
 	Root   bool
 	Phase  string
+	// Outcome narrows to jobs that ended in one word from the fixed set. It is the filter the phase
+	// cannot be: two jobs are done and one of them could not do its work.
+	Outcome string
 	// LabelKey and LabelValue narrow to jobs carrying one label. A key with no value matches any
 	// value, which is how a caller finds everything it labelled at all.
 	LabelKey   string

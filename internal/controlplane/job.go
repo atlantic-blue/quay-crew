@@ -267,9 +267,17 @@ func (s *Server) ListJobs(ctx context.Context, req *quaycrewv1.ListJobsRequest) 
 		return nil, status.Errorf(codes.InvalidArgument,
 			"%q is not a phase; use one of %s", phase, strings.Join(job.Phases(), ", "))
 	}
+	// Held to the same four words the session was offered. A filter that took any word would answer
+	// nothing for a typo, and a listing that says nothing reads exactly like a system with no such
+	// jobs in it.
+	if outcome := req.GetOutcome(); outcome != "" && !job.KnownOutcome(outcome) {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"%q is not an outcome; use one of %s", outcome, strings.Join(job.Outcomes(), ", "))
+	}
 	listed, err := s.store.ListJobs(ctx, job.Filter{
 		Workspace: req.GetWorkspace(), Project: req.GetProject(),
 		Parent: req.GetParent(), Root: req.GetRootsOnly(), Phase: req.GetPhase(),
+		Outcome:  req.GetOutcome(),
 		LabelKey: req.GetLabelKey(), LabelValue: req.GetLabelValue(),
 	})
 	if err != nil {
@@ -345,7 +353,8 @@ func asJob(from *job.Job) *quaycrewv1.Job {
 		Product: from.Product, Steers: int32(from.Steers),
 		Parent: from.Parent, Depth: int32(from.Depth), Version: int32(from.Version),
 		Phase: from.Phase, Session: from.Session, Attempts: int32(from.Attempts),
-		Answer: from.Answer, Reason: from.Reason, Question: from.Question, Resuming: from.Resuming,
+		Answer: from.Answer, Outcome: from.Outcome,
+		Reason: from.Reason, Question: from.Question, Resuming: from.Resuming,
 		Steps:       asJobSteps(from.Steps),
 		SpentTokens: from.SpentTokens, ObservedVersion: int32(from.ObservedVersion),
 		TraceId: from.TraceID, ParentSpanId: from.ParentSpanID,

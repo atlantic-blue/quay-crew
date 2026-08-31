@@ -81,7 +81,7 @@ func TestJobInARoleRunsInASessionRunningAsThatRoleInPostgres(t *testing.T) {
 
 	done := waitForJob(t, s, declared.GetJob().GetId(), job.PhaseDone)
 
-	if done.GetAnswer() != "nine pull requests are open" {
+	if !strings.Contains(done.GetAnswer(), "nine pull requests are open") {
 		t.Fatalf("the answer on the row is %q", done.GetAnswer())
 	}
 	// The session, not the row: what decides whether the boundary is real is the conversation the
@@ -190,7 +190,7 @@ func TestJobWithNoRoleStillRunsAndBuildsItsContainerInPostgres(t *testing.T) {
 
 	done := waitForJob(t, s, declared.GetJob().GetId(), job.PhaseDone)
 
-	if done.GetAnswer() != "the bill is due on the 14th" {
+	if !strings.Contains(done.GetAnswer(), "the bill is due on the 14th") {
 		t.Fatalf("the answer on the row is %q", done.GetAnswer())
 	}
 	if done.GetRole() != "" {

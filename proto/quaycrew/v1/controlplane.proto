@@ -1308,6 +1308,12 @@ message Job {
   // answer is what came back, whole. A listing leaves it out, because a listing of a hundred answers
   // is a listing nobody can read.
   string answer = 21;
+  // outcome is the one word the session ended its task with: proved, unproved, blocked or decide.
+  // It is read off the answer rather than reported by the model, and it is what a caller branches on,
+  // what a listing filters by and what a count of jobs is made of. The answer above it is the
+  // explanation rather than the signal. Empty on a job nothing has settled, and a job whose answer
+  // states no outcome does not settle at all.
+  string outcome = 40;
   // reason says why a stopped or failed job ended. question is what an asking job waits to be told.
   string reason = 22;
   string question = 23;
@@ -1422,6 +1428,9 @@ message ListJobsRequest {
   string parent = 3;
   bool roots_only = 4;
   string phase = 5;
+  // outcome narrows to jobs that ended on one word from the fixed set. It is the filter the phase
+  // cannot be: two jobs are done and one of them could not do its work.
+  string outcome = 8;
   // label_key with no label_value matches any value, which is how a caller finds everything it
   // labelled at all.
   string label_key = 6;

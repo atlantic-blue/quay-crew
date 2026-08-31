@@ -284,6 +284,9 @@ func (m *Memory) writeMovementJob(written flow.JobWrite) error {
 		if on.Answer != "" {
 			carried.Answer = on.Answer
 		}
+		if on.Outcome != "" {
+			carried.Outcome = on.Outcome
+		}
 		if on.Reason != "" {
 			carried.Reason = on.Reason
 		}

@@ -408,7 +408,8 @@ func TestAContinuedJobThatSaysWhatMovedUnderItsBaseIsDone(t *testing.T) {
 	system := aJobInARepositoryThatFailed(t)
 	ctx := context.Background()
 	system.runner.Reply = "Base: origin/main moved on by 4 commits, none in the files this branch edits.\n" +
-		"I carried on from the worktree. Opened " + aPullRequest
+		"I carried on from the worktree. Opened " + aPullRequest +
+		"\n\n" + job.OutcomeMarker + " " + job.OutcomeProved
 
 	if _, err := system.server.ResumeJob(ctx, &quaycrewv1.ResumeJobRequest{Id: system.job.GetId()}); err != nil {
 		t.Fatalf("ResumeJob: %v", err)

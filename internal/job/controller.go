@@ -86,8 +86,12 @@ type Requeue struct {
 
 // Landing is what came of a job, written onto the row in one movement.
 type Landing struct {
-	Phase       string
-	Answer      string
+	Phase  string
+	Answer string
+	// Outcome is the one word the answer stated, read off it rather than reported by the model, the
+	// way the pull request address is. Empty on every landing that is not an answer: a job the model
+	// never finished has nothing to state.
+	Outcome     string
 	Reason      string
 	SpentTokens int64
 	// PullRequest is the address the answer named, where the job named a repository. It is read off
@@ -830,6 +834,16 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 		}
 		landing.Phase, landing.Reason, kind = PhaseStopped, NoPullRequest(one.Repository), EventStopped
 	}
+	// The outcome last, because it is the word that settles the job and the asks above may have moved
+	// the answer this reads. It is read on the answering path alone: a task that failed, or that an
+	// operator stopped, has no answer, and a word invented for one would be the system reporting an
+	// outcome nobody stated.
+	if kind == EventAnswered {
+		if landing.Outcome = OutcomeIn(landing.Answer); landing.Outcome == "" {
+			landing.Phase, landing.Reason, kind =
+				PhaseStopped, NoOutcomeStated(landing.Answer), EventStopped
+		}
+	}
 	c.land(ctx, one, landing, kind)
 }
 
@@ -945,6 +959,10 @@ func (c *Controller) land(ctx context.Context, one *Job, landed Landing, kind st
 	detail := landed.Reason
 	if detail == "" {
 		detail = fmt.Sprintf("%d tokens in session %s", landed.SpentTokens, one.Session)
+	}
+	// The word this job ended on, so a reader counting a tree reads the records rather than the rows.
+	if landed.Outcome != "" {
+		detail = landed.Outcome + ", " + detail
 	}
 	// The address first, because it is the one line in this record somebody opens.
 	if landed.PullRequest != "" {
