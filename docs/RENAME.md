@@ -206,7 +206,7 @@ The tag sits in eight places: `Makefile:46`, `Makefile:126`, `.github/workflows/
 ### 2.6 The wordmark
 
 The mark is three rows of block letters spelling QUAY. It is `logo` at
-`internal/console/view.go:148`, drawn in `ansiGreen` by `mark` at `internal/console/style.go:52`.
+`internal/console/view.go:148`, drawn in `ansiGreen` by `mark` at `internal/console/style.go:53`.
 
 **Recommendation: draw KREWE, in the same idiom, at three rows.**
 
