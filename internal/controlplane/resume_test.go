@@ -297,3 +297,147 @@ func TestContinuingAJobAndRefusingOneAreBothOnTheRecord(t *testing.T) {
 		})
 	}
 }
+
+// What a continued attempt has to say that an attempt from nothing does not: what moved under the base
+// its work stands on while it was stopped. Driven through the control plane, because what decides this
+// is what the session is handed next and what the row says after it answers.
+
+// aJobInARepositoryThatFailed is the shape every job on the acceptance run had: a worktree, a branch, a
+// pull request at the end of it, and a task that died for a reason that had nothing to do with the
+// work.
+func aJobInARepositoryThatFailed(t *testing.T) heldOpen {
+	t.Helper()
+	runner := &model.FakeRunner{
+		Err: errors.New("the sandbox went away"), Gate: make(chan struct{}), Started: make(chan struct{}),
+	}
+	kept := store.NewMemory()
+	server := controlplane.NewServer(controlplane.Config{
+		Store: kept, Runner: runner, Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
+	})
+	_, project := newProject(t, server)
+	declared, err := server.CreateJob(context.Background(), &quaycrewv1.CreateJobRequest{
+		Project: project, Title: "sort the listing", Brief: "make the listing sort by the clock it shows",
+		Repository: "atlantic-blue/quay-crew",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+	one := declared.GetJob()
+	system := heldOpen{server: server, runner: runner, kept: kept, job: one}
+	ctx := context.Background()
+	server.TickJob(ctx)
+	<-runner.Started
+
+	// The address is on the record because a step named it, which is the only place it can come from
+	// when the attempt that opened it never answered.
+	if _, err := server.RecordJobStep(asJobCredential(ctx, one.GetId()),
+		&quaycrewv1.RecordJobStepRequest{Summary: "opened " + aPullRequest}); err != nil {
+		t.Fatalf("RecordJobStep: %v", err)
+	}
+	close(runner.Gate)
+	waitFor(t, func() bool {
+		sent := tasksOf(t, server, one.GetId())
+		return len(sent) == 1 && sent[0].GetStatus() == job.StatusFailed
+	})
+	server.TickJob(ctx)
+	if phase := system.reading(t).GetPhase(); phase != job.PhaseFailed {
+		t.Fatalf("the job is %q after its task died, want failed", phase)
+	}
+	runner.Err, runner.Gate, runner.Started = nil, nil, nil
+	return system
+}
+
+const aPullRequest = "https://github.com/atlantic-blue/quay-crew/pull/531"
+
+// The refusal, first, because a check that finds a report in every answer would satisfy every test
+// about finding one. A continued attempt that says nothing about its base is asked, and an attempt
+// that still says nothing stops the job rather than being called done.
+func TestAContinuedJobThatNeverSaysWhatMovedIsAskedAndThenStopped(t *testing.T) {
+	system := aJobInARepositoryThatFailed(t)
+	ctx := context.Background()
+	// The pull request is in every answer, so what holds this job back is the base and nothing else.
+	system.runner.Reply = "I carried on and the tests pass. Opened " + aPullRequest
+
+	if _, err := system.server.ResumeJob(ctx, &quaycrewv1.ResumeJobRequest{Id: system.job.GetId()}); err != nil {
+		t.Fatalf("ResumeJob: %v", err)
+	}
+	system.server.TickJob(ctx)
+	waitFor(t, func() bool { return landed(tasksOf(t, system.server, system.job.GetId())) == 2 })
+
+	// The answer says nothing about the base, so the session is asked rather than the job landed.
+	system.server.TickJob(ctx)
+	waitFor(t, func() bool { return len(tasksOf(t, system.server, system.job.GetId())) == 3 })
+	sent := tasksOf(t, system.server, system.job.GetId())
+	for _, want := range []string{"atlantic-blue/quay-crew", "Base:", "Fetch the branch"} {
+		if !strings.Contains(sent[2].GetPrompt(), want) {
+			t.Fatalf("the session was asked:\n%s\nwant it to say %q", sent[2].GetPrompt(), want)
+		}
+	}
+	if phase := system.reading(t).GetPhase(); phase != job.PhaseRunning {
+		t.Fatalf("the job is %q while the session is asked, want running", phase)
+	}
+
+	// It says nothing a second time, so the job stops and says why. Asked once and no more: every ask
+	// is a task somebody pays for.
+	waitFor(t, func() bool { return landed(tasksOf(t, system.server, system.job.GetId())) == 3 })
+	system.server.TickJob(ctx)
+	system.server.TickJob(ctx)
+
+	stopped := system.reading(t)
+	if stopped.GetPhase() != job.PhaseStopped {
+		t.Fatalf("the job is %q saying %q, want stopped", stopped.GetPhase(), stopped.GetReason())
+	}
+	for _, want := range []string{"what moved under its base", "asked twice"} {
+		if !strings.Contains(stopped.GetReason(), want) {
+			t.Fatalf("the job stopped saying %q, want it to say %q", stopped.GetReason(), want)
+		}
+	}
+	if got := len(tasksOf(t, system.server, system.job.GetId())); got != 3 {
+		t.Fatalf("%d tasks ran for this job, want 3: the failure, the attempt and the one ask", got)
+	}
+	// The end of the attempt is not the end of what it produced. A reader who cannot find the pull
+	// request declares the job a second time, which is the bill this whole behaviour exists to stop.
+	if stopped.GetPullRequest() != aPullRequest {
+		t.Fatalf("the stopped job names the pull request %q, want %s", stopped.GetPullRequest(), aPullRequest)
+	}
+}
+
+// And the report itself: a continued attempt that says what moved is done, and what it said is on the
+// row a person reads rather than in a container that is gone.
+func TestAContinuedJobThatSaysWhatMovedUnderItsBaseIsDone(t *testing.T) {
+	system := aJobInARepositoryThatFailed(t)
+	ctx := context.Background()
+	system.runner.Reply = "Base: origin/main moved on by 4 commits, none in the files this branch edits.\n" +
+		"I carried on from the worktree. Opened " + aPullRequest
+
+	if _, err := system.server.ResumeJob(ctx, &quaycrewv1.ResumeJobRequest{Id: system.job.GetId()}); err != nil {
+		t.Fatalf("ResumeJob: %v", err)
+	}
+	system.server.TickJob(ctx)
+	waitFor(t, func() bool { return landed(tasksOf(t, system.server, system.job.GetId())) == 2 })
+	system.server.TickJob(ctx)
+
+	done := system.reading(t)
+	if done.GetPhase() != job.PhaseDone {
+		t.Fatalf("the job is %q saying %q, want done", done.GetPhase(), done.GetReason())
+	}
+	if !strings.Contains(done.GetAnswer(), "moved on by 4 commits") {
+		t.Fatalf("the answer is %q, want what the session said moved under its base", done.GetAnswer())
+	}
+	// Asked once. A session that answered the question is not asked it again.
+	if got := len(tasksOf(t, system.server, system.job.GetId())); got != 2 {
+		t.Fatalf("%d tasks ran for this job, want 2: the failure and the attempt that carried it on", got)
+	}
+}
+
+// landed is how many of a session's tasks have ended, so a test waits for an answer rather than for a
+// task row that exists the moment a dispatch lets go.
+func landed(tasks []*quaycrewv1.Task) int {
+	var ended int
+	for _, one := range tasks {
+		if one.GetStatus() != job.StatusRunning {
+			ended++
+		}
+	}
+	return ended
+}

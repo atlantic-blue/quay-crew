@@ -517,7 +517,12 @@ func (r *rows) LandJob(_ context.Context, id string, landed job.Landing, event *
 	}
 	now := time.Now().UTC()
 	one.Phase, one.Answer, one.Reason = landed.Phase, landed.Answer, landed.Reason
-	one.PullRequest = landed.PullRequest
+	// Kept where the landing read none, the way both stores keep it: a step that named the pull request
+	// wrote the address before any answer landed, and a double that dropped it would let a test pass
+	// over work the real system keeps.
+	if landed.PullRequest != "" {
+		one.PullRequest = landed.PullRequest
+	}
 	one.SpentTokens, one.ObservedVersion = landed.SpentTokens, one.Version
 	one.LeaseOwner, one.LeaseUntil = "", nil
 	one.FinishedAt, one.UpdatedAt = &now, now

@@ -211,3 +211,107 @@ func TestAContinuedJobWorkingInARepositoryIsToldAgainHowItEnds(t *testing.T) {
 		}
 	}
 }
+
+// The base a continued attempt stands on. The silence is tested first, because a reading that finds a
+// report in everything satisfies every test about finding one.
+func TestAnAnswerThatSaysNothingAboutItsBaseReportsNothing(t *testing.T) {
+	for _, said := range []string{
+		"",
+		"I carried on from the worktree and opened the pull request",
+		// The word without the answer. A session that wrote the marker and stopped has said nothing
+		// about the base, and this is the case the whole check turns on.
+		"Base:",
+		"Base:    ",
+		// Two words that begin the same way and mean something else.
+		"Based on the issue, the listing sorts by the clock it shows",
+		"Database: postgres, and the migration ran",
+		// The marker inside a sentence rather than opening the line. A reader that matched anywhere
+		// would read a mention of the base as a report on it.
+		"I rebased and the base: was fine",
+	} {
+		if moved := job.MovedUnderIt(said); moved != "" {
+			t.Errorf("the answer %q reports %q moved, and it says nothing about the base", said, moved)
+		}
+	}
+}
+
+func TestAnAnswerThatSaysWhatMovedIsRead(t *testing.T) {
+	for _, said := range []struct {
+		answer string
+		want   string
+	}{
+		{answer: "Base: nothing moved", want: "nothing moved"},
+		{answer: "I finished the work.\nBase: origin/main moved on by 4 commits\nOpened the pull request",
+			want: "origin/main moved on by 4 commits"},
+		// The shapes a model reaches for when it writes a report.
+		{answer: "- Base: nothing moved", want: "nothing moved"},
+		{answer: "**Base:** nothing moved", want: "nothing moved"},
+		{answer: "  base: nothing moved  ", want: "nothing moved"},
+	} {
+		if moved := job.MovedUnderIt(said.answer); moved != said.want {
+			t.Errorf("the answer %q reports %q moved, want %q", said.answer, moved, said.want)
+		}
+	}
+}
+
+// The ask and the reading of it must not drift. A bound that stops matching asks forever, and every
+// ask is a task somebody pays for.
+func TestTheAskAboutTheBaseIsRecognisedAndTheTaskThatContinuedTheJobIsNot(t *testing.T) {
+	if !job.AskingWhatMoved(job.AskedWhatMoved("atlantic-blue/quay-crew")) {
+		t.Fatal("the system does not recognise its own ask, so it would ask forever")
+	}
+	continued := job.Continued(&job.Job{
+		Repository: "atlantic-blue/quay-crew", Resuming: "the sandbox went away",
+	})
+	if job.AskingWhatMoved(continued) {
+		t.Fatal("the task that continued the job reads as the ask, so the session would never be asked")
+	}
+}
+
+// The session is told the shape to answer in, because the system reads a shape rather than the prose.
+// A session asked for a report and never told how to write one is a session the reading will refuse.
+func TestAContinuedSessionIsToldTheShapeToSayWhatMovedIn(t *testing.T) {
+	continued := job.Continued(&job.Job{
+		Repository: "atlantic-blue/quay-crew", Resuming: "the sandbox went away",
+	})
+
+	for _, want := range []string{"Base:", "nothing moved"} {
+		if !strings.Contains(continued, want) {
+			t.Errorf("the session is told:\n%s\nwant it to say %q", continued, want)
+		}
+	}
+	// And what it is told satisfies the reading, so the example is not one the system would refuse.
+	if moved := job.MovedUnderIt("Base: nothing moved"); moved == "" {
+		t.Error("the shape the session is asked for reads as saying nothing")
+	}
+}
+
+func TestTheSecondAskAndTheReasonBothNameTheRepositoryAndWhatIsMissing(t *testing.T) {
+	asked := job.AskedWhatMoved("atlantic-blue/quay-crew")
+	for _, want := range []string{"atlantic-blue/quay-crew", "Base:", "Fetch the branch"} {
+		if !strings.Contains(asked, want) {
+			t.Errorf("the session is asked:\n%s\nwant it to say %q", asked, want)
+		}
+	}
+	stopped := job.NothingSaidAboutTheBase("atlantic-blue/quay-crew")
+	for _, want := range []string{"atlantic-blue/quay-crew", "asked twice", "pull request"} {
+		if !strings.Contains(stopped, want) {
+			t.Errorf("the job stops saying:\n%s\nwant it to say %q", stopped, want)
+		}
+	}
+}
+
+// And a continued job that names no repository is told none of it. The system reads the answer only
+// where a repository says what the work stands on, so a session told its answer would not end the job
+// would be told something the system does not do.
+func TestAContinuedJobInNoRepositoryIsNotAskedForTheLine(t *testing.T) {
+	continued := job.Continued(&job.Job{Brief: "read the electricity bill", Resuming: "the sandbox went away"})
+
+	if strings.Contains(continued, job.BaseMarker) {
+		t.Errorf("the session is told:\n%s\nand nothing will read that line", continued)
+	}
+	// It is still told to look, because the working directory it is standing in is not where it left it.
+	if !strings.Contains(continued, "what moved") {
+		t.Errorf("the session is told:\n%s\nwant it to say to look at what moved", continued)
+	}
+}

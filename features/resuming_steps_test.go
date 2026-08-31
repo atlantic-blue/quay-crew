@@ -176,7 +176,12 @@ func initializeResumingSteps(sc *godog.ScenarioContext) {
 			if err != nil {
 				return err
 			}
-			for _, want := range []string{"the model refused this task", "fetch the branch this work is based on"} {
+			// The shape it is asked to answer in as well, because the system reads a shape rather than
+			// the prose: a session asked for a report and never told how to write one is a session the
+			// reading refuses.
+			for _, want := range []string{
+				"the model refused this task", "fetch the branch this work is based on", "Base:",
+			} {
 				if !strings.Contains(carried, want) {
 					return fmt.Errorf("the second task does not say %q:\n%s", want, carried)
 				}
@@ -243,6 +248,51 @@ func initializeResumingSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("the session continued the job it was doing itself")
 		}
 		return jobIs(ctx, 0, job.PhaseFailed)
+	})
+
+	// The base a continued attempt stands on. The system runs no git, so it states the shape it reads
+	// and reads the answer against it, the way it already does with the address of a pull request.
+	sc.Step(`^the session was asked what moved under its base$`, func(ctx context.Context) error {
+		asked, err := taskAsking(ctx, 2)
+		if err != nil {
+			return err
+		}
+		for _, want := range []string{"atlantic-blue/quay-crew", "Base:", "Fetch the branch"} {
+			if !strings.Contains(asked, want) {
+				return fmt.Errorf("the session was asked %q, want it to say %q", asked, want)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^the job is stopped, and the reason says no answer said what moved under its base$`,
+		func(ctx context.Context) error {
+			one, err := readJob(ctx, 0)
+			if err != nil {
+				return err
+			}
+			if one.GetPhase() != job.PhaseStopped {
+				return fmt.Errorf("the job is %q saying %q, want stopped", one.GetPhase(), one.GetReason())
+			}
+			for _, want := range []string{"what moved under its base", "asked twice"} {
+				if !strings.Contains(one.GetReason(), want) {
+					return fmt.Errorf("the reason says %q, want it to say %q", one.GetReason(), want)
+				}
+			}
+			return nil
+		})
+
+	// The end of an attempt is not the end of what it produced. A reader who cannot find the pull
+	// request declares the job a second time, which is the bill this whole behaviour exists to stop.
+	sc.Step(`^the job still names the pull request "([^"]*)"$`, func(ctx context.Context, want string) error {
+		one, err := readJob(ctx, 0)
+		if err != nil {
+			return err
+		}
+		if one.GetPullRequest() != want {
+			return fmt.Errorf("the job names the pull request %q, want %q", one.GetPullRequest(), want)
+		}
+		return nil
 	})
 }
 
