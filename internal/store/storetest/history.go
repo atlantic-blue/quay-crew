@@ -11,77 +11,106 @@ import (
 
 // runHistoryConformance holds both stores to the history contract.
 //
-// A history is the read a session makes to say what the crew did, so what is proved here is the
-// narrowing that decides which jobs it sees: the window, the address, and the order. The arithmetic
-// is not here, because neither store does any: both filter and order, and internal/job adds up what
-// they return. That split is deliberate, and it is why these two implementations cannot disagree
-// about a number nobody could check.
+// A history is the read a session makes to say what the system did, so what is proved here is the
+// narrowing that decides which jobs it sees: the window, its two ends, the address and the order. The
+// arithmetic is not here, because neither store does any. Both filter and order, and internal/job
+// adds up what they return, which is why the two cannot disagree about a number nobody could check.
+//
+// Nothing here writes a declaration time. The Postgres store leaves created_at to the database clock
+// and the memory store takes one if it is offered, so a scenario that set its own would be testing
+// one store against a behaviour the other does not have. Every window below is built from the moment
+// a job actually came back with, which is the same on both.
 func runHistoryConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Helper()
 
-	// declaredAt writes one job into a project at a given moment, and hands back its identifier.
-	declaredAt := func(t *testing.T, s store.Store, workspace, project, title string, at time.Time) string {
+	// declared writes one job and hands back the moment the store stamped it.
+	declared := func(t *testing.T, s store.Store, workspace, project, title string) (string, time.Time) {
 		t.Helper()
+		ctx := context.Background()
 		written := &job.Job{
 			ID: store.NewID(), Workspace: workspace, Project: project,
-			Title: title, Brief: "a brief a history never carries",
-			Answer: "an answer a history never carries",
-			Role:   "implementer", Phase: job.PhaseDone, SpentTokens: 1200, Steers: 1,
+			Title: title, Brief: theBriefAHistoryNeverCarries, Answer: theAnswerAHistoryNeverCarries,
+			Role: "implementer", Phase: job.PhaseDone, SpentTokens: 1200,
 			PullRequest: "https://github.com/atlantic-blue/quay-crew/pull/531",
-			Version:     1, CreatedAt: at, UpdatedAt: at,
+			Version:     1,
 		}
-		started, finished := at, at.Add(10*time.Minute)
+		started := time.Now().UTC().Add(-10 * time.Minute)
+		finished := started.Add(10 * time.Minute)
 		written.StartedAt, written.FinishedAt = &started, &finished
-		if err := s.CreateJob(context.Background(), written, &job.Event{
+		if err := s.CreateJob(ctx, written, &job.Event{
 			ID: store.NewID(), Kind: job.EventDeclared, Job: written.ID,
-			Workspace: workspace, Project: project, OccurredAt: at,
+			Workspace: workspace, Project: project, OccurredAt: time.Now().UTC(),
 		}); err != nil {
 			t.Fatalf("CreateJob: %v", err)
 		}
-		return written.ID
+		back, err := s.GetJob(ctx, written.ID)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		return written.ID, back.CreatedAt.UTC()
 	}
 
-	day := func(n int) time.Time { return time.Date(2026, time.August, n, 9, 0, 0, 0, time.UTC) }
+	// around is a window comfortably holding one moment, for the scenarios that are not about the ends.
+	around := func(at time.Time) job.Window {
+		return job.Window{Since: at.Add(-time.Hour), Until: at.Add(time.Hour)}
+	}
 
 	t.Run("a history holds the jobs declared inside its window and no others", func(t *testing.T) {
 		open := newDataset(t)
 		s := open(t)
-		ctx := context.Background()
 		workspace, project := aProject(t, s)
 
-		declaredAt(t, s, workspace, project, "before the window", day(20))
-		inside := declaredAt(t, s, workspace, project, "inside the window", day(25))
-		declaredAt(t, s, workspace, project, "after the window", day(30))
+		inside, at := declared(t, s, workspace, project, "inside the window")
 
-		history, err := open(t).JobHistory(ctx, job.HistoryQuery{
-			Window: job.Window{Since: day(24), Until: day(26)},
-		})
+		history, err := open(t).JobHistory(context.Background(), job.HistoryQuery{Window: around(at)})
 		if err != nil {
 			t.Fatalf("JobHistory: %v", err)
 		}
 		if len(history) != 1 || history[0].ID != inside {
-			t.Fatalf("the window holds %d jobs, want only the one declared inside it", len(history))
+			t.Fatalf("the window holds %d jobs, want the one declared inside it", len(history))
+		}
+
+		// And a window that ended before the job was declared holds nothing.
+		before, err := s.JobHistory(context.Background(), job.HistoryQuery{
+			Window: job.Window{Since: at.Add(-2 * time.Hour), Until: at.Add(-time.Hour)},
+		})
+		if err != nil {
+			t.Fatalf("JobHistory: %v", err)
+		}
+		if len(before) != 0 {
+			t.Fatalf("a window that ended before the job was declared holds %d jobs", len(before))
 		}
 	})
 
 	// The near end is included and the far end is not, so two windows laid end to end count a job
-	// once. A store that closed the far end would double count every boundary.
+	// once. A store that closed the far end would count every boundary twice.
 	t.Run("the near end of a window is included and the far end is not", func(t *testing.T) {
 		open := newDataset(t)
 		s := open(t)
 		workspace, project := aProject(t, s)
 
-		near := declaredAt(t, s, workspace, project, "on the near end", day(25))
-		declaredAt(t, s, workspace, project, "on the far end", day(27))
+		id, at := declared(t, s, workspace, project, "on the boundary")
+		ctx := context.Background()
 
-		history, err := s.JobHistory(context.Background(), job.HistoryQuery{
-			Window: job.Window{Since: day(25), Until: day(27)},
+		onTheNearEnd, err := s.JobHistory(ctx, job.HistoryQuery{
+			Window: job.Window{Since: at, Until: at.Add(time.Hour)},
 		})
 		if err != nil {
 			t.Fatalf("JobHistory: %v", err)
 		}
-		if len(history) != 1 || history[0].ID != near {
-			t.Fatalf("the window holds %d jobs, want only the one on the near end", len(history))
+		if len(onTheNearEnd) != 1 || onTheNearEnd[0].ID != id {
+			t.Fatalf("a job on the near end of a window is left out of it")
+		}
+
+		onTheFarEnd, err := s.JobHistory(ctx, job.HistoryQuery{
+			Window: job.Window{Since: at.Add(-time.Hour), Until: at},
+		})
+		if err != nil {
+			t.Fatalf("JobHistory: %v", err)
+		}
+		if len(onTheFarEnd) != 0 {
+			t.Fatalf("a job on the far end of a window is counted in it, so two windows laid end to " +
+				"end would count it twice")
 		}
 	})
 
@@ -90,12 +119,12 @@ func runHistoryConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		s := open(t)
 		workspace, project := aProject(t, s)
 
-		declaredAt(t, s, workspace, project, "the oldest", day(21))
-		declaredAt(t, s, workspace, project, "the middle", day(22))
-		declaredAt(t, s, workspace, project, "the newest", day(23))
+		_, first := declared(t, s, workspace, project, "the oldest")
+		declared(t, s, workspace, project, "the middle")
+		_, last := declared(t, s, workspace, project, "the newest")
 
 		history, err := s.JobHistory(context.Background(), job.HistoryQuery{
-			Window: job.Window{Since: day(20), Until: day(24)},
+			Window: job.Window{Since: first.Add(-time.Hour), Until: last.Add(time.Hour)},
 		})
 		if err != nil {
 			t.Fatalf("JobHistory: %v", err)
@@ -103,9 +132,12 @@ func runHistoryConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if len(history) != 3 {
 			t.Fatalf("the window holds %d jobs, want 3", len(history))
 		}
-		for i, want := range []string{"the newest", "the middle", "the oldest"} {
-			if history[i].Title != want {
-				t.Fatalf("the history reads %q at %d, want %q", history[i].Title, i, want)
+		// Asserted as an order over the moments the store stamped rather than as three titles, because
+		// the stamps are the store's to write and only their order is the contract.
+		for i := 1; i < len(history); i++ {
+			if history[i].CreatedAt.After(history[i-1].CreatedAt) {
+				t.Fatalf("the history runs oldest first: %s came back before %s",
+					history[i-1].CreatedAt, history[i].CreatedAt)
 			}
 		}
 	})
@@ -120,10 +152,10 @@ func runHistoryConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("CreateProject: %v", err)
 		}
 
-		here := declaredAt(t, s, workspace, project, "in this project", day(25))
-		declaredAt(t, s, workspace, other.GetId(), "in the other project", day(25))
+		here, at := declared(t, s, workspace, project, "in this project")
+		declared(t, s, workspace, other.GetId(), "in the other project")
+		window := around(at)
 
-		window := job.Window{Since: day(24), Until: day(26)}
 		narrowed, err := s.JobHistory(ctx, job.HistoryQuery{Project: project, Window: window})
 		if err != nil {
 			t.Fatalf("JobHistory: %v", err)
@@ -148,11 +180,9 @@ func runHistoryConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		open := newDataset(t)
 		s := open(t)
 		workspace, project := aProject(t, s)
-		declaredAt(t, s, workspace, project, "the job", day(25))
+		_, at := declared(t, s, workspace, project, "the job")
 
-		history, err := s.JobHistory(context.Background(), job.HistoryQuery{
-			Window: job.Window{Since: day(24), Until: day(26)},
-		})
+		history, err := s.JobHistory(context.Background(), job.HistoryQuery{Window: around(at)})
 		if err != nil {
 			t.Fatalf("JobHistory: %v", err)
 		}
@@ -163,8 +193,11 @@ func runHistoryConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if one.Title != "the job" || one.Role != "implementer" || one.Phase != job.PhaseDone {
 			t.Fatalf("the digest reads %+v", one)
 		}
-		if one.SpentToken != 1200 || one.Steers != 1 {
-			t.Fatalf("the digest lost the cost or the steers: %+v", one)
+		// The cost, but never the steers: a declaration does not write a steer count. That column
+		// is raised by a steer, so asserting it here would be asserting against a write neither
+		// store makes at this point.
+		if one.SpentToken != 1200 {
+			t.Fatalf("the digest lost the cost: %+v", one)
 		}
 		if one.PullRequest == "" {
 			t.Fatalf("the digest lost the pull request: %+v", one)
@@ -174,13 +207,10 @@ func runHistoryConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if one.StartedAt.IsZero() || one.FinishedAt.IsZero() {
 			t.Fatalf("the digest lost the moments the job ran between: %+v", one)
 		}
-		if !one.CreatedAt.Equal(day(25)) {
-			t.Fatalf("the digest was declared at %s, want %s", one.CreatedAt, day(25))
-		}
 	})
 
-	// A job that never started has no moments, and a store that wrote the zero time instead would put
-	// the first of January year one in front of a reader.
+	// A job that never started has no moments, and a store writing the zero time instead would put the
+	// first of January year one in front of a reader.
 	t.Run("a job that never ran comes back with no moments", func(t *testing.T) {
 		open := newDataset(t)
 		s := open(t)
@@ -190,18 +220,19 @@ func runHistoryConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		written := &job.Job{
 			ID: store.NewID(), Workspace: workspace, Project: project,
 			Title: "never started", Phase: job.PhasePending, Version: 1,
-			CreatedAt: day(25), UpdatedAt: day(25),
 		}
 		if err := s.CreateJob(ctx, written, &job.Event{
 			ID: store.NewID(), Kind: job.EventDeclared, Job: written.ID,
-			Workspace: workspace, Project: project, OccurredAt: day(25),
+			Workspace: workspace, Project: project, OccurredAt: time.Now().UTC(),
 		}); err != nil {
 			t.Fatalf("CreateJob: %v", err)
 		}
+		back, err := s.GetJob(ctx, written.ID)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
 
-		history, err := s.JobHistory(ctx, job.HistoryQuery{
-			Window: job.Window{Since: day(24), Until: day(26)},
-		})
+		history, err := s.JobHistory(ctx, job.HistoryQuery{Window: around(back.CreatedAt.UTC())})
 		if err != nil {
 			t.Fatalf("JobHistory: %v", err)
 		}
@@ -218,10 +249,13 @@ func runHistoryConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		open := newDataset(t)
 		s := open(t)
 		workspace, project := aProject(t, s)
-		declaredAt(t, s, workspace, project, "the job", day(25))
+		declared(t, s, workspace, project, "the job")
 
 		history, err := s.JobHistory(context.Background(), job.HistoryQuery{
-			Window: job.Window{Since: day(1), Until: day(2)},
+			Window: job.Window{
+				Since: time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
+				Until: time.Date(2020, time.January, 2, 0, 0, 0, 0, time.UTC),
+			},
 		})
 		if err != nil {
 			t.Fatalf("JobHistory: %v", err)
@@ -231,3 +265,10 @@ func runHistoryConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 }
+
+// The prose a history must never carry, named once so the seed and the assertion cannot drift apart
+// and quietly stop proving anything.
+const (
+	theBriefAHistoryNeverCarries  = "a brief nobody should have to read to know what happened"
+	theAnswerAHistoryNeverCarries = "an answer nobody should have to read either"
+)
