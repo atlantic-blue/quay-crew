@@ -735,7 +735,7 @@ const readVerb = "show"
 // meaning for it would break the one spelling an operator learns first. Where that one argument also
 // names a project the system holds, the command has two readings and takes neither: it refuses and
 // prints the unambiguous spelling of each. Two arguments are unambiguous by position, so an address
-// that also names a project is recorded as a repository there, and that form is the way the refusal
+// that also names a project is recorded as a repository there, and that is the form the refusal
 // hands back.
 func runProjectRepository(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) > 0 && strings.EqualFold(strings.TrimSpace(args[0]), readVerb) {
@@ -876,11 +876,11 @@ func twoReadings(typed, kind string, names, scope workspace.Location) error {
 	if kind != "" {
 		write += " " + kind
 	}
-	return fmt.Errorf("%q is a repository address, and it is also the project %s, which this system holds. "+
+	return fmt.Errorf("%q is a repository address, and it is also a project this system holds. "+
 		"The command reads two ways, so it does neither."+
-		"\n\nto read what %s works in:\n    krewe project repository show %s"+
+		"\n\nto read what the project %s works in:\n    krewe project repository show %s"+
 		"\nto record %s as the repository of %s, where you are standing:\n    %s",
-		typed, names.Path, names.Path, typed, typed, scope.Path, write)
+		typed, names.Path, typed, typed, scope.Path, write)
 }
 
 // writeRecorded says what a write changed, and what it changed from.
