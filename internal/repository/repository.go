@@ -104,3 +104,14 @@ func Costs(visibility string) string {
 	}
 	return "a public repository, so its pipeline minutes are free"
 }
+
+// Named is what to call this kind of repository in a sentence that is not about the bill.
+//
+// A line saying what a write changed carries the kind the project held before it, and the bill of a
+// repository it no longer works in is a fact about nothing.
+func Named(visibility string) string {
+	if visibility == Private {
+		return "a private repository"
+	}
+	return "a public repository"
+}
