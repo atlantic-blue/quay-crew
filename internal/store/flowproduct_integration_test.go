@@ -200,8 +200,16 @@ func TestAnAnswerThatIsNotASentenceLeavesTheRunAskingInPostgres(t *testing.T) {
 func TestARunWhoseSentenceDisagreesWithTheJobAboveItIsRefusedInPostgres(t *testing.T) {
 	s, _ := aSystemWithAController(t, &addressingRunner{})
 	ctx := context.Background()
-	_, project := aProjectOnPostgres(t, s)
+	workspace, project := aProjectOnPostgres(t, s)
 
+	// A workspace allows no depth at all until an operator says otherwise, and a run started by a
+	// session hangs under that session's job. Without this the run is refused for being too deep,
+	// which is a different refusal and would leave the one this test is about unproved.
+	if _, err := s.SetWorkspaceLimits(ctx, &quaycrewv1.SetWorkspaceLimitsRequest{
+		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDepth: 2},
+	}); err != nil {
+		t.Fatalf("SetWorkspaceLimits: %v", err)
+	}
 	declared, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "build the transcript page", Brief: "start the flow",
 		Product: "paste a link and get the text back",
