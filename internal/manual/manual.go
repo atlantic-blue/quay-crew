@@ -75,13 +75,17 @@ commands:
     [--repository <owner>/<name>]         request against it. --product is one sentence in a
     [--product "..."]                     person's words: what somebody does with what gets built
     [--claim <piece of work>]             and what they get back. Every job under this one carries
-                                          it, and it is what the design is read against. --claim is
+    [--escalate ask|role:<name>]          it, and it is what the design is read against. --claim is
                                           the piece of work this job takes, an issue, a branch or a
                                           name, and a second job claiming it is refused while this
                                           one holds it, so two sessions cannot build the same slice.
-                                          A brief that asks the job to wait for the checks, or to
-                                          merge on the result, is refused: nothing wakes a job, so
-                                          that shape is a flow
+                                          --escalate says what happens when the job goes in
+                                          circles: ask puts the question to you, role:<name> hands
+                                          the job to another role in a conversation of its own,
+                                          carrying what the attempts already said. A brief
+                                          that asks the job to wait for the checks, or to merge on
+                                          the result, is refused: nothing wakes a job, so that
+                                          shape is a flow
   history [<address>|system]              what the system did over a window of time: what ran, what it
     [--since <date>] [--until <date>]     cost, and what failed and why. The read to make instead of
     [--limit <n>]                         being told. It prints the window added up, then one line

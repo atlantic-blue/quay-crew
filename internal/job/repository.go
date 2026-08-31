@@ -106,6 +106,12 @@ func Asked(one *Job) string {
 	if one.Told != "" {
 		return CarryOn(one)
 	}
+	// A job handed to another role after it went in circles. The session reading this is not the one
+	// that went round in them, and nothing it tried is in this conversation, so what those attempts
+	// said is written out rather than referred to.
+	if route, err := ReadRoute(one.EscalatedTo); err == nil && route.Names(RoleNow(one)) {
+		return HandedOver(one, AtStep(one.Attempted, one.LoopedStep))
+	}
 	said := []string{}
 	if one.Product != "" {
 		said = append(said, ServesAPerson(one.Product))

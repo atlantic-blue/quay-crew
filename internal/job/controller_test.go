@@ -526,9 +526,72 @@ func (r *rows) LandJob(_ context.Context, id string, landed job.Landing, event *
 	one.SpentTokens, one.ObservedVersion = landed.SpentTokens, one.Version
 	one.LeaseOwner, one.LeaseUntil = "", nil
 	one.FinishedAt, one.UpdatedAt = &now, now
+	// What the attempt said, in the same movement as what came of it, the way both stores write it.
+	r.recordAttempt(one, landed.Attempt)
 	r.record(id, []*job.Event{event})
 	kept := *one
 	return &kept, nil
+}
+
+// GetJob reads one job whole, which here is the row itself: the steps and the attempts live on it.
+func (r *rows) GetJob(_ context.Context, id string) (*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such job")
+	}
+	kept := *one
+	return &kept, nil
+}
+
+// LoopJob writes that a job went in circles and takes the route it declared, the way both stores do:
+// only from running, only for the controller holding the lease.
+func (r *rows) LoopJob(_ context.Context, id string, looped job.Loop, event *job.Event) (*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such job")
+	}
+	if one.Phase != job.PhaseRunning {
+		return nil, job.ErrNotRunning
+	}
+	if looped.Owner != "" && one.LeaseOwner != looped.Owner {
+		return nil, job.ErrHeld
+	}
+	now := time.Now().UTC()
+	one.LoopedStep, one.Phase, one.UpdatedAt = looped.Step, looped.Phase, now
+	if looped.To != "" {
+		one.EscalatedTo = looped.To
+	}
+	one.Question, one.Reason = looped.Question, looped.Reason
+	one.Told, one.Resuming = "", ""
+	if looped.Handed {
+		one.Session = ""
+	}
+	switch looped.Phase {
+	case job.PhaseStopped:
+		one.FinishedAt, one.ObservedVersion = &now, one.Version
+	case job.PhasePending:
+		one.StartedAt = nil
+	}
+	one.LeaseOwner, one.LeaseUntil = "", nil
+	r.recordAttempt(one, looped.Attempt)
+	r.record(id, []*job.Event{event})
+	kept := *one
+	return &kept, nil
+}
+
+// recordAttempt puts what an attempt said on the row, and does nothing where that task is already
+// there. The caller holds the lock.
+func (r *rows) recordAttempt(one *job.Job, attempt *job.Attempt) {
+	if attempt == nil || attempt.Task == "" || job.RecordedAttempt(one.Attempted, attempt.Task) {
+		return
+	}
+	kept := *attempt
+	kept.Job, kept.Seq = one.ID, len(one.Attempted)+1
+	one.Attempted = append(one.Attempted, kept)
 }
 
 // record appends what happened, the way a store writes the events in the same transaction.

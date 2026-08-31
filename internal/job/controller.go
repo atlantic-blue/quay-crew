@@ -93,6 +93,10 @@ type Landing struct {
 	// PullRequest is the address the answer named, where the job named a repository. It is read off
 	// the answer rather than reported by the model, the way an expectation is.
 	PullRequest string
+	// Attempt is what this attempt at the job produced, with how like the earlier attempts at the same
+	// step it was. It is written in the same transaction as the landing, keyed on the task, so a
+	// controller reading a task a dead one already read leaves one row rather than two.
+	Attempt *Attempt
 }
 
 // Store is the rows a controller reads and writes. Every write takes the event that describes it, so
@@ -143,6 +147,12 @@ type Store interface {
 	// LandJob writes what came of the job and lets go of the lease. It applies only to a job that
 	// is still running.
 	LandJob(ctx context.Context, id string, landed Landing, event *Event) (*Job, error)
+	// GetJob reads one job whole: what its session finished, and what its attempts said. A listing
+	// carries neither, and a loop cannot be read without both.
+	GetJob(ctx context.Context, id string) (*Job, error)
+	// LoopJob writes that a job went in circles and takes the route the job declared, in one
+	// movement. It applies only to a running job this controller still holds.
+	LoopJob(ctx context.Context, id string, looped Loop, event *Event) (*Job, error)
 	// SettledSessions is the fourth query: the sessions nothing is holding open, oldest touched
 	// first. A session is not a second resource with a declaration of its own, so what is wanted of
 	// it is derived from the job that names it, and a job still in flight keeps its session alive.
@@ -473,7 +483,7 @@ func (c *Controller) start(ctx context.Context, one *Job) {
 	// of this process, so it is the same trace after a controller has died and another took over.
 	ctx = telemetry.Under(ctx, one.TraceID, one.ParentSpanID)
 
-	handle := SessionFor(one.ID)
+	handle := ConversationFor(one)
 	limits := c.limitsIn(ctx, one.Workspace)
 	lease := Lease{Owner: c.owner, Until: time.Now().UTC().Add(limits.Lease(c.lease))}
 
@@ -529,8 +539,9 @@ func (c *Controller) start(ctx context.Context, one *Job) {
 		Title: claimed.Title,
 		// The role comes off the row and never from a caller. A caller that could name its own role
 		// could name one granting more than the job was declared with, and the credential the system
-		// mints for this task carries what that role declared it may call.
-		Role: claimed.Role,
+		// mints for this task carries what that role declared it may call. A job handed on after it went
+		// in circles runs as the role it was handed to, which is the whole of what handing it on means.
+		Role: RoleNow(claimed),
 		// Which job this task runs, so the system mints the credential for it and puts it in
 		// the environment of this task alone.
 		Job: claimed.ID,
@@ -605,19 +616,23 @@ func (c *Controller) hold(ctx context.Context, one *Job, reason string) {
 // the reason an unprovable expectation stops it: a check that quietly passes when it could not be
 // run is the same false green as no check at all.
 func (c *Controller) refusedMaterial(ctx context.Context, one *Job) string {
-	if one.Role == "" {
+	// The role doing the job now, which is the one it was handed to where it went in circles. The
+	// boundary is checked against whoever the session will actually run as, or a handoff would put a
+	// job in front of a role nobody held it against.
+	named := RoleNow(one)
+	if named == "" {
 		return ""
 	}
 	if c.roles == nil {
 		return fmt.Sprintf("this job runs as the %s role and this system cannot read its roles, "+
-			"so what the role receives could not be checked", one.Role)
+			"so what the role receives could not be checked", named)
 	}
-	held, err := c.roles.RoleFor(ctx, one.Workspace, one.Role)
+	held, err := c.roles.RoleFor(ctx, one.Workspace, named)
 	if err != nil {
 		return oneLine(err.Error())
 	}
 	if material := Unreceived(one.Requires, held); material != "" {
-		return RefusedMaterial(one.Role, material)
+		return RefusedMaterial(named, material)
 	}
 	return ""
 }
@@ -714,7 +729,7 @@ func (c *Controller) sessionNamedAfter(ctx context.Context, one *Job) string {
 		// Nothing is released on a read that failed: releasing here is what would pay twice.
 		return unknownSession
 	}
-	handle := SessionFor(one.ID)
+	handle := ConversationFor(one)
 	for _, session := range listed.GetSessions() {
 		if session.GetHandle() == handle {
 			return session.GetId()
@@ -830,6 +845,21 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 		}
 		landing.Phase, landing.Reason, kind = PhaseStopped, WhyNoPullRequest(one.Repository, one.Mode), EventStopped
 	}
+	// What this attempt produced goes on the record whichever way it went, and with it how like the
+	// earlier attempts at this step it was. The attempt that finished the job is recorded too: it is
+	// the other half of the measurement that replaces the threshold, and without it the record holds
+	// only the attempts that went nowhere.
+	whole := c.wholeJob(ctx, one)
+	attempt := TheAttempt(whole, last.GetId(), saidBy(last, landing))
+	landing.Attempt = &attempt
+	// A loop is three attempts at one step the system cannot tell apart, and an attempt that finished
+	// the job is never one of them, however like the last it reads: work that got there is not work
+	// going in circles. Neither is a task an operator halted, which is a person's decision rather than
+	// the session repeating itself.
+	if kind != EventAnswered && last.GetStatus() != StatusTaskStopped &&
+		c.wentInCircles(ctx, whole, attempt, turnedAway) {
+		return
+	}
 	c.land(ctx, one, landing, kind)
 }
 
@@ -896,8 +926,8 @@ func (c *Controller) askForThePullRequest(ctx context.Context, one *Job, asked i
 		return false
 	}
 	if _, err := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-		Project: one.Project, Handle: SessionFor(one.ID), Text: AskedForThePullRequest(one.Repository),
-		PermissionMode: one.Mode, Detach: true, Role: one.Role, Job: one.ID,
+		Project: one.Project, Handle: ConversationFor(one), Text: AskedForThePullRequest(one.Repository),
+		PermissionMode: one.Mode, Detach: true, Role: RoleNow(one), Job: one.ID,
 	}); err != nil {
 		// A system that cannot ask again lands the job below with the reason, rather than holding a row
 		// open waiting for a task nobody sent.
@@ -926,8 +956,8 @@ func (c *Controller) askWhatMovedUnderIt(ctx context.Context, one *Job, tasks []
 		return false
 	}
 	if _, err := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-		Project: one.Project, Handle: SessionFor(one.ID), Text: AskedWhatMoved(one.Repository),
-		PermissionMode: one.Mode, Detach: true, Role: one.Role, Job: one.ID,
+		Project: one.Project, Handle: ConversationFor(one), Text: AskedWhatMoved(one.Repository),
+		PermissionMode: one.Mode, Detach: true, Role: RoleNow(one), Job: one.ID,
 	}); err != nil {
 		// A system that cannot ask again lands the job below with the reason, rather than holding a row
 		// open waiting for a task nobody sent.
@@ -1097,4 +1127,103 @@ func oneLine(text string) string {
 		return flat
 	}
 	return flat[:most] + "..."
+}
+
+// wholeJob is one job with what its session finished and what its attempts said, which a listing
+// leaves out and a loop cannot be read without.
+//
+// A read per landed task rather than per tick: a job whose task is still running never reaches this,
+// so a system holding a hundred running jobs does no more work here than it did before.
+func (c *Controller) wholeJob(ctx context.Context, one *Job) *Job {
+	whole, err := c.store.GetJob(ctx, one.ID)
+	if err != nil {
+		c.logger.WarnContext(ctx, "could not read a job whole, so this attempt is not held against the ones before it",
+			"job", one.ID, "error", err)
+		return one
+	}
+	return whole
+}
+
+// saidBy is what an attempt had to show for itself: the answer where the task answered, and the
+// failure where it did not.
+//
+// Both are compared, because a session going in circles produces both shapes. Three tasks dying on
+// the same error is the same loop as three answers saying the same thing, and the second is the one
+// that spends a budget.
+func saidBy(task *quaycrewv1.Task, landed Landing) string {
+	if reply := strings.TrimSpace(task.GetReply()); reply != "" {
+		return reply
+	}
+	if failure := strings.TrimSpace(task.GetFailure()); failure != "" {
+		return failure
+	}
+	return landed.Reason
+}
+
+// wentInCircles stops the step where this job is going in circles, takes the route the job declared,
+// and says whether it did.
+//
+// Nothing is landed where it did. The attempt goes onto the record with the loop, in one movement, so
+// a reader never finds a loop with no attempt behind it.
+func (c *Controller) wentInCircles(ctx context.Context, one *Job, attempt Attempt, turnedAway givenUp) bool {
+	at := append(Before(one.Attempted, attempt.Step, attempt.Task), attempt)
+	if !Circling(at) {
+		return false
+	}
+	ctx = telemetry.Under(ctx, one.TraceID, one.ParentSpanID)
+	looped := Loop{Owner: c.owner, Step: attempt.Step, Similarity: attempt.Similarity, Attempt: &attempt}
+	route, err := ReadRoute(one.Escalation)
+	if err != nil {
+		// A route the system cannot read is a route it cannot take, and the job is still going in
+		// circles, so the operator gets it. Refused at the write, so this is the row somebody wrote
+		// before the routes existed rather than anything a caller can reach.
+		c.logger.WarnContext(ctx, "a job declares a route this build cannot read, so its loop goes to the operator",
+			"job", one.ID, "escalation", one.Escalation, "error", err)
+		route = Route{Word: RouteAsk}
+	}
+	switch {
+	// Escalated once already, and the escalation is what went in circles this time. Escalating again
+	// would be the system going round the same loop with more steps in it, so it stops and a person
+	// reads what two different attempts at the work produced.
+	case one.EscalatedTo != "":
+		looped.Phase, looped.Reason = PhaseStopped, LoopedAgain(attempt.Step, one.EscalatedTo)
+	case route.Word == RouteRole:
+		// Back to pending, in a conversation of its own, running as the role it was handed to. No
+		// reason is written: a pending job carrying one reads as a job the machine is holding back for
+		// want of room, and this one is going again.
+		looped.Phase, looped.To, looped.Handed = PhasePending, route.String(), true
+	default:
+		looped.Phase, looped.To = PhaseAsking, route.String()
+		looped.Question = LoopQuestion(one, attempt.Step, at)
+	}
+	record := c.event(ctx, one, EventLooped,
+		fmt.Sprintf("%s, %s", Looped(attempt.Step, attempt.Similarity), whereItWent(looped, route)))
+	ended, err := c.store.LoopJob(ctx, one.ID, looped, record)
+	if err != nil {
+		if !errors.Is(err, ErrNotRunning) && !errors.Is(err, ErrHeld) {
+			c.logger.WarnContext(ctx, "could not write that a job went in circles", "job", one.ID, "error", err)
+		}
+		// Left to land the way it was going to. A loop the system could not write down must not swallow
+		// the attempt underneath it.
+		return false
+	}
+	c.exported(ctx, record)
+	c.revoked(ended)
+	// Not started again inside the pass that escalated it. One movement per job per tick is what the
+	// rest of this loop does, and a job handed to another role that started again in the same tick
+	// would be pending for no time at all: nothing reading the record would ever see it waiting.
+	turnedAway[one.ID] = true
+	c.logger.InfoContext(ctx, "a job went in circles",
+		"job", one.ID, "session", one.Session, "step", attempt.Step,
+		"similarity", attempt.Similarity, "escalated", whereItWent(looped, route))
+	return true
+}
+
+// whereItWent is what the record says happened to a looping job, which is the route it took or the
+// stop where it had taken one already.
+func whereItWent(looped Loop, route Route) string {
+	if looped.Phase == PhaseStopped {
+		return "stopped, having escalated already"
+	}
+	return Escalating(route)
 }

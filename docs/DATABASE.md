@@ -203,6 +203,16 @@ finished them. A job that failed is continued from them rather than declared a s
 rather than the brief. The unique index on the job and the summary is what makes recording the same
 step twice leave one row, because a session that is continued says again what it said before.
 
+**`job_attempts`** is what each attempt at a job produced, one row per task: which step it was at,
+the conversation it was made in, what it had to show for itself, and how like the closest earlier
+attempt at that step it was. Three attempts at one step the system cannot tell apart are a loop, and
+the job escalates by the route it declared rather than spending the rest of its budget on a fourth.
+The key is the job and the task rather than a counter, because whichever controller holds a job next
+reads the task the last one read, and an attempt counted twice would manufacture a loop out of one
+piece of work. The rows are also the corpus that replaces the provisional threshold, which is why
+every attempt carries its similarity whether or not it looped. Section 3 of `docs/ORCHESTRATION.md`
+has the measure and the number.
+
 **`pending_triggers`** is the queue a flow run starts from when something happens: one row per
 trigger, carrying the flow to run, the project to run it in, what the trigger carried as a payload,
 the job that caused it where one did, and the claim a poller takes on it. `status` is
@@ -259,6 +269,7 @@ erDiagram
     projects   ||--o{ jobs : "holds declared intent"
     jobs       ||--o{ job_events : "records what happened"
     jobs       ||--o{ job_steps : "records what its session finished"
+    jobs       ||--o{ job_attempts : "records what each attempt said"
     projects   ||--o{ pending_triggers : "holds what happened, waiting to start a run"
     jobs      |o--o{ pending_triggers : "caused"
 ```

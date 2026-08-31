@@ -529,11 +529,13 @@ func (m *Memory) LandJob(_ context.Context, id string, landed job.Landing, event
 	// The hold goes with the job. A lease left on finished job would read as held forever.
 	found.LeaseOwner, found.LeaseUntil = "", nil
 	found.FinishedAt, found.UpdatedAt = &now, now
+	// What the attempt said, in the same movement as what came of it. A landing with no attempt behind
+	// it would leave the record unable to say whether this job was going anywhere.
+	m.recordAttempt(id, landed.Attempt)
 	if err := m.appendJobEvent(event); err != nil {
 		return nil, err
 	}
-	kept := cloneJob(*found)
-	return &kept, nil
+	return m.jobWithSteps(*found), nil
 }
 
 // appendJobEvents records several things that happened, the way a store writes them in one

@@ -414,6 +414,18 @@ the model is already working and abandoning it mid sentence gains nothing.
 Zero means it draws from its parent, and a root with zero draws from the workspace. Negative is
 refused. A value above the parent's remaining budget is refused, and the refusal says both numbers.
 
+**`escalation`, text, optional, default empty.** What this job does when it goes in circles: `ask`,
+which puts the question to the operator, or `role:<name>`, which hands the job to another role in a
+conversation of its own. Empty is asking, which is what a job whose author never thought about
+looping gets, because it is the only route that needs nothing else to be true and cannot make the
+work worse. A role the workspace does not hold is refused at the write, by name.
+
+`model:<name>` is refused, and the refusal says what to write instead. A role declares a model and
+nothing reads it yet, the runner taking one model for the whole system, so a job declaring that route
+would read as a decision that had been taken and change nothing. `docs/ROLES.md` records the gap and
+[#354](https://github.com/atlantic-blue/quay-crew/issues/354) owns closing it. Once it closes, the
+route is a role that runs on the other model, which is what `role:<name>` already says.
+
 **`labels`, jsonb, optional, default empty.** Free text pairs, so a caller finds its own job later.
 At most 16 pairs. Each key and each value at most 63 characters, which is the ceiling Kubernetes
 puts on a label value. Anything larger is refused.
@@ -491,6 +503,15 @@ running and empty when done.
 
 **`spent_tokens`, bigint, default 0.** What this job's own session has cost, read by the same
 reader the flow ceiling uses, `Server.SessionTokens` in `internal/controlplane/flows.go`.
+
+**`looped_step`, integer, default 0, and `escalated_to`, text, default empty.** The step this job went
+in circles on, and the route the system took when it did, in the shape the route was declared. Zero
+and empty for a job that never has. `escalated_to` being set is what makes a second loop stop the job
+rather than escalate it again: escalating twice is the system going round the same loop with more
+steps in it.
+
+**The attempts, in `job_attempts`, one row per task.** What each attempt at a step produced, and how
+like the earlier attempts at that step it was. See the section below.
 
 **`observed_version`, integer, default 0.** The `version` of the declaration this status describes.
 The record carries a `version` integer that increases on every write to a declared field. A
@@ -576,7 +597,66 @@ The one edge worth reading twice is `running` back to `pending`. A controller th
 marked running with a lease nobody holds. The next controller reads the task row, and the shape of
 that recovery is section 4.
 
+### A job that goes in circles
+
+Nothing compared what a session produced against what it had just produced, so a session going
+nowhere and a session working hard were the same picture from outside: one phase word and a growing
+bill. On the acceptance run of 30 August 2026 a session that could not get a check green tried the
+same shape of fix several times and gave the same reasoning each time, and the operator was the loop
+detector, only where he happened to read the transcript.
+
+**What an attempt is, and what a step is.** An attempt is one task: what it produced is the answer
+where it answered and the failure where it did not. The step is how many steps its session has
+recorded plus one, so the first attempt is at step 1 and the attempt after two finished steps is at
+step 3. Attempts are only ever compared with attempts at the same step, and that is what keeps a
+working session out of this: a session that finished something is somewhere new.
+
+**The measure.** The overlap of the sets of three word runs two pieces of text hold, over everything
+either of them holds. Runs of three words rather than words, because two answers about one repository
+share nearly every word and very few of the same sentences. It reads text the system already has, so
+it costs no model call and anybody holding the record can work the number out again.
+
+**The rule.** Three attempts at one step, of which the last two were each as alike as the threshold
+to an attempt before them, are a loop. Two is a retry; the third is what says the second changed
+nothing. An attempt that finished the job is never one, however like the last it reads, and neither
+is a task an operator halted.
+
+```mermaid
+flowchart TD
+    LAND["a task lands"] --> RECORD["record the attempt: what it said,<br/>and how alike the earlier attempts<br/>at this step it is"]
+    RECORD --> DONE{"did it finish the job?"}
+    DONE -->|"yes"| LANDIT["land it, and the record keeps<br/>the attempt either way"]
+    DONE -->|"no"| THREE{"three attempts at this step<br/>the system cannot tell apart?"}
+    THREE -->|"no"| LANDIT
+    THREE -->|"yes"| ALREADY{"has this job escalated before?"}
+    ALREADY -->|"yes"| STOP(["stopped: going in circles again<br/>after the escalation"])
+    ALREADY -->|"no, and it declared ask"| ASK(["asking: the question carries<br/>what each attempt said"])
+    ALREADY -->|"no, and it declared a role"| HAND(["pending, running as that role,<br/>in a conversation of its own"])
+```
+
+**The threshold is provisional, and its error has a direction.** A detector that fires on real
+progress stops work that was going to finish, so it sits an order of magnitude above anything
+different work scores rather than as low as it could go. Measured on the 304 paragraphs of
+`CHANGELOG.md` over sixty words: across the 46,056 pairs of different paragraphs the median is 0 and
+the ninety ninth percentile is 0.024, while a paragraph held against itself with every number changed
+scores at least 0.654. The measurement is `internal/job/loopcalibration_test.go`, so it runs on every
+build rather than sitting in prose. What it does not catch is an attempt reworded from scratch, which
+scores like different work.
+
+**What replaces the number.** Every attempt writes its similarity whether or not it loops, so after
+fifty jobs the threshold is measured on attempts rather than on prose: read where an attempt followed
+by a finished step sits against where an attempt on a job that ended failed or stopped sits, and put
+the number at the ninety fifth percentile of the first. It is the shape the lease length already has.
+
+**A job escalates once.** The route is a property of the job, declared while somebody is writing it,
+because the moment a job is going nowhere is the worst moment to be working out what to do about it.
+A job handed to another role starts in a conversation of its own, since a role is read only when a
+session is born, and the task it is given carries what the earlier attempts said so the new one does
+not make them again. The attempts at a step are counted across the handoff, so a new role saying what
+the last one said is the handoff itself changing nothing, and the job stops for a person to read.
+
 ## 4. The controller loop
+
 
 A controller is a loop. It watches, it compares what is declared against what exists, it acts to
 close the gap, and it records what happened. It is an ordinary workload. Nothing about sitting near
