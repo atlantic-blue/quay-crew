@@ -1,0 +1,8 @@
+name: deploy-identity-gate
+version: 1
+summary: Refuses a pull request that creates infrastructure until it says the deploy identity may create it.
+events:
+  - on: PreToolUse
+    matcher: Bash
+    entry: bin/hook
+    timeoutSeconds: 10
