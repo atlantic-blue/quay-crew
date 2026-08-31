@@ -66,6 +66,7 @@ const (
 	flagRepository     = "--repository"
 	flagProduct        = "--product"
 	flagClaim          = "--claim"
+	flagEscalate       = "--escalate"
 	flagParent         = "--parent"
 	flagPhase          = "--phase"
 	flagRoots          = "--roots"
@@ -108,6 +109,7 @@ func runJobCreate(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		Repository:     values.first(flagRepository),
 		Product:        values.first(flagProduct),
 		Claim:          values.first(flagClaim),
+		Escalation:     values.first(flagEscalate),
 	}
 	if labels, err := readLabels(values[flagLabel]); err != nil {
 		return err
@@ -408,6 +410,11 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	if one.GetResuming() != "" {
 		fmt.Fprintf(out, "continuing past: %s\n", one.GetResuming())
 	}
+	// That it went in circles, which step it went in circles on, and what it escalated to. It is here
+	// rather than only in the reason because a job that was handed to another role is running again
+	// and carries no reason at all: without this line it reads as a job that has always been this
+	// role's, and the three attempts that came before it are invisible.
+	sayItLooped(out, one)
 	// What its session finished. It is the record a second attempt carries on from, so it is here
 	// rather than only inside a task nobody can read.
 	if steps := one.GetSteps(); len(steps) > 0 {
@@ -472,6 +479,39 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		fmt.Fprintf(out, "\nread what it did with krewe task list %s\n", display.ShortID(one.GetSession()))
 	}
 	return nil
+}
+
+// sayItLooped says that a job went in circles, on which step, and what the system did about it.
+//
+// The attempts are printed under it, oldest first, each held to a line. What a person deciding what
+// to do next needs is what the session actually said, and a similarity on its own is a number nobody
+// can act on.
+func sayItLooped(out io.Writer, one *quaycrewv1.Job) {
+	if one.GetLoopedStep() == 0 {
+		return
+	}
+	fmt.Fprintf(out, "went in circles on step %d, %s\n", one.GetLoopedStep(), escalatedTo(one))
+	// The attempts, unless the job is waiting to be told something: the question underneath already
+	// carries them, and printing them twice is the reading nobody finishes.
+	if one.GetPhase() == job.PhaseAsking {
+		return
+	}
+	for _, attempt := range one.GetAttempted() {
+		if attempt.GetStep() != one.GetLoopedStep() {
+			continue
+		}
+		fmt.Fprintf(out, "  attempt %d (%s): %s\n", attempt.GetSeq(),
+			job.Alike(attempt.GetSimilarity()), oneLine(attempt.GetSaid()))
+	}
+}
+
+// escalatedTo is what the system did when the job went in circles, in a person's words.
+func escalatedTo(one *quaycrewv1.Job) string {
+	route, err := job.ReadRoute(one.GetEscalatedTo())
+	if one.GetEscalatedTo() == "" || err != nil {
+		return "and stopped"
+	}
+	return job.Escalating(route)
 }
 
 // showContextSpend prints where the session this job ran in spent its context.
@@ -771,7 +811,7 @@ func jobFlagsTaken() map[string]bool {
 	taken := map[string]bool{}
 	for _, name := range []string{
 		flagTitle, flagBrief, flagRole, flagMode, flagExpectFile, flagExpectContains, flagRepository,
-		flagProduct, flagClaim,
+		flagProduct, flagClaim, flagEscalate,
 		flagAfter, flagDeadline, flagBudgetTokens, flagLabel, flagRequires, flagPhase, flagRoots,
 		// Taken so it can be refused with the sentence that says where a parent comes from,
 		// rather than with the tool's general refusal of flags.

@@ -324,6 +324,7 @@ type JobEvent struct {
 	//	job.asked      it put a question to a person
 	//	job.told       a person answered that question
 	//	job.stopped    a person stopped it, or a limit did, or its claim did not hold
+	//	job.looped     three attempts at one step were too alike to tell apart
 	//
 	// Internal, which nothing outside should depend on:
 	//

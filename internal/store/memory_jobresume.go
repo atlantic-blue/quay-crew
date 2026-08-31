@@ -111,5 +111,9 @@ func (m *Memory) jobWithSteps(from job.Job) *job.Job {
 	if len(kept.Steps) == 0 {
 		kept.Steps = nil
 	}
+	kept.Attempted = append([]job.Attempt(nil), m.jobAttempts[from.ID]...)
+	if len(kept.Attempted) == 0 {
+		kept.Attempted = nil
+	}
 	return &kept
 }
