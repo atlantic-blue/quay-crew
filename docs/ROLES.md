@@ -206,7 +206,7 @@ silence.
 A role is imported from a directory, and a directory is anywhere. That makes the first import easy
 and everything after it invisible. The acceptance run was driven by three roles that sat in a folder
 on one machine: no pull request touched them, nobody reviewed them, nothing versioned them, and every
-listing the system printed showed them looking exactly like the fifteen that ship in
+listing the system printed showed them looking exactly like the sixteen that ship in
 [`roles/`](../roles).
 
 So `quay role import` records where it read the files, and the system says it back in every place a
@@ -292,15 +292,15 @@ write what every session in the workspace is told.
 
 ## The roles this build ships
 
-Fifteen roles live in [`roles/`](../roles) at the root of this repository, one directory each. Twelve
-of them are a design phase: a way of working from a design to a shipped slice where each step runs as
+Sixteen roles live in [`roles/`](../roles) at the root of this repository, one directory each.
+Thirteen of them are a design phase: a way of working from a design to a shipped slice where each step runs as
 a session of its own, given only what its role declares. The other three deliver one, and they are
 below under "The three that deliver a slice".
 
 ```mermaid
 flowchart LR
     subgraph FRESH["a slice, built from a design"]
-        DESIGNER["designer"] --> ARCHITECT["architect"] --> TESTWRITER["test-writer"] --> IMPLEMENTER["implementer"] --> SECURITY["security"] --> VERIFIER["verifier"] --> DEBUGGER["debugger"]
+        DESIGNER["designer"] --> ARCHITECT["architect"] --> CRITIC["plan-critic"] --> TESTWRITER["test-writer"] --> IMPLEMENTER["implementer"] --> SECURITY["security"] --> VERIFIER["verifier"] --> DEBUGGER["debugger"]
     end
     subgraph EXISTING["a codebase that already exists"]
         MAPPER["codebase-mapper"] --> ASSESSOR["assessor"] --> WRAPPER["wrapper"]
@@ -319,6 +319,8 @@ flowchart LR
 The design phase, in order, and the model each one runs on:
 
 - `designer` on opus, then `architect` on opus, which writes the contracts and the dependency graph.
+- `plan-critic` on opus reads the design, the contracts and the build order before any code exists,
+  and reports where they disagree and what they do not answer.
 - `test-writer` on sonnet writes the tests from the contracts, then `implementer` on sonnet writes
   the code that makes them pass.
 - `security` on sonnet reviews the change and writes a failing test for each defect, `verifier` on
@@ -332,15 +334,40 @@ The design phase, in order, and the model each one runs on:
 The model is declared per role rather than defaulted, for the reason `model` exists at all: naming a
 team is worth the larger model and writing one file to a specification is not.
 
-Every one of the twelve receives `job`, `context` and `skills`. Only the assessor declares a `verbs`
-list, `job.create` and `job.read`, because its brief declares a security review and reads what came
-back. Nothing else in the twelve declares anything, and default deny is what makes the assessor's
-grant mean something.
+Every one of the thirteen receives `job`, `context` and `skills`. Only the assessor declares a
+`verbs` list, `job.create` and `job.read`, because its brief declares a security review and reads what
+came back. Nothing else in the thirteen declares anything, and default deny is what makes the
+assessor's grant mean something.
 
-`skills` goes to all fifteen because each brief works inside a repository, and a repository reaches a
+`skills` goes to all sixteen because each brief works inside a repository, and a repository reaches a
 session here through the git skill: nothing is cloned for a session. Withholding `skills` would take
 away the brief and the mounted directory and leave the workspace's secrets in the environment
 regardless, so it would break a role rather than fence one.
+
+### The role that reads the plan before anybody builds it
+
+`plan-critic` is the newest of the sixteen and it is the only one that runs before any code exists.
+It reads the design, the contracts and the build order, and it reads them against the one sentence
+the job carries. It reports where the three disagree, and where none of them answers the sentence.
+
+It exists because a run built a design document faithfully, every check was green, and the operator
+opened it two days later and could not use it. Nothing in the run had asked whether the document was
+the product. That is [quay-crew#520](https://github.com/atlantic-blue/quay-crew/issues/520).
+
+No role already there covers it. `architect` writes the contracts, so asking it to review them makes
+it the only reader of its own work, which is the shape this page refuses at the top. `assessor` reads
+a codebase that exists and here none does. `verifier` reads a finished slice against its contracts,
+which is the same question one step too late.
+
+The method is imported. Six of its seven classes of finding come from
+[github/spec-kit](https://github.com/github/spec-kit), which is MIT licensed, and the brief records
+that and the two files it was read from. The seventh is this crew's: the source checks a plan against
+itself and never asks whether the plan is the right product. What was read and what was left behind
+is in [`ROLE-IMPORTS.md`](ROLE-IMPORTS.md).
+
+It declares no `verbs`, so it may call nothing, and its brief says it changes no file. The first half
+is a boundary the system holds. The second is prose, for the reason the whole page gives: krewe has
+no word for a file.
 
 ### The three that deliver a slice
 
@@ -412,22 +439,22 @@ there, and each brief says which document it writes.
 
 ### The two longest briefs sit near the ceiling
 
-A brief may be 16,384 bytes. Twelve of the fifteen fit under thirteen thousand. `architect` at 16,348
+A brief may be 16,384 bytes. Thirteen of the sixteen fit under thirteen thousand. `architect` at 16,348
 and `assessor` at 16,237 are both within two hundred bytes of the ceiling, so a sentence added to
 either has to come out somewhere else, and both say so at the top. That is also why the phase ending
 about pushing and opening a pull request is written into the three delivery briefs rather than into
-all fifteen: those two have no room for it. Raising the ceiling is the change that would give them
+all sixteen: those two have no room for it. Raising the ceiling is the change that would give them
 room, and it is the operator's to make.
 
 ### What this does not do
 
 - **A role cannot be told which files it may not touch.** That is the whole of the paragraph above,
-  and it is the reason every one of the fifteen carries a line saying so.
+  and it is the reason every one of the sixteen carries a line saying so.
 - A fresh system is seeded with none of them. Skills and hooks are seeded and roles are not, so an
   operator runs `quay role import roles/<name>` from a checkout, once per role.
 - Nothing chooses one. A flow graph names a role, or a caller names one when it declares a job, and
   the workspace has to hold it already.
-- Nothing runs the phase. The twelve describe an order and the system does not keep it: a role names
+- Nothing runs the phase. The thirteen describe an order and the system does not keep it: a role names
   the role that comes next in its own output, and it is the operator who writes that order into a
   flow graph or declares the next job.
 - Nothing hands one role's output to the next. Each writes a document into the repository, and the
@@ -437,9 +464,10 @@ The scenarios that hold this up are in [`features/roles.feature`](../features/ro
 imports every role in `roles/`, refuses a directory holding none, and asks each of the three
 delivery roles for a verb it holds and a verb it does not; in
 [`features/rolesessions.feature`](../features/rolesessions.feature), which proves a role receiving
-`skills` is handed the git skill and one that does not is handed none; and in
+`skills` is handed the git skill and one that does not is handed none; in
 [`features/jobcontroller.feature`](../features/jobcontroller.feature), which runs a job as one of
-them.
+them; and in [`features/plancritic.feature`](../features/plancritic.feature), which reads back what
+a session running as the plan critic was told and proves it can declare nothing.
 
 ## What is not built
 
@@ -461,6 +489,7 @@ them.
 The scenarios that hold up what is built are in
 [`features/roles.feature`](../features/roles.feature),
 [`features/rolesessions.feature`](../features/rolesessions.feature),
+[`features/plancritic.feature`](../features/plancritic.feature),
 [`features/job.feature`](../features/job.feature) and
 [`features/jobcontroller.feature`](../features/jobcontroller.feature). If a behaviour is not there,
 it is not built.
