@@ -66,7 +66,7 @@ func TestServeAnswersARealRequestOnThisMachine(t *testing.T) {
 	go func() { served <- Serve(ctx, client, "127.0.0.1:0", said) }()
 
 	where := waitForAddress(t, said)
-	listing := fetch(t, where)
+	listing := fetch(t, where+"/sessions")
 	if !strings.Contains(listing, "me/house-bills/") {
 		t.Fatalf("the served listing does not carry the session:\n%s", listing)
 	}
