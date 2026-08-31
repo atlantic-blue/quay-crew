@@ -92,17 +92,19 @@ Feature: Projects hold a body of work inside a workspace
 
   # The point of the record. Nobody passes the address again, and the session doing the job is told
   # where the work goes.
+  # In the mode that reaches the network, because a job that works in a repository is only declared in
+  # that one. The clone, the push and the pull request all need it. features/job.feature holds the rule.
   Scenario: A job declared in the project works in the project's repository
     Given a project named "transcript"
     And the project's work lands in "atlantic-blue/transcript"
-    When the caller declares a job
+    When the caller declares a job in the mode "dangerous"
     Then the job works in "atlantic-blue/transcript"
     And the session doing it is asked to open a pull request against "atlantic-blue/transcript"
 
   Scenario: A job that names its own repository keeps it
     Given a project named "transcript"
     And the project's work lands in "atlantic-blue/transcript"
-    When the caller declares a job in the repository "atlantic-blue/quay-crew"
+    When the caller declares a job in the repository "atlantic-blue/quay-crew" in the mode "dangerous"
     Then the job works in "atlantic-blue/quay-crew"
 
   Scenario: A job in a project that works nowhere is asked to push nowhere

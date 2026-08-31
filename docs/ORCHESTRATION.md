@@ -258,6 +258,22 @@ answers plausibly instead of stopping. That is the same failure `expect_file` ex
 leaves the session in the mode it is born in. Validated through `model.PermissionModeNamed`, which
 is what `flow.Parse` already does, and refused with the same list of what would work.
 
+**Held against the repository, because a repository is reached over the network.** The clone, the
+push and the pull request are all network commands, and the narrower modes ask a person before they
+run one. Nobody stands beside a dispatched job, so the approval never arrives: the system used to
+admit the pair, spend the session, and say so at the end. `model.PermissionModeReachesTheNetwork` is
+the one place that answers whether a mode may run a network command, and both the declaration and the
+controller read it. A job that carries a repository and cannot reach it is refused at the write,
+naming the repository, the mode and what to type instead. The mode a job runs in is its own where it
+named one and the system's where it did not, so the pair is held again at the control plane, once the
+project's repository and the system's own mode are both filled in. A crew configured to be born in
+the mode that reaches the network admits what the default configuration refuses.
+
+**Nothing widens a mode on the job's behalf.** A repository on the project could have made every job
+declared in it born in the widest mode instead, and that is an upgrade quietly granting what nobody
+asked for, which is the worst way to learn a setting exists. The refusal costs a sentence. The run it
+replaces costs a session and its budget.
+
 **`expect_file`, text, optional, default empty.** A path that must be in the session's working
 directory after the task. Relative only. An absolute path is refused. A path with a `..` part is
 refused. Both rules are `flow.usableExpectFile`, unchanged.
@@ -503,6 +519,11 @@ purpose. The list, so a test can be written against it:
 - A job whose `expect_file` holds a `..` part is refused.
 - A job whose `repository` is not an owner and a name is refused, and the refusal says how to write
   one.
+- A job that names a repository and a mode that cannot reach the network is refused, and the refusal
+  names both and gives the mode to declare it in. A job that takes its repository from its project is
+  refused on the same rule, and a job that names no repository is admitted in every mode.
+- A job running in a mode that cannot reach the network is not asked a second time for its pull
+  request, and the reason it stops names the mode.
 - A job that names a repository and answers without a pull request against it is asked again, and
   stopped if the second answer names none either.
 - A job that names no repository, in a project that records one, works in the project's.

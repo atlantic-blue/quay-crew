@@ -332,6 +332,9 @@ func (d Declaration) Validate() error {
 	if err := usableRepository(tidy.Repository); err != nil {
 		return err
 	}
+	if err := tidy.validateModeReachesTheRepository(); err != nil {
+		return err
+	}
 	if err := usableClaim(tidy.Claim); err != nil {
 		return err
 	}
@@ -351,6 +354,19 @@ func (d Declaration) validateMode() error {
 			d.Mode, strings.Join(model.PermissionModesOffered(), ", "))
 	}
 	return nil
+}
+
+// validateModeReachesTheRepository holds the mode against the repository, after each has been held to
+// its own shape, so a job that got the address wrong is told about the address.
+//
+// A job that names no mode is admitted here and held again at the control plane. What an unnamed mode
+// runs in is the system's own configuration, which a declaration does not hold: refusing it here
+// would refuse every job on a crew that already runs its work in the mode that can push.
+func (d Declaration) validateModeReachesTheRepository() error {
+	if d.Mode == "" {
+		return nil
+	}
+	return UsableModeFor(d.Repository, d.NamedMode())
 }
 
 func (d Declaration) validateLabels() error {

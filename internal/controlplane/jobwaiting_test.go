@@ -98,7 +98,7 @@ func TestOrdinaryBriefsAreStillDeclared(t *testing.T) {
 	} {
 		created, err := s.CreateJob(context.Background(), &quaycrewv1.CreateJobRequest{
 			Project: project, Title: "land the defect fix", Brief: brief,
-			Repository: "atlantic-blue/quay-crew",
+			Repository: "atlantic-blue/quay-crew", Mode: "dangerous",
 		})
 		if err != nil {
 			t.Errorf("%q was refused: %v", brief, err)

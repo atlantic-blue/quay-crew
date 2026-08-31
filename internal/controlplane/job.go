@@ -154,6 +154,16 @@ func (s *Server) PrepareJob(ctx context.Context, under string, declaration job.D
 	if declared.Repository == "" {
 		declared.Repository = project.GetRepository()
 	}
+	// The mode against the repository, once the repository is settled. A repository is reached over the
+	// network and the narrower modes ask a person before they run a network command, so a job that
+	// carries one and cannot reach it spends a session and stops holding work nobody can read. Both
+	// facts are here at the moment of the write, and the refusal costs nothing.
+	//
+	// Held here as well as in the declaration because both halves can arrive without anybody typing
+	// them: the repository comes from the project, and the mode comes from the system.
+	if err := s.modeReachesTheRepository(declared); err != nil {
+		return nil, nil, err
+	}
 	if err := s.underTheCaller(ctx, under, declared); err != nil {
 		return nil, nil, err
 	}
@@ -503,6 +513,25 @@ func (s *Server) underTheCaller(ctx context.Context, under string, declared *job
 				"Raise it with krewe limits <workspace> --max-depth %d, which an operator does deliberately: "+
 				"a session that could raise its own ceiling has none",
 			limits.MaxDepth, declared.Depth, declared.Depth)
+	}
+	return nil
+}
+
+// modeReachesTheRepository refuses a job that works in a repository it cannot reach.
+//
+// The mode a job runs in is its own where it named one, and the system's where it did not, so the
+// answer needs the server rather than the declaration alone. A crew configured to run its jobs in the
+// mode that reaches the network admits the same job the default configuration refuses, which is the
+// point: the rule reads what this system will actually run, not a constant.
+func (s *Server) modeReachesTheRepository(declared *job.Job) error {
+	if declared.Mode != "" {
+		if err := job.UsableModeFor(declared.Repository, declared.Mode); err != nil {
+			return status.Error(codes.InvalidArgument, err.Error())
+		}
+		return nil
+	}
+	if err := job.UsableModeBornIn(declared.Repository, model.PermissionModeBornIn(s.birthMode)); err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
 	}
 	return nil
 }
