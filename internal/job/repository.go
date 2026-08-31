@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/atlantic-blue/krewe/internal/model"
 	"github.com/atlantic-blue/krewe/internal/repository"
 )
 
@@ -135,4 +136,70 @@ func AskedForThePullRequest(repository string) string {
 func NoPullRequest(repository string) string {
 	return fmt.Sprintf("this job works in %s and no answer named a pull request against it, asked twice. "+
 		"The work is in the session and nowhere else: open it, and push what is there.", repository)
+}
+
+// A repository is reached over the network, so a job that names one needs a mode that reaches it.
+//
+// Every way into a repository is a command that needs the network: the clone, the push, the pull
+// request. The narrower modes ask a person before they run one, and nobody stands beside a dispatched
+// job, so the approval never arrives. The system held both facts at the moment of the write and never
+// compared them, so it admitted the job, spent the session, and said so at the end.
+
+// UsableModeFor refuses a job that works in a repository, in a mode somebody named that cannot reach
+// the network.
+//
+// Read twice, from the one answer in the model layer: here for the mode and the repository a caller
+// typed, and again at the control plane once the project's repository and the system's own mode have
+// been filled in.
+func UsableModeFor(repository, mode string) error {
+	return refuseTheMode(repository, mode,
+		fmt.Sprintf("this job names the mode %s", model.PermissionModeSpoken(mode)))
+}
+
+// UsableModeBornIn refuses the same pair where nobody named a mode, so the job takes the system's.
+// It is the path nobody types a flag for: a project holds the repository, every job declared in it
+// carries one, and the mode is whatever the system was configured with.
+func UsableModeBornIn(repository, mode string) error {
+	return refuseTheMode(repository, mode,
+		fmt.Sprintf("this job names no mode, so it runs in the system's, which is %s",
+			model.PermissionModeSpoken(mode)))
+}
+
+// refuseTheMode is the one sentence both refusals say, and the clause that says where the mode came
+// from is the only thing that differs.
+func refuseTheMode(repository, mode, named string) error {
+	if repository == "" || model.PermissionModeReachesTheNetwork(mode) {
+		return nil
+	}
+	return fmt.Errorf("this job works in %s, and every way into a repository needs the network: the "+
+		"clone, the push and the pull request. %s, and that mode asks a person before it runs a network "+
+		"command. Nobody stands beside a job, so the approval never arrives and the work stops inside "+
+		"the session. Declare it with --mode %s, or leave the repository off a job that does not work "+
+		"in a repository", repository, named, model.PermissionModeOnTheNetwork())
+}
+
+// WhyNoPullRequest is why a job that names a repository stopped without one, which is a different
+// sentence where the mode is the reason.
+func WhyNoPullRequest(repository, mode string) string {
+	if ModeCannotPush(mode) {
+		return noPullRequestInThisMode(repository, mode)
+	}
+	return NoPullRequest(repository)
+}
+
+// ModeCannotPush says whether this job runs in a mode that stops it reaching its repository. A job
+// that names no mode is not one: the mode it runs in is the system's, and a controller does not hold
+// that, so it reads as the mode every job ran in before this was written down.
+func ModeCannotPush(mode string) bool {
+	return mode != "" && !model.PermissionModeReachesTheNetwork(mode)
+}
+
+// noPullRequestInThisMode says the mode is the reason, rather than sending somebody to look for a
+// push that was never going to happen.
+func noPullRequestInThisMode(repository, mode string) string {
+	return fmt.Sprintf("this job works in %s and runs in mode %s, which asks a person before it runs a "+
+		"network command, so it could never push. Nothing named a pull request against the repository, "+
+		"and the session was not asked again, because the ask would have ended the same way. The work is "+
+		"in the session: declare the job again with --mode %s.",
+		repository, model.PermissionModeSpoken(mode), model.PermissionModeOnTheNetwork())
 }

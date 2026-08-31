@@ -130,3 +130,88 @@ func TestAJobNamingNoRepositoryIsToldNothingAboutAPullRequest(t *testing.T) {
 		t.Fatalf("the session is asked %q, and this job names no repository", asked)
 	}
 }
+
+// A repository is reached over the network, and a mode that asks a person before it runs a network
+// command cannot reach one. Nobody stands beside a dispatched job, so the approval never arrives: the
+// system used to admit the pair, spend the session, and say so at the end.
+//
+// The refusal first, because a rule that refused everything would pass every test that only proves a
+// refusal. The admission is below it.
+func TestAJobThatWorksInARepositoryIsRefusedInAModeThatCannotReachIt(t *testing.T) {
+	for _, mode := range []string{"plan", "edits", "acceptEdits"} {
+		t.Run(mode, func(t *testing.T) {
+			d := declared()
+			d.Repository = "atlantic-blue/quay-crew"
+			d.Mode = mode
+
+			err := d.Validate()
+			if err == nil {
+				t.Fatalf("a job in %s was admitted, and it works in a repository it cannot reach", mode)
+			}
+			// All three, because a refusal that says only that something is wrong leaves the operator
+			// guessing: which repository, which mode, and what to type instead.
+			for _, phrase := range []string{"atlantic-blue/quay-crew", "needs the network", "--mode dangerous"} {
+				if !strings.Contains(err.Error(), phrase) {
+					t.Errorf("the refusal says %q, want it to say %q", err, phrase)
+				}
+			}
+		})
+	}
+}
+
+func TestAJobThatWorksInARepositoryIsDeclaredInTheModeThatReachesIt(t *testing.T) {
+	for _, mode := range []string{"dangerous", "bypassPermissions"} {
+		t.Run(mode, func(t *testing.T) {
+			d := declared()
+			d.Repository = "atlantic-blue/quay-crew"
+			d.Mode = mode
+
+			if err := d.Validate(); err != nil {
+				t.Fatalf("a job in %s was refused: %v", mode, err)
+			}
+		})
+	}
+}
+
+// The rule is the pair, not the mode. A job that works in no repository asks nothing of the network,
+// so every mode still declares one and nothing about this change narrows what a job may be.
+func TestAJobThatWorksInNoRepositoryIsDeclaredInEveryMode(t *testing.T) {
+	for _, mode := range []string{"", "plan", "edits", "dangerous", "acceptEdits", "bypassPermissions"} {
+		t.Run(mode, func(t *testing.T) {
+			d := declared()
+			d.Mode = mode
+
+			if err := d.Validate(); err != nil {
+				t.Fatalf("a job in %q, working in no repository, was refused: %v", mode, err)
+			}
+		})
+	}
+}
+
+// A job that names no mode is admitted here and held again at the control plane, which is the only
+// place that holds what an unnamed mode runs in. Refusing it here would refuse every job on a crew
+// already configured to run its work in the mode that can push.
+func TestAJobThatNamesNoModeIsLeftToTheSystem(t *testing.T) {
+	d := declared()
+	d.Repository = "atlantic-blue/quay-crew"
+
+	if err := d.Validate(); err != nil {
+		t.Fatalf("a job that names no mode was refused: %v", err)
+	}
+}
+
+// The address is held to its shape first, so a job that got both wrong is told about the address it
+// typed rather than about a mode it can do nothing with until the address is right.
+func TestARepositoryThatIsNotAnOwnerAndANameIsRefusedBeforeTheMode(t *testing.T) {
+	d := declared()
+	d.Repository = "quay-crew"
+	d.Mode = "edits"
+
+	err := d.Validate()
+	if err == nil {
+		t.Fatal("a repository that is not an owner and a name was admitted")
+	}
+	if strings.Contains(err.Error(), "--mode") {
+		t.Fatalf("the refusal says %q, want it to be about the address", err)
+	}
+}
