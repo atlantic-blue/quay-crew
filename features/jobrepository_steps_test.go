@@ -25,11 +25,37 @@ func initializeJobRepositorySteps(sc *godog.ScenarioContext) {
 			})
 		})
 
+	// In the mode that reaches the network, because that is the only mode a job working in a
+	// repository is declared in: the clone, the push and the pull request all need it, and the
+	// narrower modes ask a person who is not there. The scenarios below are about what the controller
+	// does with the answer, and the mode is what lets them have a job at all.
 	sc.Step(`^a job titled "([^"]*)" in the repository "([^"]*)"$`,
 		func(ctx context.Context, title, repository string) error {
 			return declareJob(ctx, &quaycrewv1.CreateJobRequest{
 				Title: title, Brief: "make the listing sort by the clock it shows", Repository: repository,
+				Mode: "dangerous",
 			})
+		})
+
+	sc.Step(`^the caller declares a job in the repository "([^"]*)" in the mode "([^"]*)"$`,
+		func(ctx context.Context, repository, mode string) error {
+			return declareJob(ctx, &quaycrewv1.CreateJobRequest{
+				Title: "sort the listing", Brief: "make the listing sort by the clock it shows",
+				Repository: repository, Mode: mode,
+			})
+		})
+
+	// The refusal names all three: which repository the job works in, which mode it would run in, and
+	// what to type instead. A refusal that says only that something is wrong leaves the operator
+	// guessing at the flag.
+	sc.Step(`^the system refuses it, naming the mode, the repository and what to type instead$`,
+		func(ctx context.Context) error {
+			for _, phrase := range []string{"atlantic-blue", "needs the network", "--mode dangerous"} {
+				if err := theRefusalSays(phrase)(ctx); err != nil {
+					return err
+				}
+			}
+			return nil
 		})
 
 	sc.Step(`^the job works in "([^"]*)"$`, func(ctx context.Context, want string) error {

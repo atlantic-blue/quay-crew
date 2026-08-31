@@ -317,7 +317,7 @@ func aJobInARepositoryThatFailed(t *testing.T) heldOpen {
 	_, project := newProject(t, server)
 	declared, err := server.CreateJob(context.Background(), &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "sort the listing", Brief: "make the listing sort by the clock it shows",
-		Repository: "atlantic-blue/quay-crew",
+		Repository: "atlantic-blue/quay-crew", Mode: "dangerous",
 	})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)

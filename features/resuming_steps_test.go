@@ -32,7 +32,9 @@ func initializeResumingSteps(sc *godog.ScenarioContext) {
 			w.release = w.runner.hold()
 			if err := declareJob(ctx, &quaycrewv1.CreateJobRequest{
 				Title: title, Brief: "make the listing sort by the clock it shows",
-				Role: everyVerbRole, Repository: repository,
+				// In the mode that reaches the network: a job that works in a repository is only declared in
+				// that one, because the clone, the push and the pull request all need it.
+				Role: everyVerbRole, Repository: repository, Mode: "dangerous",
 			}); err != nil {
 				return err
 			}

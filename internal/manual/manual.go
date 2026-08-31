@@ -45,10 +45,14 @@ commands:
   project create [<workspace>/]<name>     create a project and move into it
   project list [<workspace>]              list projects
   project repository [<address>]          say where this project's work lands, and what kind of
-    [<owner>/<name>] [public|private]     repository that is. On its own it reads it back. A job
-                                          declared here works in it and ends in a pull request
-                                          against it. Public unless you say otherwise, because a
-                                          pipeline's minutes are free on a public repository
+    [<owner>/<name>] [public|private]     repository that is. On its own it reads it back. One
+                                          address is a write, and it is refused where that address
+                                          also names a project. A job declared here works in it and
+                                          ends in a pull request against it. Public unless you say
+                                          otherwise, because a pipeline's minutes are free on a
+                                          public repository, and a kind you leave out is the kind
+                                          the project already holds
+  project repository show [<address>]     read where a project's work lands, recording nothing
   project delete [<workspace>/]<project>  remove it and the sessions inside it, confirmed the same way
   flow import <file>                      store an automation graph the system can run
   flow start [<address>] <graph>          begin a run of it in a project
@@ -94,7 +98,8 @@ commands:
                                           unproved, blocked or decide: the word the session ended on,
                                           which the phase cannot tell you
   job show <job>                          one job whole: what it is, where it got to, the word it
-                                          ended on, why it stopped, and what came back
+                                          ended on, why it stopped, what came back, and where its
+                                          session spent its context
   job stop <job> [<reason>]               halt a job that has not ended, keeping the reason
   job ask "<question>"                    put a question to a person about the job you are running,
                                           when a decision no measurement settles is in your way.
@@ -157,9 +162,12 @@ commands:
                                           status column says what is inside each sandbox: awake is a
                                           conversation running with nobody watching it, attached is
                                           somebody in it, idle is an empty container, and unknown is
-                                          the system asking the sandbox and not being told. Last
-                                          moved first, so the session you were last working in is at
-                                          the top and the age column reads down the list
+                                          the system asking the sandbox and not being told. The
+                                          spent on column says what filled the context: reads is
+                                          files, tools is what every other tool returned, turns is
+                                          the session's own words, and told is what it was given.
+                                          Last moved first, so the session you were last working in
+                                          is at the top and the age column reads down the list
   answer <session> [--all]                 what a session came back with, and nothing else, so a
                                           caller can pipe it. The most recent answer, or with --all
                                           every one of them, oldest first
