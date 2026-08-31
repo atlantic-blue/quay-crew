@@ -258,6 +258,22 @@ answers plausibly instead of stopping. That is the same failure `expect_file` ex
 leaves the session in the mode it is born in. Validated through `model.PermissionModeNamed`, which
 is what `flow.Parse` already does, and refused with the same list of what would work.
 
+**Held against the repository, because a repository is reached over the network.** The clone, the
+push and the pull request are all network commands, and the narrower modes ask a person before they
+run one. Nobody stands beside a dispatched job, so the approval never arrives: the system used to
+admit the pair, spend the session, and say so at the end. `model.PermissionModeReachesTheNetwork` is
+the one place that answers whether a mode may run a network command, and both the declaration and the
+controller read it. A job that carries a repository and cannot reach it is refused at the write,
+naming the repository, the mode and what to type instead. The mode a job runs in is its own where it
+named one and the system's where it did not, so the pair is held again at the control plane, once the
+project's repository and the system's own mode are both filled in. A crew configured to be born in
+the mode that reaches the network admits what the default configuration refuses.
+
+**Nothing widens a mode on the job's behalf.** A repository on the project could have made every job
+declared in it born in the widest mode instead, and that is an upgrade quietly granting what nobody
+asked for, which is the worst way to learn a setting exists. The refusal costs a sentence. The run it
+replaces costs a session and its budget.
+
 **`expect_file`, text, optional, default empty.** A path that must be in the session's working
 directory after the task. Relative only. An absolute path is refused. A path with a `..` part is
 refused. Both rules are `flow.usableExpectFile`, unchanged.
@@ -341,6 +357,47 @@ already says which skills a session starts without.
 builds the first thing a person can open, and a run of it stops there once and asks whether that
 thing does what the sentence says. Where a caller declares its jobs directly rather than through a
 graph, the sentence still reaches every session and nothing reads it back.
+
+**`claim`, text, optional, default empty.** The piece of work this job is doing: an issue, a branch,
+or a name two people would both use for the same thing. Empty claims nothing. It is held to the
+title's ceiling, and it is stored lowercased with any run of space inside it taken down to one,
+because two people naming the same work from memory write it two ways and a claim that misses over a
+capital letter is a claim that did nothing.
+
+**A second job that claims work another job is holding is refused, and the refusal names that job.**
+The failure it answers happened twice in one run: two sessions picked up the same issue and built it
+under different names, and the first anybody knew was two pull requests conflicting on files both of
+them had created. The two designs disagreed in small places, which is the expensive part. Nothing was
+in the other's way in the filesystem, because `quay-crew#255` already gives each session its own
+working copy. They were in each other's way over the work itself.
+
+It is not a lock on a file. It is a record of intent, which is what was missing: both sessions would
+have read it before starting. So the claim is on the row, `quay job list` carries a column of what is
+claimed, and `quay job show` says it.
+
+**A claim ends three ways, and the third is the one to test.** The job settles, into any of the three
+terminal phases and not only `done`. Somebody stops it. Or nothing moves the job for longer than a
+claim lives, which is the crashed session: the container went, no controller is renewing anything,
+and the row is all that is left. Without the third, one dead container holds a piece of work for as
+long as the system runs, and every test about claiming still passes.
+
+The life is two hours, chosen rather than measured, and it is a constant rather than a setting
+because a system given no number would hold work forever. What it has to outlast is the longest gap
+between two movements of a job that is alive. A running job is not one of them: its controller renews
+the lease every tick and every renewal moves the row. The two long gaps are a job waiting for a
+person to answer its question and a job queued behind everything else in its workspace. The
+measurement that would replace the number is the distribution of that gap, which nothing takes yet.
+
+**The scope is the workspace**, which is the boundary this design already uses for concurrency and
+for fairness. Two projects inside one workspace are the same people's work, so a claim in one is a
+claim in the other.
+
+**Checked at the write, and only there.** Every other rule on a declaration is checked again at the
+dispatch, and this one is not: a job stopped hours later because somebody else claimed its work in
+the meantime is a refusal nobody can act on, and the second declaration was refused at its own write
+anyway. The check is a read inside the transaction that writes the row, under a lock taken on the
+claim, because a check made before the write is a check two callers declaring at the same moment both
+pass. No unique index does it instead, because an index cannot say that holding has run out.
 
 **`after`, text array, optional, default empty.** Identifiers of other job this job waits for.
 Every identifier must name a job that exists. A cycle is refused, and the refusal names the two
@@ -462,6 +519,11 @@ purpose. The list, so a test can be written against it:
 - A job whose `expect_file` holds a `..` part is refused.
 - A job whose `repository` is not an owner and a name is refused, and the refusal says how to write
   one.
+- A job that names a repository and a mode that cannot reach the network is refused, and the refusal
+  names both and gives the mode to declare it in. A job that takes its repository from its project is
+  refused on the same rule, and a job that names no repository is admitted in every mode.
+- A job running in a mode that cannot reach the network is not asked a second time for its pull
+  request, and the reason it stops names the mode.
 - A job that names a repository and answers without a pull request against it is asked again, and
   stopped if the second answer names none either.
 - A job that names no repository, in a project that records one, works in the project's.
@@ -470,6 +532,13 @@ purpose. The list, so a test can be written against it:
 - A job whose brief negates one of those phrases is declared, because "do not merge the pull request"
   is not an instruction to merge it.
 - A step of a flow is not held to that rule, because the graph around it holds the wait.
+- A job that claims a piece of work another job is holding is refused, and the refusal names that
+  job, its title, and how old the claim is.
+- The same piece of work written another way, with different capitals or extra space, is the same
+  claim and is refused the same.
+- A job that claims work a settled or stopped job claimed is declared.
+- A job that claims work nothing has moved for longer than a claim lives is declared.
+- A job with a claim of 201 bytes is refused.
 - A job whose `after` names an identifier that does not exist is refused.
 - A job whose `after` closes a cycle is refused, and the refusal names both identifiers.
 - A job with `parent` in the request is refused, and the refusal says the parent comes from the

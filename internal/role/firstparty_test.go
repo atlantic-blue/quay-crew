@@ -77,6 +77,7 @@ func TestTheShippedRolesRunOnTheModelsTheyWereWrittenFor(t *testing.T) {
 		"marketing": "opus", "marketing-researcher": "opus", "security": "sonnet",
 		"test-writer": "sonnet", "verifier": "sonnet", "wrapper": "sonnet",
 		"orchestrator": "opus", "infrastructure-writer": "opus", "releaser": "sonnet",
+		"writer": "opus",
 	}
 	roles, err := All(shipped)
 	if err != nil {

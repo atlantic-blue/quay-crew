@@ -83,18 +83,62 @@ Feature: A job is a record the system keeps
   # the job is not done until the answer names it. It is on the job rather than in a brief, because a
   # brief that forgets to ask for a push produces work nobody can see.
   Scenario: A job names the repository its work goes to
-    When the caller declares a job in the repository "atlantic-blue/quay-crew"
+    When the caller declares a job in the repository "atlantic-blue/quay-crew" in the mode "dangerous"
     Then the job works in "atlantic-blue/quay-crew"
 
   # The address a person has in front of them is the one in their browser, so both spellings are
   # taken and both are kept as one.
   Scenario: The address of a repository is kept as an owner and a name
-    When the caller declares a job in the repository "https://github.com/atlantic-blue/quay-crew"
+    When the caller declares a job in the repository "https://github.com/atlantic-blue/quay-crew" in the mode "dangerous"
     Then the job works in "atlantic-blue/quay-crew"
 
   Scenario: A repository that is not an owner and a name is refused
     When the caller declares a job in the repository "quay-crew"
     Then the system refuses it and says how to write a repository
+
+  # Every way into a repository needs the network: the clone, the push, the pull request. The narrower
+  # modes ask a person before they run a network command, and nobody stands beside a dispatched job,
+  # so the approval never arrives. The system held both facts at the moment of the write and never
+  # compared them, so it admitted the job, spent the session, and said so at the end.
+  #
+  # The refusal first. A rule that only ever admits is a rule nothing tests.
+  Scenario: A job that works in a repository is refused in a mode that cannot reach it
+    When the caller declares a job in the repository "atlantic-blue/quay-crew" in the mode "edits"
+    Then the system refuses it, naming the mode, the repository and what to type instead
+    And no job was written
+
+  Scenario: A job that works in a repository is refused in the mode that only plans
+    When the caller declares a job in the repository "atlantic-blue/quay-crew" in the mode "plan"
+    Then the system refuses it, naming the mode, the repository and what to type instead
+    And no job was written
+
+  Scenario: A job that works in a repository is declared in the mode that reaches it
+    When the caller declares a job in the repository "atlantic-blue/quay-crew" in the mode "dangerous"
+    Then the job works in "atlantic-blue/quay-crew"
+
+  # The rule is the pair and not the mode. A job that works in no repository asks nothing of the
+  # network, so every mode still declares one.
+  Scenario: A job that works in no repository is declared in a mode that reaches no network
+    When the caller declares a job in the mode "edits"
+    Then the job is declared
+
+  Scenario: A job that works in no repository is declared in the mode that only plans
+    When the caller declares a job in the mode "plan"
+    Then the job is declared
+
+  # The path nobody types a flag for, which is the path this was reported on. The project holds the
+  # repository, so every job declared in it carries one without anybody saying so, and the mode is
+  # whatever the system was configured with.
+  Scenario: A job that takes its repository from its project is refused the same way
+    Given the project's work lands in "atlantic-blue/transcript"
+    When the caller declares a job
+    Then the system refuses it, naming the mode, the repository and what to type instead
+    And no job was written
+
+  Scenario: A job that takes its repository from its project is declared in the mode that reaches it
+    Given the project's work lands in "atlantic-blue/transcript"
+    When the caller declares a job in the mode "dangerous"
+    Then the job works in "atlantic-blue/transcript"
 
   # A job cannot wait. It runs once and answers, and nothing wakes it when the checks land, so a
   # brief that says "merge on green" asks for something the runtime does not have and the session

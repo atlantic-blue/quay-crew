@@ -67,6 +67,7 @@ const (
 	flagRequires       = "--requires"
 	flagRepository     = "--repository"
 	flagProduct        = "--product"
+	flagClaim          = "--claim"
 	flagParent         = "--parent"
 	flagPhase          = "--phase"
 	flagRoots          = "--roots"
@@ -108,6 +109,7 @@ func runJobCreate(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		Requires:       values[flagRequires],
 		Repository:     values.first(flagRepository),
 		Product:        values.first(flagProduct),
+		Claim:          values.first(flagClaim),
 	}
 	if labels, err := readLabels(values[flagLabel]); err != nil {
 		return err
@@ -135,6 +137,11 @@ func runJobCreate(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	}
 	declared := resp.GetJob()
 	fmt.Fprintf(out, "declared %s%s\n", display.ShortID(declared.GetId()), inAddress(at))
+	// The claim in the spelling it was stored in, which is not always the spelling that was typed: it
+	// is lowercased and the space inside it comes out, and that is what a second declaration meets.
+	if declared.GetClaim() != "" {
+		fmt.Fprintf(out, "claims %s\n", declared.GetClaim())
+	}
 	fmt.Fprintf(out, "%s. A controller picks it up and runs it; read the answer with krewe job show %s\n",
 		declared.GetPhase(), display.ShortID(declared.GetId()))
 	sayNoSentence(out, declared)
@@ -274,17 +281,23 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		addresses = jobAddresses(ctx, client)
 	}
 	holding := ""
+	// The column is only there when something in the listing claims a piece of work. It exists to be
+	// read before somebody starts work a job already has, and a column of blanks on every listing is a
+	// column nobody reads by the second week.
+	claiming := anythingClaimed(resp.GetJobs())
 	for _, one := range resp.GetJobs() {
 		if holding == "" && heldForRoom(one) {
 			holding = one.GetReason()
 		}
 		if where.where == "" {
-			fmt.Fprintf(out, "%-10s %-24s %-2d %-8s %s\n", display.ShortID(one.GetId()),
-				addresses[one.GetProject()], one.GetDepth(), phaseOf(one), truncateLine(one.GetTitle()))
+			fmt.Fprintf(out, "%-10s %-24s %-2d %-8s %s%s\n", display.ShortID(one.GetId()),
+				addresses[one.GetProject()], one.GetDepth(), phaseOf(one), claimColumn(one, claiming),
+				truncateLine(one.GetTitle()))
 			continue
 		}
-		fmt.Fprintf(out, "%-10s %-2d %-8s %s\n",
-			display.ShortID(one.GetId()), one.GetDepth(), phaseOf(one), truncateLine(one.GetTitle()))
+		fmt.Fprintf(out, "%-10s %-2d %-8s %s%s\n",
+			display.ShortID(one.GetId()), one.GetDepth(), phaseOf(one), claimColumn(one, claiming),
+			truncateLine(one.GetTitle()))
 	}
 	// Said once, under the listing, because an operator reading a column of "held" needs to know it
 	// is the machine and not the system. A full machine and a stalled system look identical otherwise.
@@ -294,6 +307,33 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	where.counted(out, len(resp.GetJobs()))
 	return nil
 }
+
+// anythingClaimed says whether any row in a listing has taken a piece of work.
+func anythingClaimed(jobs []*quaycrewv1.Job) bool {
+	for _, one := range jobs {
+		if one.GetClaim() != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// claimColumn is the piece of work a row claims, in a column, and nothing at all where no row in the
+// listing claims anything.
+func claimColumn(one *quaycrewv1.Job, claiming bool) string {
+	if !claiming {
+		return ""
+	}
+	claim := one.GetClaim()
+	if len(claim) > claimWidth {
+		claim = claim[:claimWidth-1] + "…"
+	}
+	return fmt.Sprintf("%-*s ", claimWidth, claim)
+}
+
+// claimWidth is how wide the claim column is. It holds an owner, a name and an issue number, which is
+// what most claims are, and cuts anything longer rather than pushing the title off the line.
+const claimWidth = 28
 
 // phaseOf is the word the listing carries. A pending job the system is holding back reads "held"
 // rather than "pending": both are waiting, and only one of them is waiting for a machine.
@@ -411,6 +451,10 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	if required := one.GetRequires(); len(required) > 0 {
 		fmt.Fprintf(out, "requires %s\n", strings.Join(required, ", "))
 	}
+	// The piece of work it took, so a reader who came here from a refusal sees what this job holds.
+	if one.GetClaim() != "" {
+		fmt.Fprintf(out, "claims %s\n", one.GetClaim())
+	}
 	if one.GetRepository() != "" {
 		fmt.Fprintf(out, "in %s\n", one.GetRepository())
 	}
@@ -434,9 +478,42 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		fmt.Fprintf(out, "\nanswer:\n%s\n", one.GetAnswer())
 	}
 	if one.GetSession() != "" {
+		showContextSpend(ctx, client, one.GetSession(), out)
 		fmt.Fprintf(out, "\nread what it did with krewe task list %s\n", display.ShortID(one.GetSession()))
 	}
 	return nil
+}
+
+// showContextSpend prints where the session this job ran in spent its context.
+//
+// It is on the job rather than only on the session listing because the job is what a person reads
+// after the work is over, and this is the number that says why it took what it took: whether the
+// session filled up on the code it had to read, on tool output it read once, or on its own repeated
+// attempts.
+//
+// The check under it holds the breakdown against the model's own count of the same context. A
+// breakdown whose parts do not add up to the model's total is a number that will be trusted and is
+// wrong, so the comparison is printed rather than kept.
+//
+// A session the system cannot read says nothing. A job whose work is elsewhere should not fail to
+// print because one number is missing.
+func showContextSpend(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
+	id string, out io.Writer,
+) {
+	resp, err := client.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: id})
+	if err != nil {
+		return
+	}
+	session := resp.GetSession()
+	spent := display.Spend(session)
+	if spent.Empty() {
+		return
+	}
+	fmt.Fprintf(out, "\ncontext spent in session %s:\n", display.ShortID(session.GetId()))
+	for _, line := range spent.Lines() {
+		fmt.Fprintf(out, "  %s\n", line)
+	}
+	fmt.Fprintf(out, "  %s\n", spent.Against(session.GetContextWindow().GetUsed()).Line())
 }
 
 // runJobStop halts job that has not ended. The reason is what somebody reading it tomorrow has.
@@ -729,7 +806,7 @@ func jobFlagsTaken() map[string]bool {
 	taken := map[string]bool{}
 	for _, name := range []string{
 		flagTitle, flagBrief, flagRole, flagMode, flagExpectFile, flagExpectContains, flagRepository,
-		flagProduct,
+		flagProduct, flagClaim,
 		flagAfter, flagDeadline, flagBudgetTokens, flagLabel, flagRequires, flagPhase, flagRoots,
 		// Taken so it can be refused with the sentence that says where a parent comes from,
 		// rather than with the tool's general refusal of flags.

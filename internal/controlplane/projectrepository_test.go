@@ -127,7 +127,8 @@ func TestAJobWorksInTheProjectsRepository(t *testing.T) {
 	_, project := newProject(t, s)
 	record(t, s, project, "atlantic-blue/transcript", "public")
 
-	declared := declareJob(t, s, project, "read the electricity bill")
+	// In the mode that reaches the network, because a job that works in a repository needs one.
+	declared := declareJobIn(t, s, project, "read the electricity bill", "dangerous")
 
 	if declared.GetRepository() != "atlantic-blue/transcript" {
 		t.Fatalf("the job works in %q, want the project's atlantic-blue/transcript", declared.GetRepository())
@@ -149,7 +150,7 @@ func TestAJobThatNamesItsOwnRepositoryKeepsIt(t *testing.T) {
 
 	created, err := s.CreateJob(context.Background(), &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "fix the listing", Brief: "make the listing sort by the clock it shows",
-		Repository: "atlantic-blue/quay-crew",
+		Repository: "atlantic-blue/quay-crew", Mode: "dangerous",
 	})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)

@@ -317,7 +317,13 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			// conversation is still worth continuing. It gives way after the cost columns and before
 			// everything else: what a conversation cost is history, and how full it is now is a
 			// decision waiting to be made.
-			{Title: "ctx", Width: 6, Give: 4, Colour: colourOfContext},
+			{Title: "ctx", Width: 6, Give: 5, Colour: colourOfContext},
+			// Which of the four the context went on: the files it read, what every other tool
+			// returned, its own words, or what it was told. The share on its own says a session is
+			// nearly full and nothing about what to do, and this is the half that says what to look
+			// at. It gives way before the window it explains: at half a window the share is what an
+			// operator acts on, and this is what they read next.
+			{Title: "spent on", Width: 10, Give: 4, Colour: dim},
 			// What the conversation has cost. The cache is the largest of the three by a long way and
 			// the first to give way, because at half a window the age of a session is worth more than
 			// what it read from a cache.
@@ -429,7 +435,8 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			// conversation is still worth continuing. It gives way after the cost columns and before
 			// everything else: what a conversation cost is history, and how full it is now is a
 			// decision waiting to be made.
-			{Title: "ctx", Width: 6, Give: 4, Colour: colourOfContext},
+			{Title: "ctx", Width: 6, Give: 5, Colour: colourOfContext},
+			{Title: "spent on", Width: 10, Give: 4, Colour: dim},
 			{Title: "in", Width: 7, Give: 3, Colour: colourOfTokens},
 			{Title: "out", Width: 7, Give: 2, Colour: colourOfTokens},
 			{Title: "cache", Width: 7, Give: 1, Colour: colourOfTokens},

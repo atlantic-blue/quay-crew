@@ -16,7 +16,7 @@ import (
 const jobColumns = `id, workspace, project, title, brief, role, role_version, mode, expect_file,
 	expect_contains, after_jobs, deadline, budget_tokens, labels, requires, coalesce(parent, ''), depth, version,
 	phase, session, attempts, answer, reason, question, told, resuming, spent_tokens, observed_version,
-	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product, steers,
+	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product, steers, claim,
 	created_at, updated_at, started_at, finished_at`
 
 // CreateJob writes a job and the record of its declaration in one transaction.
@@ -31,6 +31,9 @@ func (p *Postgres) CreateJob(ctx context.Context, declared *job.Job, event *job.
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if err := takeTheClaim(ctx, tx, declared); err != nil {
+		return err
+	}
 	if err := insertJob(ctx, tx, declared); err != nil {
 		return err
 	}
@@ -41,6 +44,48 @@ func (p *Postgres) CreateJob(ctx context.Context, declared *job.Job, event *job.
 		return fmt.Errorf("create job: %w", err)
 	}
 	return nil
+}
+
+// takeTheClaim refuses a declaration that claims a piece of work another job is still holding.
+//
+// Inside the transaction that writes the row, and behind a lock taken on the claim itself, because
+// two declarations arriving together would otherwise both read no holder and both write one: neither
+// transaction can see the other's row until it commits. The lock is held to the end of the
+// transaction, so the second one reads what the first wrote.
+//
+// The lock is on the claim rather than on the table, so declarations of different work never wait for
+// each other. Two different claims that hash to the same number wait for one another and both then
+// succeed, which costs a moment and is not a wrong answer.
+//
+// There is no unique index doing this instead, because holding runs out: a job that settles releases
+// its claim, and so does one that nothing has moved for longer than a claim lives. An index cannot
+// say either.
+func takeTheClaim(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
+	if declared.Claim == "" {
+		return nil
+	}
+	// The two joined by a colon, which a workspace identifier cannot contain, so one workspace's claim
+	// never hashes to another's by accident of where the two words were cut.
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1 || ':' || $2))`,
+		declared.Workspace, declared.Claim); err != nil {
+		return fmt.Errorf("create job: %w", err)
+	}
+	// The oldest holder, so the answer is the same one every time.
+	row := tx.QueryRow(ctx, `
+		select id, title, created_at from jobs
+		where workspace = $1 and claim = $2 and phase = any($3::text[])
+			and updated_at > now() - make_interval(secs => $4::double precision)
+		order by created_at asc, id asc limit 1`,
+		declared.Workspace, declared.Claim, job.LivePhases(), job.ClaimLife.Seconds())
+	held := &job.Held{Claim: declared.Claim}
+	switch err := row.Scan(&held.Holder, &held.Title, &held.TakenAt); {
+	case errors.Is(err, pgx.ErrNoRows):
+		return nil
+	case err != nil:
+		return fmt.Errorf("create job: %w", err)
+	default:
+		return held
+	}
 }
 
 // insertJob writes one job inside a transaction somebody else owns, which is what lets a
@@ -59,9 +104,10 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 			expect_contains, after_jobs, deadline, budget_tokens, labels, requires, parent, depth, version, phase,
 			session, attempts, answer, reason, question, told, spent_tokens, observed_version, started_at,
 			finished_at, lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product,
-			resuming)
+			resuming, claim, created_at, updated_at)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37)`,
+			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38,
+			coalesce($39::timestamptz, now()), coalesce($40::timestamptz, now()))`,
 		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
 		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
 		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
@@ -69,10 +115,25 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 		declared.Session, declared.Attempts, declared.Answer, declared.Reason, declared.Question,
 		declared.Told, declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt,
 		declared.LeaseOwner, declared.LeaseUntil, declared.TraceID, declared.ParentSpanID,
-		declared.Repository, declared.PullRequest, declared.Product, declared.Resuming); err != nil {
+		declared.Repository, declared.PullRequest, declared.Product, declared.Resuming,
+		declared.Claim, stampOrNow(declared.CreatedAt), stampOrNow(declared.UpdatedAt)); err != nil {
 		return fmt.Errorf("create job: %w", err)
 	}
 	return nil
+}
+
+// stampOrNow is a moment the caller stamped on a row, and nothing where it stamped none, which the
+// statement reads as the database's clock.
+//
+// The in memory store already keeps a moment it is handed and stamps only what arrives empty, so
+// this is the same store keeping what it is given. Nothing in the system stamps a job it declares,
+// and what it buys is a test that can write a job whose last movement was three hours ago: a claim
+// running out is otherwise unprovable without waiting for it.
+func stampOrNow(at time.Time) *time.Time {
+	if at.IsZero() {
+		return nil
+	}
+	return &at
 }
 
 // GetJob reads one job back, whole: its answer and the steps its session finished.
@@ -287,7 +348,7 @@ func scanJob(row rowScanner) (*job.Job, error) {
 		&found.Version, &found.Phase, &found.Session, &found.Attempts, &found.Answer, &found.Reason,
 		&found.Question, &found.Told, &found.Resuming, &found.SpentTokens, &found.ObservedVersion,
 		&found.LeaseOwner, &found.LeaseUntil, &found.TraceID, &found.ParentSpanID,
-		&found.Repository, &found.PullRequest, &found.Product, &found.Steers,
+		&found.Repository, &found.PullRequest, &found.Product, &found.Steers, &found.Claim,
 		&found.CreatedAt, &found.UpdatedAt, &found.StartedAt, &found.FinishedAt); err != nil {
 		return nil, err
 	}
