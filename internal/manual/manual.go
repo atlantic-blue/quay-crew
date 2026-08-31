@@ -75,6 +75,15 @@ commands:
                                           that asks the job to wait for the checks, or to merge on
                                           the result, is refused: nothing wakes a job, so that
                                           shape is a flow
+  history [<address>|system]              what the system did over a window of time: what ran, what it
+    [--since <date>] [--until <date>]     cost, and what failed and why. The read to make instead of
+    [--limit <n>]                         being told. It prints the window added up, then one line
+                                          for each job, newest first, with the reason under a job
+                                          that failed. Dates are written 2026-08-28, and the last
+                                          day named is included whole. The window is the last week
+                                          unless you say otherwise, and the total always covers the
+                                          whole window even when --limit prints fewer rows. It says
+                                          how many it left out
   job list [<address>|system]             the jobs there are, newest first. With no address it
     [--phase <phase>] [--label k=v]       reads where you are standing and says so, and system reads
     [--parent <job>] [--roots]            every project. Narrow it further with --phase, --label,

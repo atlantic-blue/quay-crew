@@ -1,8 +1,10 @@
 name: marketing
-version: 1
+version: 2
 summary: writes the marketing plan and its tasks from the research findings, and cites a finding for every recommendation
 model: opus
 receives:
   - job
   - context
   - skills
+verbs:
+  - job.read
