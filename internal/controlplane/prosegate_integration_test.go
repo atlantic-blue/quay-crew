@@ -45,11 +45,18 @@ func TestTheProseGateRefusesInsideTheContainerTheControlPlaneMade(t *testing.T) 
 	if err != nil {
 		t.Fatalf("model runner: %v", err)
 	}
+	// A hook reaches a container as a mount, so the system needs somewhere on the host to write one.
+	// Without a data directory it writes nothing, mounts nothing and refuses nothing, and the task
+	// still runs, which is the trade renderHooks makes deliberately. This test runs beside the daemon
+	// rather than inside a container, so the path this process writes and the path the daemon mounts
+	// are the same one.
+	data := t.TempDir()
 	server := controlplane.NewServer(controlplane.Config{
 		Store:    store.NewMemory(),
 		Runner:   runner,
 		Provider: sandbox.DockerProvider{Image: image},
 		Secrets:  secrets.NewMemory(),
+		Storage:  sandbox.Storage{Dir: data, Host: data},
 	})
 
 	workspace, err := server.CreateWorkspace(ctx, &quaycrewv1.CreateWorkspaceRequest{Name: "acme"})
