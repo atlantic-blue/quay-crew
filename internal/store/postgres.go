@@ -408,26 +408,49 @@ func (p *Postgres) ReclaimSession(ctx context.Context, id string) error {
 	return nil
 }
 
-// SettledSessions is the sessions nothing is holding open, oldest touched first.
+// IdleSandboxes is the sessions that still hold a container and nothing is holding open, oldest
+// touched first.
 //
-// Live, not running, and named by no job in a non terminal phase. A session with a task
-// under way is not settled, and neither is one whose job is still open even though its own task has
-// landed: the job is what says the session is wanted, and the controller is about to send it another
-// task.
+// Live, not running, not already reclaimed, and named by no job in a non terminal phase. A session
+// with a task under way is not settled, and neither is one whose job is still open even though its
+// own task has landed: the job is what says the session is wanted, and the controller is about to
+// send it another task.
 //
 // Sessions an operator stopped are left out. A stop is somebody's decision, and filing away what
 // somebody halted would overwrite it with bookkeeping.
-func (p *Postgres) SettledSessions(ctx context.Context, limit int) ([]*quaycrewv1.Session, error) {
-	query := `
-		select ` + sessionColumns + `
-		from sessions s
-		where s.archived_at is null
+//
+// Reclaimed rows are left out too, and that split is the fault this closes. They stay settled for
+// ever where no archive time is set, and their updated_at is the moment they were reclaimed, so they
+// sort ahead of a sandbox that has been idle for an hour. One batch of twenty then holds twenty rows
+// nothing can move, and the reclaim never reaches a container again. See issue 575.
+func (p *Postgres) IdleSandboxes(ctx context.Context, limit int) ([]*quaycrewv1.Session, error) {
+	return p.settled(ctx, `
 		  and s.status = any($1)
 		  and not exists (
 		      select 1 from jobs w where w.session = s.id and not (w.phase = any($2))
 		  )
-		order by s.updated_at, s.id`
-	args := []any{settledStatuses(), terminalPhases()}
+		order by s.updated_at, s.id`, limit, holdingStatuses(), terminalPhases())
+}
+
+// ReclaimedSessions is the sessions whose container has already gone, longest reclaimed first.
+//
+// Ordered by reclaimed_at rather than updated_at, because that is what the archive time is measured
+// against. A reclaim writes both stamps and only one of them says how long the session has been in
+// this state.
+func (p *Postgres) ReclaimedSessions(ctx context.Context, limit int) ([]*quaycrewv1.Session, error) {
+	return p.settled(ctx, `
+		  and s.status = $1
+		  and not exists (
+		      select 1 from jobs w where w.session = s.id and not (w.phase = any($2))
+		  )
+		order by s.reclaimed_at nulls first, s.id`, limit, StatusReclaimed, terminalPhases())
+}
+
+// settled runs one of the two queries above. Both read the same rows through the same index and
+// differ only in which statuses they take and what they order by.
+func (p *Postgres) settled(ctx context.Context, where string, limit int, args ...any) (
+	[]*quaycrewv1.Session, error) {
+	query := `select ` + sessionColumns + ` from sessions s where s.archived_at is null` + where
 	if limit > 0 {
 		args = append(args, limit)
 		query += fmt.Sprintf(" limit $%d", len(args))

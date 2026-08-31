@@ -37,6 +37,9 @@ type FakeProvider struct {
 	// Watched are the sessions somebody has the conversation open in, so a scenario can be an
 	// operator typing into a container the system is about to take back.
 	Watched map[string]bool
+	// watchAll answers yes for every session, whether or not this provider has seen it yet. See
+	// WatchEverything.
+	watchAll bool
 	// AttachErr is the daemon refusing to answer whether anybody is attached, which is not the same
 	// answer as nobody: a system that cannot tell must leave the container alone.
 	AttachErr error
@@ -175,7 +178,7 @@ func (f *FakeProvider) Attached(_ context.Context, sessionID string) (bool, erro
 	if box, live := f.live[sessionID]; !live || box.Closed {
 		return false, nil
 	}
-	return f.Watched[sessionID], nil
+	return f.watchAll || f.Watched[sessionID], nil
 }
 
 // Watch makes this provider one where somebody has that session's conversation open.
@@ -347,4 +350,14 @@ func (f *FakeProvider) Existing(_ context.Context, sessionID string) (Sandbox, b
 		return nil, false, nil
 	}
 	return box, true, nil
+}
+
+// WatchEverything makes this provider one where somebody has every session's conversation open,
+// which is the one state in which a system may not take a container back however stopped its queue
+// is. It is set rather than listed because a caller that watched each session as it appeared would
+// be racing the tick that is about to reclaim one.
+func (f *FakeProvider) WatchEverything() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.watchAll = true
 }

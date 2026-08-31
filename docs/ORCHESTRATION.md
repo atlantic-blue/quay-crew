@@ -841,18 +841,115 @@ flowchart TD
     WAKE --> START
 ```
 
+### The fifth comparison: is this system doing anything at all
+
+The four queries above make reality match what was declared. This one asks whether they are working,
+and it is the only comparison in the loop that is about the loop rather than about a row.
+
+**Nothing running with something held is a state that is always wrong.** It is not a slow system and
+it is not a busy machine, because a busy machine has jobs running on it. It says the room is held by
+sandboxes doing nothing, and that nothing will change on its own, because the thing that would give
+the room back is the thing that has stopped.
+
+On 31 August 2026 twenty five jobs were declared at once against a workspace allowing eight running.
+Fifteen finished. Then nothing ran at all. Five jobs sat held, each saying that a sandbox asks for
+100 per cent of a processor and that 0 per cent of 1200 per cent is unallocated. Twelve sandboxes
+were idle, every one of them for an hour or more, and between them they held the whole processor
+allocation. The workspace reclaim time was thirty minutes and not one container came back. An
+operator drained thirty three sessions by hand to free a resource the reclaim was already meant to
+free. See issue 575.
+
+```mermaid
+flowchart TD
+    TICK(["tick, after the four above"]) --> MOVING{"is any job<br/>running or asking?"}
+    MOVING -->|"yes"| WELL["nothing to do:<br/>a full machine with work<br/>on it is a healthy machine"]
+    MOVING -->|"no"| WAITING{"is any job held<br/>for want of room?"}
+    WAITING -->|"no"| IDLE["nothing to do:<br/>an idle system"]
+    WAITING -->|"yes"| BOXES["read the sandboxes<br/>nothing is holding open,<br/>idle longest first"]
+    BOXES --> ATTACHED{"is somebody in it,<br/>or cannot the system tell?"}
+    ATTACHED -->|"yes"| NEXT["try the next one"]
+    NEXT --> ATTACHED
+    ATTACHED -->|"no"| TAKE["reclaim it: the container goes,<br/>its whole reservation goes back,<br/>everything else stays"]
+    TAKE --> SAY["job.unstuck on the job<br/>the room was freed for"]
+    SAY --> AGAIN["the next tick starts it"]
+    NEXT -->|"none left"| STUCK["say it: nothing running,<br/>work waiting, nothing to take"]
+```
+
+**Three faults were found and all three were real.**
+
+*Reclaim ran and found nothing to take.* `putAway` is on every tick and never conditional, so the
+loop was reaching it. But reclaim never looks at the machine: its only inputs are the workspace
+reclaim time, the session `updated_at` and whether somebody is attached. And the batch starved.
+The controller read twenty settled sessions per tick, ordered by how long ago each was touched. A
+reclaimed session stays settled, and with no archive time set nothing ever moves it, so once twenty
+reclaimed rows sat at the front the batch was all of them and the reclaim never reached a container
+again. That is why the two rules are two queries now, each in its own order.
+
+*The processor is released, and only when the container goes.* Both axes are one reservation and
+neither moves without the other. `Ledger.ReleaseSession` is the only path that gives a placed
+sandbox's room back, and only `closeSandbox` and the reaper call it. So an idle sandbox holds a
+whole processor while using almost none of one. That is correct scheduler arithmetic and it is what
+kubernetes does. The mismatch is that a pod ends and a session does not, so the fix is not to change
+the arithmetic but to take the container back.
+
+*Nothing noticed.* No query anywhere paired running against held. The health probe is the closest
+thing and does not cover it: it asks whether the system can write, because a control plane once
+served every listing and dispatched nothing for an hour, which is issue 400. This incident is that
+failure again one layer up, with every write landing.
+
+**What it does.** One container per tick, and the one idle longest. One is enough to start the queue
+again, and taking twelve would throw away eleven warm containers to answer a question that one
+answers. The workspace reclaim clock is not read: that clock exists to save memory on a quiet system
+and is unset until three measurements are taken, while this question needs no measurement.
+
+**What it never does.** It never takes a container an operator is attached to, and a system that
+cannot tell reads that as attached. It never takes a session a live job names, because the query it
+reads leaves those out. It never stops a session that is doing work.
+
+**What a person reads.** A job the machine turns away while nothing at all is running carries the
+room arithmetic and then one more sentence saying the system is stopped rather than busy. `hold`
+already writes a reason only when the sentence changes, so it is written once and not every five
+seconds. Where the system frees room, `job.unstuck` goes on the job it freed the room for, naming
+the container it took and how long that container had been idle.
+
+**Why the pair, and not the pressure.** A full machine is healthy. Eight jobs running and seventeen
+waiting is exactly what admission is for, and reclaiming there takes a container from a session that
+is about to get its next task.
+
+**Why not refuse the declaration earlier.** Section 5.1 already decided that a job the machine cannot
+host stays pending for as long as it takes and is never admitted and then killed. Refusing at
+declaration would turn away work the machine can do in ten minutes, and it would not have moved the
+five jobs in the incident, which were declared while the machine still had room. At declaration
+nothing knows what the machine holds when the job's turn comes.
+
+**Why not evict.** Evicting is issue 478, and its trigger is different: the machine in danger,
+measured against what the runtime actually holds. This one fires when the machine is idle and the
+queue is stopped, which issue 478 would read as a healthy machine. Issue 477 holds a sandbox to what
+it asked for, which reduces how often either fires and replaces neither.
+
 ### What it watches
 
 Rows in `job`, in the store, by polling. Not the log. This is the same split the flow engine
 already made and for the same reason: publishing is lossy, so a controller whose next action
 depended on a record arriving would sit forever with nothing to say why.
 
-Three queries per tick, each on an index:
+Six queries per tick, each on an index:
 
 - jobs in `pending` whose `after` identifiers have all reached a terminal phase, oldest declared
   first;
 - jobs in `waiting` whose dependencies have now ended, which moves it back to `pending`;
-- jobs in `running` or `asking` whose `lease_until` has passed.
+- jobs in `running` or `asking` whose `lease_until` has passed;
+- the sessions that still hold a container and nothing is holding open, oldest touched first;
+- the sessions whose container has already gone, longest reclaimed first;
+- whether any job is running or asking at all, which is a probe rather than a count.
+
+The last one is the fifth comparison, and it costs one index lookup on a system with a million
+finished jobs. Only when it says nothing is moving does the loop read a seventh: the jobs the
+machine turned away. A working system never pays for that one.
+
+The two session queries are two rather than one because a reclaimed session never leaves the second
+set where no archive time is set. Reading both from one batch let those rows crowd out the sandboxes
+behind them, and the reclaim stopped reaching a container at all. See the fifth comparison above.
 
 A system with a thousand finished jobs and one pending does one row of work per tick. That
 is the property `DueFlowRuns` already has and it is worth keeping.
@@ -870,9 +967,10 @@ morning.
 
 ### What it does
 
-One of: nothing, claim, dispatch, adopt an answer, stop, or wake dependents. Never more than one
-job per tick moves from `pending` to `running`, so the concurrency limit is enforced by
-construction rather than by counting after the fact.
+One of: nothing, claim, dispatch, adopt an answer, stop, wake dependents, put a session away, or
+take one container back because the queue has stopped. Never more than one job per tick moves from
+`pending` to `running`, so the concurrency limit is enforced by construction rather than by counting
+after the fact, and never more than one container is taken back for the same reason.
 
 ### What it writes
 
@@ -1177,6 +1275,14 @@ been built, and the next job counts it. Kubernetes calls this assuming the pod o
 **A system that cannot read its runtime admits the work and says so.** A system whose sessions do not run
 on a container runtime has no arithmetic to do, and stopping dead there would be worse than the system
 that counted.
+
+**A reservation ends with the container and at no other moment.** `Ledger.ReleaseSession` is the
+only path that gives a placed sandbox's room back, and only `closeSandbox` and the reaper call it.
+Both axes go together: there is no path that returns memory and keeps the processor. That is the
+kubernetes shape and it holds while a pod's life is its work's life. A session is not a pod: it
+outlives its job, so an idle sandbox holds a whole processor while using almost none of one, and on
+31 August 2026 twelve of them held a whole machine while five jobs waited. The answer is not in the
+arithmetic. It is the fifth comparison in section 4, which takes the container back.
 
 **What this does not do.** Nothing holds a sandbox to what it asked for, which is issue 477, and
 nothing stops anything once a machine is in trouble anyway, which is issue 478.
@@ -2207,7 +2313,13 @@ The rule, in three lines:
 - A session named only by terminal job, and reclaimed for longer than the workspace's archive time,
   is wanted archived. The controller archives it, which is `ArchiveSession` with no operator.
 
-Each rule is a fourth query per tick, on the same index the other three use. The controller keeps
+The last two rules are two queries and not one, and that is what went wrong. A reclaimed session
+stays settled, and where no archive time is set nothing ever moves it, so one batch ordered by how
+long ago each row was touched fills with rows nothing can act on and never reaches a container. On
+31 August 2026 twelve idle sandboxes held a whole machine behind twenty of those rows. See issue 575
+and the fifth comparison in section 4.
+
+Each rule is a query per tick, on the same index the other three use. The controller keeps
 nothing in memory, which is the property section 4 depends on.
 
 ```mermaid

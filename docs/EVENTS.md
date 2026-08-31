@@ -136,6 +136,12 @@ The contract, which another service may depend on:
   step, how alike they were, and what the job escalated to. It is written whether the job then asks
   a person, is handed to another role, or stops, because the loop is the thing that happened and
   where it went is what the job declared.
+- `job.held`, when the machine had no room for its sandbox. The job stays pending, so it is not a
+  movement, and it is written once per reason rather than once per tick.
+- `job.unstuck`, when nothing at all was running while this job waited for room, so the system took
+  back the container that had been idle longest and freed the room itself. The detail names how many
+  jobs were waiting, which container went, and how long that container had been idle. The job is
+  pending before it and pending after it: what changed is the machine.
 - `job.told`, when that person answered it. The detail is the answer. The pair is the record of every
   decision a run stopped for, so somebody reading it afterwards learns what was chosen without
   opening a container that is long gone.

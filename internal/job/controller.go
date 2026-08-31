@@ -154,10 +154,22 @@ type Store interface {
 	// LoopJob writes that a job went in circles and takes the route the job declared, in one
 	// movement. It applies only to a running job this controller still holds.
 	LoopJob(ctx context.Context, id string, looped Loop, event *Event) (*Job, error)
-	// SettledSessions is the fourth query: the sessions nothing is holding open, oldest touched
-	// first. A session is not a second resource with a declaration of its own, so what is wanted of
-	// it is derived from the job that names it, and a job still in flight keeps its session alive.
-	SettledSessions(ctx context.Context, limit int) ([]*quaycrewv1.Session, error)
+	// IdleSandboxes is the fourth query: the sessions that still hold a container and nothing is
+	// holding open, oldest touched first. A session is not a second resource with a declaration of its
+	// own, so what is wanted of it is derived from the job that names it, and a job still in flight
+	// keeps its session alive.
+	IdleSandboxes(ctx context.Context, limit int) ([]*quaycrewv1.Session, error)
+	// ReclaimedSessions is the same question about the sessions whose container has already gone,
+	// longest reclaimed first. It is a second query rather than half of the one above because a
+	// reclaimed session never leaves that set where no archive time is set, and a single batch fills
+	// with rows nothing can move while a sandbox sits behind them holding a whole machine. See issue 575.
+	ReclaimedSessions(ctx context.Context, limit int) ([]*quaycrewv1.Session, error)
+	// AnythingMoving and TurnedAwayJob are the fifth comparison, and it is the one that says whether
+	// the four above are working. Nothing moving with something held is a state that is always wrong,
+	// and it is the state this system sat in for an hour with twelve idle sandboxes holding the
+	// machine. The probe runs on every tick; the listing runs only when the probe says nothing moves.
+	AnythingMoving(ctx context.Context) (bool, error)
+	TurnedAwayJob(ctx context.Context, limit int) ([]*Job, error)
 }
 
 // ControlPlane is what a controller may do on the system. It is the same interface every other caller
@@ -485,9 +497,13 @@ func (c *Controller) Tick(ctx context.Context) {
 	c.recoverAbandoned(ctx)
 	c.adoptAnswers(ctx, turnedAway)
 	c.startDeclared(ctx, turnedAway)
-	// Last, so a session this tick has just dispatched into is not a candidate on the same pass. The
-	// three above decide what is wanted alive; this one acts on what is left.
+	// Last but one, so a session this tick has just dispatched into is not a candidate on the same
+	// pass. The three above decide what is wanted alive; this one acts on what is left.
 	c.putAway(ctx)
+	// Last, and the only comparison here that is about the loop rather than about a row. The four
+	// above are what this system is meant to do; this one asks whether it is doing any of it, and
+	// takes a container back when the answer is no. See stall.go and issue 575.
+	c.unstick(ctx)
 }
 
 // startDeclared sends a task for each job that has not started.
@@ -501,18 +517,21 @@ func (c *Controller) startDeclared(ctx context.Context, turnedAway givenUp) {
 		c.logger.WarnContext(ctx, "could not read which job is ready to run", "error", err)
 		return
 	}
+	// Worked out once for the whole pass, and only if a job is actually turned away. A burst of
+	// twenty held jobs must not be twenty probes of the same question.
+	moving := &stillMoving{}
 	for _, one := range runnable {
 		// Turned away a moment ago, in this same pass. Starting it again here would ask the machine
 		// that had no room whether it has room yet, without anything having had a chance to change.
 		if turnedAway[one.ID] {
 			continue
 		}
-		c.start(ctx, one)
+		c.start(ctx, one, moving)
 	}
 }
 
 // start claims one job and sends its task.
-func (c *Controller) start(ctx context.Context, one *Job) {
+func (c *Controller) start(ctx context.Context, one *Job, moving *stillMoving) {
 	// Everything this controller does for this job happens under the job's own trace. The
 	// dispatch below then writes its task with the same identifier, which is what lets a reader join
 	// a job to the conversation that ran it. The context comes off the row rather than out
@@ -530,7 +549,7 @@ func (c *Controller) start(ctx context.Context, one *Job) {
 	// for eight. Every road below that does not end in a dispatch gives it back.
 	key := capacity.KeyFor(one.Project, handle)
 	if verdict := c.admit(ctx, key, limits.Request(capacity.DefaultRequest())); !verdict.OK {
-		c.hold(ctx, one, verdict.Reason)
+		c.hold(ctx, one, c.whyItWaits(ctx, verdict.Reason, moving))
 		return
 	}
 

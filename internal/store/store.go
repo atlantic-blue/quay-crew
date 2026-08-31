@@ -57,13 +57,14 @@ var ErrNotFound = errors.New("store: not found")
 // terms of it and the store must not depend on the package that calls it.
 const StatusReclaimed = "reclaimed"
 
-// settledStatuses are the states a session can be in and still be nothing's to hold open: waiting for
-// job, holding a failed last task, or already reclaimed and waiting to be filed.
+// holdingStatuses are the states a session can be in, still hold a container, and still be nothing's
+// to hold open: waiting for job, or holding a failed last task.
 //
 // "running" is absent because a task is in flight. "stopped" is absent because an operator put the
-// session down, and a system that archived what somebody halted would be overwriting a decision with
-// bookkeeping.
-func settledStatuses() []string { return []string{"idle", "failed", StatusReclaimed} }
+// session down, and a system that reclaimed what somebody halted would be overwriting a decision with
+// bookkeeping. "reclaimed" is absent because the container has already gone, and mixing it in here is
+// what starved the reclaim: see IdleSandboxes.
+func holdingStatuses() []string { return []string{"idle", "failed"} }
 
 // terminalPhases are the phases of a job that no longer hold a session open. Read from the job
 // package rather than listed here, so a phase added there cannot be forgotten in these two queries.
@@ -208,14 +209,24 @@ type Store interface {
 	// the same as one that was halted. Whether a session is in a state that may be reclaimed is the
 	// control plane's question, not the store's.
 	ReclaimSession(ctx context.Context, id string) error
-	// SettledSessions is the sessions nothing is holding open, oldest touched first: live, not
-	// running, and named by no job in a non terminal phase. It is the fourth query a
-	// controller runs each tick, and the one the session lifecycle is derived from.
+	// IdleSandboxes is the sessions that still hold a container and nothing is holding open, oldest
+	// touched first: live, not running, not already reclaimed, and named by no job in a non terminal
+	// phase. It is the fourth query a controller runs each tick, and the one a reclaim acts on.
 	//
 	// A session is not a second resource with a declaration of its own. What is wanted of it is read
 	// from the job that names it, so job still in flight keeps its session alive and nothing here
 	// has to be told.
-	SettledSessions(ctx context.Context, limit int) ([]*quaycrewv1.Session, error)
+	//
+	// Reclaimed rows are left out, and that is the whole reason this is not one query with the one
+	// below. A reclaimed session has no container left to take, and with no archive time set it stays
+	// settled for ever, so a single batch fills with rows nothing can move and never reaches a
+	// sandbox. Two queries, each in its own order, and neither can starve the other.
+	IdleSandboxes(ctx context.Context, limit int) ([]*quaycrewv1.Session, error)
+	// ReclaimedSessions is the sessions whose container has already gone and that nothing is holding
+	// open, longest reclaimed first. It is what the archive time is measured against, so it is ordered
+	// by reclaimed_at rather than by updated_at: a reclaim writes both, and only one of them says how
+	// long the session has been in this state.
+	ReclaimedSessions(ctx context.Context, limit int) ([]*quaycrewv1.Session, error)
 	// ArchiveSession only hides a session from the default listing. The row, the conversation handle
 	// and the files on the host all stay.
 	ArchiveSession(ctx context.Context, id string) error
@@ -437,6 +448,17 @@ type Store interface {
 	RunnableJob(ctx context.Context, limit int) ([]*job.Job, error)
 	HeldJob(ctx context.Context, owner string, limit int) ([]*job.Job, error)
 	ExpiredJob(ctx context.Context, limit int) ([]*job.Job, error)
+	// AnythingMoving says whether any job is running or asking: whether this system is doing
+	// anything at all. It is the first half of the fifth comparison, and it is a probe rather than a
+	// count, so a system with a million finished jobs pays one index lookup per tick.
+	//
+	// Asking counts as moving. A job waiting for a person is not stalled, it is waiting correctly, and
+	// its session is wanted alive whatever else is true.
+	AnythingMoving(ctx context.Context) (bool, error)
+	// TurnedAwayJob is the job the machine had no room for: pending, carrying a reason, oldest
+	// declared first. It is the other half of the comparison. Only the system writes a reason on a
+	// pending job, and it writes one only when it holds the job back.
+	TurnedAwayJob(ctx context.Context, limit int) ([]*job.Job, error)
 	StartJob(ctx context.Context, id string, lease job.Lease, events []*job.Event) (*job.Job, error)
 	HoldJob(ctx context.Context, id, reason string, event *job.Event) (*job.Job, error)
 	TakeOverJob(ctx context.Context, id string, lease job.Lease, events []*job.Event) (*job.Job, error)

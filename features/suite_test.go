@@ -750,6 +750,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeJobRoleSteps(sc)
 	initializeTriggerSteps(sc)
 	initializeLifecycleSteps(sc)
+	initializeStalledSteps(sc)
 	initializeJobEventsSteps(sc)
 	initializeJobLeaseSteps(sc)
 	initializeAskingSteps(sc)
