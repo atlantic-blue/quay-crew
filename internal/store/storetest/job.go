@@ -840,6 +840,112 @@ func runJobControllerConformance(t *testing.T, newDataset func(t *testing.T) Ope
 		}
 	})
 
+	// The fifth comparison, both halves. Nothing moving with something held is a state that is always
+	// wrong, and it is the state this system sat in for an hour with twelve idle sandboxes holding the
+	// machine. Both stores answer it, and both are held to the same rule here. See issue 575.
+	t.Run("nothing is moving on a system whose jobs are all pending or ended", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		declaredJob(t, s, workspace, project, "the one that has not started")
+
+		moving, err := s.AnythingMoving(ctx)
+		if err != nil {
+			t.Fatalf("AnythingMoving: %v", err)
+		}
+		if moving {
+			t.Fatal("this system reads as doing something with one pending job and nothing else")
+		}
+	})
+
+	t.Run("a running job is moving, and so is one waiting for a person", func(t *testing.T) {
+		for _, one := range []struct {
+			name  string
+			start func(t *testing.T, s store.Store, workspace, project, id string)
+		}{
+			{"running", func(t *testing.T, s store.Store, workspace, project, id string) {
+				if _, err := s.StartJob(context.Background(), id, aLease("controller-a"),
+					[]*job.Event{startedEvent(id, workspace, project)}); err != nil {
+					t.Fatalf("StartJob: %v", err)
+				}
+			}},
+			{"asking", func(t *testing.T, s store.Store, workspace, project, id string) {
+				ctx := context.Background()
+				if _, err := s.StartJob(ctx, id, aLease("controller-a"),
+					[]*job.Event{startedEvent(id, workspace, project)}); err != nil {
+					t.Fatalf("StartJob: %v", err)
+				}
+				if _, err := s.AskJob(ctx, id, "which account?",
+					askedEvent(id, workspace, project, "which account?")); err != nil {
+					t.Fatalf("AskJob: %v", err)
+				}
+			}},
+		} {
+			t.Run(one.name, func(t *testing.T) {
+				s := newDataset(t)(t)
+				workspace, project := aProject(t, s)
+				id := declaredJob(t, s, workspace, project, "read the electricity bill")
+				one.start(t, s, workspace, project, id)
+
+				moving, err := s.AnythingMoving(context.Background())
+				if err != nil {
+					t.Fatalf("AnythingMoving: %v", err)
+				}
+				if !moving {
+					t.Fatalf("a job in %s reads as nothing happening, and a job waiting for a person "+
+						"is waiting correctly rather than stalled", one.name)
+				}
+			})
+		}
+	})
+
+	t.Run("the jobs the machine turned away are the pending ones carrying a reason", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		waiting := declaredJob(t, s, workspace, project, "the one with no room")
+		declaredJob(t, s, workspace, project, "the one nobody has reached yet")
+
+		reason := "there is not enough processor for this job's sandbox"
+		if _, err := s.HoldJob(ctx, waiting, reason, heldEvent(waiting, workspace, project, reason)); err != nil {
+			t.Fatalf("HoldJob: %v", err)
+		}
+
+		turnedAway, err := s.TurnedAwayJob(ctx, 0)
+		if err != nil {
+			t.Fatalf("TurnedAwayJob: %v", err)
+		}
+		if len(turnedAway) != 1 || turnedAway[0].ID != waiting {
+			t.Fatalf("%d jobs read as turned away, want only the one carrying a reason", len(turnedAway))
+		}
+		if turnedAway[0].Reason != reason {
+			t.Fatalf("the turned away job says %q, want the reason it was held with", turnedAway[0].Reason)
+		}
+	})
+
+	t.Run("a job that started is no longer turned away", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredJob(t, s, workspace, project, "read the electricity bill")
+		reason := "there is not enough processor for this job's sandbox"
+		if _, err := s.HoldJob(ctx, id, reason, heldEvent(id, workspace, project, reason)); err != nil {
+			t.Fatalf("HoldJob: %v", err)
+		}
+		if _, err := s.StartJob(ctx, id, aLease("controller-a"),
+			[]*job.Event{startedEvent(id, workspace, project)}); err != nil {
+			t.Fatalf("StartJob: %v", err)
+		}
+
+		turnedAway, err := s.TurnedAwayJob(ctx, 0)
+		if err != nil {
+			t.Fatalf("TurnedAwayJob: %v", err)
+		}
+		if len(turnedAway) != 0 {
+			t.Fatalf("%d jobs read as turned away, and the only one started", len(turnedAway))
+		}
+	})
+
 	t.Run("landing job that never started is refused", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
