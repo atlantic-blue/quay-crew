@@ -160,6 +160,10 @@ func Continued(one *Job) string {
 			"that is not on the list above, and record each one as you finish it with krewe job step \"...\".",
 	}
 	if one.Repository != "" {
+		// The shape to say it in, and only here. What the line below says about the job not ending is
+		// true where the system reads the answer against a repository, and a job that names none is
+		// held to nothing, so telling it otherwise would be the system saying what it does not do.
+		said = append(said, SayWhatMoved())
 		// Said again, because this task is the one that ends the job and a model reads what it is handed.
 		// It also keeps the bound honest: the system asks a session once more for an address its answer
 		// did not carry, and counts the tasks the session has run to decide, so a continued attempt that
@@ -209,4 +213,87 @@ func RecordEachStep() string {
 	return "Record each step as you finish it, in a few words: krewe job step \"read the issue\". If this " +
 		"job dies part way, what is on that record is where it carries on from, and what is not on it " +
 		"is done a second time."
+}
+
+// The base is the part a continued attempt has to answer for, and the part the system cannot see.
+//
+// A resume puts a session back into the working directory it left, and what that work stands on moved
+// while it was stopped. So the attempt that carries on is asked what moved, and the answer is read
+// rather than believed: an answer that says nothing about the base is an attempt that may have built
+// on a base nobody looked at, and calling that done is the second failure this behaviour exists to
+// stop.
+//
+// It is read the way a pull request address is, off the answer, because the system runs no git.
+
+// BaseMarker opens the line a continued session writes about its base. The system asks for one shape
+// it can find, so what it finds is what the session meant to say rather than a sentence that happened
+// to hold the word.
+const BaseMarker = "Base:"
+
+// theSecondAsk is the sentence the ask below is recognised by. It is a constant because the ask and
+// the reading of it must not drift: a bound that stops matching asks forever, and every ask is a task
+// somebody pays for.
+const theSecondAsk = "did not say what moved under the base"
+
+// SayWhatMoved is how a continued session is asked for it, in the shape the system reads back.
+func SayWhatMoved() string {
+	return fmt.Sprintf("Say what moved on a line of its own that starts with %s, for example: %s "+
+		"origin/main moved on by four commits, one of them in the file this branch edits. Where nothing "+
+		"moved, write %s nothing moved. An answer that says nothing about the base does not end this job.",
+		BaseMarker, BaseMarker, BaseMarker)
+}
+
+// MovedUnderIt is what an answer says moved under the base the work stands on, and empty where it says
+// nothing.
+//
+// A bullet or a heading in front of the marker is still the line, because a model writing a report
+// reaches for one of those and refusing the line over a dash would refuse work that was done. The
+// marker with nothing after it is not a report, which is the case this has to get right: an answer
+// carrying the word and none of the answer is exactly the silence being looked for.
+func MovedUnderIt(answer string) string {
+	for _, line := range strings.Split(answer, "\n") {
+		said := strings.TrimLeft(strings.TrimSpace(line), "-*#> \t")
+		if len(said) < len(BaseMarker) || !strings.EqualFold(said[:len(BaseMarker)], BaseMarker) {
+			continue
+		}
+		if moved := strings.Trim(said[len(BaseMarker):], "*_ \t"); moved != "" {
+			return moved
+		}
+	}
+	return ""
+}
+
+// AskedWhatMoved is what the system sends a continued session whose answer said nothing about its
+// base. It is the second half of the refusal: the job is not landed, and the session that did the work
+// is asked for the one thing missing.
+//
+// Asked rather than stopped, for the reason the pull request is asked for: the session is open, the
+// fetch is one command, and the alternative is a job that ends "done, and nobody knows what it stands
+// on".
+//
+// It asks for the address of the pull request in the same breath. This answer is the one that ends the
+// job, and a job in a repository is held to naming its pull request in the answer that ends it, so an
+// answer carrying the base line alone would trade one silence for another.
+func AskedWhatMoved(repository string) string {
+	return fmt.Sprintf("This job was continued after it failed, and its answer %s it is working on, so "+
+		"nobody can tell whether this work stands on %s as it is now. Fetch the branch this work is based "+
+		"on and answer with that one line. %s This answer ends the job, so put the address of your pull "+
+		"request in it as well. Change nothing else.", theSecondAsk, repository, SayWhatMoved())
+}
+
+// AskingWhatMoved says whether a task the system sent was that ask.
+//
+// The bound on asking twice is read off the record rather than counted. A continued job's session
+// already holds the tasks of the attempt that failed, so a count of them says nothing about this
+// attempt, which is the trap the pull request ask does not have to step around.
+func AskingWhatMoved(prompt string) bool { return strings.Contains(prompt, theSecondAsk) }
+
+// NothingSaidAboutTheBase is why a continued job that never said what moved stops. It is written after
+// the session has been asked a second time, so it says that too, and it says where the work is: the
+// end of this attempt is not the end of what it produced.
+func NothingSaidAboutTheBase(repository string) string {
+	return fmt.Sprintf("this job was continued after it failed and no answer said what moved under its "+
+		"base, asked twice, so whether this work stands on %s as it is now is unknown. What the session "+
+		"did is in its conversation and in any pull request it opened: read those before this work is "+
+		"trusted or the job is declared again", repository)
 }
