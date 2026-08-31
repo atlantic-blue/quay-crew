@@ -247,6 +247,11 @@ const (
 	// part of the record somebody reads a week later.
 	EventResumed = "job.resumed"
 	EventRefused = "job.refused"
+	// EventUnstuck is written when the system finds it is running nothing while jobs wait for room,
+	// and takes a container back to start again. It is not a movement: the job is pending before it
+	// and pending after it, and the next tick starts it. It goes on the job the room was freed for,
+	// because that is the job that was being denied.
+	EventUnstuck = "job.unstuck"
 )
 
 // Contract says whether a kind is one another service may depend on.

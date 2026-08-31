@@ -473,6 +473,31 @@ func (p *Postgres) ExpiredJob(ctx context.Context, limit int) ([]*job.Job, error
 		order by created_at, id`, limit, job.PhaseRunning)
 }
 
+// AnythingMoving says whether any job is running or asking: whether this system is doing anything
+// at all.
+//
+// A probe rather than a count. The controller asks it on every tick and what it needs is a yes or a
+// no, so this stops at the first row and costs one lookup on jobs_phase_idx however many finished
+// jobs the table holds.
+func (p *Postgres) AnythingMoving(ctx context.Context) (bool, error) {
+	var moving bool
+	if err := p.pool.QueryRow(ctx,
+		`select exists (select 1 from jobs where phase = any($1))`,
+		[]string{job.PhaseRunning, job.PhaseAsking}).Scan(&moving); err != nil {
+		return false, fmt.Errorf("read whether anything is moving: %w", err)
+	}
+	return moving, nil
+}
+
+// TurnedAwayJob is the job the machine had no room for: pending, carrying a reason, oldest declared
+// first. Only the system writes a reason on a pending job, and it writes one only when it holds the
+// job back, so the reason is the whole condition.
+func (p *Postgres) TurnedAwayJob(ctx context.Context, limit int) ([]*job.Job, error) {
+	return p.jobMatching(ctx, `
+		where phase = $1 and reason <> ''
+		order by created_at, id`, limit, job.PhasePending)
+}
+
 // jobMatching runs one of the controller's queries, capped.
 func (p *Postgres) jobMatching(ctx context.Context, where string, limit int, args ...any) ([]*job.Job, error) {
 	query := `select ` + jobColumns + ` from jobs ` + where

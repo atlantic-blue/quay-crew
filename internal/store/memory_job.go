@@ -395,6 +395,29 @@ func (m *Memory) ExpiredJob(_ context.Context, limit int) ([]*job.Job, error) {
 	}), nil
 }
 
+// AnythingMoving says whether any job is running or asking: whether this system is doing anything
+// at all.
+func (m *Memory) AnythingMoving(_ context.Context) (bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, one := range m.jobs {
+		if one.Phase == job.PhaseRunning || one.Phase == job.PhaseAsking {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// TurnedAwayJob is the job the machine had no room for: pending, carrying a reason, oldest declared
+// first. Only the system writes a reason on a pending job, and only when it holds the job back.
+func (m *Memory) TurnedAwayJob(_ context.Context, limit int) ([]*job.Job, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.jobMatching(limit, func(one *job.Job) bool {
+		return one.Phase == job.PhasePending && one.Reason != ""
+	}), nil
+}
+
 // jobMatching is the oldest declared job that matches, capped. The caller holds the lock.
 func (m *Memory) jobMatching(limit int, matches func(*job.Job) bool) []*job.Job {
 	found := make([]*job.Job, 0, len(m.jobs))
