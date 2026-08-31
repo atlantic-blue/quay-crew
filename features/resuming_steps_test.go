@@ -33,6 +33,10 @@ func initializeResumingSteps(sc *godog.ScenarioContext) {
 			if err := declareJob(ctx, &quaycrewv1.CreateJobRequest{
 				Title: title, Brief: "make the listing sort by the clock it shows",
 				Role: everyVerbRole, Repository: repository,
+				// With the settle gate off, so every scenario in this file ends where continuing a job
+				// ends. A gated job is held back until a reviewer and a tester have passed it, which is
+				// features/settling.feature.
+				Ungated: true,
 			}); err != nil {
 				return err
 			}

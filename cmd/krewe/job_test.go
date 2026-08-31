@@ -358,7 +358,10 @@ func TestJobShowSaysWhereTheWorkWent(t *testing.T) {
 	mustRun(t, client, "job", "create",
 		"--title", "sort the listing",
 		"--brief", "make the listing sort by the clock it shows",
-		"--repository", "atlantic-blue/quay-crew")
+		"--repository", "atlantic-blue/quay-crew",
+		// With the gate off, so this test ends where the rule it is about ends. A gated job waits on a
+		// reviewer and a tester, which is a behaviour of its own.
+		"--no-gate")
 	// The whole identifier, because a listing prints the short one and only the tool expands it.
 	listed, err := client.ListJobs(context.Background(), &quaycrewv1.ListJobsRequest{})
 	if err != nil || len(listed.GetJobs()) != 1 {

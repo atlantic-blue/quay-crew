@@ -475,6 +475,9 @@ func (m *Memory) LandJob(_ context.Context, id string, landed job.Landing, event
 	if landed.PullRequest != "" {
 		found.PullRequest = landed.PullRequest
 	}
+	// What read this work before it settled, so a settled job says whether anything independent
+	// agreed with its answer rather than leaving a reader to open two conversations.
+	found.Reviewed, found.Tested = landed.Reviewed, landed.Tested
 	found.SpentTokens, found.ObservedVersion = landed.SpentTokens, found.Version
 	// The hold goes with the job. A lease left on finished job would read as held forever.
 	found.LeaseOwner, found.LeaseUntil = "", nil

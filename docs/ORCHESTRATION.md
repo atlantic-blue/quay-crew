@@ -295,6 +295,15 @@ job, with a reason saying it was asked twice.
 **No role gains anything by this.** The merge is the gate, because a push applies nothing and a merge
 runs the pipeline, so nothing here lets a session merge and the line the system adds says so.
 
+**And naming one says the job cannot settle on its own answer.** Before it settles, a reviewer reads
+the change and a tester runs the repository's own gates, in sessions that did not do the work. The
+whole of it is section 3.1 below.
+
+**`ungated`, boolean, optional, default false.** Declares this job with that gate off, so it settles
+on its own answer. Stated in the negative, so a caller that says nothing is gated: a boundary has to
+default on, and a column that defaults false is a job that is gated. The row keeps it, so a settled
+job always says which of the two it was.
+
 **A brief that asks the job to wait is refused.** A job runs once and answers. Nothing wakes it, so
 "push, watch the checks and merge on green" asks for something the runtime does not have, and the
 session is left with two bad moves: hold a container open through a five minute pipeline and pay for
@@ -430,6 +439,12 @@ running and empty when done.
 
 **`question`, text, default empty.** What an asking job is waiting to be told.
 
+**`reviewed` and `tested`, booleans, default false.** What passed this work before it settled, each in
+a session that did not do it. Written in the same statement as the phase, so a reader of a settled job
+is never left opening two conversations to find out whether anything independent agreed with the
+answer. A settled job carrying neither was declared with the gate off or never reached one, and
+`krewe job show` says which.
+
 **`spent_tokens`, bigint, default 0.** What this job's own session has cost, read by the same
 reader the flow ceiling uses, `Server.SessionTokens` in `internal/controlplane/flows.go`.
 
@@ -478,6 +493,96 @@ purpose. The list, so a test can be written against it:
 - A job with 17 labels is refused.
 - A job with a label value of 64 characters is refused.
 - A caller that is not the controller cannot write `phase`, `answer`, `reason` or `session`.
+- A job that names a repository does not reach `done` until a reviewer and a tester have passed it.
+- A gate that fails the work sends it back to the session that did the work, and the job stays open.
+- A gate that fails the same work twice stops the job, with what it said on the row.
+- A gate that answers without a verdict stops the job, and never passes it.
+- A gate whose own task failed stops the job.
+- A job declared with `ungated` settles on its own answer, and the row says it was declared that way.
+
+### 3.1 The gate before a job settles
+
+A job ends when the session running it says it is finished, and until this nothing independent had to
+agree first. Every failure of the acceptance run reached the operator through that door: the answer
+was the only evidence, and it was written by the session being judged.
+
+So a job that names a repository is passed by two sessions that did not do the work, before it
+settles.
+
+```mermaid
+flowchart TD
+    WORK["the session doing the work answers,<br/>naming its pull request"]
+    REVIEW["a reviewer reads the change against<br/>what the job was asked for"]
+    TEST["a tester runs the repository's own gates<br/>and reads the output"]
+    BACK["the work goes back to the session that did it,<br/>carrying the reason. The job stays open"]
+    DONE(["done, and the row says which gates passed it"])
+    STOP(["stopped, and the reason says what nothing agreed with"])
+    WORK --> REVIEW
+    REVIEW -->|"pass"| TEST
+    REVIEW -->|"fail, first time"| BACK
+    REVIEW -->|"fail again, or no verdict"| STOP
+    TEST -->|"pass"| DONE
+    TEST -->|"fail, first time"| BACK
+    TEST -->|"fail again, or no verdict"| STOP
+    BACK --> WORK
+```
+
+**The reviewer** is given the sentence the job serves, its title and its brief, and the address of the
+pull request. It is not given the answer, because the answer is the testimony this exists to check: a
+reviewer handed it first is a reviewer reading somebody else's conclusion. It is told to read the
+change against the repository as it is rather than against the diff alone, to report only what changes
+what a person or an operator gets, and to change no file.
+
+**The tester** runs the gates the repository runs, found in its Makefile, its package scripts or its
+continuous integration workflow, and it is told to read their output rather than their exit status. A
+suite that ran nothing exits zero, a pipeline reports the status of its last command, and a green
+check that executed nothing is indistinguishable from one that passed. So it fails the work where a
+gate is red, where a gate could not be run, and where a gate reported success having run nothing.
+
+**Each answers with one line, and the line is read off the answer** rather than reported by the
+model, exactly as the address of a pull request and the base line already are:
+
+    Verdict: fail the change adds a column and no migration, so a fresh store cannot read it
+
+An answer carrying no such line has judged nothing, so the job stops rather than settling: reading it
+as a pass is the false green the whole gate exists to prevent.
+
+**They run in conversations of their own**, `job-<id>-reviewer` and `job-<id>-tester`, named after the
+job the way the working session is, so a controller that comes back to the row finds them without
+being told. A second opinion formed by the session that formed the first is not a second opinion.
+
+**Neither holds a credential.** What a session may call on the system comes from the job it runs, and
+the dispatch that starts a gate names no job and no role, so the system mints it nothing. That is the
+boundary, and it is the credential rather than a sentence in the text.
+
+**A fail is the next task, not the end of the run.** It goes back to the session that did the work
+carrying the reason, because the branch and the worktree are still there and the fix is usually one
+edit. It asks for the address of the pull request again, for the reason the continued task does: that
+answer is the one that ends the job. It goes back once, and the count is read off the tasks of the
+working session rather than kept in a field, which is what makes the whole gate safe to run twice.
+
+**Nothing is remembered between ticks.** The reviewer's verdict is on the record of the reviewer's own
+session, so a controller that took the row over after another died reads the same records and reaches
+the same answer. The only thing that lands on the row is which gates passed, written in the same
+statement as the phase.
+
+**A gate the system could not start leaves the job running**, and a later tick asks again. A machine
+with no room is a moment rather than a verdict, which is the reasoning a job turned away for want of a
+sandbox already gets, and settling here would settle work nothing read.
+
+**It costs two more sandboxes per job**, one at a time, after the work is done. A job that names no
+repository produced no change, so nothing reads it and nothing is paid for.
+
+**It is refusable rather than optional.** A job declared `ungated` settles on its own answer, and the
+row records that it did, so a settled job always states whether anything independent passed it.
+
+What this does not do: it reads one pull request and it never merges. Nothing here holds a verdict
+against a policy, nothing counts how often a gate fails the same session, and the reviewer's method is
+its own subject, in [#533](https://github.com/atlantic-blue/quay-crew/issues/533) and
+[#534](https://github.com/atlantic-blue/quay-crew/issues/534). A flow that reviews a pull request on a
+schedule, with an operator reading the draft before anything is posted, is
+[#513](https://github.com/atlantic-blue/quay-crew/issues/513) and is a different mechanism: this one is
+inside the loop and posts nothing.
 
 ### The lifecycle
 

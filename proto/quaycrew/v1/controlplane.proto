@@ -1288,6 +1288,10 @@ message Job {
   // on the job the steer landed on and on every job above it. On the job at the top it is the score
   // of the whole tree.
   int32 steers = 37;
+  // ungated is a job declared with the settle gate off: it settles on its own answer, and nothing
+  // independent has to agree first. It is stated in the negative so that a declaration saying nothing
+  // is gated, which is the direction a boundary has to default in.
+  bool ungated = 40;
 
   // What the system assigned, and the caller may not.
   // parent is which job asked for this one, read from the credential the caller presented
@@ -1318,6 +1322,12 @@ message Job {
   // pull_request is the address the answer named, read off the answer rather than reported by the
   // model. It is what a reader opens to see the work, without opening a sandbox.
   string pull_request = 34;
+  // reviewed and tested are what passed this work before it settled, each in a session that did not
+  // do the work: a reviewer that read the change against what the job was asked for, and a tester
+  // that ran the repository's own gates and read their output. A settled job carrying neither was
+  // either declared with the gate off or never reached one.
+  bool reviewed = 41;
+  bool tested = 42;
   int64 spent_tokens = 24;
   // steps are what the session doing this job said it finished, in the order it finished them. A job
   // that failed is continued from them rather than started again. A listing leaves them out, the way
@@ -1387,6 +1397,10 @@ message CreateJobRequest {
   // back. A job declared under another inherits its parent's, and stating a second one where the
   // parent already carries one is refused rather than ignored.
   string product = 16;
+  // ungated declares this job with the settle gate off, so it settles on its own answer. A job that
+  // names a repository is otherwise passed by a reviewer and a tester, in sessions that did not do
+  // the work, before it settles. Stated in the negative, so a caller that says nothing gets the gate.
+  bool ungated = 17;
   // id and parent are here to be refused rather than ignored. The system assigns the identifier, and
   // the parent is read from the credential the caller presented: a caller that could set its own
   // parent could set its own depth, and the depth limit would bound nothing.

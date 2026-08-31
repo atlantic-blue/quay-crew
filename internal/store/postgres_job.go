@@ -17,6 +17,7 @@ const jobColumns = `id, workspace, project, title, brief, role, role_version, mo
 	expect_contains, after_jobs, deadline, budget_tokens, labels, requires, coalesce(parent, ''), depth, version,
 	phase, session, attempts, answer, reason, question, told, resuming, spent_tokens, observed_version,
 	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product, steers,
+	ungated, reviewed, tested,
 	created_at, updated_at, started_at, finished_at`
 
 // CreateJob writes a job and the record of its declaration in one transaction.
@@ -59,9 +60,10 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 			expect_contains, after_jobs, deadline, budget_tokens, labels, requires, parent, depth, version, phase,
 			session, attempts, answer, reason, question, told, spent_tokens, observed_version, started_at,
 			finished_at, lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product,
-			resuming)
+			resuming, ungated, reviewed, tested)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37)`,
+			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37,
+			$38, $39, $40)`,
 		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
 		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
 		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
@@ -69,7 +71,8 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 		declared.Session, declared.Attempts, declared.Answer, declared.Reason, declared.Question,
 		declared.Told, declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt,
 		declared.LeaseOwner, declared.LeaseUntil, declared.TraceID, declared.ParentSpanID,
-		declared.Repository, declared.PullRequest, declared.Product, declared.Resuming); err != nil {
+		declared.Repository, declared.PullRequest, declared.Product, declared.Resuming,
+		declared.Ungated, declared.Reviewed, declared.Tested); err != nil {
 		return fmt.Errorf("create job: %w", err)
 	}
 	return nil
@@ -285,6 +288,7 @@ func scanJob(row rowScanner) (*job.Job, error) {
 		&found.Question, &found.Told, &found.Resuming, &found.SpentTokens, &found.ObservedVersion,
 		&found.LeaseOwner, &found.LeaseUntil, &found.TraceID, &found.ParentSpanID,
 		&found.Repository, &found.PullRequest, &found.Product, &found.Steers,
+		&found.Ungated, &found.Reviewed, &found.Tested,
 		&found.CreatedAt, &found.UpdatedAt, &found.StartedAt, &found.FinishedAt); err != nil {
 		return nil, err
 	}
@@ -541,11 +545,14 @@ func (p *Postgres) LandJob(ctx context.Context, id string, landed job.Landing, e
 			-- step that named the pull request wrote it before the answer landed, and a job that failed
 			-- carries no answer at all, so an unconditional write here would erase the address.
 			pull_request = case when $7 <> '' then $7 else pull_request end,
+			-- What read this work before it settled, so a settled job says whether anything independent
+			-- agreed with its answer rather than leaving a reader to open two conversations.
+			reviewed = $8, tested = $9,
 			observed_version = version, lease_owner = '', lease_until = null,
 			finished_at = now(), updated_at = now()
 		where id = $1 and phase = $6`,
 		id, landed.Phase, landed.Answer, landed.Reason, landed.SpentTokens, job.PhaseRunning,
-		landed.PullRequest)
+		landed.PullRequest, landed.Reviewed, landed.Tested)
 	if err != nil {
 		return nil, fmt.Errorf("land job: %w", err)
 	}

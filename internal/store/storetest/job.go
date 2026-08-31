@@ -80,6 +80,12 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if found.PullRequest != "" {
 			t.Fatalf("a job nobody has run says its pull request is %q", found.PullRequest)
 		}
+		// And nothing has read it, so nothing passed it. A store that answered true here would report
+		// every job as independently checked, which is the exact false green the gate exists to end.
+		if found.Ungated || found.Reviewed || found.Tested {
+			t.Fatalf("a job nobody has run says ungated=%v reviewed=%v tested=%v",
+				found.Ungated, found.Reviewed, found.Tested)
+		}
 		if found.Phase != job.PhasePending {
 			t.Fatalf("the job opens in phase %q, want pending", found.Phase)
 		}
@@ -776,6 +782,81 @@ func runJobControllerConformance(t *testing.T, newDataset func(t *testing.T) Ope
 		found, _ := s.GetJob(ctx, id)
 		if found.Phase != job.PhaseDone {
 			t.Fatalf("the second landing moved the job to %q", found.Phase)
+		}
+	})
+
+	// A settled job says whether anything independent agreed with its answer. It is written in the
+	// same statement as the phase, so a reader can never find a job that is done and no record of what
+	// read it, and a job the gate did not pass reads differently from one it did.
+	t.Run("what passed a job before it settled lands with the phase", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+
+		// The fail first: a job that landed with neither gate having passed it keeps saying so, however
+		// often it is read back.
+		unread := declaredJob(t, s, workspace, project, "sort the listing")
+		if _, err := s.StartJob(ctx, unread, aLease("controller-a"), []*job.Event{startedEvent(unread, workspace, project)}); err != nil {
+			t.Fatalf("StartJob: %v", err)
+		}
+		if _, err := s.LandJob(ctx, unread, job.Landing{
+			Phase: job.PhaseStopped, Reason: "the reviewer failed this work twice",
+		}, answeredEvent(unread, workspace, project)); err != nil {
+			t.Fatalf("LandJob: %v", err)
+		}
+		stopped, err := s.GetJob(ctx, unread)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		if stopped.Reviewed || stopped.Tested {
+			t.Fatalf("a job nothing passed reads back as reviewed=%v tested=%v",
+				stopped.Reviewed, stopped.Tested)
+		}
+
+		passed := declaredJob(t, s, workspace, project, "sort the listing again")
+		if _, err := s.StartJob(ctx, passed, aLease("controller-a"), []*job.Event{startedEvent(passed, workspace, project)}); err != nil {
+			t.Fatalf("StartJob: %v", err)
+		}
+		landed, err := s.LandJob(ctx, passed, job.Landing{
+			Phase: job.PhaseDone, Answer: "opened the pull request", Reviewed: true, Tested: true,
+		}, answeredEvent(passed, workspace, project))
+		if err != nil {
+			t.Fatalf("LandJob: %v", err)
+		}
+		if !landed.Reviewed || !landed.Tested {
+			t.Fatalf("the job landed as reviewed=%v tested=%v, want both", landed.Reviewed, landed.Tested)
+		}
+		reread, err := s.GetJob(ctx, passed)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		if !reread.Reviewed || !reread.Tested {
+			t.Fatalf("the job reads back as reviewed=%v tested=%v, want both", reread.Reviewed, reread.Tested)
+		}
+	})
+
+	// The gate is refusable, so the declaration carries the answer and the store keeps it. A store that
+	// lost this would gate a job the caller declared without one, or worse, gate none of them.
+	t.Run("a job declared with the gate off reads back with the gate off", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+
+		declared := &job.Job{
+			ID: store.NewID(), Workspace: workspace, Project: project,
+			Title: "sort the listing", Brief: "make the listing sort by the clock it shows",
+			Repository: "atlantic-blue/quay-crew", Ungated: true,
+			Version: 1, Phase: job.PhasePending,
+		}
+		if err := s.CreateJob(ctx, declared, declaredEvent(declared)); err != nil {
+			t.Fatalf("CreateJob: %v", err)
+		}
+		found, err := s.GetJob(ctx, declared.ID)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		if !found.Ungated {
+			t.Fatal("a job declared with the gate off reads back with the gate on")
 		}
 	})
 

@@ -65,6 +65,7 @@ const (
 	flagRequires       = "--requires"
 	flagRepository     = "--repository"
 	flagProduct        = "--product"
+	flagNoGate         = "--no-gate"
 	flagParent         = "--parent"
 	flagPhase          = "--phase"
 	flagRoots          = "--roots"
@@ -106,6 +107,7 @@ func runJobCreate(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		Requires:       values[flagRequires],
 		Repository:     values.first(flagRepository),
 		Product:        values.first(flagProduct),
+		Ungated:        values.has(flagNoGate),
 	}
 	if labels, err := readLabels(values[flagLabel]); err != nil {
 		return err
@@ -403,6 +405,10 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	}
 	if one.GetRepository() != "" {
 		fmt.Fprintf(out, "in %s\n", one.GetRepository())
+		// What read this work, or that nothing did. A settled job that says only "done" is what the gate
+		// exists to end: the answer was the only evidence, and it was written by the session being
+		// judged.
+		fmt.Fprintf(out, "%s\n", gateOf(one).PassedBy())
 	}
 	if one.GetBudgetTokens() > 0 {
 		fmt.Fprintf(out, "budget %d tokens\n", one.GetBudgetTokens())
@@ -612,6 +618,15 @@ func findJob(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, t
 	}
 }
 
+// gateOf is a job as the gate reads it, off the wire. The sentence lives in the package that decides
+// it, so the tool and the system cannot say two different things about the same row.
+func gateOf(one *quaycrewv1.Job) job.Gate {
+	return job.Gate{
+		Repository: one.GetRepository(), Ungated: one.GetUngated(),
+		Reviewed: one.GetReviewed(), Tested: one.GetTested(), Phase: one.GetPhase(),
+	}
+}
+
 // given is what an invocation gave for each flag, in the order it gave them, so a flag that may be
 // repeated keeps its order and one that may not is read with first.
 type given map[string][]string
@@ -628,8 +643,9 @@ func (g given) has(name string) bool { return len(g[name]) > 0 }
 // valuelessFlags are the flags that are a word on their own. Each says which of two things a
 // command does rather than carrying a value, so the word after one belongs to the command.
 var valuelessFlags = map[string]bool{
-	flagRoots: true,
-	flagClear: true,
+	flagRoots:  true,
+	flagClear:  true,
+	flagNoGate: true,
 }
 
 // readFlags separates the values from the words.// readFlags separates the values from the words. This tool takes no flags anywhere else, so the
@@ -694,7 +710,7 @@ func jobFlagsTaken() map[string]bool {
 	taken := map[string]bool{}
 	for _, name := range []string{
 		flagTitle, flagBrief, flagRole, flagMode, flagExpectFile, flagExpectContains, flagRepository,
-		flagProduct,
+		flagProduct, flagNoGate,
 		flagAfter, flagDeadline, flagBudgetTokens, flagLabel, flagRequires, flagPhase, flagRoots,
 		// Taken so it can be refused with the sentence that says where a parent comes from,
 		// rather than with the tool's general refusal of flags.

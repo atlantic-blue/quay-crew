@@ -523,6 +523,10 @@ func (r *rows) LandJob(_ context.Context, id string, landed job.Landing, event *
 	if landed.PullRequest != "" {
 		one.PullRequest = landed.PullRequest
 	}
+	// What read this work before it settled, the way both stores keep it. A double that dropped these
+	// would report every job as passed by nothing, or worse, let a test pass over a row the real system
+	// writes differently.
+	one.Reviewed, one.Tested = landed.Reviewed, landed.Tested
 	one.SpentTokens, one.ObservedVersion = landed.SpentTokens, one.Version
 	one.LeaseOwner, one.LeaseUntil = "", nil
 	one.FinishedAt, one.UpdatedAt = &now, now

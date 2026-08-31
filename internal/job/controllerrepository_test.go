@@ -21,6 +21,17 @@ func inARepository(title string) *job.Job {
 	return declared
 }
 
+// withTheGateOff is a job declared with the settle gate off.
+//
+// A test about the pull request rule, or about what a continued attempt has to say, ends where that
+// rule ends. A job that names a repository is otherwise held back until a reviewer and a tester have
+// passed it, and driving two gates through every one of these tests would make each of them about
+// two things. The gate has its own tests.
+func withTheGateOff(one *job.Job) *job.Job {
+	one.Ungated = true
+	return one
+}
+
 // The session is told how the job ends, by the system rather than by whoever wrote the brief. A brief
 // that forgets to ask for a push produces work nobody can see, and every brief forgets eventually.
 func TestASessionDoingAJobInARepositoryIsToldItEndsInAPullRequest(t *testing.T) {
@@ -59,7 +70,7 @@ func TestASessionDoingAJobInNoRepositoryIsAskedForNoPullRequest(t *testing.T) {
 
 func TestAnAnswerNamingThePullRequestLeavesTheJobDoneAndSaysWhereTheWorkIs(t *testing.T) {
 	controller, kept, plane := aController(t)
-	one := kept.add(inARepository("make the listing sort by the clock it shows"))
+	one := kept.add(withTheGateOff(inARepository("make the listing sort by the clock it shows")))
 	ctx := context.Background()
 
 	controller.Tick(ctx)
@@ -114,7 +125,7 @@ func TestAnAnswerNamingNoPullRequestSendsTheSessionBackForOne(t *testing.T) {
 // And the ask works: the session opens the pull request and the job is done, carrying the address.
 func TestASessionThatOpensThePullRequestWhenAskedLeavesTheJobDone(t *testing.T) {
 	controller, kept, plane := aController(t)
-	one := kept.add(inARepository("make the listing sort by the clock it shows"))
+	one := kept.add(withTheGateOff(inARepository("make the listing sort by the clock it shows")))
 	ctx := context.Background()
 
 	controller.Tick(ctx)
