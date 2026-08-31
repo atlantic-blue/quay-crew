@@ -142,3 +142,45 @@ func TestAWorkspaceCannotBeCalledTheWordTheLevelUsedToTake(t *testing.T) {
 		t.Fatalf("ValidateWorkspace(\"crew-quarters\") = %v, want it accepted", err)
 	}
 }
+
+// A reserved word is reserved however it was typed.
+//
+// A name is lowercase letters, digits and hyphens, so neither reserved word can ever be capitalised
+// and still be a name. The general rule read "System" and answered with the typed name lowercased,
+// which is "system", the one name a workspace may not hold. The operator was told to type the very
+// thing that is refused, so the rule read as not applying here.
+func TestTheReservedWordsAreRefusedHoweverTheyAreTyped(t *testing.T) {
+	for _, typed := range []string{"System", "SYSTEM", "sYsTeM", "Crew", "CREW"} {
+		err := name.ValidateWorkspace(typed)
+		if err == nil {
+			t.Fatalf("ValidateWorkspace(%q) = nil, want a refusal", typed)
+		}
+		// The refusal that names the word, rather than the one that says to lowercase it.
+		if strings.Contains(err.Error(), "lowercase letters, digits and hyphens") {
+			t.Fatalf("ValidateWorkspace(%q) = %q, which advises typing a name this refuses", typed, err)
+		}
+		if !strings.Contains(err.Error(), name.System) {
+			t.Fatalf("ValidateWorkspace(%q) = %q, and it never says the word", typed, err)
+		}
+	}
+}
+
+// The same for the word where an address goes. "Crew" typed at a command answered that this system
+// has no workspace called Crew, which sends the operator looking for a workspace.
+func TestTheWordTheLevelUsedToTakeIsRefusedHoweverItIsTyped(t *testing.T) {
+	for _, typed := range []string{"Crew", "CREW", "cReW", "  Crew  "} {
+		err := name.RefuseRetired(typed)
+		if err == nil {
+			t.Fatalf("RefuseRetired(%q) = nil, want the refusal that says what to type", typed)
+		}
+		if !strings.Contains(err.Error(), name.System) {
+			t.Fatalf("RefuseRetired(%q) = %q, and it never says to type %q", typed, err, name.System)
+		}
+	}
+	// Only the word itself. A name that contains it is somebody's workspace.
+	for _, typed := range []string{"Crews", "Crew-cut", "Acme"} {
+		if err := name.RefuseRetired(typed); err != nil {
+			t.Fatalf("RefuseRetired(%q) = %v, want it left alone", typed, err)
+		}
+	}
+}

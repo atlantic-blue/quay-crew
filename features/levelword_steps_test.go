@@ -53,6 +53,14 @@ func initializeLevelWordSteps(sc *godog.ScenarioContext) {
 		return says("standard error", toolFrom(ctx).stderr, name.RefuseRetired(theLevelWordThatWent).Error())
 	})
 
+	// The refusal that names the word, rather than the general one about names, whose advice is the
+	// typed name lowercased and therefore a name this refuses.
+	sc.Step(`^standard error never says "([^"]*)"$`, func(ctx context.Context, never string) error {
+		if strings.Contains(toolFrom(ctx).stderr, never) {
+			return fmt.Errorf("standard error says %q, which is the refusal that advises typing a reserved word", never)
+		}
+		return nil
+	})
 	sc.Step(`^the caller asks for the manual$`, func(ctx context.Context) error {
 		return runTool(ctx, "manual")
 	})
