@@ -102,7 +102,7 @@ a stated point, which is when no session started under the old build is still ru
 
 ## Decision 5: the local sandbox image tag
 
-Today the tag is `quaycrew-sandbox-claude:local`. It appears in eight places, including the
+Today the tag is `quaycrew-sandbox-claude:local`. It appears 14 times in 10 files, including the
 `Makefile`, the continuous integration workflow and `deploy/env.example`.
 
 **Recommendation. The tag becomes `bluequay-sandbox-claude:local`. The operator runs `make
@@ -116,7 +116,7 @@ absent. The changelog entry names both the retag and the rebuild.
 
 ## Decision 6: the wordmark
 
-Today the console header draws QUAY in four block letters, three rows tall and 35 columns wide, in
+Today the console header draws QUAY in four block letters, three rows tall and 36 columns wide, in
 `internal/console/view.go`.
 
 **Recommendation. The drawn wordmark stays QUAY. The header's own status text carries the whole
@@ -187,8 +187,11 @@ current full names, and to leave the Postgres database name, user and password d
 `quaycrew`. Those three are internal and no person reads them. The compose project name still moves
 to `bluequay`, so the container prefix and the project agree.
 
-The cost is honest and it is real. Seven occurrences of `quaycrew` stay in
-`deploy/docker-compose.yml` with a comment saying why. So issue 517's acceptance criterion, that no
+The cost is honest and it is real. Eleven occurrences of `quaycrew` stay in
+`deploy/docker-compose.yml`, with a comment saying why: seven in the database name, the user and the
+password default, and four in the pinned volume names. Only the Postgres volume is irreplaceable.
+The other three hold the event log and the telemetry, which the store can produce again, and they
+are pinned so that nothing goes missing without a word. So issue 517's acceptance criterion, that no
 string `quay` remains in the code, is not met by this plan.
 
 **The memory file mark stays `quay:`, and this plan found it too.** `internal/sandbox/memory.go`
@@ -281,4 +284,5 @@ asked for a plan, did no work, and holds.
 
 That live job dies with the sandbox it ran in. This file is the plan that survives, and those seven
 steps are the seven pull requests listed above.
+
 
