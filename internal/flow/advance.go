@@ -1,9 +1,12 @@
 package flow
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/atlantic-blue/krewe/internal/job"
 )
 
 // Run statuses. Failed is a run the graph could not carry any further, which is different from a
@@ -80,6 +83,44 @@ type Run struct {
 	DueIn time.Duration
 }
 
+// The state a run keeps about the product, which is the one sentence it serves.
+//
+// Both are ordinary state keys, so a prompt renders the sentence with {{product}} and a choice can
+// read either one without the graph needing an expression language.
+const (
+	// stateProduct is the sentence the run serves now. It opens as the graph's own and is replaced by
+	// an answer at the first usable path, which is the whole point: the answer of no is a new
+	// sentence, and the run carries on from it.
+	stateProduct = "product"
+	// stateProductAsked is "true" once the run has stopped for a person to use what it built. A run
+	// stops once. A graph that loops back over the same step must not ask a question the operator
+	// already answered.
+	stateProductAsked = "product.asked"
+)
+
+// theAnswerThatCarriesOn is the answer at the first usable path that means the product is right.
+// Anything else is read as the sentence the operator wanted instead.
+const theAnswerThatCarriesOn = "yes"
+
+// ErrNotASentence is what an answer at the first usable path could not be read as. It is the
+// operator's typing rather than a fault in the system, so the run stays where it is and the caller
+// is told what to type instead.
+var ErrNotASentence = errors.New("flow: this answer is not a sentence a run can serve")
+
+// askingWhetherItIsTheProduct is the one question a run puts at the first thing a person can open.
+//
+// It names the address and the sentence, so the answer is about the product rather than about the
+// code. A person who is shown a change and asked whether it is correct answers about the code,
+// because that is the only thing in front of them.
+func askingWhetherItIsTheProduct(sentence, address string) string {
+	return fmt.Sprintf("This is the first thing a person can open, and it is here: %s\n\n"+
+		"It was built to serve one sentence, which is what a person does and what they get back: %s\n\n"+
+		"Open it and use it. Does it do what that sentence says?\n\n"+
+		"Answer %s and the run carries on. Answer with the sentence you wanted instead, and the run "+
+		"replaces this one with yours and carries on from that. Answer about the product, not about "+
+		"the code.", address, sentence, theAnswerThatCarriesOn)
+}
+
 // Event is one thing that happened to a run.
 type Event struct {
 	Kind string
@@ -147,6 +188,18 @@ func Advance(graph Graph, run Run, event Event) (Run, []Command, error) {
 		// Under one name, so an ordinary choice reads a person's decision and the graph needs no
 		// expression language to branch on it.
 		run.State["answer"] = event.Answer
+		// At the first usable path the question was about the product, so anything but yes is the
+		// sentence the operator wanted instead. The run carries on either way: an answer of no there
+		// costs the one step that was built, and the same answer at the end costs the whole run.
+		if graph.Nodes[run.Node].Usable {
+			instead, err := theSentenceInstead(event.Answer)
+			if err != nil {
+				return run, nil, err
+			}
+			if instead != "" {
+				run.State[stateProduct] = instead
+			}
+		}
 		next, err := follow(graph, run.Node, "")
 		if err != nil {
 			return run, nil, err
@@ -201,6 +254,9 @@ func Advance(graph Graph, run Run, event Event) (Run, []Command, error) {
 				run.Node, event.Unmet)
 			return run, nil, nil
 		}
+		if putDown := theFirstUsableStop(graph, &run, event.Reply); putDown {
+			return run, nil, nil
+		}
 		next, err := follow(graph, run.Node, "")
 		if err != nil {
 			return run, nil, err
@@ -209,6 +265,66 @@ func Advance(graph Graph, run Run, event Event) (Run, []Command, error) {
 	default:
 		return run, nil, fmt.Errorf("flow: run %s was handed an event of kind %q", run.ID, event.Kind)
 	}
+}
+
+// theFirstUsableStop puts the run down at the first thing a person can open, and says whether it
+// put it down.
+//
+// This is the moment the whole feature exists for. A run that builds something a person can open
+// used to build all of it, pass every check, and be opened two days later by an operator who could
+// not use it. The stop costs one step. The same answer at the end costs the run.
+//
+// It stops once. A graph that loops back over the step must not put a question the operator has
+// already answered, so the run remembers that it asked rather than counting attempts: an answer of
+// no is meant to send the work round again, and the second time round the sentence is the new one.
+//
+// A step that replied with no address stops the run instead. A question naming an address a person
+// cannot open is a question about nothing, and the run walking on would be a run whose one gate
+// passed by being empty.
+func theFirstUsableStop(graph Graph, run *Run, reply string) bool {
+	node, known := graph.Nodes[run.Node]
+	if !known || !node.Usable || run.State[stateProductAsked] == "true" {
+		return false
+	}
+	address := strings.TrimSpace(reply)
+	if address == "" {
+		run.Status = StatusStopped
+		run.Reason = fmt.Sprintf("stopped at %s, which is the first thing a person can open and replied "+
+			"with no address, so the operator would be asked about something they cannot open; have the "+
+			"step reply with the address", run.Node)
+		return true
+	}
+	sentence := run.State[stateProduct]
+	if sentence == "" {
+		sentence = graph.Product
+	}
+	run.State[stateProduct], run.State[stateProductAsked] = sentence, "true"
+	run.Status, run.Question = StatusAsking, askingWhetherItIsTheProduct(sentence, address)
+	return true
+}
+
+// theSentenceInstead is what an answer at the first usable path replaces the sentence with, and the
+// refusal where it could not be read as one. Empty means the answer was yes and nothing changes.
+//
+// An empty answer is refused rather than read as a yes. Silence taking the product further is the
+// failure this whole gate exists to stop, and it is the same rule an ask node already keeps: nothing
+// but an answer moves a run that is asking.
+func theSentenceInstead(answer string) (string, error) {
+	tidy := job.TidySentence(answer)
+	if strings.EqualFold(tidy, theAnswerThatCarriesOn) {
+		return "", nil
+	}
+	switch {
+	case tidy == "":
+		return "", fmt.Errorf("%w: the answer is empty, and the run is waiting to be told whether what it "+
+			"built is the product: answer %s if it does what the sentence says, or answer with the sentence "+
+			"you wanted instead", ErrNotASentence, theAnswerThatCarriesOn)
+	case len(tidy) > job.ProductLimit:
+		return "", fmt.Errorf("%w: this answer is %d bytes and the sentence it replaces may be %d: say what "+
+			"somebody does and what they get back, and leave the rest to the steps that build it",
+			ErrNotASentence, len(tidy), job.ProductLimit)
+	}
+	return tidy, nil
 }
 
 // brake stops a run that has reached a limit, saying which one in words the operator can act on.

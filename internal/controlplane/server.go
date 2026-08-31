@@ -325,6 +325,9 @@ func NewServer(cfg Config) *Server {
 		// The credentials a job's sessions hold, taken back the moment the job ends. It is what ends
 		// a credential in a working system; its expiry is the backstop behind it.
 		Revoking(server).
+		// The work a job leaves behind, pushed rather than described. Without it a job that stops
+		// without a pull request can only say that the system cannot reach its files.
+		Publishing(server).
 		// The signal that stops a reclaim closing a container an operator is typing into. Without it
 		// the controller reclaims nothing, whatever the workspace's times say.
 		Watching(server)
@@ -1171,9 +1174,9 @@ func (s *Server) ListProjects(ctx context.Context, req *quaycrewv1.ListProjectsR
 //
 // The address is held to its shape here, while the person who typed it is looking, for the same
 // reason a job's is: an address nothing can be pushed to is worth finding out about now rather than
-// an hour into the work. The kind is held to two words, and saying nothing means public, because
-// free pipeline minutes are the cheaper of the two and a project that cannot be public is the one
-// that has to say so.
+// an hour into the work. The kind is held to two words. Saying nothing keeps the kind the project
+// holds, and means public on a project nobody has told, because free pipeline minutes are the cheaper
+// of the two and a project that cannot be public is the one that has to say so.
 func (s *Server) SetProjectRepository(ctx context.Context, req *quaycrewv1.SetProjectRepositoryRequest) (*quaycrewv1.SetProjectRepositoryResponse, error) {
 	if req.GetProject() == "" {
 		return nil, status.Error(codes.InvalidArgument, "which project: say where with an address")
@@ -1185,6 +1188,19 @@ func (s *Server) SetProjectRepository(ctx context.Context, req *quaycrewv1.SetPr
 	kind, err := repository.Kind(req.GetVisibility())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	// An omitted kind keeps the kind the project holds. Saying nothing means public on a project
+	// nobody has told, and it used to mean public on every write, so an operator correcting an
+	// address dropped that project from private to public in the same command and was told in the
+	// same breath that its pipeline minutes were free.
+	if strings.TrimSpace(req.GetVisibility()) == "" {
+		held, err := s.store.GetProject(ctx, req.GetProject())
+		if err != nil {
+			return nil, storeError(err, "project")
+		}
+		if held.GetVisibility() != "" {
+			kind = held.GetVisibility()
+		}
 	}
 	recorded, err := s.store.SetProjectRepository(ctx, req.GetProject(), address, kind)
 	if err != nil {
@@ -2033,6 +2049,7 @@ func (s *Server) ListSessions(ctx context.Context, req *quaycrewv1.ListSessionsR
 	for _, session := range sessions {
 		s.withUsage(session)
 		s.withContextWindow(session)
+		s.withContextSpend(session)
 	}
 	s.withStaleness(ctx, sessions)
 	if req.GetPresence() {
@@ -2049,6 +2066,7 @@ func (s *Server) GetSession(ctx context.Context, req *quaycrewv1.GetSessionReque
 	}
 	s.withUsage(session)
 	s.withContextWindow(session)
+	s.withContextSpend(session)
 	s.withStaleness(ctx, []*quaycrewv1.Session{session})
 	return &quaycrewv1.GetSessionResponse{Session: session}, nil
 }
@@ -2108,6 +2126,27 @@ func (s *Server) withContextWindow(session *quaycrewv1.Session) {
 	}
 	size, _ := s.storage.ContextWindowSize(session.GetWorkspace())
 	session.ContextWindow = &quaycrewv1.ContextWindow{Used: carried.Carried(), Size: size}
+}
+
+// withContextSpend puts where a session's context went onto it, by category.
+//
+// The window's share says a session is nearly full and nothing about what filled it, so a person
+// reading it cannot say whether the answer is to read differently, to run fewer commands, or to stop
+// the session going round in circles. This is that answer.
+//
+// It costs nothing beyond the two readings above: all three come out of one pass over the transcript,
+// kept until the file changes.
+//
+// A conversation nobody has spoken in is left without a breakdown rather than given four zeroes,
+// which is the same rule the cost and the window follow.
+func (s *Server) withContextSpend(session *quaycrewv1.Session) {
+	spent := s.storage.ConversationSpend(boxOf(session), session.GetModelSessionId())
+	if spent.Empty() {
+		return
+	}
+	session.ContextSpend = &quaycrewv1.ContextSpend{
+		Reads: spent.Reads, Tools: spent.Tools, Turns: spent.Turns, Told: spent.Told,
+	}
 }
 
 // AttachSession describes how to open a session's conversation.

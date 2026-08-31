@@ -75,6 +75,18 @@ type Provider interface {
 	// every container runs on; removing by name is what makes stopping a session mean something then.
 	// A sandbox that is not there is a remove that already happened, not an error.
 	Remove(ctx context.Context, sessionID string) error
+	// Existing is a sandbox over the container this session already has, and false where there is
+	// none. It never makes one.
+	//
+	// It is the difference between reaching into a session and starting one. Create adopts a
+	// container by name and makes one where there is nothing to adopt, which is right for a task and
+	// wrong for the system going to fetch what a finished job left behind: a job that ends is a job
+	// whose session may have been reclaimed, and creating a container to look inside it would cost a
+	// machine a sandbox and find an empty directory.
+	//
+	// A container that has stopped is started, the way Create adopts one, because a stopped container
+	// still holds the session's files and the credential helper that reaches its remote.
+	Existing(ctx context.Context, sessionID string) (Sandbox, bool, error)
 	// Stranded lists the sessions whose sandboxes this provider still holds, so the system can reap the
 	// ones whose sessions no longer want one.
 	Stranded(ctx context.Context) ([]string, error)

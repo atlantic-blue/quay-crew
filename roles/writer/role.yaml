@@ -1,0 +1,8 @@
+name: writer
+version: 1
+summary: writes a draft for a person outside the work to read, from the material it was given, and refuses a figure it cannot cite or a draft that states no cost
+model: opus
+receives:
+  - job
+  - context
+  - skills

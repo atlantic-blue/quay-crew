@@ -89,6 +89,8 @@ Then run `krewe` with no arguments to open the console. `make help` lists every 
   skill is, and how each one reaches a session.
 - [`docs/DATABASE.md`](docs/DATABASE.md), [`docs/EVENTS.md`](docs/EVENTS.md) and
   [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md): the store, the event log and the signals.
+- [`docs/CONTEXT-SPEND.md`](docs/CONTEXT-SPEND.md): where a session's context actually goes, measured,
+  and the run to repeat it. Read it before proposing a change to how a session reads code.
 
 ## License
 

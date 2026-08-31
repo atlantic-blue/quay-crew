@@ -65,16 +65,10 @@ func sayMode(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, s
 // spokenOf is the word for a stored mode. A session from before the mode was written down holds
 // nothing, and runs acceptEdits, so an empty value reads as "edits" rather than as blank, which
 // would look like it asks about everything.
-func spokenOf(stored string) string {
-	switch stored {
-	case model.PermissionPlan:
-		return "plan"
-	case model.PermissionBypass:
-		return "dangerous"
-	default:
-		return "edits"
-	}
-}
+//
+// The words live in the model layer, with the table that reads them back, because a surface that
+// prints one word and takes another is how the two drift.
+func spokenOf(stored string) string { return model.PermissionModeSpoken(stored) }
 
 // offeredModes lists what can be typed, in the order they widen what a task may do.
 func offeredModes() string {

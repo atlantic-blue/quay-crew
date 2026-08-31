@@ -132,6 +132,16 @@ The contract, which another service may depend on:
   reason.
 - `job.stopped`, when a person stopped it, or a limit did, or its claim did not hold.
 - `job.asked`, when it put a question to a person. The detail is the question.
+- `job.looped`, when three attempts at one step were too alike to tell apart. The detail says the
+  step, how alike they were, and what the job escalated to. It is written whether the job then asks
+  a person, is handed to another role, or stops, because the loop is the thing that happened and
+  where it went is what the job declared.
+- `job.held`, when the machine had no room for its sandbox. The job stays pending, so it is not a
+  movement, and it is written once per reason rather than once per tick.
+- `job.unstuck`, when nothing at all was running while this job waited for room, so the system took
+  back the container that had been idle longest and freed the room itself. The detail names how many
+  jobs were waiting, which container went, and how long that container had been idle. The job is
+  pending before it and pending after it: what changed is the machine.
 - `job.told`, when that person answered it. The detail is the answer. The pair is the record of every
   decision a run stopped for, so somebody reading it afterwards learns what was chosen without
   opening a container that is long gone.
@@ -147,6 +157,12 @@ job. They are the four kinds
   movements it took and what it spent.
 - `flow.run.stopped`, when the run was halted instead: a limit, a refusal, or a person. The detail is
   the reason.
+
+One more, added by [issue 520](https://github.com/atlantic-blue/quay-crew/issues/520):
+
+- `flow.product.replaced`, when the operator, shown the first thing a person can open, answered with
+  the sentence they wanted instead. The detail is the new sentence, so the tree says what the rest of
+  the work was done against rather than only what it started against.
 
 One history rather than two, which is why they are here and not on a stream of their own. Every step
 the run took is a job under the same one, so its `job.*` records are beside these.

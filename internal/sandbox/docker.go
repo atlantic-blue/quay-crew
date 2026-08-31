@@ -403,3 +403,17 @@ func ImageBuild(ctx context.Context, image string) string {
 	}
 	return build
 }
+
+// Existing is a sandbox over the container this session already has, and false where the daemon holds
+// none by that name. It never creates one: it is how the system reaches into a session that has
+// finished rather than starting one that has not.
+func (d DockerProvider) Existing(ctx context.Context, sessionID string) (Sandbox, bool, error) {
+	box, err := d.adopt(ctx, ContainerName(sessionID))
+	if err != nil {
+		return nil, false, err
+	}
+	if box == nil {
+		return nil, false, nil
+	}
+	return box, true, nil
+}

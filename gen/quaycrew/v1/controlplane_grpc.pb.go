@@ -56,6 +56,7 @@ const (
 	ControlPlaneService_SetSessionLabel_FullMethodName          = "/quaycrew.v1.ControlPlaneService/SetSessionLabel"
 	ControlPlaneService_ListContexts_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ListContexts"
 	ControlPlaneService_SetContext_FullMethodName               = "/quaycrew.v1.ControlPlaneService/SetContext"
+	ControlPlaneService_ReadSessionWork_FullMethodName          = "/quaycrew.v1.ControlPlaneService/ReadSessionWork"
 	ControlPlaneService_ImportSkill_FullMethodName              = "/quaycrew.v1.ControlPlaneService/ImportSkill"
 	ControlPlaneService_ListSkills_FullMethodName               = "/quaycrew.v1.ControlPlaneService/ListSkills"
 	ControlPlaneService_AttachSkill_FullMethodName              = "/quaycrew.v1.ControlPlaneService/AttachSkill"
@@ -138,6 +139,8 @@ type ControlPlaneServiceClient interface {
 	SetSessionLabel(ctx context.Context, in *SetSessionLabelRequest, opts ...grpc.CallOption) (*SetSessionLabelResponse, error)
 	ListContexts(ctx context.Context, in *ListContextsRequest, opts ...grpc.CallOption) (*ListContextsResponse, error)
 	SetContext(ctx context.Context, in *SetContextRequest, opts ...grpc.CallOption) (*SetContextResponse, error)
+	// Reads a file, or a listing, out of the work a session left behind, without attaching to it.
+	ReadSessionWork(ctx context.Context, in *ReadSessionWorkRequest, opts ...grpc.CallOption) (*ReadSessionWorkResponse, error)
 	ImportSkill(ctx context.Context, in *ImportSkillRequest, opts ...grpc.CallOption) (*ImportSkillResponse, error)
 	ListSkills(ctx context.Context, in *ListSkillsRequest, opts ...grpc.CallOption) (*ListSkillsResponse, error)
 	AttachSkill(ctx context.Context, in *AttachSkillRequest, opts ...grpc.CallOption) (*AttachSkillResponse, error)
@@ -571,6 +574,16 @@ func (c *controlPlaneServiceClient) SetContext(ctx context.Context, in *SetConte
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ReadSessionWork(ctx context.Context, in *ReadSessionWorkRequest, opts ...grpc.CallOption) (*ReadSessionWorkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReadSessionWorkResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ReadSessionWork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) ImportSkill(ctx context.Context, in *ImportSkillRequest, opts ...grpc.CallOption) (*ImportSkillResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ImportSkillResponse)
@@ -948,6 +961,8 @@ type ControlPlaneServiceServer interface {
 	SetSessionLabel(context.Context, *SetSessionLabelRequest) (*SetSessionLabelResponse, error)
 	ListContexts(context.Context, *ListContextsRequest) (*ListContextsResponse, error)
 	SetContext(context.Context, *SetContextRequest) (*SetContextResponse, error)
+	// Reads a file, or a listing, out of the work a session left behind, without attaching to it.
+	ReadSessionWork(context.Context, *ReadSessionWorkRequest) (*ReadSessionWorkResponse, error)
 	ImportSkill(context.Context, *ImportSkillRequest) (*ImportSkillResponse, error)
 	ListSkills(context.Context, *ListSkillsRequest) (*ListSkillsResponse, error)
 	AttachSkill(context.Context, *AttachSkillRequest) (*AttachSkillResponse, error)
@@ -1121,6 +1136,9 @@ func (UnimplementedControlPlaneServiceServer) ListContexts(context.Context, *Lis
 }
 func (UnimplementedControlPlaneServiceServer) SetContext(context.Context, *SetContextRequest) (*SetContextResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetContext not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ReadSessionWork(context.Context, *ReadSessionWorkRequest) (*ReadSessionWorkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReadSessionWork not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ImportSkill(context.Context, *ImportSkillRequest) (*ImportSkillResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ImportSkill not implemented")
@@ -1908,6 +1926,24 @@ func _ControlPlaneService_SetContext_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ReadSessionWork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadSessionWorkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ReadSessionWork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ReadSessionWork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ReadSessionWork(ctx, req.(*ReadSessionWorkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ImportSkill_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ImportSkillRequest)
 	if err := dec(in); err != nil {
@@ -2656,6 +2692,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetContext",
 			Handler:    _ControlPlaneService_SetContext_Handler,
+		},
+		{
+			MethodName: "ReadSessionWork",
+			Handler:    _ControlPlaneService_ReadSessionWork_Handler,
 		},
 		{
 			MethodName: "ImportSkill",

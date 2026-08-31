@@ -83,3 +83,57 @@ func TestWideningIsMovingTowardsDoingMore(t *testing.T) {
 		})
 	}
 }
+
+// One place answers whether a mode runs a network command without asking, because two surfaces read
+// it: the declaration of a job that must clone and push, and the controller that would otherwise ask
+// a session to push in the mode that already stopped it.
+//
+// The refusal first. A predicate that answered true for everything would satisfy every test that
+// admits, and the whole point of it is what it refuses.
+func TestOnlyTheWidestModeReachesTheNetwork(t *testing.T) {
+	for _, tc := range []struct {
+		mode    string
+		reaches bool
+	}{
+		// Plan proposes and runs nothing.
+		{mode: model.PermissionPlan, reaches: false},
+		{mode: "plan", reaches: false},
+		// Edits writes the files in the working directory and asks a person before it runs a command.
+		// Nobody stands beside a dispatched job, so the approval never arrives.
+		{mode: model.PermissionAcceptEdits, reaches: false},
+		{mode: "edits", reaches: false},
+		{mode: model.PermissionBypass, reaches: true},
+		{mode: "dangerous", reaches: true},
+		{mode: "bypassPermissions", reaches: true},
+		// A mode nobody set counts as the mode a session with nothing set actually runs in, which is
+		// edits, so the empty case answers what the session will do rather than nothing at all.
+		{mode: "", reaches: false},
+		{mode: "yolo", reaches: false},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			if got := model.PermissionModeReachesTheNetwork(tc.mode); got != tc.reaches {
+				t.Fatalf("mode %q reaches the network: %v, want %v", tc.mode, got, tc.reaches)
+			}
+		})
+	}
+}
+
+// A refusal says the mode in the word a person types back, whichever spelling it was written in.
+func TestAModeIsSaidInTheWordSomebodyTypes(t *testing.T) {
+	for _, tc := range []struct{ mode, spoken string }{
+		{mode: model.PermissionAcceptEdits, spoken: "edits"},
+		{mode: model.PermissionBypass, spoken: "dangerous"},
+		{mode: model.PermissionPlan, spoken: "plan"},
+		{mode: "dangerous", spoken: "dangerous"},
+		{mode: "", spoken: "edits"},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			if got := model.PermissionModeSpoken(tc.mode); got != tc.spoken {
+				t.Fatalf("mode %q is said as %q, want %q", tc.mode, got, tc.spoken)
+			}
+		})
+	}
+	if got := model.PermissionModeOnTheNetwork(); got != "dangerous" {
+		t.Fatalf("the mode that reaches the network is offered as %q, want dangerous", got)
+	}
+}
