@@ -77,7 +77,8 @@ func ContextLabel(session *quaycrewv1.Session) string {
 // The band rather than a second setting, because the standard the ceiling comes from names a band
 // rather than a point: quality falls off between 50 and 70 per cent of a window and is poor past 70.
 // So a ceiling of 70 marks a session from 50, and a ceiling an operator moves takes its band with it.
-// It is as provisional as the ceiling is, and internal/job holds the same number for the same reason.
+// It is as provisional as the ceiling internal/job refuses work at, and it lives here because saying
+// which sessions are near one is a listing's job: the gate itself reads no band at all.
 const NearBand = 20
 
 // againstTheCeiling is the word beside the share, and nothing where the system stated no ceiling. A

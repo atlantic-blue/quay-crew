@@ -34,7 +34,7 @@ import (
 //
 // **This number is provisional and it is not measured.** It is taken from the standard quay-crew#539
 // names, which says quality falls off between 50 and 70 per cent of a window and is poor past 70. No
-// run of this crew produced it. What would replace it is a measurement of this crew's own answers
+// run recorded here produced it. What would replace it is a measurement of this system's own answers
 // against how full the window was when each was written, and nobody has taken one.
 const DefaultContextCeiling = 70
 

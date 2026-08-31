@@ -35,5 +35,5 @@ create index if not exists job_handoffs_job_idx on job_handoffs (job, seq);
 --
 -- This is the one number on this row that ships set rather than unset. It comes from the standard
 -- quay-crew#539 names, which says quality falls off between 50 and 70 per cent of a window and is
--- poor past 70, and from no measurement of this crew. A workspace that wants the gate off sets 100.
+-- poor past 70, and from no measurement anybody has taken here. A workspace that wants no gate sets 100.
 alter table workspace_limits add column if not exists context_ceiling_percent int not null default 0;

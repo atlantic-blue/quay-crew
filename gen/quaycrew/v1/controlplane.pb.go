@@ -10551,8 +10551,8 @@ type WorkspaceLimits struct {
 	//
 	// Unlike the other numbers on this row, the system ships this one set rather than unset. It is
 	// taken from the standard quay-crew#539 names, which says quality falls off between 50 and 70 per
-	// cent of a window and is poor past 70, and from no measurement of this crew. A workspace that
-	// wants the gate off sets it to 100, which refuses nothing until the window is full.
+	// cent of a window and is poor past 70, and from no measurement anybody has taken here. A
+	// workspace that wants the gate off sets it to 100, which refuses nothing until the window is full.
 	ContextCeilingPercent int32 `protobuf:"varint,10,opt,name=context_ceiling_percent,json=contextCeilingPercent,proto3" json:"context_ceiling_percent,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
