@@ -156,7 +156,7 @@ func aJobInARepository(t *testing.T) *aJobThatWillNotName {
 	_, project := newProject(t, server)
 	declared, err := server.CreateJob(context.Background(), &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "sort the listing", Brief: "make the listing sort by the clock it shows",
-		Repository: "atlantic-blue/krewe",
+		Repository: "atlantic-blue/krewe", Mode: model.PermissionBypass,
 	})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)

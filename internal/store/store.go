@@ -387,6 +387,11 @@ type Store interface {
 	// CreateJob writes the job and the record of its declaration in one transaction. A row with no
 	// record of how it came to exist, and a record of a declaration that is not there, are both
 	// states nothing can explain afterwards.
+	//
+	// A job that claims a piece of work another job is still holding is refused with a *job.Held
+	// naming that job, and nothing is written. The check belongs here rather than above the store
+	// because it has to happen inside the transaction that writes the row: a check made before the
+	// write is a check two callers declaring at the same moment both pass.
 	CreateJob(ctx context.Context, declared *job.Job, event *job.Event) error
 	// GetJob reads one job back, whole, its answer included.
 	GetJob(ctx context.Context, id string) (*job.Job, error)

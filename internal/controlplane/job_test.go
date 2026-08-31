@@ -777,3 +777,16 @@ func TestTheControllerReadsTheRoleTheWorkspaceHolds(t *testing.T) {
 		t.Fatalf("the refusal says %q, want the sentence naming the role and nothing wrapped round it", err)
 	}
 }
+
+// declareJobIn is a job declared in a mode, for the jobs that work in a repository: a repository is
+// reached over the network, and only one mode runs a network command without asking.
+func declareJobIn(t *testing.T, s *controlplane.Server, project, title, mode string) *quaycrewv1.Job {
+	t.Helper()
+	created, err := s.CreateJob(context.Background(), &quaycrewv1.CreateJobRequest{
+		Project: project, Title: title, Brief: "open the bill and say when it is due", Mode: mode,
+	})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+	return created.GetJob()
+}

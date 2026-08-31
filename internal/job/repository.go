@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/atlantic-blue/krewe/internal/model"
 	"github.com/atlantic-blue/krewe/internal/publish"
 	"github.com/atlantic-blue/krewe/internal/repository"
 )
@@ -134,35 +135,39 @@ func AskedForThePullRequest(repository string) string {
 //
 // It is written after the session has been asked a second time, so it says that too: a reason that
 // reads as though nobody tried sends somebody looking for a step that already happened.
+func NoPullRequest(repository, session string, found publish.Work) string {
+	return fmt.Sprintf("this job works in %s and no answer named a pull request against it, asked twice.",
+		repository) + whatBecameOfTheWork(session, found)
+}
+
+// whatBecameOfTheWork is the half of every one of these reasons an operator can act on.
 //
-// What it must never do is tell a person to go into a container. That is what it used to do, and it
-// is the whole of this behaviour: the system holds the work, on a mount it made itself, so it either
-// publishes the branch or it says where the bytes are. Both of those an operator can act on. "Open
-// it, and push what is there" asks them to learn the layout first, and makes them the transport.
+// What it must never do is tell a person to go into a container. That is what the reason used to do,
+// and it is the whole of this behaviour: the system holds the work, on a mount it made itself, so it
+// either publishes the branch or it says where the bytes are. Both of those an operator can act on.
+// "Open it, and push what is there" asks them to learn the layout first, and makes them the transport.
 //
 // Five sentences for five outcomes, and the empty one matters most. A reason that names a branch the
 // session never made sends the operator looking for work that was never done.
-func NoPullRequest(repository, session string, found publish.Work) string {
-	said := fmt.Sprintf("this job works in %s and no answer named a pull request against it, asked twice. ",
-		repository)
+func whatBecameOfTheWork(session string, found publish.Work) string {
 	switch found.State {
 	case publish.Pushed:
 		if found.Pushed {
-			return said + fmt.Sprintf("The system pushed the branch %s, so the work is in the repository: "+
+			return fmt.Sprintf(" The system pushed the branch %s, so the work is in the repository: "+
 				"open the pull request from it.", found.Branch)
 		}
-		return said + fmt.Sprintf("The branch %s is already in the repository, so the work is there: "+
+		return fmt.Sprintf(" The branch %s is already in the repository, so the work is there: "+
 			"open the pull request from it.", found.Branch)
 	case publish.Held:
-		return said + fmt.Sprintf("The system could not push %s: %s.%s",
+		return fmt.Sprintf(" The system could not push %s: %s.%s",
 			branchOrIt(found.Branch), found.Why, whereItIs(session, found.Host))
 	case publish.Nothing:
-		return said + "The session committed nothing, so there is no branch to push." +
+		return " The session committed nothing, so there is no branch to push." +
 			whereItIs(session, found.Host)
 	case publish.Absent:
-		return said + "The session holds no repository." + whereItIs(session, found.Host)
+		return " The session holds no repository." + whereItIs(session, found.Host)
 	default:
-		return said + fmt.Sprintf("The system could not read the work: %s.%s",
+		return fmt.Sprintf(" The system could not read the work: %s.%s",
 			found.Why, whereItIs(session, found.Host))
 	}
 }
@@ -176,8 +181,8 @@ func branchOrIt(branch string) string {
 	return "the branch " + branch
 }
 
-// whereItIs is the half of every reason an operator can act on: the directory the work is in, on the
-// machine that runs the sandboxes, and the command that reads it without opening anything.
+// whereItIs is the directory the work is in, on the machine that runs the sandboxes, and the command
+// that reads it without opening anything.
 //
 // A system that keeps nothing on disk has no path to give, and says that rather than printing an
 // empty one. It is the one case where the answer is that there is no answer, and it has to read as
@@ -188,4 +193,77 @@ func whereItIs(session, host string) string {
 	}
 	return fmt.Sprintf(" The work is at %s on the machine running the sandboxes, and krewe read %s reads it.",
 		host, session)
+}
+
+// A repository is reached over the network, so a job that names one needs a mode that reaches it.
+//
+// Every way into a repository is a command that needs the network: the clone, the push, the pull
+// request. The narrower modes ask a person before they run one, and nobody stands beside a dispatched
+// job, so the approval never arrives. The system held both facts at the moment of the write and never
+// compared them, so it admitted the job, spent the session, and said so at the end.
+
+// UsableModeFor refuses a job that works in a repository, in a mode somebody named that cannot reach
+// the network.
+//
+// Read twice, from the one answer in the model layer: here for the mode and the repository a caller
+// typed, and again at the control plane once the project's repository and the system's own mode have
+// been filled in.
+func UsableModeFor(repository, mode string) error {
+	return refuseTheMode(repository, mode,
+		fmt.Sprintf("this job names the mode %s", model.PermissionModeSpoken(mode)))
+}
+
+// UsableModeBornIn refuses the same pair where nobody named a mode, so the job takes the system's.
+// It is the path nobody types a flag for: a project holds the repository, every job declared in it
+// carries one, and the mode is whatever the system was configured with.
+func UsableModeBornIn(repository, mode string) error {
+	return refuseTheMode(repository, mode,
+		fmt.Sprintf("this job names no mode, so it runs in the system's, which is %s",
+			model.PermissionModeSpoken(mode)))
+}
+
+// refuseTheMode is the one sentence both refusals say, and the clause that says where the mode came
+// from is the only thing that differs.
+func refuseTheMode(repository, mode, named string) error {
+	if repository == "" || model.PermissionModeReachesTheNetwork(mode) {
+		return nil
+	}
+	return fmt.Errorf("this job works in %s, and every way into a repository needs the network: the "+
+		"clone, the push and the pull request. %s, and that mode asks a person before it runs a network "+
+		"command. Nobody stands beside a job, so the approval never arrives and the work stops inside "+
+		"the session. Declare it with --mode %s, or leave the repository off a job that does not work "+
+		"in a repository", repository, named, model.PermissionModeOnTheNetwork())
+}
+
+// WhyNoPullRequest is why a job that names a repository stopped without one, which is a different
+// sentence where the mode is the reason. Both sentences end the same way, with what became of the
+// work: the mode explains why nothing was pushed by the session, and it says nothing about where the
+// work went.
+func WhyNoPullRequest(repository, mode, session string, found publish.Work) string {
+	if ModeCannotPush(mode) {
+		return noPullRequestInThisMode(repository, mode, session, found)
+	}
+	return NoPullRequest(repository, session, found)
+}
+
+// ModeCannotPush says whether this job runs in a mode that stops it reaching its repository. A job
+// that names no mode is not one: the mode it runs in is the system's, and a controller does not hold
+// that, so it reads as the mode every job ran in before this was written down.
+func ModeCannotPush(mode string) bool {
+	return mode != "" && !model.PermissionModeReachesTheNetwork(mode)
+}
+
+// noPullRequestInThisMode says the mode is the reason, rather than sending somebody to look for a
+// push that was never going to happen.
+//
+// The mode holds the session and not the system. A narrow mode asks a person before the session runs
+// a network command, and the system's own push is not the session running anything, so the work is
+// still published here: what the mode cost is the pull request, not the branch.
+func noPullRequestInThisMode(repository, mode, session string, found publish.Work) string {
+	return fmt.Sprintf("this job works in %s and runs in mode %s, which asks a person before it runs a "+
+		"network command, so the session could never push. Nothing named a pull request against the "+
+		"repository, and the session was not asked again, because the ask would have ended the same way.",
+		repository, model.PermissionModeSpoken(mode)) +
+		whatBecameOfTheWork(session, found) +
+		fmt.Sprintf(" Declare the job again with --mode %s.", model.PermissionModeOnTheNetwork())
 }

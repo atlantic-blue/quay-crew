@@ -27,3 +27,8 @@ pipes, which attaching never did.
 sandbox is the host and has no container to run git in, so a local system says so and names the path
 instead. A job that fails, rather than stopping without a pull request, is not published: its work is
 still read with `krewe read`.
+
+**A job in a mode that could never push is published too.** The mode holds the session, not the
+system: a narrow mode asks a person before the session runs a network command, and the system's own
+push is not the session running anything. So that reason still explains the mode, and it now ends
+with what became of the work rather than leaving it in the session.

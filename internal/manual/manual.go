@@ -45,10 +45,14 @@ commands:
   project create [<workspace>/]<name>     create a project and move into it
   project list [<workspace>]              list projects
   project repository [<address>]          say where this project's work lands, and what kind of
-    [<owner>/<name>] [public|private]     repository that is. On its own it reads it back. A job
-                                          declared here works in it and ends in a pull request
-                                          against it. Public unless you say otherwise, because a
-                                          pipeline's minutes are free on a public repository
+    [<owner>/<name>] [public|private]     repository that is. On its own it reads it back. One
+                                          address is a write, and it is refused where that address
+                                          also names a project. A job declared here works in it and
+                                          ends in a pull request against it. Public unless you say
+                                          otherwise, because a pipeline's minutes are free on a
+                                          public repository, and a kind you leave out is the kind
+                                          the project already holds
+  project repository show [<address>]     read where a project's work lands, recording nothing
   project delete [<workspace>/]<project>  remove it and the sessions inside it, confirmed the same way
   flow import <file>                      store an automation graph the system can run
   flow start [<address>] <graph>          begin a run of it in a project
@@ -70,11 +74,14 @@ commands:
     [--expect-contains "..."]             names one is not done until its answer names a pull
     [--repository <owner>/<name>]         request against it. --product is one sentence in a
     [--product "..."]                     person's words: what somebody does with what gets built
-                                          and what they get back. Every job under this one carries
-                                          it, and it is what the design is read against. A brief
-                                          that asks the job to wait for the checks, or to merge on
-                                          the result, is refused: nothing wakes a job, so that
-                                          shape is a flow
+    [--claim <piece of work>]             and what they get back. Every job under this one carries
+                                          it, and it is what the design is read against. --claim is
+                                          the piece of work this job takes, an issue, a branch or a
+                                          name, and a second job claiming it is refused while this
+                                          one holds it, so two sessions cannot build the same slice.
+                                          A brief that asks the job to wait for the checks, or to
+                                          merge on the result, is refused: nothing wakes a job, so
+                                          that shape is a flow
   history [<address>|system]              what the system did over a window of time: what ran, what it
     [--since <date>] [--until <date>]     cost, and what failed and why. The read to make instead of
     [--limit <n>]                         being told. It prints the window added up, then one line
@@ -89,7 +96,8 @@ commands:
     [--parent <job>] [--roots]            every project. Narrow it further with --phase, --label,
                                           --parent or --roots
   job show <job>                          one job whole: what it is, where it got to,
-                                          why it stopped, and what came back
+                                          why it stopped, what came back, and where its session
+                                          spent its context
   job stop <job> [<reason>]               halt a job that has not ended, keeping the reason
   job ask "<question>"                    put a question to a person about the job you are running,
                                           when a decision no measurement settles is in your way.
@@ -152,9 +160,12 @@ commands:
                                           status column says what is inside each sandbox: awake is a
                                           conversation running with nobody watching it, attached is
                                           somebody in it, idle is an empty container, and unknown is
-                                          the system asking the sandbox and not being told. Last
-                                          moved first, so the session you were last working in is at
-                                          the top and the age column reads down the list
+                                          the system asking the sandbox and not being told. The
+                                          spent on column says what filled the context: reads is
+                                          files, tools is what every other tool returned, turns is
+                                          the session's own words, and told is what it was given.
+                                          Last moved first, so the session you were last working in
+                                          is at the top and the age column reads down the list
   read <session> [<path>]                 what a session made, out of the directory the system keeps
                                           for it. With no path it lists what is there and names the
                                           directory on the machine; with one it prints that file, so
@@ -229,7 +240,7 @@ commands:
   role import <directory>                 take a role into the system from its directory. A role is a
                                           named way of working: a brief, the model it runs on, and
                                           the material it may receive
-                                          this build ships twelve in roles/ at the root of the
+                                          this build ships sixteen in roles/ at the root of the
                                           repository, and a fresh system is seeded with none of them
   role list [<workspace>]                 what roles the system holds, or what one workspace holds
   role show [<workspace>] <name>          read one role back whole: what it is, what it may do, who

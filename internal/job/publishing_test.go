@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/krewe/internal/model"
 	"github.com/atlantic-blue/krewe/internal/publish"
 )
 
@@ -120,20 +121,13 @@ func TestNoReasonEverTellsAPersonToOpenAContainer(t *testing.T) {
 		{State: publish.Unreadable, Why: "this system keeps no working directory on disk"},
 		{},
 	}
-	// The words the old sentence used, and the ones any rewrite of it would reach for.
-	banned := []string{"open it", "open the container", "attach", "and push what is there"}
+	// Both sentences, because there are two now: the one about the mode and the one about the pull
+	// request. A rule that held only one of them would be a rule the next sentence walks past.
 	for _, found := range every {
-		said := job.NoPullRequest(theRepository, "145c0173", found)
-		for _, word := range banned {
-			if strings.Contains(strings.ToLower(said), word) {
-				t.Fatalf("the reason for %q says %q, which makes the operator the transport:\n%s",
-					found.State, word, said)
-			}
+		for _, mode := range []string{"", model.PermissionAcceptEdits} {
+			mustNotSendAnybodyIn(t, job.WhyNoPullRequest(theRepository, mode, "145c0173", found), found.State)
 		}
-		// And every one of them still names the repository, which is what the listing is read for.
-		if !strings.Contains(said, theRepository) {
-			t.Fatalf("the reason for %q does not name the repository:\n%s", found.State, said)
-		}
+		mustNotSendAnybodyIn(t, job.NoPullRequest(theRepository, "145c0173", found), found.State)
 	}
 }
 
@@ -257,4 +251,64 @@ func stopWithoutAPullRequest(ctx context.Context, controller *job.Controller, pl
 	plane.lands("There is no token in this session, so I could not push")
 	controller.Tick(ctx)
 	controller.Tick(ctx)
+}
+
+// A job in a mode that could never push. The mode holds the session, not the system, so the work is
+// still published: what the mode cost is the pull request, never the branch.
+//
+// The two halves have to compose, because they arrived from two directions at once. A reason that
+// explained the mode and then went back to "the work is in the session" would answer the question
+// nobody asked and drop the one that matters.
+func TestAJobInAModeThatCouldNeverPushStillHasItsWorkPublished(t *testing.T) {
+	kept, plane := newRows(), newSystem()
+	publisher := &aPublisher{found: publish.Work{
+		State: publish.Pushed, Branch: "sort-the-listing", Pushed: true, Host: theHostPath,
+	}}
+	controller := job.NewController(kept, plane, nil, nil, nil).Publishing(publisher)
+	declared := inARepository("make the listing sort by the clock it shows")
+	declared.Mode = model.PermissionAcceptEdits
+	one := kept.add(declared)
+	ctx := context.Background()
+
+	controller.Tick(ctx)
+	plane.lands("I made the change, and I could not push")
+	controller.Tick(ctx)
+
+	got := kept.get(one.ID)
+	if got.Phase != job.PhaseStopped {
+		t.Fatalf("the job is %q saying %q, want stopped", got.Phase, got.Reason)
+	}
+	// The mode is still the reason nothing was pushed by the session, said as the reason.
+	for _, want := range []string{"mode edits", "--mode dangerous"} {
+		if !strings.Contains(got.Reason, want) {
+			t.Fatalf("the reason is %q, want it to say %q", got.Reason, want)
+		}
+	}
+	// And the work went somewhere anyway.
+	if len(publisher.asked) != 1 {
+		t.Fatalf("the system looked at the work %d times, want once even in a mode that cannot push",
+			len(publisher.asked))
+	}
+	if !strings.Contains(got.Reason, "pushed the branch sort-the-listing") {
+		t.Fatalf("the reason is %q, want it to say the system published the work", got.Reason)
+	}
+	if strings.Contains(got.Reason, "The work is in the session") {
+		t.Fatalf("the reason leaves the work in the session:\n%s", got.Reason)
+	}
+}
+
+// mustNotSendAnybodyIn is the rule over the class: no reason the system writes about a job that
+// stopped without a pull request may send a person into a container, and every one of them names the
+// repository, which is what the listing is read for.
+func mustNotSendAnybodyIn(t *testing.T, said, state string) {
+	t.Helper()
+	for _, word := range []string{"open it", "open the container", "attach", "and push what is there"} {
+		if strings.Contains(strings.ToLower(said), word) {
+			t.Fatalf("the reason for %q says %q, which makes the operator the transport:\n%s",
+				state, word, said)
+		}
+	}
+	if !strings.Contains(said, theRepository) {
+		t.Fatalf("the reason for %q does not name the repository:\n%s", state, said)
+	}
 }

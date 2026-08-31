@@ -864,8 +864,8 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 		if c.askForThePullRequest(ctx, one, len(tasks)) {
 			return
 		}
-		landing.Phase, landing.Reason, kind =
-			PhaseStopped, NoPullRequest(one.Repository, one.Session, c.published(ctx, one)), EventStopped
+		landing.Phase, landing.Reason, kind = PhaseStopped,
+			WhyNoPullRequest(one.Repository, one.Mode, one.Session, c.published(ctx, one)), EventStopped
 	}
 	c.land(ctx, one, landing, kind)
 }
@@ -921,6 +921,15 @@ func waitingForRoom(failure string) string {
 // was built to end.
 func (c *Controller) askForThePullRequest(ctx context.Context, one *Job, asked int) bool {
 	if asked > 1 {
+		return false
+	}
+	// A mode that cannot reach the network cannot push, so the ask is a task nobody can answer: it asks
+	// for the one command the mode stops, and it ends where the first task ended. The job is landed
+	// below with the mode named as the reason instead, because a whole task is what this costs.
+	//
+	// A job that names no mode is asked. The mode it runs in is the system's, and this loop does not
+	// hold it, so an unnamed mode is not evidence of anything.
+	if ModeCannotPush(one.Mode) {
 		return false
 	}
 	if _, err := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{

@@ -65,11 +65,54 @@ func PermissionModeWidens(from, to string) bool {
 }
 
 func permissionRank(mode string) int {
-	spelt := PermissionModeBornIn(mode)
+	running := modeRunning(mode)
 	for at, spoken := range modeOrder {
-		if named, _ := PermissionModeNamed(spoken); named == spelt {
+		if named, _ := PermissionModeNamed(spoken); named == running {
 			return at
 		}
 	}
 	return 0
+}
+
+// PermissionModeReachesTheNetwork says whether a task in this mode runs a command that needs the
+// network without a person approving it first.
+//
+// One answer in one place, because more than one surface asks it. A job that names a repository is
+// held to it while the person who declared it is looking, and the controller reads it again rather
+// than asking a session to push in the mode that already stopped it from pushing. Two tables of the
+// same answer drift, and the drift shows up as one surface admitting what another refuses.
+//
+// Only the widest mode reaches it. Plan proposes and runs nothing. Edits writes the files in the
+// working directory and asks a person before it runs a command, and nobody stands beside a dispatched
+// job, so the approval never arrives. A mode nobody set counts as the mode a session with nothing set
+// actually runs in, which is the reading PermissionModeWidens takes.
+func PermissionModeReachesTheNetwork(mode string) bool {
+	return modeRunning(mode) == PermissionBypass
+}
+
+// PermissionModeSpoken is the word a person types for a mode, however the mode was written down. It
+// is here rather than beside each refusal so that the words a person reads in a sentence are the
+// words they type back.
+func PermissionModeSpoken(mode string) string {
+	running := modeRunning(mode)
+	for _, spoken := range modeOrder {
+		if named, _ := PermissionModeNamed(spoken); named == running {
+			return spoken
+		}
+	}
+	return modeOrder[0]
+}
+
+// PermissionModeOnTheNetwork is the word for the mode that does reach the network, so a refusal says
+// what to type rather than naming a mode the reader has to go and look up.
+func PermissionModeOnTheNetwork() string { return PermissionModeSpoken(PermissionBypass) }
+
+// modeRunning is the mode the runtime would actually run, however the mode was written: the word
+// somebody types, the protocol's own spelling, or nothing at all, which is the mode a session with
+// nothing set runs in.
+func modeRunning(mode string) string {
+	if named, known := PermissionModeNamed(mode); known {
+		return named
+	}
+	return PermissionModeBornIn(mode)
 }
