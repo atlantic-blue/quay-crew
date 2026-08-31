@@ -252,7 +252,7 @@ func initializeResumingSteps(sc *godog.ScenarioContext) {
 		return jobIs(ctx, 0, job.PhaseFailed)
 	})
 
-	// The base a continued attempt stands on. The system runs no git, so it states the shape it reads
+	// The base a continued attempt stands on. Nothing here runs git, so the system states the shape it reads
 	// and reads the answer against it, the way it already does with the address of a pull request.
 	sc.Step(`^the session was asked what moved under its base$`, func(ctx context.Context) error {
 		asked, err := taskAsking(ctx, 2)

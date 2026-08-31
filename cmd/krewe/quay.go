@@ -213,6 +213,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runProject(ctx, client, args[1:], out)
 	case "task":
 		return runTask(ctx, client, args[1:], out)
+	case "read":
+		return runRead(ctx, client, args[1:], out)
 	case "attach":
 		return runAttach(ctx, client, args[1:], out, os.Stdin)
 	case "web":

@@ -325,6 +325,9 @@ func NewServer(cfg Config) *Server {
 		// The credentials a job's sessions hold, taken back the moment the job ends. It is what ends
 		// a credential in a working system; its expiry is the backstop behind it.
 		Revoking(server).
+		// The work a job leaves behind, pushed rather than described. Without it a job that stops
+		// without a pull request can only say that the system cannot reach its files.
+		Publishing(server).
 		// The signal that stops a reclaim closing a container an operator is typing into. Without it
 		// the controller reclaims nothing, whatever the workspace's times say.
 		Watching(server)

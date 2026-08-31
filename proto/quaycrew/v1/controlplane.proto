@@ -650,6 +650,36 @@ message SetContextResponse {
   ContextDir dir = 1;
 }
 
+// SessionWorkEntry is one thing in a session's work: a file or a directory, with the size of a file.
+message SessionWorkEntry {
+  string name = 1;
+  bool directory = 2;
+  int64 size = 3;
+}
+
+// ReadSessionWorkRequest reads what a session made, out of the directory the system keeps for it.
+//
+// It never enters the container. The work is a bind mount the system already holds, so this answers
+// for a session whose sandbox has gone as readily as for one that is running, which is the whole
+// point: work a job finished must reach somebody without a person carrying it out of a container.
+message ReadSessionWorkRequest {
+  string session = 1;
+  // path is what to read, relative to the session's work. Empty reads the work itself, which is how
+  // a caller finds out what is in there before naming a file.
+  string path = 2;
+}
+message ReadSessionWorkResponse {
+  // host is the directory on the machine running the sandboxes, which is the path an operator opens.
+  string host = 1;
+  // path is what was read, relative to the work, and empty for the work itself.
+  string path = 2;
+  bool directory = 3;
+  // content is the bytes of a file, and empty for a directory.
+  bytes content = 4;
+  // entries is what a directory holds, sorted by name, and empty for a file.
+  repeated SessionWorkEntry entries = 5;
+}
+
 // SecretRef names a secret a workspace has set. It carries no value and there is no call that returns
 // one: a value the backend holds must not become readable because a client asked politely. The only
 // reader is the system itself, at the moment a task needs it.
@@ -1758,6 +1788,8 @@ service ControlPlaneService {
   rpc SetSessionLabel(SetSessionLabelRequest) returns (SetSessionLabelResponse);
   rpc ListContexts(ListContextsRequest) returns (ListContextsResponse);
   rpc SetContext(SetContextRequest) returns (SetContextResponse);
+  // Reads a file, or a listing, out of the work a session left behind, without attaching to it.
+  rpc ReadSessionWork(ReadSessionWorkRequest) returns (ReadSessionWorkResponse);
 
   rpc ImportSkill(ImportSkillRequest) returns (ImportSkillResponse);
   rpc ListSkills(ListSkillsRequest) returns (ListSkillsResponse);

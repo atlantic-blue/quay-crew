@@ -12,6 +12,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/krewe/internal/capacity"
+	"github.com/atlantic-blue/krewe/internal/publish"
 	"github.com/atlantic-blue/krewe/internal/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 )
@@ -254,6 +255,15 @@ type Prover interface {
 	SessionHolds(ctx context.Context, session, path string) (bool, error)
 }
 
+// Publisher puts the work a session finished where somebody else can read it, and says what it found.
+//
+// It answers with a state rather than with an error, because "the system could not look" is one of
+// the answers and must never be reported as one of the others. A controller with no publisher is a
+// system that cannot reach a session's files at all, which is a state too and says so.
+type Publisher interface {
+	PublishSessionWork(ctx context.Context, session string) publish.Work
+}
+
 // Controller makes reality match the job the system holds.
 //
 // It reads the rows, compares them against the world, and closes the gap: it sends a task for a job
@@ -277,6 +287,10 @@ type Controller struct {
 	// admission was arithmetic, and it says so in the log rather than quietly.
 	room     Room
 	exporter Exporter
+	// publisher pushes the branch a finished job left behind, and says where the work is. Nil cannot
+	// reach a session's files at all, and the reason says that rather than naming a path this system
+	// does not have.
+	publisher Publisher
 	// revoker takes a job's credentials back when the job ends. Nil takes none back, and then a
 	// credential lasts until it runs out.
 	revoker Revoker
@@ -387,6 +401,28 @@ func (c *Controller) Redacting(redactor Redactor) *Controller {
 func (c *Controller) Placing(room Room) *Controller {
 	c.room = room
 	return c
+}
+
+// Publishing returns a controller that publishes the work a job leaves behind when it stops without
+// a pull request. Without one the system can neither push nor say where the work is, and the reason
+// says exactly that.
+func (c *Controller) Publishing(publisher Publisher) *Controller {
+	c.publisher = publisher
+	return c
+}
+
+// published is what the system found and did with the work of a job that is about to stop.
+//
+// Asked once, at the moment of stopping, and never while a job is running: it costs commands inside a
+// container, and a job still working has not finished the work this is about.
+func (c *Controller) published(ctx context.Context, one *Job) publish.Work {
+	if c.publisher == nil {
+		return publish.Work{
+			State: publish.Unreadable,
+			Why:   "this system has no way to reach a session's files",
+		}
+	}
+	return c.publisher.PublishSessionWork(ctx, one.Session)
 }
 
 // Revoking returns a controller that takes a job's credentials back as it writes the end of that
@@ -843,7 +879,8 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 		if c.askForThePullRequest(ctx, one, len(tasks)) {
 			return
 		}
-		landing.Phase, landing.Reason, kind = PhaseStopped, WhyNoPullRequest(one.Repository, one.Mode), EventStopped
+		landing.Phase, landing.Reason, kind = PhaseStopped,
+			WhyNoPullRequest(one.Repository, one.Mode, one.Session, c.published(ctx, one)), EventStopped
 	}
 	// What this attempt produced goes on the record whichever way it went, and with it how like the
 	// earlier attempts at this step it was. The attempt that finished the job is recorded too: it is

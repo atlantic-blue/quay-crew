@@ -170,6 +170,11 @@ commands:
                                           the session's own words, and told is what it was given.
                                           Last moved first, so the session you were last working in
                                           is at the top and the age column reads down the list
+  read <session> [<path>]                 what a session made, out of the directory the system keeps
+                                          for it. With no path it lists what is there and names the
+                                          directory on the machine; with one it prints that file, so
+                                          it pipes. It never enters the container, so it answers for
+                                          a session whose sandbox has gone
   answer <session> [--all]                 what a session came back with, and nothing else, so a
                                           caller can pipe it. The most recent answer, or with --all
                                           every one of them, oldest first

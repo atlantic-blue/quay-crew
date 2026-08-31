@@ -479,13 +479,48 @@ the work being wrong rather than the run. `features/resuming.feature` is the sha
 
 **A continued attempt says what moved under its base, and the answer is read.** A resume puts a
 session back into the working directory it left, and what that work stands on moved while it was
-stopped. The system runs no git, so it states the shape it will read and reads the answer against it,
-exactly as it does with the address of a pull request: the continued task asks for one line opening
-with `Base:`, and where the job names a repository and the answer carries no such line, the session is
-asked once more and the job stops if the second answer carries none either. The reason names the
-repository and says it asked twice, and what the attempt produced stays on the row, because the end of
-an attempt is not the end of its work. A job that names no repository is not held to it, since the
-system knows of no base it was away from.
+stopped. Nothing runs git here, so the system states the shape it will read and reads the answer
+against it, exactly as it does with the address of a pull request: the continued task asks for one
+line opening with `Base:`, and where the job names a repository and the answer carries no such line,
+the session is asked once more and the job stops if the second answer carries none either. The reason
+names the repository and says it asked twice, and what the attempt produced stays on the row, because
+the end of an attempt is not the end of its work. A job that names no repository is not held to it,
+since the system knows of no base it was away from.
+
+**A job that stops without a pull request has its branch pushed, and the reason says where its work
+is.** The last word on this path used to be an instruction to a person: open the container, and push
+what is inside it. The product of the job then sat where no command reached it and the operator became
+the transport, which is the opposite of what a system is for.
+
+The bytes were never in the container alone. A session's working directory is a bind mount the system
+made itself and a workspace's volume is another, so the system was holding the work the whole time and
+had no way to name it.
+
+So the system publishes rather than asking. Where a job that names a repository is about to stop
+without one, the system looks at what the session left behind and pushes the branch it is on. A push
+applies nothing, so it needs nobody's approval; a merge runs the pipeline and a pull request is a
+decision, so the system does neither, and the reason says which step is left. This is the one place
+the system runs git itself, and it runs it inside the session's own container: the control plane is a
+static binary with no shell, and the credential that reaches the remote belongs to the workspace and
+is already in there.
+
+**Five outcomes, and the empty one matters most.** A reason that names a branch nobody made sends the
+operator looking for work that was never done, so the states are held apart rather than collapsed:
+the branch is on the remote, whether the system put it there or the session had; there are commits and
+the push was refused; a repository is there and nothing was committed to it; the session holds no
+repository at all; and the system could not look, which is never reported as one of the other four. In
+every state but the first the reason names the directory the work is in, on the machine that runs the
+sandboxes, and the command that reads it. No reason it writes may send a person into a container.
+
+**One command reads work out of a session.** `krewe read <session> [<path>]` lists what a session made
+or prints one file out of it, reading the directory rather than the container, so it answers for a
+session whose sandbox has gone. Before it, the only road into a finished session was to attach, which
+is a person driving a terminal: it does not compose into a script, a flow or a report.
+**A job in a mode that could never push is published too.** The mode holds the session and not the
+system, so the reason that explains the mode ends with what became of the work in the same way. What
+a narrow mode costs a job is the pull request, never the branch.
+
+`features/publishing.feature` is the shape of both halves.
 
 **`session`, text, empty until a session exists.** The session the job runs in. This is how a
 reader gets from the job to the conversation, and it is what `quay attach` takes.
