@@ -1,8 +1,13 @@
 # The name
 
-The tool is called `krewe`. This file says what the name has to clear, what was checked, and what
-nobody has checked yet. It exists because the check was made once, after the fact, and the answer
-cost a rename of 346 files.
+The owner decided the name on 31 August 2026. The tool becomes **blue quay**. That decision is
+settled. `docs/RENAME.md` holds the plan that carries it out, and the decisions it asks a person to
+settle.
+
+The tool is still called `krewe` in the code, because none of the rename has landed yet.
+
+This file says what a name has to clear, what was checked, and what nobody has checked yet. It exists
+because the check was made once, after the fact, and the answer cost a rename of 346 files.
 
 ## The bar
 
@@ -64,3 +69,20 @@ searches by hand, restricted to live marks in classes 9 and 42, and writes the a
 that line exists, treat the trademark position as unknown rather than as clear.
 
 The addresses are https://tmsearch.uspto.gov/ and https://www.search-for-trademark.service.gov.uk/ .
+
+## blue quay: chosen on 31 August 2026, by the owner
+
+This is a decision, not a screening result. The owner chose the name. Nothing here reopens it.
+
+The bar above is not satisfied for this name yet. One check is in flight: whether keeping the word
+`quay` inside `blue quay` carries the Red Hat Quay collision forward. Two words differ from one, and
+a search for "blue quay" is not a search for "quay". Nobody has measured which of those a person
+types.
+
+When that check answers, its finding goes here, beside `fabric` and `blueprint`. Until then, treat
+the collision question as open rather than as cleared.
+
+Issue 585 recommends keeping `krewe`, and names `hardstand`, `dunnage` and `wharfinger` as three
+names that clear the bar. That recommendation is overtaken. The evidence in it stands.
+
+The trademark position is unchanged. Read the next section.
