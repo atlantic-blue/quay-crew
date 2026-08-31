@@ -149,3 +149,51 @@ Feature: A step of a flow runs as a role, in its own session
     When the operator starts the flow "release" in the project
     Then the role's session holds the "git" skill
     And the role's sandbox mounts the git skill
+
+  # The writer holds the method for prose, so a writing job carries the subject and the material and
+  # nothing else. Krewe does not read a draft, so neither refusal below is one the system makes: what
+  # it can do is put both in front of the session, every task, out of the role rather than out of a
+  # brief somebody typed again.
+  #
+  # The refusals come first. A role that accepts everything satisfies every scenario about producing
+  # a draft, and the refusals are the reason for having the role at all.
+  Scenario: A session running as the writer is told the two drafts it refuses
+    Given the operator imports the "writer" role this build ships
+    And the operator attached the "writer" role to the workspace
+    And the system holds this flow graph:
+      """
+      name: write-the-post
+      version: 1
+      mode: edits
+      nodes:
+        draft: { type: dispatch, role: writer, prompt: "Write one post about the eviction work. The material says 6 jobs were lost." }
+      edges:
+        - [draft, done]
+      """
+    When the operator starts the flow "write-the-post" in the project
+    Then the role's memory file carries "A figure that is not in the material does not go in the piece"
+    And the role's memory file carries "Say the figure is missing and name it, rather than estimating it."
+    And the role's memory file carries "A draft that states no cost is not a draft"
+    And the role's memory file carries "Say what was skipped, what does not work yet, or where you were wrong."
+
+  # And the other half of it. The step's prompt is one sentence of subject and one of material, and
+  # the session is told the whole method anyway.
+  Scenario: A writing job carries the subject and the material, and the role carries the method
+    Given the operator imports the "writer" role this build ships
+    And the operator attached the "writer" role to the workspace
+    And the system holds this flow graph:
+      """
+      name: write-the-post
+      version: 1
+      mode: edits
+      nodes:
+        draft: { type: dispatch, role: writer, prompt: "Write one post about the eviction work. The material says 6 jobs were lost." }
+      edges:
+        - [draft, done]
+      """
+    When the operator starts the flow "write-the-post" in the project
+    Then that session was asked "Write one post about the eviction work. The material says 6 jobs were lost."
+    And the role's memory file carries "Read the voice specification in full before you write a word."
+    And the role's memory file carries "No dash as punctuation."
+    And the role's memory file carries "The surface decides the length and the pronoun."
+    And the role's memory file carries "You never publish."

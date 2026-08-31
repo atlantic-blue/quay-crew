@@ -85,6 +85,11 @@ type Job struct {
 	// needs, and where the two disagree the job is refused rather than run without it.
 	Requires []string
 
+	// Claim is the piece of work this job is doing: an issue, a branch, or a name two people would
+	// both use for the same thing. A second job claiming it is refused while this one holds it. See
+	// claim.go for what holding means and when it ends.
+	Claim string
+
 	// Repository is the repository this job works in, written owner/name. Naming one says how the job
 	// ends: the session pushes and opens a pull request, and the job is not done until its answer names
 	// that pull request. Empty claims nothing and is checked as nothing.
@@ -275,6 +280,7 @@ type Declaration struct {
 	Requires       []string
 	Repository     string
 	Product        string
+	Claim          string
 	ID             string
 	Parent         string
 }
@@ -289,6 +295,7 @@ func (d Declaration) Tidied() Declaration {
 	d.Product = TidySentence(d.Product)
 	d.Requires = TidyRequires(d.Requires)
 	d.Repository = TidyRepository(d.Repository)
+	d.Claim = TidyClaim(d.Claim)
 	return d
 }
 
@@ -331,6 +338,9 @@ func (d Declaration) Validate() error {
 		return err
 	}
 	if err := usableRepository(tidy.Repository); err != nil {
+		return err
+	}
+	if err := usableClaim(tidy.Claim); err != nil {
 		return err
 	}
 	if err := tidy.validateRequires(); err != nil {
@@ -416,6 +426,18 @@ func Terminal(phase string) bool {
 // Phases are every phase a job can be in, in the order it moves through them.
 func Phases() []string {
 	return []string{PhasePending, PhaseWaiting, PhaseRunning, PhaseAsking, PhaseDone, PhaseFailed, PhaseStopped}
+}
+
+// LivePhases are the phases a job has not ended in. It is Phases without the terminal ones, in one
+// place so a store reading "the jobs that are still going" cannot spell that set its own way.
+func LivePhases() []string {
+	live := make([]string, 0, len(Phases()))
+	for _, phase := range Phases() {
+		if !Terminal(phase) {
+			live = append(live, phase)
+		}
+	}
+	return live
 }
 
 // KnownPhase says whether a word is a phase, which is what a listing filter is held to.

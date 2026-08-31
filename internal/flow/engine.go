@@ -31,6 +31,10 @@ const (
 	EventRunAsked    = "flow.run.asked"
 	EventRunFinished = "flow.run.finished"
 	EventRunStopped  = "flow.run.stopped"
+	// EventProductReplaced is the operator answering the question at the first usable path with a
+	// sentence of their own. The detail is the new sentence, so the tree says what the rest of the
+	// work was done against.
+	EventProductReplaced = "flow.product.replaced"
 )
 
 // pollBatch is how many landed steps one tick carries on. A system with a thousand finished runs is
@@ -60,6 +64,11 @@ type Store interface {
 	// GetJob reads one job back. The engine reads the job carrying a run to write a
 	// record against it, because a record has to agree with the row it describes.
 	GetJob(ctx context.Context, id string) (*job.Job, error)
+	// ReplaceJobProduct writes the one sentence a job serves over what it carried. The engine calls
+	// it when the operator answers the question at the first usable path with a sentence of their
+	// own, and it is the whole of what "the work continues from it" means: every step declared after
+	// this carries the new sentence, because a step takes it from the job above it.
+	ReplaceJobProduct(ctx context.Context, id, product string, event *job.Event) (*job.Job, error)
 	// ScheduleFlow records that a graph runs in a project every so often, from now. Re-recording
 	// the same pair moves its schedule rather than making a second one.
 	ScheduleFlow(ctx context.Context, graph, project string, every time.Duration, next time.Time) error
@@ -353,9 +362,19 @@ func (e *Engine) create(ctx context.Context, from starting) (Run, string, Graph,
 		Brief: fmt.Sprintf("carries the run of flow %s, version %d. Its steps hang under it, and it "+
 			"ends when the run does.", graphName, version),
 		Labels: labels,
+		// The graph's sentence goes on the job carrying the run, so every step under it carries the
+		// same one and every session doing a step is given it above its brief. A run started by a
+		// session whose job already serves a different sentence is refused there, which is the rule a
+		// tree with two products already keeps.
+		Product: graph.Product,
 	})
 	if err != nil {
 		return Run{}, "", Graph{}, fmt.Errorf("flow: start %s: %w", graphName, err)
+	}
+	// Read off the carrier rather than off the graph, because a run started inside a job tree that
+	// already serves a sentence carries that one.
+	if carrier.Product != "" {
+		run.State[stateProduct] = carrier.Product
 	}
 	// Held back rather than pending, because a controller must never send this one as a task. It is a
 	// parent whose children are outstanding, which is what waiting already means, and the controller's
@@ -383,6 +402,11 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, at where, ev
 	// the model actually charged rather than against a number from the start.
 	run.Spent = e.spentBy(ctx, run)
 
+	// The sentence as it stands, kept before the movement rather than compared afterwards. A run
+	// carries maps, so the reducer writes into the same state this run holds and the two would read
+	// the same however the movement changed it.
+	served := run.State[stateProduct]
+
 	next, commands, err := Advance(graph, run, event)
 	if err != nil {
 		return run, err
@@ -405,6 +429,16 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, at where, ev
 	if next.Status == StatusWaiting && next.DueIn > 0 {
 		when := e.now().Add(next.DueIn)
 		due = &when
+	}
+
+	// The operator answered the question at the first usable path with a sentence of their own, so the
+	// sentence the tree serves is replaced before the next step is declared. It has to be this way
+	// round: a step reads what it serves off the job above it as it is declared, so a replacement
+	// written afterwards would reach every step but the one the answer was about.
+	if at.carrier != "" && next.State[stateProduct] != served {
+		if err := e.replaceTheSentence(ctx, at.carrier, next.State[stateProduct]); err != nil {
+			return run, fmt.Errorf("flow: run %s was told what it should serve and the sentence could not be replaced, so it has not moved: %w", run.ID, err)
+		}
 	}
 
 	written := JobWrite{}
@@ -447,6 +481,25 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, at where, ev
 		e.archive(ctx, next)
 	}
 	return next, nil
+}
+
+// replaceTheSentence writes the sentence the operator gave onto the job carrying the run, and
+// records that it moved.
+//
+// The record is the point of doing it here rather than in a column update nobody sees. An operator
+// reading the tree afterwards wants the question, the answer, and the sentence the rest of the work
+// was done against, and the first two are already records on this job.
+func (e *Engine) replaceTheSentence(ctx context.Context, id, sentence string) error {
+	carrying, err := e.store.GetJob(ctx, id)
+	if err != nil {
+		return err
+	}
+	record := e.record(carrying, EventProductReplaced, sentence)
+	if _, err := e.store.ReplaceJobProduct(ctx, id, sentence, record); err != nil {
+		return err
+	}
+	e.exported(ctx, record)
+	return nil
 }
 
 // declare writes down one step as a job: same rules, same tree, same ceilings as anything

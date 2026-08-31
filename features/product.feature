@@ -75,3 +75,126 @@ Feature: A job says what a person does with it and what they get back
     When the caller declares a job through the tool saying nothing about what a person gets
     Then the command succeeds
     And standard output says the sentence is missing and how to say it
+
+  # The second half of the same failure. A job carrying the sentence puts it in front of every
+  # session, and nothing ever measured what was delivered against it. So a run that builds something
+  # a person can open stops once, at the first usable path, and asks. An answer of no there costs one
+  # step. The same answer once everything is built costs the run.
+
+  Scenario: A flow that stops for a person and says nothing about what they get is refused at import
+    When the operator imports this flow graph, which is refused:
+      """
+      name: transcript
+      version: 1
+      mode: edits
+      nodes:
+        page:   { type: dispatch, prompt: "put the thinnest page up", usable: true }
+        polish: { type: dispatch, prompt: "finish the page" }
+      edges:
+        - [page, polish]
+        - [polish, done]
+      """
+    Then the refusal says how to write what a person gets
+
+  Scenario: A run stops at the first thing a person can open, and the question names it and the sentence
+    Given the system holds this flow graph:
+      """
+      name: transcript
+      version: 1
+      mode: edits
+      product: paste a link and get the text back
+      nodes:
+        page:
+          type: dispatch
+          prompt: "put the thinnest page up and reply with its address"
+          usable: true
+        polish:
+          type: dispatch
+          prompt: "finish the page"
+      edges:
+        - [page, polish]
+        - [polish, done]
+      """
+    And the model will answer "https://transcripts.example/videos?id=gyN9lV9QgyA"
+    When the operator starts the flow "transcript" in the project
+    Then the flow run asks about the product, naming "https://transcripts.example/videos?id=gyN9lV9QgyA" and "paste a link and get the text back"
+    And the run's steps were asked 1 task
+
+  # The answer the whole thing exists for. It does not end the run: it replaces the sentence, and
+  # every step after it is done against the new one.
+  Scenario: Told no, the run replaces the sentence and carries on from it
+    Given the system holds this flow graph:
+      """
+      name: transcript
+      version: 1
+      mode: edits
+      product: search the archive by video id
+      nodes:
+        page:
+          type: dispatch
+          prompt: "put the thinnest page up and reply with its address"
+          usable: true
+        polish:
+          type: dispatch
+          prompt: "finish the page"
+      edges:
+        - [page, polish]
+        - [polish, done]
+      """
+    And the model will answer "https://transcripts.example/videos?id=gyN9lV9QgyA"
+    When the operator starts the flow "transcript" in the project
+    And the operator answers the run with "paste a YouTube link and get the text back"
+    Then the flow run is done
+    And the job carrying the run says a person "paste a YouTube link and get the text back"
+    And the step after the question was told a person "paste a YouTube link and get the text back", and that the sentence wins
+
+  Scenario: Told yes, the run carries on against the sentence it had
+    Given the system holds this flow graph:
+      """
+      name: transcript
+      version: 1
+      mode: edits
+      product: paste a link and get the text back
+      nodes:
+        page:
+          type: dispatch
+          prompt: "put the thinnest page up and reply with its address"
+          usable: true
+        polish:
+          type: dispatch
+          prompt: "finish the page"
+      edges:
+        - [page, polish]
+        - [polish, done]
+      """
+    And the model will answer "https://transcripts.example/videos?id=gyN9lV9QgyA"
+    When the operator starts the flow "transcript" in the project
+    And the operator answers the run with "yes"
+    Then the flow run is done
+    And the job carrying the run says a person "paste a link and get the text back"
+
+  # A question naming an address nobody can open is a question about nothing, and a gate whose
+  # question is empty is a gate that passes.
+  Scenario: A step that built something and named no address stops the run
+    Given the system holds this flow graph:
+      """
+      name: transcript
+      version: 1
+      mode: edits
+      product: paste a link and get the text back
+      nodes:
+        page:
+          type: dispatch
+          prompt: "put the thinnest page up and reply with its address"
+          usable: true
+        polish:
+          type: dispatch
+          prompt: "finish the page"
+      edges:
+        - [page, polish]
+        - [polish, done]
+      """
+    And the model will answer " "
+    When the operator starts the flow "transcript" in the project
+    Then the flow run stopped because the step named no address
+    And the run's steps were asked 1 task

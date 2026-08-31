@@ -387,6 +387,11 @@ type Store interface {
 	// CreateJob writes the job and the record of its declaration in one transaction. A row with no
 	// record of how it came to exist, and a record of a declaration that is not there, are both
 	// states nothing can explain afterwards.
+	//
+	// A job that claims a piece of work another job is still holding is refused with a *job.Held
+	// naming that job, and nothing is written. The check belongs here rather than above the store
+	// because it has to happen inside the transaction that writes the row: a check made before the
+	// write is a check two callers declaring at the same moment both pass.
 	CreateJob(ctx context.Context, declared *job.Job, event *job.Event) error
 	// GetJob reads one job back, whole, its answer included.
 	GetJob(ctx context.Context, id string) (*job.Job, error)
@@ -440,6 +445,14 @@ type Store interface {
 	RenewLease(ctx context.Context, id string, lease job.Lease) error
 	RecordJobSession(ctx context.Context, id, session string) error
 	LandJob(ctx context.Context, id string, landed job.Landing, event *job.Event) (*job.Job, error)
+	// ReplaceJobProduct writes the one sentence a job serves over what it carried, and records the
+	// move. It is what a flow run does when the operator, shown the first thing a person can open,
+	// answers with the sentence they wanted instead: every job declared under this one afterwards
+	// carries the new sentence, because a job takes it from the job above it as it is declared.
+	//
+	// Any phase. A job that carries a run is held back while its steps work, so a rule that only let
+	// a running job be corrected would refuse the one case this exists for.
+	ReplaceJobProduct(ctx context.Context, id, product string, event *job.Event) (*job.Job, error)
 	// ListJobEvents returns one job's own history, oldest first.
 	ListJobEvents(ctx context.Context, id string) ([]*job.Event, error)
 	// RecordSteer writes one steer and adds it to the count on each job in counted, in one
