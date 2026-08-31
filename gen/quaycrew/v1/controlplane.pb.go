@@ -8444,6 +8444,10 @@ type Job struct {
 	// on the job the steer landed on and on every job above it. On the job at the top it is the score
 	// of the whole tree.
 	Steers int32 `protobuf:"varint,37,opt,name=steers,proto3" json:"steers,omitempty"`
+	// claim is the piece of work this job is doing: an issue, a branch, or a name two people would
+	// both use for the same thing. A second job claiming it is refused while this one still holds it,
+	// so two sessions cannot build the same slice. Empty claims nothing.
+	Claim string `protobuf:"bytes,40,opt,name=claim,proto3" json:"claim,omitempty"`
 	// What the system assigned, and the caller may not.
 	// parent is which job asked for this one, read from the credential the caller presented
 	// and never from the request. depth is zero for a root and the parent's depth plus one otherwise.
@@ -8655,6 +8659,13 @@ func (x *Job) GetSteers() int32 {
 		return x.Steers
 	}
 	return 0
+}
+
+func (x *Job) GetClaim() string {
+	if x != nil {
+		return x.Claim
+	}
+	return ""
 }
 
 func (x *Job) GetParent() string {
@@ -8899,6 +8910,9 @@ type CreateJobRequest struct {
 	// back. A job declared under another inherits its parent's, and stating a second one where the
 	// parent already carries one is refused rather than ignored.
 	Product string `protobuf:"bytes,16,opt,name=product,proto3" json:"product,omitempty"`
+	// claim is the piece of work this job takes: an issue, a branch, or a named piece of work. The
+	// declaration is refused where another job holds the same one, and the refusal names that job.
+	Claim string `protobuf:"bytes,17,opt,name=claim,proto3" json:"claim,omitempty"`
 	// id and parent are here to be refused rather than ignored. The system assigns the identifier, and
 	// the parent is read from the credential the caller presented: a caller that could set its own
 	// parent could set its own depth, and the depth limit would bound nothing.
@@ -9032,6 +9046,13 @@ func (x *CreateJobRequest) GetRepository() string {
 func (x *CreateJobRequest) GetProduct() string {
 	if x != nil {
 		return x.Product
+	}
+	return ""
+}
+
+func (x *CreateJobRequest) GetClaim() string {
+	if x != nil {
+		return x.Claim
 	}
 	return ""
 }
@@ -11216,7 +11237,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xbc\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xd2\n" +
 	"\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
@@ -11240,7 +11261,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"repository\x18! \x01(\tR\n" +
 	"repository\x12\x18\n" +
 	"\aproduct\x18$ \x01(\tR\aproduct\x12\x16\n" +
-	"\x06steers\x18% \x01(\x05R\x06steers\x12\x16\n" +
+	"\x06steers\x18% \x01(\x05R\x06steers\x12\x14\n" +
+	"\x05claim\x18( \x01(\tR\x05claim\x12\x16\n" +
 	"\x06parent\x18\x0f \x01(\tR\x06parent\x12\x14\n" +
 	"\x05depth\x18\x10 \x01(\x05R\x05depth\x12\x18\n" +
 	"\aversion\x18\x11 \x01(\x05R\aversion\x12\x14\n" +
@@ -11273,7 +11295,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x03seq\x18\x01 \x01(\x05R\x03seq\x12\x18\n" +
 	"\asummary\x18\x02 \x01(\tR\asummary\x12;\n" +
 	"\vfinished_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"finishedAt\"\xb9\x04\n" +
+	"finishedAt\"\xcf\x04\n" +
 	"\x10CreateJobRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x14\n" +
@@ -11292,7 +11314,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\n" +
 	"repository\x18\x0f \x01(\tR\n" +
 	"repository\x12\x18\n" +
-	"\aproduct\x18\x10 \x01(\tR\aproduct\x12\x0e\n" +
+	"\aproduct\x18\x10 \x01(\tR\aproduct\x12\x14\n" +
+	"\x05claim\x18\x11 \x01(\tR\x05claim\x12\x0e\n" +
 	"\x02id\x18\f \x01(\tR\x02id\x12\x16\n" +
 	"\x06parent\x18\r \x01(\tR\x06parent\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +

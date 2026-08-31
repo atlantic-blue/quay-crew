@@ -14,10 +14,40 @@ import (
 func (m *Memory) CreateJob(_ context.Context, declared *job.Job, event *job.Event) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// Under the same lock as the write, because a check that answers before the write is a check two
+	// callers can both pass. The Postgres store takes a lock on the claim for the same reason.
+	if held := m.claimHolder(declared, time.Now().UTC()); held != nil {
+		return held
+	}
 	if err := m.writeJob(declared); err != nil {
 		return err
 	}
 	return m.appendJobEvent(event)
+}
+
+// claimHolder is the job already holding the piece of work this declaration claims, and nil where
+// nothing holds it.
+//
+// The oldest holder, so an answer is the same one every time. Two live jobs cannot hold one claim
+// once this check is in place, and a store that picked whichever the map handed it first would
+// answer differently on two runs of the same data.
+func (m *Memory) claimHolder(declared *job.Job, now time.Time) *job.Held {
+	if declared.Claim == "" {
+		return nil
+	}
+	var holder *job.Job
+	for _, one := range m.jobs {
+		if one.Workspace != declared.Workspace || one.Claim != declared.Claim || !one.Holding(now) {
+			continue
+		}
+		if holder == nil || one.CreatedAt.Before(holder.CreatedAt) {
+			holder = one
+		}
+	}
+	if holder == nil {
+		return nil
+	}
+	return &job.Held{Claim: declared.Claim, Holder: holder.ID, Title: holder.Title, TakenAt: holder.CreatedAt}
 }
 
 // writeJob puts one job in the store. The caller holds the lock, which is what lets a
