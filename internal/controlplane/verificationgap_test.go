@@ -160,7 +160,11 @@ func theOldVerifier(t *testing.T) []*quaycrewv1.RoleFile {
 		body := string(file.GetBody())
 		switch file.GetPath() {
 		case role.ManifestFile:
-			file.Body = []byte(strings.Replace(body, "version: 2", "version: 1", 1))
+			back := strings.Replace(body, fmt.Sprintf("version: %d", shippedVersionOf(t, "verifier")), "version: 1", 1)
+			if back == body {
+				t.Fatalf("the shipped verifier does not carry the version this test puts back:\n%s", body)
+			}
+			file.Body = []byte(back)
 		case role.BriefFile:
 			opens, closes := strings.Index(body, "<verification_gap>"), strings.Index(body, "</verification_gap>")
 			if opens < 0 || closes < 0 {
@@ -252,7 +256,7 @@ func TestAWorkspaceHoldingTheOldVerifierIsMovedOnByAttachingAgain(t *testing.T) 
 	if err != nil {
 		t.Fatalf("list what the workspace holds: %v", err)
 	}
-	if moved.GetRoles()[0].GetVersion() != 2 {
+	if moved.GetRoles()[0].GetVersion() != int32(shippedVersionOf(t, "verifier")) {
 		t.Fatalf("the workspace holds version %d after attaching again", moved.GetRoles()[0].GetVersion())
 	}
 	if !strings.Contains(it.briefGivenTo(t, "verifier", "verify it again"), theGapQuestion) {

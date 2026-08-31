@@ -2,6 +2,7 @@ package controlplane_test
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -26,6 +27,18 @@ func filesOf(t *testing.T, dir string) []*quaycrewv1.RoleFile {
 		files = append(files, &quaycrewv1.RoleFile{Path: file.Path, Body: file.Body})
 	}
 	return files
+}
+
+// shippedVersionOf is the version a role in roles/ carries now, read rather than written down. A
+// test that named the number would have to be edited every time a brief is, and a brief that ships
+// unedited is the failure those tests exist to catch.
+func shippedVersionOf(t *testing.T, named string) int {
+	t.Helper()
+	one, err := role.One(filepath.Join(shippedRoles, named))
+	if err != nil {
+		t.Fatalf("reading the %s this build ships: %v", named, err)
+	}
+	return one.Version
 }
 
 // The check run against the real store and the real control plane rather than against the reader

@@ -326,8 +326,9 @@ The design phase, in order, and the model each one runs on:
 - `test-writer` on sonnet writes the tests from the contracts, then `implementer` on sonnet writes
   the code that makes them pass.
 - `security` on sonnet reviews the change and writes a failing test for each defect, `verifier` on
-  sonnet checks the slice against its contracts and asks whether verification could have failed
-  at all, and `debugger` on sonnet finds a cause and fixes it.
+  sonnet checks the slice against its contracts, asks whether verification could have failed at all
+  and tries to break what the change says about itself, and `debugger` on sonnet finds a cause and
+  fixes it.
 - For a codebase that already exists: `codebase-mapper` on sonnet documents it, `assessor` on sonnet
   reports its coverage, contracts and risks, and `wrapper` on sonnet locks an existing boundary with
   tests.
@@ -460,11 +461,12 @@ A brief also names documents the system does not create: `CLAUDE.md`, `docs/DESI
 that reads one is the role after the role that writes it, so a phase run out of order finds nothing
 there, and each brief says which document it writes.
 
-### The two longest briefs sit near the ceiling
+### The three longest briefs sit near the ceiling
 
-A brief may be 16,384 bytes. Twelve of the sixteen fit under thirteen thousand. `architect` at 16,354
-and `assessor` at 16,243 are both within two hundred bytes of the ceiling, so a sentence added to
-either has to come out somewhere else, and both say so at the top. That is also why the phase ending
+A brief may be 16,384 bytes. Twelve of the sixteen fit under thirteen thousand. `architect` at 16,354,
+`assessor` at 16,243 and `verifier` at 15,837 have between two hundred and five hundred and fifty
+bytes left, so a sentence added to any of them has to come out somewhere else. The first two say so
+at the top of their own file. That is also why the phase ending
 about pushing and opening a pull request is written into the three delivery briefs rather than into
 all sixteen: those two have no room for it. Raising the ceiling is the change that would give them
 room, and it is the operator's to make.
