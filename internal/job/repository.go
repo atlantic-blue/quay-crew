@@ -102,6 +102,12 @@ func Asked(one *Job) string {
 	if one.Resuming != "" {
 		return Continued(one)
 	}
+	// A handoff waiting to be taken up comes next. The conversation this task is going to has never
+	// seen the job, so what it gets is the brief and the record together, which is where it differs
+	// from a job being continued in the conversation that did the work. See ceiling.go.
+	if HandingOver(one) {
+		return HandedOver(one)
+	}
 	if one.Told != "" {
 		return CarryOn(one)
 	}

@@ -2234,6 +2234,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	runJobLeaseConformance(t, newDataset)
 	runJobAskingConformance(t, newDataset)
 	runJobResumeConformance(t, newDataset)
+	runJobHandoffConformance(t, newDataset)
 	runWorkspaceLimitsConformance(t, newDataset)
 	runSessionLifecycleConformance(t, newDataset)
 	runTriggerConformance(t, newDataset)

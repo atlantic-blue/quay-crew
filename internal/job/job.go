@@ -136,6 +136,10 @@ type Job struct {
 	// are what a continued job carries on from, and they are read with one job rather than with a
 	// listing: a listing of a hundred lists is a listing nobody can read.
 	Steps []Step
+	// Handoffs are what each session wrote down when it stopped taking work on this job at the context
+	// ceiling: what is left, and what it tried that did not work. The newest one goes in front of the
+	// session that carries the job on, and the count of them names that session. See ceiling.go.
+	Handoffs []Handoff
 	// Resuming is the failure this attempt is continuing past, and empty for a job nobody continued.
 	// It is what the job failed with, moved off the reason by the resume, so a job that is going again
 	// does not sit pending reading as one the machine is holding back.
@@ -211,6 +215,12 @@ const (
 	// movement: the job is running before it and running after it, and what it adds is the record a
 	// second attempt carries on from.
 	EventStepped = "job.stepped"
+	// EventHandedOver is written when the session doing a job says what it leaves behind, at the
+	// context ceiling, and EventHandedOn when the system then gives the rest of the job to a fresh
+	// session. They are two moments rather than one: a session can write a handoff and the system
+	// still fail to move the job, and a reader who saw one line could not tell which happened.
+	EventHandedOver = "job.handed_over"
+	EventHandedOn   = "job.handed_on"
 	// EventResumed is written when a person continues a job that failed, and EventRefused when they
 	// end one instead. They are the two answers to a failure, and which of the two was given is the
 	// part of the record somebody reads a week later.
@@ -483,6 +493,10 @@ type Limits struct {
 	// ArchiveSeconds is how long a reclaimed session here waits before the system files it away. Zero
 	// is unset, and it ships unset for the same reason.
 	ArchiveSeconds int
+	// ContextCeilingPercent is how full a session's context window may be here before the system gives
+	// it no new task. Zero takes the system's own, which is DefaultContextCeiling: this is the one
+	// number on this row that ships set, and ceiling.go says where it came from.
+	ContextCeilingPercent int
 	// RequestMemoryBytes and RequestProcessor are what one sandbox in this workspace asks the machine
 	// for. The system adds up what it has placed and admits a job only where its runtime still has that
 	// much unallocated, so a workspace whose jobs run heavier says so here rather than being counted

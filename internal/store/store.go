@@ -424,6 +424,22 @@ type Store interface {
 	// failed, in the same statement, so two resumes leave one attempt.
 	ResumeJob(ctx context.Context, id string, event *job.Event) (*job.Job, error)
 	RefuseJob(ctx context.Context, id, reason string, event *job.Event) (*job.Job, error)
+	// RecordJobHandoff writes down the state a fresh session starts this job from, written by the
+	// session that reached its workspace's context ceiling. Only from running, the way a step is,
+	// because a handoff on a job nobody is doing is a note about work that already ended.
+	//
+	// session is the conversation that wrote it, and it is the system's to supply rather than the
+	// caller's to name: it is what tells a handoff waiting to be taken up from one a fresh session
+	// already holds.
+	RecordJobHandoff(ctx context.Context, id, left, tried, session string, event *job.Event) (*job.Job, error)
+	// HandOffJob puts a running job back to pending and lets go of its session, so the controller
+	// starts it in a fresh conversation carrying the handoff. Only from running and only for the
+	// controller holding the lease, in the same statement, so a controller that lost the row cannot
+	// take another one's job away from the session doing it.
+	//
+	// The job does not restart. Its steps, its pull request, its answer and its identity all stay: what
+	// changes is which conversation carries the rest of it.
+	HandOffJob(ctx context.Context, id string, back job.Requeue, event *job.Event) (*job.Job, error)
 	// What a controller needs of the store. RunnableJob is the job it may start, HeldJob is what
 	// it holds and has to come back to, and ExpiredJob is what a controller that went away left
 	// behind. Every write is conditional in the same statement as its condition, which is what keeps

@@ -709,6 +709,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeJobLeaseSteps(sc)
 	initializeAskingSteps(sc)
 	initializeResumingSteps(sc)
+	initializeContextCeilingSteps(sc)
 	initializeCapabilitySteps(sc)
 	initializeProductSteps(sc)
 	initializeSteersSteps(sc)

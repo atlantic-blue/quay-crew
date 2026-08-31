@@ -87,6 +87,10 @@ type Memory struct {
 	// jobs rather than on the row, which is the table the Postgres store keeps, so a listing here
 	// carries what a listing there carries.
 	jobSteps map[string][]job.Step
+	// jobHandoffs is what each job's sessions wrote down when they stopped taking work at the context
+	// ceiling, in the order they wrote them. Beside the jobs for the reason the steps are, so this
+	// store and the Postgres one carry the same thing on one job.
+	jobHandoffs map[string][]job.Handoff
 	// jobSteers is every moment the operator had to say something a job should have known, keyed by
 	// the steer identifier.
 	jobSteers map[string]*job.Steer

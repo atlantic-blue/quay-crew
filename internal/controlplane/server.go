@@ -327,7 +327,11 @@ func NewServer(cfg Config) *Server {
 		Revoking(server).
 		// The signal that stops a reclaim closing a container an operator is typing into. Without it
 		// the controller reclaims nothing, whatever the workspace's times say.
-		Watching(server)
+		Watching(server).
+		// How full each session's context window is, which is what the ceiling is checked against.
+		// Without it a session is given new work however full it is, which is what every version of
+		// this loop did before the ceiling existed.
+		Measuring(server)
 	return server
 }
 
@@ -2032,8 +2036,8 @@ func (s *Server) ListSessions(ctx context.Context, req *quaycrewv1.ListSessionsR
 	}
 	for _, session := range sessions {
 		s.withUsage(session)
-		s.withContextWindow(session)
 	}
+	s.withContextWindows(ctx, sessions)
 	s.withStaleness(ctx, sessions)
 	if req.GetPresence() {
 		s.withPresence(ctx, sessions)
@@ -2048,7 +2052,7 @@ func (s *Server) GetSession(ctx context.Context, req *quaycrewv1.GetSessionReque
 		return nil, storeError(err, "session")
 	}
 	s.withUsage(session)
-	s.withContextWindow(session)
+	s.withContextWindows(ctx, []*quaycrewv1.Session{session})
 	s.withStaleness(ctx, []*quaycrewv1.Session{session})
 	return &quaycrewv1.GetSessionResponse{Session: session}, nil
 }
@@ -2091,7 +2095,8 @@ func (s *Server) withUsage(session *quaycrewv1.Session) {
 	}
 }
 
-// withContextWindow puts how full the model's context window is onto a session.
+// withContextWindows puts how full the model's context window is onto each session, and what this
+// workspace lets it fill.
 //
 // A different question from what the conversation cost, and the one that decides whether it is still
 // worth continuing: cost only grows, while the window empties again when the model compacts. The used
@@ -2101,13 +2106,31 @@ func (s *Server) withUsage(session *quaycrewv1.Session) {
 // A conversation nobody has spoken in is left without a figure. A window nobody has been told the
 // size of is reported as a count with no size, which a listing shows as tokens rather than as a share
 // it made up.
-func (s *Server) withContextWindow(session *quaycrewv1.Session) {
-	carried := s.storage.ConversationContext(boxOf(session), session.GetModelSessionId())
-	if carried.Empty() {
-		return
+// The ceiling goes on beside the two numbers, so a client says what the share means rather than
+// working it out from a limit of its own. It is read once per workspace rather than once per session,
+// the way staleness is: a listing is most of what the console asks for.
+func (s *Server) withContextWindows(ctx context.Context, sessions []*quaycrewv1.Session) {
+	ceilings := map[string]int32{}
+	for _, session := range sessions {
+		carried := s.storage.ConversationContext(boxOf(session), session.GetModelSessionId())
+		if carried.Empty() {
+			continue
+		}
+		workspace := session.GetWorkspace()
+		if _, known := ceilings[workspace]; !known {
+			// A ceiling the system could not read is one it does not state. The listing then shows the
+			// share on its own, which is what it showed before there was a ceiling at all, rather than
+			// marking a row against a number nobody answered with.
+			ceilings[workspace] = 0
+			if limits, err := s.store.WorkspaceLimits(ctx, workspace); err == nil {
+				ceilings[workspace] = int32(limits.ContextCeiling())
+			}
+		}
+		size, _ := s.storage.ContextWindowSize(workspace)
+		session.ContextWindow = &quaycrewv1.ContextWindow{
+			Used: carried.Carried(), Size: size, Ceiling: ceilings[workspace],
+		}
 	}
-	size, _ := s.storage.ContextWindowSize(session.GetWorkspace())
-	session.ContextWindow = &quaycrewv1.ContextWindow{Used: carried.Carried(), Size: size}
 }
 
 // AttachSession describes how to open a session's conversation.

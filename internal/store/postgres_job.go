@@ -92,6 +92,9 @@ func (p *Postgres) GetJob(ctx context.Context, id string) (*job.Job, error) {
 	if found.Steps, err = p.jobSteps(ctx, id); err != nil {
 		return nil, err
 	}
+	if found.Handoffs, err = p.jobHandoffs(ctx, id); err != nil {
+		return nil, err
+	}
 	return found, nil
 }
 
@@ -391,7 +394,49 @@ func (p *Postgres) jobMatching(ctx context.Context, where string, limit int, arg
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("read job: %w", err)
 	}
+	if err := p.withHandoffs(ctx, found); err != nil {
+		return nil, err
+	}
 	return found, nil
+}
+
+// withHandoffs puts what each session left behind onto the jobs a controller is about to act on.
+//
+// One query for the batch rather than one per job. The controller needs them before it claims
+// anything, because the conversation a job runs in is derived from them: each handover moves the name
+// on, and a controller reading a job without them would send the rest of that job straight back into
+// the conversation that was full.
+func (p *Postgres) withHandoffs(ctx context.Context, found []*job.Job) error {
+	if len(found) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(found))
+	for _, one := range found {
+		ids = append(ids, one.ID)
+	}
+	rows, err := p.pool.Query(ctx, `
+		select job, seq, remaining, tried, session, written_at
+		from job_handoffs where job = any($1) order by job, seq`, ids)
+	if err != nil {
+		return fmt.Errorf("read job handoffs: %w", err)
+	}
+	defer rows.Close()
+
+	byJob := map[string][]job.Handoff{}
+	for rows.Next() {
+		var one job.Handoff
+		if err := rows.Scan(&one.Job, &one.Seq, &one.Left, &one.Tried, &one.Session, &one.WrittenAt); err != nil {
+			return fmt.Errorf("scan job handoff: %w", err)
+		}
+		byJob[one.Job] = append(byJob[one.Job], one)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read job handoffs: %w", err)
+	}
+	for _, one := range found {
+		one.Handoffs = byJob[one.ID]
+	}
+	return nil
 }
 
 // StartJob claims one job and records the record of the claim in the same transaction.
