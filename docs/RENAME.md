@@ -225,8 +225,12 @@ pull request that ships them draws by hand.
 
 `TestTheWordmarkSurvivesAConversationBesideIt` asserts the mark at 84 columns. That is half of a 168
 column window, which is what a conversation beside the console leaves. 81 is under 84, so a five
-letter mark survives exactly that case, and the test does not need loosening. Its comment says 35
-columns and roughly 80. Both numbers move, to 44 and to 81.
+letter mark survives exactly that case.
+
+The four wordmark tests were run against a five letter stand in, and all four passed, so the width
+test does not need loosening. A mark of 100 columns then turned two of them red, which is what proves
+they read the width at all. The comment on that test says 35 columns and roughly 80. Both numbers
+move, to 44 and to 81.
 
 **Cost.** The mark disappears between 73 and 80 columns, where it is drawn today. That is a narrow
 terminal, and the header still carries the build and the way to help there.
