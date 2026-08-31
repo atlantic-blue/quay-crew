@@ -358,6 +358,94 @@ builds the first thing a person can open, and a run of it stops there once and a
 thing does what the sentence says. Where a caller declares its jobs directly rather than through a
 graph, the sentence still reaches every session and nothing reads it back.
 
+### The plan, and the person who approves it
+
+The sentence reaches every session and nothing ever holds the brief against it. That is the gap this
+closes, and it sits before every other gate the system has: a job that states the sentence writes its
+plan, and a person approves the plan before any work starts.
+
+The failure is the one section 14b already describes, one step earlier. A person says one sentence.
+Something turns that sentence into a brief. The system executes the brief faithfully and fast, and
+nothing compares the two, because reading the brief costs nearly as much as reading the result: one
+of them ran to 1,109 words for a 1,505 word result. So a misreading of one sentence becomes two days
+of correct work in the wrong direction, and it looks like progress the whole way. 14b stops the run
+at the first thing a person can open, which costs one step. This stops it before the first step,
+which costs one task.
+
+**The sentence is the trigger, and it adds no field.** A job that states the sentence and hangs under
+nothing is planned. A job that states none is an errand, which section 3 above already says needs no
+sentence: there is nothing to write a plan from and nothing to hold the plan against, which is the
+argument 14b makes for refusing a usable node with no sentence. Right against what. A job declared
+under another is never planned either: it is one part of a plan a person already approved, and
+stopping at every job in a tree puts a person back in the loop for all of them, which is the cost the
+system exists to remove.
+
+**`plan`, text, written by the controller.** The steps the session wrote, one per line, in the shape
+`Step 1: read the design`. At most `job.PlanSteps`, which is seven, each held to the title's ceiling.
+So a whole plan is at most about 1,400 bytes against a brief of 16,384, which is the whole point:
+reading the plan has to cost less than reading the result, and a plan as long as the work buys
+nothing. The number seven is chosen rather than measured. What replaces it is the distribution of
+steps a job actually records, which `krewe job step` already writes down: after fifty jobs, the
+ninety fifth percentile of steps recorded per job.
+
+**`plan_approved`, boolean, written by the control plane.** Whether a person said yes. The two are
+separate columns rather than one state word, because a plan on a row nobody has approved is the plan
+a person is being asked about, and the same plan with the flag set is the thing the work is held to.
+
+**The first task asks for the plan and for no work.** It carries the sentence above the brief, the way
+every task for a planned job does, because a plan written from the brief alone carries whatever
+misreading the brief carries. The reply is read for the plan rather than believed, the way a pull
+request address and a base line are read. A reply carrying no plan the system can read is asked once
+more and stops the job the second time, which is the two strike shape the pull request ask already
+has: a job whose plan nobody could read is a job nobody approved.
+
+**Then the job asks, through the mechanism that already exists.** The plan and the question land in
+one movement, so a reader never finds a job asking with no plan on it. Nothing new puts a question to
+a person: the phase is `asking`, the answer is `krewe job answer`, and nothing but an answer moves it.
+
+**`yes` approves and anything else replaces the plan.** This is 14b's rule, one gate earlier. An
+answer that is not the approval is the correction: the job goes back to pending carrying it, and the
+session is given the plan it wrote and what the person said, and writes the plan again from that. So
+an answer of no costs one task and never ends the job, and the person who said no writes no plan.
+Writing the replacement is the system's job, because a person writing the plan by hand is the person
+doing the compression the system exists to do.
+
+**The work is then held to the plan, or the approval is worth nothing.** The approved plan travels
+with the work, and it replaces the ordinary line about recording steps rather than sitting beside it:
+the session records each step it finishes with its number, `krewe job step "2: read the design"`. When
+the job lands, the numbers the record carries are held against the numbers the plan carries, and a
+step of the plan that nothing accounts for stops the job with a reason naming it. What the session
+answered stays on the row, because work that walked off the plan is unapproved rather than lost.
+
+The measurement is arithmetic over a set of numbers. It costs no model call and anybody holding the
+record can work it out again, which is the property the loop detector's own measure was chosen for. A
+model judging whether a plan was followed, or a similarity score over prose, would both be guesses.
+Work the session recorded that the plan never named is not a fault: the plan is a floor rather than a
+ceiling.
+
+```mermaid
+flowchart TD
+    SAID["a person declares a job stating the sentence"] --> PLAN["first task: write the plan,<br/>do no work"]
+    PLAN --> READ{"can the system read<br/>a plan out of the reply?"}
+    READ -->|"no, first time"| PLAN
+    READ -->|"no, a second time"| NOPLAN(["stopped: nobody could approve<br/>a plan nobody could read"])
+    READ -->|"yes"| ASK{"asking: here is the sentence,<br/>here is the plan"}
+    ASK -->|"anything but yes"| AGAIN["the answer is the correction,<br/>and the session writes the plan again"]
+    AGAIN --> ASK
+    ASK -->|"yes"| WORK["the work, carrying the approved plan"]
+    WORK --> HELD{"does the record account for<br/>every step of the plan?"}
+    HELD -->|"yes"| DONE(["done"])
+    HELD -->|"no"| DRIFT(["stopped, naming the steps<br/>nothing accounted for"])
+```
+
+**What it does not do.** It reads no brief and judges no wording: nothing here compares the brief with
+the sentence, because that comparison needs a judgement no rule can make. What it does is put a short
+thing a person can read in front of them while stopping is still cheap. It reaches one job rather than
+a tree: a child is not planned and is not held to its parent's plan, so a tree still spends whatever
+the approved plan set it going on. And a plan a person approves without reading is a plan that
+approves itself, which no system can prevent and the ceiling is the only defence against.
+
+
 **`claim`, text, optional, default empty.** The piece of work this job is doing: an issue, a branch,
 or a name two people would both use for the same thing. Empty claims nothing. It is held to the
 title's ceiling, and it is stored lowercased with any run of space inside it taken down to one,
@@ -588,6 +676,18 @@ purpose. The list, so a test can be written against it:
 - A job whose brief negates one of those phrases is declared, because "do not merge the pull request"
   is not an instruction to merge it.
 - A step of a flow is not held to that rule, because the graph around it holds the wait.
+- A job at the top that states the sentence is asked for its plan first, and its first task tells it
+  to do no work.
+- A job that states no sentence, and a job declared under another, are asked for no plan at all.
+- A plan of eight steps, a step over the title's ceiling, and a plan numbered with a gap or a repeat
+  are each refused, and the session is asked again.
+- A session that answers twice with no plan the system can read stops the job, and the reason says it
+  was asked twice.
+- An answer of `yes` approves the plan, and the work that follows carries it.
+- Any other answer replaces the plan: the job goes back to pending and the session is given the plan
+  it wrote and what the person said.
+- A job whose record accounts for every step of the approved plan finishes, and says nothing.
+- A job whose record misses a step of the approved plan stops, and the reason names that step.
 - A job that claims a piece of work another job is holding is refused, and the refusal names that
   job, its title, and how old the claim is.
 - The same piece of work written another way, with different capitals or extra space, is the same

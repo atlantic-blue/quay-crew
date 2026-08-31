@@ -105,6 +105,15 @@ type Job struct {
 	// because only one of them existed.
 	Product string
 
+	// Plan is what the crew said it would do, one numbered step per line, and PlanApproved says
+	// whether a person approved it. A job that states the sentence writes its plan before it does any
+	// work, and nothing is built until somebody says yes to these lines. See plan.go.
+	//
+	// Both are the controller's and the operator's to write, never a caller's: the crew writes the
+	// plan and the person approves it, which is the whole shape.
+	Plan         string
+	PlanApproved bool
+
 	// Steers is how many times the operator had to say something this job should have known, counted
 	// on the job the steer landed on and on every job above it. On the job at the top it is the score
 	// of the whole tree, which is the number the acceptance job exists to move. See steer.go.

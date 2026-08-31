@@ -17,7 +17,7 @@ const jobColumns = `id, workspace, project, title, brief, role, role_version, mo
 	expect_contains, after_jobs, deadline, budget_tokens, labels, requires, coalesce(parent, ''), depth, version,
 	phase, session, attempts, answer, reason, question, told, resuming, spent_tokens, observed_version,
 	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product, steers, claim,
-	escalation, looped_step, escalated_to,
+	escalation, looped_step, escalated_to, plan, plan_approved,
 	created_at, updated_at, started_at, finished_at`
 
 // CreateJob writes a job and the record of its declaration in one transaction.
@@ -286,6 +286,33 @@ func (p *Postgres) AnswerJob(ctx context.Context, id, answer string, event *job.
 		job.PhasePending, answer, job.PhaseAsking)
 }
 
+// ProposeJobPlan writes the plan the crew wrote and puts the question about it to a person, in one
+// movement.
+//
+// One statement, so a reader never finds a job asking with no plan on it, and never a plan on a
+// running row that nobody was asked to approve. Conditional on the running phase for the reason
+// asking is: a job nothing is running has nobody to write a plan.
+func (p *Postgres) ProposeJobPlan(ctx context.Context, id, plan, question string,
+	event *job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "propose job plan", job.ErrNotRunning, []*job.Event{event}, `
+		update jobs set phase = $2, plan = $3, question = $4, told = '', resuming = '', lease_owner = '',
+			lease_until = null, updated_at = now()
+		where id = $1 and phase = $5`,
+		job.PhaseAsking, plan, question, job.PhaseRunning)
+}
+
+// ApproveJobPlan records that a person approved the plan and puts the job back to pending, so a
+// controller starts the work against it.
+//
+// Conditional on the asking phase and on the plan not being approved yet, in the same statement, so
+// two people approving at once leave one approval and one task.
+func (p *Postgres) ApproveJobPlan(ctx context.Context, id string, event *job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "approve job plan", job.ErrNotAsking, []*job.Event{event}, `
+		update jobs set phase = $2, told = '', plan_approved = true, started_at = null, updated_at = now()
+		where id = $1 and phase = $3 and plan_approved = false`,
+		job.PhasePending, job.PhaseAsking)
+}
+
 // ListJobEvents returns one job's own history, in the order it was written.
 
 // By the sequence rather than by the moment. Two records written in one transaction are stamped in
@@ -351,7 +378,7 @@ func scanJob(row rowScanner) (*job.Job, error) {
 		&found.Question, &found.Told, &found.Resuming, &found.SpentTokens, &found.ObservedVersion,
 		&found.LeaseOwner, &found.LeaseUntil, &found.TraceID, &found.ParentSpanID,
 		&found.Repository, &found.PullRequest, &found.Product, &found.Steers, &found.Claim,
-		&found.Escalation, &found.LoopedStep, &found.EscalatedTo,
+		&found.Escalation, &found.LoopedStep, &found.EscalatedTo, &found.Plan, &found.PlanApproved,
 		&found.CreatedAt, &found.UpdatedAt, &found.StartedAt, &found.FinishedAt); err != nil {
 		return nil, err
 	}

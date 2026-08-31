@@ -109,7 +109,10 @@ commands:
                                           answers, so end your task and say you are waiting. The
                                           answer arrives as your next task
   job answer <job> "<answer>"             tell a job waiting on you what you decided. It starts
-                                          again with the answer, in the session that asked
+                                          again with the answer, in the session that asked. Where
+                                          the job is waiting for its plan to be approved, "yes"
+                                          starts the work and anything else is what you wanted
+                                          instead, which the session writes the next plan from
   job step "<what you finished>"          record one step of the job you are running, as you finish
                                           it. If the job dies part way, what is on that record is
                                           where it carries on from, and what is not on it is done a
