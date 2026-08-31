@@ -189,6 +189,62 @@ func (m *Memory) AnswerJob(_ context.Context, id, answer string, event *job.Even
 	return &kept, nil
 }
 
+// ProposeJobPlan writes the plan the crew wrote and puts the question about it to a person, in one
+// movement.
+//
+// Only from running, which is what asking already applies to: a job nothing is running has nobody to
+// write a plan. The hold goes with it, because nothing is coming back until a person answers.
+func (m *Memory) ProposeJobPlan(_ context.Context, id, plan, question string,
+	event *job.Event) (*job.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != job.PhaseRunning {
+		return nil, job.ErrNotRunning
+	}
+	found.Phase, found.Plan, found.Question, found.Told = job.PhaseAsking, plan, question, ""
+	found.LeaseOwner, found.LeaseUntil = "", nil
+	found.UpdatedAt = time.Now().UTC()
+	if err := m.appendJobEvent(event); err != nil {
+		return nil, err
+	}
+	kept := cloneJob(*found)
+	return &kept, nil
+}
+
+// ApproveJobPlan records that a person approved the plan and puts the job back to pending, so a
+// controller starts the work against it.
+//
+// Only from asking and only where the plan is not approved yet, in the same movement, so two people
+// approving at once leave one approval and one task.
+func (m *Memory) ApproveJobPlan(_ context.Context, id string, event *job.Event) (*job.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != job.PhaseAsking || found.PlanApproved {
+		return nil, job.ErrNotAsking
+	}
+	// What it was told is cleared rather than kept, which is the opposite of what an ordinary answer
+	// does, and the difference is what the session is started again with. An ordinary answer is the
+	// instruction in hand: the session asked something and carries on from what it was told. An
+	// approval is not an instruction to anybody. It says the work may begin, so what the session is
+	// given is the work and the plan it is held to, and a "yes" left on the row would be sent instead
+	// of it. That a person approved is on the record as the event and on the row as the flag.
+	found.Phase, found.Told, found.PlanApproved = job.PhasePending, "", true
+	found.StartedAt, found.UpdatedAt = nil, time.Now().UTC()
+	if err := m.appendJobEvent(event); err != nil {
+		return nil, err
+	}
+	kept := cloneJob(*found)
+	return &kept, nil
+}
+
 // ListJobEvents returns one job's own history, oldest first.
 func (m *Memory) ListJobEvents(_ context.Context, id string) ([]*job.Event, error) {
 	m.mu.RLock()

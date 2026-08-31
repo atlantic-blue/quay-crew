@@ -154,6 +154,13 @@ type Store interface {
 	// LoopJob writes that a job went in circles and takes the route the job declared, in one
 	// movement. It applies only to a running job this controller still holds.
 	LoopJob(ctx context.Context, id string, looped Loop, event *Event) (*Job, error)
+	// ProposeJobPlan writes the plan the crew wrote and puts the question about it to a person, in one
+	// movement. It applies only to a running job, which is what asking already applies to.
+	//
+	// One movement because the two halves are one fact. A reader who found a job asking with no plan
+	// on it would be looking at a question about nothing, and a plan on a running row would be a plan
+	// nobody was ever asked to approve.
+	ProposeJobPlan(ctx context.Context, id, plan, question string, event *Event) (*Job, error)
 	// IdleSandboxes is the fourth query: the sessions that still hold a container and nothing is
 	// holding open, oldest touched first. A session is not a second resource with a declaration of its
 	// own, so what is wanted of it is derived from the job that names it, and a job still in flight
@@ -875,6 +882,22 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 		}
 	}
 
+	// Read whole once, and used twice below: the plan a person approved is held against the steps the
+	// session recorded, and the attempt is held against the attempts before it. Both need what a
+	// listing does not carry.
+	whole := c.wholeJob(ctx, one)
+
+	// A job that owes a person a plan answered with the plan rather than with work, so nothing is
+	// landed here: the plan goes on the row and the question goes to a person. This is the moment the
+	// gate exists for, and it costs one task. The same answer after everything is built costs the job.
+	if kind == EventAnswered && WaitingForItsPlan(whole) {
+		if put, why := c.proposeThePlan(ctx, whole, tasks, landing.Answer); put {
+			return
+		} else if why != "" {
+			landing.Phase, landing.Reason, kind = PhaseStopped, NoPlanToApprove(why), EventStopped
+		}
+	}
+
 	// Where the job names a repository, the answer has to say where the work went. Read off the answer
 	// rather than reported by the model, the way an expectation is, and read on every path so a job
 	// that stopped for some other reason still records the pull request it did open.
@@ -901,11 +924,19 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 		landing.Phase, landing.Reason, kind = PhaseStopped,
 			WhyNoPullRequest(one.Repository, one.Mode, one.Session, c.published(ctx, one)), EventStopped
 	}
+	// A plan a person approved and the work then walked away from is the same failure as no plan at
+	// all, one step further along, so the record is held against the plan before the job is called
+	// done. It is arithmetic over the numbers the session recorded: no model call, and no judgement
+	// about prose.
+	if kind == EventAnswered && whole.PlanApproved {
+		if missing := NotAccountedFor(whole.Plan, whole.Steps); len(missing) > 0 {
+			landing.Phase, landing.Reason, kind = PhaseStopped, PlanNotFollowed(missing), EventStopped
+		}
+	}
 	// What this attempt produced goes on the record whichever way it went, and with it how like the
 	// earlier attempts at this step it was. The attempt that finished the job is recorded too: it is
 	// the other half of the measurement that replaces the threshold, and without it the record holds
 	// only the attempts that went nowhere.
-	whole := c.wholeJob(ctx, one)
 	attempt := TheAttempt(whole, last.GetId(), saidBy(last, landing))
 	landing.Attempt = &attempt
 	// A loop is three attempts at one step the system cannot tell apart, and an attempt that finished
@@ -994,6 +1025,58 @@ func (c *Controller) askForThePullRequest(ctx context.Context, one *Job, asked i
 	// The hold moves on, because the job is still this controller's and a task is in flight again.
 	c.renew(ctx, one)
 	return true
+}
+
+// proposeThePlan reads the plan out of what the session answered and puts it to a person, and says
+// what it did.
+//
+// It answers two things. `put` is true when the job is now asking, or when the session has been sent
+// back for a plan the system can read, and in both cases nothing is landed. `why` is the refusal
+// where the session was asked twice and answered with no plan either time, which is what stops the
+// job: a job whose plan nobody could read is a job nobody approved.
+//
+// Asked once and no more, bounded off the record rather than off a counter of the system's own. The
+// second ask carries a sentence this reads back, the way the ask about a moved base does, so a
+// controller that took the row over after another died reads the same history and does not ask a
+// third time.
+func (c *Controller) proposeThePlan(ctx context.Context, one *Job, tasks []*quaycrewv1.Task,
+	answer string) (put bool, why string) {
+	steps, err := ReadPlan(answer)
+	if err != nil {
+		if AskedForThePlanAgain(tasks[len(tasks)-1].GetPrompt()) {
+			return false, oneLine(err.Error())
+		}
+		if _, sent := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+			Project: one.Project, Handle: ConversationFor(one),
+			Text:           AskedForAPlanTheSystemCanRead(err.Error()),
+			PermissionMode: one.Mode, Detach: true, Role: RoleNow(one), Job: one.ID,
+		}); sent != nil {
+			// A system that cannot ask again stops the job with the reason, rather than holding a row
+			// open waiting for a task nobody sent.
+			c.logger.WarnContext(ctx, "could not ask a session again for a plan the system can read",
+				"job", one.ID, "session", one.Session, "error", sent)
+			return false, oneLine(err.Error())
+		}
+		// The hold moves on, because the job is still this controller's and a task is in flight again.
+		c.renew(ctx, one)
+		return true, ""
+	}
+
+	ctx = telemetry.Under(ctx, one.TraceID, one.ParentSpanID)
+	plan := PlanText(steps)
+	question := AskingWhetherThisIsThePlan(one.Product, plan)
+	record := c.event(ctx, one, EventAsked, question)
+	if _, err := c.store.ProposeJobPlan(ctx, one.ID, plan, question, record); err != nil {
+		if !errors.Is(err, ErrNotRunning) {
+			c.logger.WarnContext(ctx, "could not put a job's plan to a person",
+				"job", one.ID, "error", err)
+		}
+		// Nothing is landed either way. The row moved under this controller, or the write did not
+		// apply, and a later tick reads the record again and does the same arithmetic.
+		return true, ""
+	}
+	c.exported(ctx, record)
+	return true, ""
 }
 
 // askWhatMovedUnderIt sends a continued session back for the one thing its answer did not carry, and

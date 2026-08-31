@@ -217,6 +217,17 @@ func (c *system) sent() int {
 	return len(c.dispatched)
 }
 
+// lastText is what the last task the system was asked to run actually said, which is the only place
+// a test can see what the session was told rather than what the row says it should have been.
+func (c *system) lastText() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.dispatched) == 0 {
+		return ""
+	}
+	return c.dispatched[len(c.dispatched)-1].GetText()
+}
+
 // rows is a store double: the smallest set of rows a controller reads and writes.
 type rows struct {
 	mu     sync.Mutex
@@ -371,6 +382,31 @@ func (r *rows) add(one *job.Job) *job.Job {
 	r.held[one.ID] = &kept
 	r.order = append(r.order, one.ID)
 	return &kept
+}
+
+// approvePlan is a person saying yes to the plan, the way the control plane writes it: the flag goes
+// on, what it was told is cleared because an approval is no instruction to anybody, and the row goes
+// back to pending for a controller to start the work.
+func (r *rows) approvePlan(id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return
+	}
+	one.PlanApproved, one.Told, one.Phase = true, "", job.PhasePending
+	one.StartedAt = nil
+}
+
+// recordStep is the session saying it finished something, the way krewe job step writes it.
+func (r *rows) recordStep(id, summary string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return
+	}
+	one.Steps = append(one.Steps, job.Step{Job: id, Seq: len(one.Steps) + 1, Summary: summary})
 }
 
 // claim puts a lease on a row by hand, which is what a controller that then died left behind.
@@ -603,6 +639,27 @@ func (r *rows) LandJob(_ context.Context, id string, landed job.Landing, event *
 	one.FinishedAt, one.UpdatedAt = &now, now
 	// What the attempt said, in the same movement as what came of it, the way both stores write it.
 	r.recordAttempt(one, landed.Attempt)
+	r.record(id, []*job.Event{event})
+	kept := *one
+	return &kept, nil
+}
+
+// ProposeJobPlan writes the plan and the question about it in one movement, the way both stores do:
+// only from running, and the hold goes with it because nothing comes back until a person answers.
+func (r *rows) ProposeJobPlan(_ context.Context, id, plan, question string,
+	event *job.Event) (*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such job")
+	}
+	if one.Phase != job.PhaseRunning {
+		return nil, job.ErrNotRunning
+	}
+	one.Phase, one.Plan, one.Question, one.Told = job.PhaseAsking, plan, question, ""
+	one.LeaseOwner, one.LeaseUntil = "", nil
+	one.UpdatedAt = time.Now().UTC()
 	r.record(id, []*job.Event{event})
 	kept := *one
 	return &kept, nil
