@@ -1,4 +1,4 @@
-// Package channel defines the contract every Quay System channel implements.
+// Package channel defines the contract every Quay Krewe channel implements.
 //
 // A channel receives input from somewhere (a CLI, a chat app, a scheduler), turns it into an
 // InboundMessage, and delivers OutboundMessage replies. The control plane and the rest of the

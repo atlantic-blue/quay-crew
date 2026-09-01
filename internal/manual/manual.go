@@ -294,9 +294,9 @@ func Text() string {
 // preamble is the part that cannot be assembled from anywhere: what the words mean, and where
 // things are kept. Deliberately short, because everything below it is generated and stays true on its
 // own, while every sentence here is one somebody has to remember to change.
-const preamble = `# Quay System
+const preamble = `# Quay Krewe
 
-You are running inside a Quay System session. Quay System is a self hosted hub for agent sessions: the
+You are running inside a Quay Krewe session. Quay Krewe is a self hosted hub for agent sessions: the
 operator commands a system of them from any channel, and each one runs in its own sandbox container.
 The ` + "`krewe`" + ` command drives it. If it is on your path, you can use it.
 

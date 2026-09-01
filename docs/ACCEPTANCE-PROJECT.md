@@ -3,7 +3,7 @@
 One idea, twenty four hours, one declared job. The operator only answers questions.
 
 This document describes a project to run once the orchestration slices land. It is not a feature and
-it is not a plan for a feature. It is quay's own acceptance test, written before the run so that
+it is not a plan for a feature. It is the system's own acceptance test, written before the run so that
 nobody can move the target afterwards.
 
 Do not build the project from this document. This document says what the run must exercise and how
@@ -17,17 +17,17 @@ a finding.
 The operator declares one job. After that the operator only answers questions.
 
 **Answering** is a reply to a question the system asked. There are two commands, because there are two
-things that ask. `quay flow answer` answers an ask node in a graph. `quay job answer` answers a
+things that ask. `krewe flow answer` answers an ask node in a graph. `krewe job answer` answers a
 question a session put about the job it is running, which shipped on 30 August 2026 out of the first
 run's own finding, `quay-crew#446`: a session chose a store that bills while idle and the operator
 found out by asking.
 
-**Driving** is anything else the operator types that changes the job. A second `quay job create` is
-driving. A `quay task --dispatch` is driving. A `quay job stop` is driving. An edit to a file is
+**Driving** is anything else the operator types that changes the job. A second `krewe job create` is
+driving. A `krewe task --dispatch` is driving. A `krewe job stop` is driving. An edit to a file is
 driving. A push is driving.
 
-**Reading is free.** The operator may read anything at any moment. `quay job list`, `quay task list`,
-`quay answer`, the console, the panel and the web view are all reads. A read is never a finding.
+**Reading is free.** The operator may read anything at any moment. `krewe job list`, `krewe task list`,
+`krewe answer`, the console, the panel and the web view are all reads. A read is never a finding.
 
 Every time the operator drives, that is a finding. The site can still ship. The test still fails.
 See section 13.
@@ -73,7 +73,7 @@ The two pull requests that blocked it merged on 29 August 2026.
   plane is also on. Before it, a session could not declare a job, could not hand work to a role, and
   the verb boundary in section 7 had never refused a real call.
 - https://github.com/atlantic-blue/quay-crew/pull/437 renamed the noun this whole document is about.
-  `quay work create` is `quay job create`, and the words here are the words that shipped.
+  `krewe work create` is `krewe job create`, and the words here are the words that shipped.
 
 One gap is left and it does not block the run. Nothing raises a trigger yet, which is
 https://github.com/atlantic-blue/quay-crew/issues/433. Section 9 says what the run does about it.
@@ -174,7 +174,7 @@ flowchart TD
     FETCH --> DEEP["depth 3: refused, the workspace limit is two"]
 ```
 
-The root runs as `orchestrator`. Its session reads the brief, reads `quay manual`, declares the three
+The root runs as `orchestrator`. Its session reads the brief, reads `krewe manual`, declares the three
 children and declares nothing else. It then goes to `waiting`, because a parent with open children waits.
 The infrastructure job runs as `infrastructure-writer` and declares three children of its own, because the
 distribution, the store and the alarm are three deliverables with three reviews.
@@ -186,12 +186,12 @@ orchestrator may work around. Every other refusal ends the job with the refusal 
 for the reason section 7 gives.
 
 The depth limit for the run is two. That number comes from the tree and not from taste: the tree is three
-levels deep, so a limit of two makes the fourth level refuse. The operator sets it with `quay limits`
+levels deep, so a limit of two makes the fourth level refuse. The operator sets it with `krewe limits`
 before the run starts.
 
 ## 7. The roles
 
-Three roles, imported with `quay role import` and attached by the operator. They live in
+Three roles, imported with `krewe role import` and attached by the operator. They live in
 [`roles/`](../roles) now, beside the twelve the design phase uses, so they can be read, reviewed and
 changed like anything else. They were written outside this repository for the first run, which is the
 reason the first run's version of this section was wrong in the three ways below.
@@ -238,7 +238,7 @@ the pipeline that applies on merge, is a finding of the worst kind.
 ## 8. The flows
 
 Two flows, in [`flows/`](../flows) at the root of this repository: `transcript-release.yaml` and
-`transcript-watch.yaml`. The operator imports both with `quay flow import` before the run and starts
+`transcript-watch.yaml`. The operator imports both with `krewe flow import` before the run and starts
 neither by hand.
 
 ```mermaid
@@ -304,7 +304,7 @@ The other candidate was what the page does when a video has no captions at all. 
 and a question the specification already answers is not a real question.
 
 **What the run must observe.** The run stops at that node and waits. The operator answers with
-`quay flow answer <run> <answer>`, and the next step writes the answer into the page. If the run passes the
+`krewe flow answer <run> <answer>`, and the next step writes the answer into the page. If the run passes the
 node without an answer, the gate is decoration and the test failed.
 
 The answer also becomes the first measurement. After a week, the count of visits whose only captions were
@@ -330,7 +330,7 @@ system derives these numbers instead of guessing them.
 ## 12. The checklist
 
 One line per capability, grouped by who exercises it, each naming its failure. The list is taken from
-`quay help` and from `internal/manual`, so it is complete rather than remembered.
+`krewe help` and from `internal/manual`, so it is complete rather than remembered.
 
 **The operator, before the one declared job.** Setting up is not driving: it happens before the job exists.
 
@@ -385,7 +385,7 @@ One line per capability, grouped by who exercises it, each naming its failure. T
 30. **Health.** A failure answers every read, starts no work, and reports itself healthy.
 31. **The console, the panel and the web view.** A failure is a flat session list, or a view that shows a
     session and not what it was asked.
-32. **Manual and features.** The orchestrator reads `quay manual` to learn how to drive the system. A
+32. **Manual and features.** The orchestrator reads `krewe manual` to learn how to drive the system. A
     failure has to be told in its brief what the system can do.
 
 That is thirty two capabilities, and two dropped in section 5.
@@ -412,7 +412,7 @@ controller while a child runs and confirms two things from the record: the job i
 `job.started` event.
 
 **Whether twenty four hours of work fits inside the machine.** On 27 August 2026 it did not: the kernel
-killed eighteen sandboxes, three monitors and a build in one event, and nothing in quay reported it.
+killed eighteen sandboxes, three monitors and a build in one event, and nothing in krewe reported it.
 The headroom figure is sampled for the whole run, plus four counts:
 
 - the peak memory against the limit that binds, which on this machine is the Docker virtual machine's

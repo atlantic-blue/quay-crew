@@ -67,17 +67,9 @@ func TestNothingSendsTheOperatorToARetiredLocation(t *testing.T) {
 
 	// The directory, not the product's name: com.quaycrew.build is a docker label and stays.
 	oneSystemDirectory := []string{home, homeTest, itself}
-	// The documents still send a reader to the directory that went, and the words move in the piece
-	// after this one in docs/RENAME.md. The plan itself keeps naming it, the way the changelog does:
-	// it is the record of the move rather than an instruction. Delete every line but the plan when
-	// the words land.
-	theWordsHaveNotMovedYet := append([]string{
-		"docs/RENAME.md",
-		"docs/ARCHITECTURE.md",
-		"docs/DATABASE.md",
-		"docs/SANDBOX.md",
-		"docs/WORKSPACE.md",
-	}, oneSystemDirectory...)
+	// The plan keeps naming the directory that went, the way the changelog does: it is the record of
+	// the move rather than an instruction to a reader.
+	theRecordOfTheMove := append([]string{"docs/RENAME.md"}, oneSystemDirectory...)
 	// The retired variable is read on purpose, for one release, so a shell profile that exports it
 	// still points the stack at the operator's own directory. The makefile reads it, the scenario that
 	// proves an operator who exports it still lands in their own system sets it, and the entry that
@@ -86,7 +78,7 @@ func TestNothingSendsTheOperatorToARetiredLocation(t *testing.T) {
 		"Makefile",
 		filepath.Join("features", "systemdirectory_steps_test.go"),
 		filepath.Join("changelog.d", "517-the-system-keeps-its-things-in-krewe.md"),
-	}, theWordsHaveNotMovedYet...)
+	}, theRecordOfTheMove...)
 	retired := []struct {
 		path    string
 		because string
@@ -103,7 +95,7 @@ func TestNothingSendsTheOperatorToARetiredLocation(t *testing.T) {
 		{
 			path:    "~/.quay/",
 			because: "a system keeps everything it owns in ~/.krewe, and the tokens, the sealing key and every conversation are in it",
-			allowed: theWordsHaveNotMovedYet,
+			allowed: theRecordOfTheMove,
 		},
 		{
 			path:    "QUAY_HOME",

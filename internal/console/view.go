@@ -232,7 +232,7 @@ func (m Model) statusLines(spent string) []string {
 	}
 	lines := []string{statusKey.Render(pad("Version:", 16)) + build + spent}
 	if m.info.Behind {
-		lines = append(lines, statusKey.Render(pad("Quay:", 16))+
+		lines = append(lines, statusKey.Render(pad("Krewe:", 16))+
 			alert.Render("this control plane is older than the tool, run make upgrade"))
 	}
 	if m.info.SandboxStale() {

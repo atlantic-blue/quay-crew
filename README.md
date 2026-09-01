@@ -1,4 +1,4 @@
-# Quay System
+# Quay Krewe
 
 A self hosted, open source personal agent hub. You command agent sessions from a command line
 tool. Each session works in its own container and reports back, and every action it takes is on
@@ -6,7 +6,8 @@ the record. It is for one person who wants agents working on their own machine, 
 subscription, with nothing sent to a service they do not run.
 
 The name is the picture. Every channel docks at the quay, and behind it one system holds what every
-workspace shares.
+workspace shares. A krewe is the group that puts the work on, which is what the sessions are. The
+command you type is `krewe`.
 
 It is early. [`CHANGELOG.md`](CHANGELOG.md) is the list of what has landed, and
 [`features/`](features/) says what the system does today, as scenarios you can run. A change that
