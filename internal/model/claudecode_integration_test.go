@@ -28,7 +28,7 @@ func TestClaudeCodeRunnerRealTask(t *testing.T) {
 
 	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
 	if image == "" {
-		image = "quaycrew-sandbox-claude:local"
+		image = "krewe-sandbox-claude:local"
 	}
 	if err := exec.Command("docker", "image", "inspect", image).Run(); err != nil {
 		t.Skipf("sandbox image %s not found; build it with `make sandbox-image`", image)
@@ -76,7 +76,7 @@ func TestClaudeConversationSurvivesItsContainer(t *testing.T) {
 	}
 	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
 	if image == "" {
-		image = "quaycrew-sandbox-claude:local"
+		image = "krewe-sandbox-claude:local"
 	}
 	if err := exec.Command("docker", "image", "inspect", image).Run(); err != nil {
 		t.Skipf("sandbox image %s not found; build it with `make sandbox-image`", image)
@@ -141,7 +141,7 @@ func TestClaudeConversationSurvivesItsContainer(t *testing.T) {
 //
 // Skips unless the image has been built (`make sandbox-image`), the same as the real task test.
 func TestClaudeSandboxImageSkipsFirstRunPrompts(t *testing.T) {
-	const image = "quaycrew-sandbox-claude:local"
+	const image = "krewe-sandbox-claude:local"
 	if exec.Command("docker", "image", "inspect", image).Run() != nil {
 		t.Skipf("%s is not built; run make sandbox-image", image)
 	}

@@ -75,13 +75,17 @@ commands:
     [--repository <owner>/<name>]         request against it. --product is one sentence in a
     [--product "..."]                     person's words: what somebody does with what gets built
     [--claim <piece of work>]             and what they get back. Every job under this one carries
-                                          it, and it is what the design is read against. --claim is
+    [--escalate ask|role:<name>]          it, and it is what the design is read against. --claim is
                                           the piece of work this job takes, an issue, a branch or a
                                           name, and a second job claiming it is refused while this
                                           one holds it, so two sessions cannot build the same slice.
-                                          A brief that asks the job to wait for the checks, or to
-                                          merge on the result, is refused: nothing wakes a job, so
-                                          that shape is a flow
+                                          --escalate says what happens when the job goes in
+                                          circles: ask puts the question to you, role:<name> hands
+                                          the job to another role in a conversation of its own,
+                                          carrying what the attempts already said. A brief
+                                          that asks the job to wait for the checks, or to merge on
+                                          the result, is refused: nothing wakes a job, so that
+                                          shape is a flow
   history [<address>|system]              what the system did over a window of time: what ran, what it
     [--since <date>] [--until <date>]     cost, and what failed and why. The read to make instead of
     [--limit <n>]                         being told. It prints the window added up, then one line
@@ -105,7 +109,10 @@ commands:
                                           answers, so end your task and say you are waiting. The
                                           answer arrives as your next task
   job answer <job> "<answer>"             tell a job waiting on you what you decided. It starts
-                                          again with the answer, in the session that asked
+                                          again with the answer, in the session that asked. Where
+                                          the job is waiting for its plan to be approved, "yes"
+                                          starts the work and anything else is what you wanted
+                                          instead, which the session writes the next plan from
   job step "<what you finished>"          record one step of the job you are running, as you finish
                                           it. If the job dies part way, what is on that record is
                                           where it carries on from, and what is not on it is done a
@@ -177,6 +184,11 @@ commands:
                                           the session's own words, and told is what it was given.
                                           Last moved first, so the session you were last working in
                                           is at the top and the age column reads down the list
+  read <session> [<path>]                 what a session made, out of the directory the system keeps
+                                          for it. With no path it lists what is there and names the
+                                          directory on the machine; with one it prints that file, so
+                                          it pipes. It never enters the container, so it answers for
+                                          a session whose sandbox has gone
   answer <session> [--all]                 what a session came back with, and nothing else, so a
                                           caller can pipe it. The most recent answer, or with --all
                                           every one of them, oldest first
@@ -208,7 +220,12 @@ commands:
   context clear [<address>]               empty what a level says
   attach <session>                         open a session's conversation, with its history
   web [<address>]                         read the system in a browser on this machine. Read only,
-                                           and it serves 127.0.0.1:8080 unless told another port
+                                           and it serves 127.0.0.1:8080 unless told another port.
+                                           The front door is the briefing: what needs you, what is
+                                           blocked, what the system produced, and what is running
+                                           last. It says how many jobs run, what the system spent,
+                                           what the machine has left and how the system is, and it
+                                           draws itself again. The session listing is at /sessions
   room                                     how much memory this sandbox actually has, and what to
                                            do about a gate that does not fit in it. A sandbox with
                                            no limit advertises the whole machine, and the kernel
@@ -246,7 +263,7 @@ commands:
   role import <directory>                 take a role into the system from its directory. A role is a
                                           named way of working: a brief, the model it runs on, and
                                           the material it may receive
-                                          this build ships sixteen in roles/ at the root of the
+                                          this build ships seventeen in roles/ at the root of the
                                           repository, and a fresh system is seeded with none of them
   role list [<workspace>]                 what roles the system holds, or what one workspace holds
   role show [<workspace>] <name>          read one role back whole: what it is, what it may do, who

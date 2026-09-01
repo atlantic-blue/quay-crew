@@ -32,8 +32,8 @@ func (s *Server) CreateJob(ctx context.Context, req *quaycrewv1.CreateJobRequest
 		ExpectFile: req.GetExpectFile(), ExpectContains: req.GetExpectContains(),
 		After: req.GetAfter(), BudgetTokens: req.GetBudgetTokens(), Labels: req.GetLabels(),
 		Requires: req.GetRequires(), Repository: req.GetRepository(), Product: req.GetProduct(),
-		Claim: req.GetClaim(),
-		ID:    req.GetId(), Parent: req.GetParent(),
+		Claim: req.GetClaim(), Escalation: req.GetEscalation(),
+		ID: req.GetId(), Parent: req.GetParent(),
 	}
 	if req.GetDeadline() != nil {
 		at := req.GetDeadline().AsTime()
@@ -142,7 +142,7 @@ func (s *Server) PrepareJob(ctx context.Context, under string, declaration job.D
 		ExpectFile: tidy.ExpectFile, ExpectContains: tidy.ExpectContains,
 		After: tidy.After, Deadline: tidy.Deadline, BudgetTokens: tidy.BudgetTokens,
 		Labels: tidy.Labels, Requires: tidy.Requires, Repository: tidy.Repository,
-		Product: tidy.Product, Claim: tidy.Claim,
+		Product: tidy.Product, Claim: tidy.Claim, Escalation: tidy.Escalation,
 		Version: 1, Phase: job.PhasePending,
 	}
 	// Where the work lands, when the declaration did not say. It is the project's, because a project
@@ -178,6 +178,9 @@ func (s *Server) PrepareJob(ctx context.Context, under string, declaration job.D
 		return nil, nil, err
 	}
 	if err := s.pinRole(ctx, declared, tidy.Role); err != nil {
+		return nil, nil, err
+	}
+	if err := s.holdsTheEscalationRole(ctx, declared); err != nil {
 		return nil, nil, err
 	}
 	if err := s.checkAfter(ctx, declared); err != nil {
@@ -234,6 +237,26 @@ func (s *Server) pinRole(ctx context.Context, declared *job.Job, named string) e
 	return nil
 }
 
+// holdsTheEscalationRole refuses a job that would be handed to a role the workspace does not hold.
+//
+// Held here, at the write, for the reason every other rule is: a route that names nobody is found the
+// moment the job goes in circles, which is the moment there is least to spare. The version is not
+// pinned, unlike the role the job runs as, because the handoff happens later and the role it lands on
+// should be the one the workspace holds then.
+func (s *Server) holdsTheEscalationRole(ctx context.Context, declared *job.Job) error {
+	route, err := job.ReadRoute(declared.Escalation)
+	if err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	if route.Word != job.RouteRole {
+		return nil
+	}
+	if _, err := s.roleFor(ctx, declared.Workspace, route.To); err != nil {
+		return err
+	}
+	return nil
+}
+
 // checkAfter refuses an ordering that could never come due: job that waits for something the system
 // does not hold, or a loop of jobs waiting on one another.
 func (s *Server) checkAfter(ctx context.Context, declared *job.Job) error {
@@ -287,11 +310,22 @@ func (s *Server) ListJobs(ctx context.Context, req *quaycrewv1.ListJobsRequest) 
 		return nil, status.Errorf(codes.InvalidArgument,
 			"%q is not a phase; use one of %s", phase, strings.Join(job.Phases(), ", "))
 	}
-	listed, err := s.store.ListJobs(ctx, job.Filter{
+	if req.GetLimit() < 0 {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"a listing cannot return %d jobs; leave the limit out for every row, or give a count above zero",
+			req.GetLimit())
+	}
+	filter := job.Filter{
 		Workspace: req.GetWorkspace(), Project: req.GetProject(),
 		Parent: req.GetParent(), Root: req.GetRootsOnly(), Phase: req.GetPhase(),
 		LabelKey: req.GetLabelKey(), LabelValue: req.GetLabelValue(),
-	})
+		Limit: int(req.GetLimit()),
+	}
+	if since := req.GetFinishedSince(); since != nil {
+		at := since.AsTime()
+		filter.FinishedSince = &at
+	}
+	listed, err := s.store.ListJobs(ctx, filter)
 	if err != nil {
 		return nil, storeError(err, "job")
 	}
@@ -363,9 +397,12 @@ func asJob(from *job.Job) *quaycrewv1.Job {
 		After: from.After, BudgetTokens: from.BudgetTokens, Labels: from.Labels,
 		Requires: from.Requires, Repository: from.Repository, PullRequest: from.PullRequest, Claim: from.Claim,
 		Product: from.Product, Steers: int32(from.Steers),
+		Plan: from.Plan, PlanApproved: from.PlanApproved,
 		Parent: from.Parent, Depth: int32(from.Depth), Version: int32(from.Version),
 		Phase: from.Phase, Session: from.Session, Attempts: int32(from.Attempts),
 		Answer: from.Answer, Reason: from.Reason, Question: from.Question, Resuming: from.Resuming,
+		Escalation: from.Escalation, LoopedStep: int32(from.LoopedStep), EscalatedTo: from.EscalatedTo,
+		Attempted:   asJobAttempts(from.Attempted),
 		Steps:       asJobSteps(from.Steps),
 		Handoffs:    asJobHandoffs(from.Handoffs),
 		SpentTokens: from.SpentTokens, ObservedVersion: int32(from.ObservedVersion),
@@ -382,6 +419,22 @@ func asJob(from *job.Job) *quaycrewv1.Job {
 		on.FinishedAt = timestamppb.New(*from.FinishedAt)
 	}
 	return on
+}
+
+// asJobAttempts puts what each attempt at this job said on the wire, with how like the ones before it
+// each was.
+func asJobAttempts(from []job.Attempt) []*quaycrewv1.JobAttempt {
+	if len(from) == 0 {
+		return nil
+	}
+	attempts := make([]*quaycrewv1.JobAttempt, 0, len(from))
+	for _, one := range from {
+		attempts = append(attempts, &quaycrewv1.JobAttempt{
+			Task: one.Task, Seq: int32(one.Seq), Step: int32(one.Step), Session: one.Session,
+			Said: one.Said, Similarity: one.Similarity, OccurredAt: timestamppb.New(one.OccurredAt),
+		})
+	}
+	return attempts
 }
 
 // asJobSteps puts what a job's session said it finished on the wire.

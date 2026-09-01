@@ -20,7 +20,7 @@ import (
 // The rule, in three lines:
 //
 //   - A session named by job in a non terminal phase is wanted alive, and nothing here touches it.
-//     The store's query is what leaves it out.
+//     The store's queries are what leave it out.
 //   - A settled session idle for longer than its workspace's reclaim time is wanted reclaimed: the
 //     container goes and everything else stays.
 //   - A session reclaimed for longer than its workspace's archive time is wanted archived.
@@ -32,38 +32,52 @@ import (
 // would take it. Until those runs exist the system refuses a number it was never given rather than
 // choosing one, because a reclaim time set below the real idle gap throws away containers that were
 // about to be used.
+//
+// **The two rules are two queries, and that is the fault this closes.** They used to be one: every
+// settled session, ordered by how long ago it was touched, capped at a batch. A reclaimed session is
+// settled and stays settled, because with no archive time nothing ever moves it, and its stamp is
+// older than that of a sandbox idle for an hour. So the batch filled with rows nothing could act on
+// and the reclaim stopped reaching a container at all, permanently. Twelve sandboxes then held a
+// whole machine's processors while five jobs waited for room. See issue 575.
 
 // putAway takes back the containers of sessions nothing is holding open, and files the ones that have
 // been back for long enough.
 //
-// One query per tick, on rows the store already indexes, and one movement per session per tick: a
-// session reclaimed on this tick is archived on a later one, never both at once, so every step is on
-// the record separately.
+// Two queries per tick, each on an index the store already has, and one movement per session per
+// tick: a session reclaimed on this tick is archived on a later one, never both at once, so every
+// step is on the record separately. A session cannot be in both queries, which is what keeps that
+// property true now that there are two.
 func (c *Controller) putAway(ctx context.Context) {
-	settled, err := c.store.SettledSessions(ctx, c.batch)
+	now := time.Now().UTC()
+	sandboxes, err := c.store.IdleSandboxes(ctx, c.batch)
 	if err != nil {
-		c.logger.WarnContext(ctx, "could not read which sessions nothing is holding open", "error", err)
+		c.logger.WarnContext(ctx, "could not read which sessions still hold a container", "error", err)
+	}
+	for _, session := range sandboxes {
+		c.reclaimIdle(ctx, session, c.limitsFor(ctx, session).Reclaim(), now)
+	}
+	reclaimed, err := c.store.ReclaimedSessions(ctx, c.batch)
+	if err != nil {
+		c.logger.WarnContext(ctx, "could not read which sessions have already given their container back",
+			"error", err)
 		return
 	}
-	now := time.Now().UTC()
-	for _, session := range settled {
-		c.putOneAway(ctx, session, now)
+	for _, session := range reclaimed {
+		c.archiveAged(ctx, session, c.limitsFor(ctx, session).Archive(), now)
 	}
 }
 
-// putOneAway moves one settled session on, if its workspace has given the system a number to move it by.
-func (c *Controller) putOneAway(ctx context.Context, session *quaycrewv1.Session, now time.Time) {
+// limitsFor is what this session's workspace allows, and nothing at all where it could not be read. A
+// workspace whose row will not come back leaves its sessions alone rather than being reclaimed
+// against a number nobody set.
+func (c *Controller) limitsFor(ctx context.Context, session *quaycrewv1.Session) Limits {
 	limits, err := c.store.WorkspaceLimits(ctx, session.GetWorkspace())
 	if err != nil {
 		c.logger.WarnContext(ctx, "could not read a workspace's ceiling, so its sessions are left alone",
 			"session", session.GetId(), "workspace", session.GetWorkspace(), "error", err)
-		return
+		return Limits{Workspace: session.GetWorkspace()}
 	}
-	if session.GetStatus() == StatusReclaimed {
-		c.archiveAged(ctx, session, limits.Archive(), now)
-		return
-	}
-	c.reclaimIdle(ctx, session, limits.Reclaim(), now)
+	return limits
 }
 
 // reclaimIdle takes one session's container back, if it has been idle for longer than its workspace

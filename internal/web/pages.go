@@ -14,6 +14,9 @@ import (
 type shell struct {
 	Title string
 	Where string
+	// Refresh is how many seconds until the browser draws the page again, and zero for a page that
+	// does not. A conversation and a listing are read once; the briefing goes stale while it is open.
+	Refresh int
 }
 
 // sessionRow is one conversation in the listing.

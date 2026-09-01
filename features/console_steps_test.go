@@ -67,6 +67,13 @@ func (c *consoleWorld) list(ctx context.Context, parent string) error {
 
 // initializeConsoleSteps registers the console scenarios' steps. It is called from
 // initializeScenario so the console keeps its steps in its own file.
+// theWordmark is KREWE, the word a person types, in the block letters the console draws it in.
+var theWordmark = []string{
+	" ██  ▄█▀ ██▀▀▀█▄ ██▀▀▀▀▀ ██     ██ ██▀▀▀▀▀ ",
+	" ██▀▀█▄  ██▀▀██  ██▀▀▀   ██ ▄█▄ ██ ██▀▀▀   ",
+	" ▀▀   ▀▀ ▀▀   ▀▀ ▀▀▀▀▀▀▀  ▀▀   ▀▀  ▀▀▀▀▀▀▀ ",
+}
+
 func initializeConsoleSteps(sc *godog.ScenarioContext) {
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		return context.WithValue(ctx, consoleKey{}, &consoleWorld{}), nil
@@ -119,6 +126,33 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return c.press(tea.WindowSizeMsg{Width: 84, Height: 41})
 	})
 
+	sc.Step(`^the operator looks at the console (\d+) columns wide$`, func(ctx context.Context, columns int) error {
+		c := consoleFrom(ctx)
+		if err := c.openModel(worldFrom(ctx)); err != nil {
+			return err
+		}
+		return c.press(tea.WindowSizeMsg{Width: columns, Height: 41})
+	})
+
+	sc.Step(`^the wordmark (is on screen|is not drawn)$`, func(ctx context.Context, expected string) error {
+		view := consoleFrom(ctx).model.View()
+		var found int
+		for _, row := range theWordmark {
+			if strings.Contains(view, row) {
+				found++
+			}
+		}
+		drawn := found == len(theWordmark)
+		if drawn && expected == "is not drawn" {
+			return fmt.Errorf("the wordmark is drawn where there is no room for it:\n%s", view)
+		}
+		if !drawn && expected == "is on screen" {
+			return fmt.Errorf("the wordmark is gone, and %d of its %d rows are on screen:\n%s",
+				found, len(theWordmark), view)
+		}
+		return nil
+	})
+
 	sc.Step(`^the operator looks at the console and asks for help$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
 		if err := c.openModel(worldFrom(ctx)); err != nil {
@@ -134,9 +168,14 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the header shows the wordmark$`, func(ctx context.Context) error {
 		view := consoleFrom(ctx).model.View()
-		// A row of the block letters, so this passes only on the logo and not on the name written out.
-		if !strings.Contains(view, "▄█▀▀▀▀█▄") {
-			return fmt.Errorf("the wordmark is not on the screen:\n%s", view)
+		// Every row of the block letters, so this passes only on the whole mark and never on the name
+		// written out in text. Written here rather than read out of the console package: a step that
+		// read the variable it is checking would pass whatever that variable was changed to, including
+		// an empty one.
+		for _, row := range theWordmark {
+			if !strings.Contains(view, row) {
+				return fmt.Errorf("the wordmark is not on the screen:\n%s", view)
+			}
 		}
 		return nil
 	})

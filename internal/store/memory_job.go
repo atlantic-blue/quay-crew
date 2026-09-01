@@ -98,12 +98,28 @@ func (m *Memory) ListJobs(_ context.Context, filter job.Filter) ([]*job.Job, err
 		kept.Answer = ""
 		listed = append(listed, &kept)
 	}
+	// A window about what finished orders by the moment a job finished, and everything else orders by
+	// the moment it was declared. A row with no moment at all sorts last rather than crashing the
+	// listing: the filter above should already have dropped it.
+	ordering := func(one *job.Job) time.Time {
+		if filter.FinishedSince == nil {
+			return one.CreatedAt
+		}
+		if one.FinishedAt == nil {
+			return time.Time{}
+		}
+		return *one.FinishedAt
+	}
 	sort.SliceStable(listed, func(i, j int) bool {
-		if listed[i].CreatedAt.Equal(listed[j].CreatedAt) {
+		left, right := ordering(listed[i]), ordering(listed[j])
+		if left.Equal(right) {
 			return listed[i].ID > listed[j].ID
 		}
-		return listed[i].CreatedAt.After(listed[j].CreatedAt)
+		return left.After(right)
 	})
+	if filter.Limit > 0 && len(listed) > filter.Limit {
+		listed = listed[:filter.Limit]
+	}
 	return listed, nil
 }
 
@@ -189,6 +205,62 @@ func (m *Memory) AnswerJob(_ context.Context, id, answer string, event *job.Even
 	return &kept, nil
 }
 
+// ProposeJobPlan writes the plan the crew wrote and puts the question about it to a person, in one
+// movement.
+//
+// Only from running, which is what asking already applies to: a job nothing is running has nobody to
+// write a plan. The hold goes with it, because nothing is coming back until a person answers.
+func (m *Memory) ProposeJobPlan(_ context.Context, id, plan, question string,
+	event *job.Event) (*job.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != job.PhaseRunning {
+		return nil, job.ErrNotRunning
+	}
+	found.Phase, found.Plan, found.Question, found.Told = job.PhaseAsking, plan, question, ""
+	found.LeaseOwner, found.LeaseUntil = "", nil
+	found.UpdatedAt = time.Now().UTC()
+	if err := m.appendJobEvent(event); err != nil {
+		return nil, err
+	}
+	kept := cloneJob(*found)
+	return &kept, nil
+}
+
+// ApproveJobPlan records that a person approved the plan and puts the job back to pending, so a
+// controller starts the work against it.
+//
+// Only from asking and only where the plan is not approved yet, in the same movement, so two people
+// approving at once leave one approval and one task.
+func (m *Memory) ApproveJobPlan(_ context.Context, id string, event *job.Event) (*job.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != job.PhaseAsking || found.PlanApproved {
+		return nil, job.ErrNotAsking
+	}
+	// What it was told is cleared rather than kept, which is the opposite of what an ordinary answer
+	// does, and the difference is what the session is started again with. An ordinary answer is the
+	// instruction in hand: the session asked something and carries on from what it was told. An
+	// approval is not an instruction to anybody. It says the work may begin, so what the session is
+	// given is the work and the plan it is held to, and a "yes" left on the row would be sent instead
+	// of it. That a person approved is on the record as the event and on the row as the flag.
+	found.Phase, found.Told, found.PlanApproved = job.PhasePending, "", true
+	found.StartedAt, found.UpdatedAt = nil, time.Now().UTC()
+	if err := m.appendJobEvent(event); err != nil {
+		return nil, err
+	}
+	kept := cloneJob(*found)
+	return &kept, nil
+}
+
 // ListJobEvents returns one job's own history, oldest first.
 func (m *Memory) ListJobEvents(_ context.Context, id string) ([]*job.Event, error) {
 	m.mu.RLock()
@@ -243,6 +315,12 @@ func matchesJob(held *job.Job, filter job.Filter) bool {
 	case filter.Parent == "" && filter.Root && held.Parent != "":
 		return false
 	case filter.Phase != "" && held.Phase != filter.Phase:
+		return false
+	// A job that has not finished is not late in the window, it is outside the question: the
+	// window is about jobs that ended.
+	case filter.FinishedSince != nil && held.FinishedAt == nil:
+		return false
+	case filter.FinishedSince != nil && held.FinishedAt.Before(*filter.FinishedSince):
 		return false
 	}
 	if filter.LabelKey == "" {
@@ -314,6 +392,29 @@ func (m *Memory) ExpiredJob(_ context.Context, limit int) ([]*job.Job, error) {
 	return m.jobMatching(limit, func(one *job.Job) bool {
 		return one.Phase == job.PhaseRunning &&
 			(one.LeaseUntil == nil || !one.LeaseUntil.After(now))
+	}), nil
+}
+
+// AnythingMoving says whether any job is running or asking: whether this system is doing anything
+// at all.
+func (m *Memory) AnythingMoving(_ context.Context) (bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, one := range m.jobs {
+		if one.Phase == job.PhaseRunning || one.Phase == job.PhaseAsking {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// TurnedAwayJob is the job the machine had no room for: pending, carrying a reason, oldest declared
+// first. Only the system writes a reason on a pending job, and only when it holds the job back.
+func (m *Memory) TurnedAwayJob(_ context.Context, limit int) ([]*job.Job, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.jobMatching(limit, func(one *job.Job) bool {
+		return one.Phase == job.PhasePending && one.Reason != ""
 	}), nil
 }
 
@@ -538,11 +639,13 @@ func (m *Memory) LandJob(_ context.Context, id string, landed job.Landing, event
 	// The hold goes with the job. A lease left on finished job would read as held forever.
 	found.LeaseOwner, found.LeaseUntil = "", nil
 	found.FinishedAt, found.UpdatedAt = &now, now
+	// What the attempt said, in the same movement as what came of it. A landing with no attempt behind
+	// it would leave the record unable to say whether this job was going anywhere.
+	m.recordAttempt(id, landed.Attempt)
 	if err := m.appendJobEvent(event); err != nil {
 		return nil, err
 	}
-	kept := cloneJob(*found)
-	return &kept, nil
+	return m.jobWithSteps(*found), nil
 }
 
 // appendJobEvents records several things that happened, the way a store writes them in one

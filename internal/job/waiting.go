@@ -17,10 +17,14 @@ import (
 // graph: a dispatch that pushes and opens the pull request, a wait, then a choice on the check
 // result. The refusal names that graph.
 //
-// The rule reads the brief, so it is a guess about English. It is held narrow for that reason. A
-// waiting word has to point at a forge pipeline, and a merge has to point at a pull request or at
-// the result of one, so "merge origin/main into your branch" is ordinary work and stays legal. A
-// refusal that fires on ordinary work is the rule everybody learns to word around.
+// The rule reads the brief, so it is a guess about English. A waiting word has to point at a forge
+// pipeline, and a merge has to point at a pull request or at the result of one, so "merge
+// origin/main into your branch" is ordinary work and stays legal.
+//
+// It reads the whole brief as one string, so it matches a fragment anywhere in it and reads no
+// tense, no mood and no subject. A brief that describes work which already landed, that says what
+// another job is doing, or that quotes this rule, is refused today. Issue 594 holds the four cases
+// and what to do about them.
 
 // waitWindow and mergeWindow are how far a verb may sit from the thing it acts on, in bytes. About a
 // short clause. The merge window is the tighter of the two because the words that follow a merge are
@@ -78,7 +82,9 @@ func OnlyAFlowCan(brief string) string {
 	return ""
 }
 
-// negated says whether the text just before a phrase turns it into an instruction not to do it.
+// negated says whether the text just before a phrase turns it into an instruction not to do it. The
+// test is a substring test, so a word that holds a negation word negates too: "another" holds "not",
+// and "another job merges the pull request" is accepted. Issue 594 covers it.
 func negated(said string, at int) bool {
 	from := at - negationWindow
 	if from < 0 {

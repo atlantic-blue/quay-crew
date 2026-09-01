@@ -84,8 +84,9 @@ type recordingRunner struct {
 	mu       sync.Mutex
 	requests []model.Request
 	// failNext makes the next task fail, which is how a scenario gets a session that exists but has
-	// no conversation behind it.
+	// no conversation behind it. failWith is what it fails with, and empty is the general refusal.
 	failNext bool
+	failWith string
 	// takes is how long a task pretends to take. Zero is instant, which is right for almost every
 	// scenario and wrong for any scenario about something happening while a task is under way:
 	// with an instant model a whole automation finishes before the next step runs, and a scenario
@@ -122,6 +123,15 @@ func (r *recordingRunner) failTheNextTask() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.failNext = true
+}
+
+// failTheNextTaskWith is the same, in words the scenario chooses, so a scenario about attempts that
+// failed differently can say what each one failed with. A model that says the same thing every time
+// would make every failure a loop.
+func (r *recordingRunner) failTheNextTaskWith(said string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.failNext, r.failWith = true, said
 }
 
 // willSay adds one answer to the queue, so a scenario builds up what a model says over several tasks.
@@ -209,8 +219,12 @@ func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.failNext {
-		r.failNext = false
-		return model.Response{}, fmt.Errorf("the model refused this task")
+		said := r.failWith
+		r.failNext, r.failWith = false, ""
+		if said == "" {
+			said = "the model refused this task"
+		}
+		return model.Response{}, fmt.Errorf("%s", said)
 	}
 	return model.Response{
 		Reply: r.answerFor(asked, req.Text),
@@ -378,6 +392,8 @@ type world struct {
 	// change is the repository a scenario built to stand for the change a session is opening a pull
 	// request for, because the gate reads the change rather than being told about it.
 	change string
+	// proseGate is what the shipped prose gate answered the last time a scenario fired it.
+	proseGate gateAnswer
 }
 
 type worldKey struct{}
@@ -701,6 +717,8 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeConsoleJobsSteps(sc)
 	initializeKeysSteps(sc)
 	initializeWebSteps(sc)
+	initializeBriefingSteps(sc)
+	initializeBriefingHeaderSteps(sc)
 	initializeFlowSteps(sc)
 	initializeFlowSurfaceSteps(sc)
 	initializePullRequestReviewSteps(sc)
@@ -730,16 +748,20 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeClaimSteps(sc)
 	initializeJobControllerSteps(sc)
 	initializeJobRepositorySteps(sc)
+	initializePublishingSteps(sc)
 	initializeJobWaitingSteps(sc)
 	initializeFlowStepSteps(sc)
 	initializeJobRoleSteps(sc)
 	initializeTriggerSteps(sc)
 	initializeLifecycleSteps(sc)
+	initializeStalledSteps(sc)
 	initializeJobEventsSteps(sc)
 	initializeJobLeaseSteps(sc)
 	initializeAskingSteps(sc)
 	initializeResumingSteps(sc)
 	initializeContextCeilingSteps(sc)
+	initializePlanSteps(sc)
+	initializeLoopingSteps(sc)
 	initializeCapabilitySteps(sc)
 	initializeProductSteps(sc)
 	initializeSteersSteps(sc)
@@ -761,11 +783,14 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeDeployIdentityGateSteps(sc)
 	initializeSigningSteps(sc)
 	initializeSecretFileSteps(sc)
+	initializeProseGateSteps(sc)
 	initializeSystemSecretSteps(sc)
 	initializeGitConfigSteps(sc)
 	initializeWizardModeSteps(sc)
 	initializeDetachSteps(sc)
 	initializeDispatchingSteps(sc)
+	initializeSandboxNameSteps(sc)
+	initializeSystemDirectorySteps(sc)
 	initializeWaitsSteps(sc)
 	initializeDegradedSteps(sc)
 	initializeHeadroomSteps(sc)
@@ -782,6 +807,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeShippedRoleVerbSteps(sc)
 	initializeRoleSkillSteps(sc)
 	initializeRoleSessionSteps(sc)
+	initializePlanCriticSteps(sc)
 	initializeStoppedReasonSteps(sc)
 	initializeHookVersionSteps(sc)
 	initializeImportedSkillSteps(sc)

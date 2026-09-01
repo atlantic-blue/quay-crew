@@ -104,7 +104,7 @@ func TestAHandoffIsKeptWholeAndNamesTheConversationThatWroteIt(t *testing.T) {
 	// The task the fresh session would be given, built from the record rather than from anything held
 	// in a process. A test that a second session starts passes whether or not the handoff carries
 	// anything, so this reads what it would actually be handed.
-	carried := job.HandedOver(&job.Job{
+	carried := job.HandedOn(&job.Job{
 		Brief: "choose where the transcripts are stored",
 		Handoffs: []job.Handoff{{
 			Left: one.GetLeft(), Tried: one.GetTried(), Session: one.GetSession(),

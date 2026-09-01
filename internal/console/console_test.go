@@ -596,7 +596,7 @@ func TestShellActionExecsIntoTheSessionContainer(t *testing.T) {
 	}
 	// The prompt names the session, so a shell says which sandbox it is in rather than looking like
 	// every other one. See TestShellingInOpensTheSandboxUnderTheCursorAndSaysWhichOneItIs.
-	want := []string{"docker", "exec", "-it", "-e", "PS1=s1 $ ", "quaycrew-s1", "sh"}
+	want := []string{"docker", "exec", "-it", "-e", "PS1=s1 $ ", "krewe-s1", "sh"}
 	if strings.Join(command.Args, " ") != strings.Join(want, " ") {
 		t.Fatalf("command = %v, want %v", command.Args, want)
 	}
@@ -1505,8 +1505,9 @@ func TestTheHeaderIsTheWordmarkTheBuildAndTheWayToEverythingElse(t *testing.T) {
 // console is half the window then, and the wordmark was the thing that lost.
 func TestTheWordmarkSurvivesAConversationBesideIt(t *testing.T) {
 	// Down to half of a 168 column window, which is what a conversation beside the console leaves.
-	// The wordmark is 35 columns wide, so below roughly 80 it genuinely does not fit and is dropped
-	// rather than drawn over the top of something.
+	// The wordmark is 43 columns wide and is drawn from 80 console columns up against this status
+	// block, both measured, so 84 is the narrowest case here. Below 80 it genuinely does not fit and
+	// is dropped rather than drawn over the top of something.
 	for _, width := range []int{170, 99, 84} {
 		model := newTestModel(t, Sessions(&fakeClient{}))
 		model.width = width
@@ -1584,8 +1585,9 @@ func TestTheWordmarkIsThereBeforeTheSystemAnswers(t *testing.T) {
 // and are the first thing dropped when the window is small. One line fits beside the version at every
 // width worth drawing a console in.
 func TestTheWordmarkFitsWhereverTheHeaderDoes(t *testing.T) {
-	// The logo is 36 columns wide, so below roughly 60 it does not fit beside the version and is
-	// dropped rather than drawn over it. Height never stops it: it is drawn on rows the header has.
+	// The logo is 43 columns wide, so below 80 it does not fit beside the version and the address and
+	// is dropped rather than drawn over them. Height never stops it: it is drawn on rows the header
+	// has.
 	for _, size := range [][2]int{{140, 30}, {100, 24}, {84, 12}, {140, 3}} {
 		model := newTestModel(t, staticResource("sessions"))
 		model, _ = update(t, model, tea.WindowSizeMsg{Width: size[0], Height: size[1]})
@@ -2895,7 +2897,7 @@ func TestShellingInOpensTheSandboxUnderTheCursorAndSaysWhichOneItIs(t *testing.T
 	if firstArgs == secondArgs {
 		t.Fatalf("both sessions open the same shell:\n%s", firstArgs)
 	}
-	if !strings.Contains(firstArgs, "quaycrew-c9964dc287c1c7048c82ecd3") {
+	if !strings.Contains(firstArgs, "krewe-c9964dc287c1c7048c82ecd3") {
 		t.Fatalf("the shell does not open the selected session's container:\n%s", firstArgs)
 	}
 

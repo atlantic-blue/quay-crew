@@ -189,13 +189,13 @@ func AskedForAHandoff(one *Job, ceiling int) string {
 // AskingForAHandoff says whether a task the system sent was that ask.
 func AskingForAHandoff(prompt string) bool { return strings.Contains(prompt, theHandoffAsk) }
 
-// HandedOver is what the system sends the fresh session that carries the job on.
+// HandedOn is what the system sends the fresh session that carries the job on.
 //
 // It is the brief and the record together, which is where it differs from a job being continued after
 // a failure. A resume goes back into the conversation that did the work, so the brief would be the
 // job asked for a second time. This conversation has never seen the job, so it gets the brief, what
 // is already finished, and what the session before it left behind.
-func HandedOver(one *Job) string {
+func HandedOn(one *Job) string {
 	latest, written := Latest(one.Handoffs)
 	said := []string{}
 	if one.Product != "" {

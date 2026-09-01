@@ -60,7 +60,7 @@ func atTheCeiling(t *testing.T, ceiling int64) (*job.Controller, *rows, *system,
 	ctx := context.Background()
 
 	controller.Tick(ctx)
-	kept.step(one.ID, "read the issue")
+	kept.recordStep(one.ID, "read the issue")
 	windows.fills("session-"+job.SessionFor(one.ID), ceiling)
 	plane.lands("I moved the query onto the new index and the tests pass")
 	controller.Tick(ctx)

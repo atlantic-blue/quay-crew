@@ -103,8 +103,8 @@ func (m *Memory) RefuseJob(_ context.Context, id, reason string, event *job.Even
 	return m.jobWithSteps(*found), nil
 }
 
-// jobWithSteps is one job as a reader gets it, its finished steps and its handoffs included. The
-// caller holds the lock.
+// jobWithSteps is one job as a reader gets it, its finished steps, its handoffs and its attempts
+// included. The caller holds the lock.
 func (m *Memory) jobWithSteps(from job.Job) *job.Job {
 	kept := cloneJob(from)
 	kept.Steps = append([]job.Step(nil), m.jobSteps[from.ID]...)
@@ -114,6 +114,10 @@ func (m *Memory) jobWithSteps(from job.Job) *job.Job {
 	kept.Handoffs = append([]job.Handoff(nil), m.jobHandoffs[from.ID]...)
 	if len(kept.Handoffs) == 0 {
 		kept.Handoffs = nil
+	}
+	kept.Attempted = append([]job.Attempt(nil), m.jobAttempts[from.ID]...)
+	if len(kept.Attempted) == 0 {
+		kept.Attempted = nil
 	}
 	return &kept
 }

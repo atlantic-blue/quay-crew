@@ -58,7 +58,7 @@ func TestAJobPastTheContextCeilingCarriesOnInAnotherSession(t *testing.T) {
 	declared, err := client.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project.GetProject().GetId(), Title: "sort the listing",
 		Brief:      "make the listing sort by the clock it shows",
-		Repository: "atlantic-blue/quay-crew",
+		Repository: "atlantic-blue/quay-crew", Mode: model.PermissionModeOnTheNetwork(),
 	})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)
@@ -180,7 +180,7 @@ func TestAJobWhoseSessionWritesNoHandoffStopsRatherThanStartingAgain(t *testing.
 	declared, err := client.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project.GetProject().GetId(), Title: "sort the listing",
 		Brief:      "make the listing sort by the clock it shows",
-		Repository: "atlantic-blue/quay-crew",
+		Repository: "atlantic-blue/quay-crew", Mode: model.PermissionModeOnTheNetwork(),
 	})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)

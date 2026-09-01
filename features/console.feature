@@ -291,6 +291,28 @@ Feature: The operator sees the system from the console
     When the operator opens the console with a conversation beside it
     Then the header shows the wordmark
 
+  # The mark spells the command a person types, which is krewe. It spelled the product's first word,
+  # beside a command that spelled the other half of the name.
+  #
+  # Five letters cost seven columns more than four: 43 rather than 36, both measured against this
+  # tree. What that costs is the narrowest console it is drawn in, and that depends on what else is on
+  # the header line: 77 columns beside the build alone, and 80 beside a status block that also names
+  # the address and the workspace. Under it the header keeps the build and the way to help, and the
+  # mark gives way rather than being drawn over the top of them. A conversation beside the console
+  # leaves 84, which is the case above and is the one that matters.
+  Scenario Outline: The wordmark is drawn where there is room, and gives way where there is not
+    When the operator looks at the console <columns> columns wide
+    Then the wordmark <is drawn or not>
+    And the header says which build this is
+
+    Examples:
+      | columns | is drawn or not |
+      | 120     | is on screen    |
+      | 84      | is on screen    |
+      | 77      | is on screen    |
+      | 76      | is not drawn    |
+      | 60      | is not drawn    |
+
   Scenario: The help panel carries everything the header dropped
     When the operator looks at the console and asks for help
     Then the help panel names the system it is pointed at

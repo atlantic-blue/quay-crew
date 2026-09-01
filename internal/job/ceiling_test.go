@@ -137,7 +137,7 @@ func TestTheFreshSessionIsToldWhatWasLeft(t *testing.T) {
 			Tried: "adding the index inside the migration that renames the column, which deadlocks",
 		}},
 	}
-	handed := job.HandedOver(one)
+	handed := job.HandedOn(one)
 	for _, want := range []string{
 		"the query still reads the old one",
 		"539-feat-index",
@@ -160,7 +160,7 @@ func TestASessionThatTriedNothingIsSaidSoOutLoud(t *testing.T) {
 		ID: "0123456789abcdef01234567", Brief: "read the electricity bill",
 		Handoffs: []job.Handoff{{Seq: 1, Session: "aaaaaaaaaaaaaaaaaaaaaaaa", Left: "say when it is due"}},
 	}
-	if handed := job.HandedOver(one); !strings.Contains(handed, "recorded nothing it tried") {
+	if handed := job.HandedOn(one); !strings.Contains(handed, "recorded nothing it tried") {
 		t.Fatalf("the fresh session is not told that nothing was tried:\n%s", handed)
 	}
 }
