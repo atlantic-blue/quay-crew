@@ -135,6 +135,11 @@ func TestAPlanCriticJobIsRefusedWhenTheRoleStopsReceivingContextInPostgres(t *te
 // The happy path, and the one the whole slice is for: a job that names this role and cannot be done
 // without the context runs, in a session running as the role, and the brief that session would be
 // told is the file's brief and not a truncation of it.
+//
+// The job states no sentence, and that is the crossing this tier is for rather than an oversight. A
+// job at the top that states one writes a plan and waits for a person to approve it, so it never
+// reaches done on its own, and what that gate does is a different test's subject. The sentence the
+// critic reads a plan against is held in features/plancritic.feature.
 func TestAPlanCriticJobRunsInASessionThatReceivesTheContextInPostgres(t *testing.T) {
 	answer := "one finding: section 3 says the address carries an identifier and the sentence says a link"
 	s, boxes := aSystemWithRoles(t, &model.FakeRunner{Reply: answer})
@@ -145,7 +150,6 @@ func TestAPlanCriticJobRunsInASessionThatReceivesTheContextInPostgres(t *testing
 	declared, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "read the plan", Brief: "read the design, the contracts and the build order",
 		Role: "plan-critic", Requires: []string{"context"},
-		Product: "pastes a link and gets the text back",
 	})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)
