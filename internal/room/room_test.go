@@ -5,7 +5,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/atlantic-blue/krewe/internal/room"
+	"github.com/atlantic-blue/quay-krewe/internal/room"
 )
 
 // machine builds the accounting a sandbox reads, so a test says what the kernel is reporting rather

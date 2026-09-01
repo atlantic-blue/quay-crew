@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // The measurement the threshold came from, run again on every build.

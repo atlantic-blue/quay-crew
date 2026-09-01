@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 )
 
 // saying pipes text into the next invocation, the way a shell redirection does, and puts standard

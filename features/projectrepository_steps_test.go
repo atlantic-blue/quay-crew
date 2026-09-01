@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/repository"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/repository"
 	"github.com/cucumber/godog"
 )
 
@@ -78,7 +78,7 @@ func initializeProjectRepositorySteps(sc *godog.ScenarioContext) {
 		})
 
 	sc.Step(`^the control plane refuses it as invalid, saying how to write a repository$`,
-		theRefusalSays("atlantic-blue/quay-crew"))
+		theRefusalSays("atlantic-blue/quay-krewe"))
 
 	sc.Step(`^the control plane refuses it as invalid, naming the two kinds$`, func(ctx context.Context) error {
 		for _, kind := range []string{repository.Public, repository.Private} {

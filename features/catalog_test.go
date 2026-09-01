@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/features"
+	"github.com/atlantic-blue/quay-krewe/features"
 )
 
 func TestTheCatalogCarriesEveryFeatureFile(t *testing.T) {

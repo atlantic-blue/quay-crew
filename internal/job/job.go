@@ -19,9 +19,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/capacity"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/role"
+	"github.com/atlantic-blue/quay-krewe/internal/capacity"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/role"
 )
 
 // The phases a job moves through. They are the flow engine's words plus one, so a reader

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // The stop at the first thing a person can open, as the reducer decides it.

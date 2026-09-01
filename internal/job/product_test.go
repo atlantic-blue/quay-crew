@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // The sentence is one line wherever it is read: in a listing, on `krewe job show` and in front of a

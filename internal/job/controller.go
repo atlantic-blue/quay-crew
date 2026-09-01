@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/capacity"
-	"github.com/atlantic-blue/krewe/internal/publish"
-	"github.com/atlantic-blue/krewe/internal/telemetry"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/capacity"
+	"github.com/atlantic-blue/quay-krewe/internal/publish"
+	"github.com/atlantic-blue/quay-krewe/internal/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 )
 

@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/model"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
 )
 
 // What a fresh system puts in front of every session, rather than what it merely offers.

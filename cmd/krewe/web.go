@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/web"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/web"
 )
 
 // runWeb serves the system to a browser on this machine, and keeps serving until the operator stops it.

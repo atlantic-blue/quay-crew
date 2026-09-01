@@ -6,8 +6,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/role"
-	"github.com/atlantic-blue/krewe/internal/store"
+	"github.com/atlantic-blue/quay-krewe/internal/role"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

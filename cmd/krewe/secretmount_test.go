@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 )
 
 // A git configuration, complete with the blank line and the trailing newline a real one has, because

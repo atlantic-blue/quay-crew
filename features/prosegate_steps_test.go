@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/hook"
+	"github.com/atlantic-blue/quay-krewe/internal/hook"
 	"github.com/cucumber/godog"
 )
 

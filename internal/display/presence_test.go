@@ -3,7 +3,7 @@ package display
 import (
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 )
 
 // TestTheListingSaysWhichKindOfIdleItIs. Four states used to share one word, and the operator acts on

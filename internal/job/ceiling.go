@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/display"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
 )
 
 // A session used to run until its context window was full.

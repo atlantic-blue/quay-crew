@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/capacity"
-	"github.com/atlantic-blue/krewe/internal/headroom"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/capacity"
+	"github.com/atlantic-blue/quay-krewe/internal/headroom"
 )
 
 // roomSummary is the room view's line above the columns: the word, what every container holds, the

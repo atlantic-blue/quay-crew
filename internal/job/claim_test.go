@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // A claim is a job's hold on a piece of work in the world. What is proved here is when it ends,
@@ -15,7 +15,7 @@ import (
 // The expiry first. A claim system with no expiry passes every test about claiming.
 func TestAClaimOnAJobNothingHasMovedRunsOut(t *testing.T) {
 	crashed := &job.Job{
-		Claim: "atlantic-blue/krewe#540", Phase: job.PhaseRunning,
+		Claim: "atlantic-blue/quay-krewe#540", Phase: job.PhaseRunning,
 		UpdatedAt: time.Now().UTC().Add(-job.ClaimLife - time.Minute),
 	}
 	if crashed.Holding(time.Now().UTC()) {
@@ -28,7 +28,7 @@ func TestAClaimOnAJobNothingHasMovedRunsOut(t *testing.T) {
 // so a claim that ran out while the work was in flight would be worse than no claim at all.
 func TestAClaimOnAMovingJobHolds(t *testing.T) {
 	running := &job.Job{
-		Claim: "atlantic-blue/krewe#540", Phase: job.PhaseRunning,
+		Claim: "atlantic-blue/quay-krewe#540", Phase: job.PhaseRunning,
 		UpdatedAt: time.Now().UTC().Add(-time.Minute),
 	}
 	if !running.Holding(time.Now().UTC()) {
@@ -40,7 +40,7 @@ func TestAClaimOnAMovingJobHolds(t *testing.T) {
 // happy path takes: work that failed is work somebody else should be able to pick up.
 func TestAClaimEndsWhenTheJobSettles(t *testing.T) {
 	for _, phase := range []string{job.PhaseDone, job.PhaseFailed, job.PhaseStopped} {
-		settled := &job.Job{Claim: "atlantic-blue/krewe#540", Phase: phase, UpdatedAt: time.Now().UTC()}
+		settled := &job.Job{Claim: "atlantic-blue/quay-krewe#540", Phase: phase, UpdatedAt: time.Now().UTC()}
 		if settled.Holding(time.Now().UTC()) {
 			t.Errorf("a %s job still holds its claim, so the work it did not finish is held by nobody working on it", phase)
 		}
@@ -49,7 +49,7 @@ func TestAClaimEndsWhenTheJobSettles(t *testing.T) {
 
 func TestALiveJobHoldsItsClaimInEveryPhaseNothingEnded(t *testing.T) {
 	for _, phase := range []string{job.PhasePending, job.PhaseWaiting, job.PhaseRunning, job.PhaseAsking} {
-		live := &job.Job{Claim: "atlantic-blue/krewe#540", Phase: phase, UpdatedAt: time.Now().UTC()}
+		live := &job.Job{Claim: "atlantic-blue/quay-krewe#540", Phase: phase, UpdatedAt: time.Now().UTC()}
 		if !live.Holding(time.Now().UTC()) {
 			t.Errorf("a %s job does not hold its claim, so a second job takes work this one has not finished", phase)
 		}
@@ -67,12 +67,12 @@ func TestAJobClaimingNothingHoldsNothing(t *testing.T) {
 // letter or a stray space is a claim that did nothing.
 func TestTheSamePieceOfWorkWrittenTwoWaysIsOneClaim(t *testing.T) {
 	for _, written := range []string{
-		"atlantic-blue/krewe#540",
-		"  atlantic-blue/krewe#540 ",
-		"Atlantic-Blue/Krewe#540",
-		"atlantic-blue/krewe#540\n",
+		"atlantic-blue/quay-krewe#540",
+		"  atlantic-blue/quay-krewe#540 ",
+		"Atlantic-Blue/Quay-Krewe#540",
+		"atlantic-blue/quay-krewe#540\n",
 	} {
-		if tidy := job.TidyClaim(written); tidy != "atlantic-blue/krewe#540" {
+		if tidy := job.TidyClaim(written); tidy != "atlantic-blue/quay-krewe#540" {
 			t.Errorf("%q is stored as %q, so it would not meet the same claim written plainly", written, tidy)
 		}
 	}
@@ -96,7 +96,7 @@ func TestAClaimLongerThanATitleIsRefused(t *testing.T) {
 
 func TestAnOrdinaryClaimIsDeclared(t *testing.T) {
 	if err := (job.Declaration{
-		Title: "fix the defect", Brief: "fix it", Claim: "atlantic-blue/krewe#540",
+		Title: "fix the defect", Brief: "fix it", Claim: "atlantic-blue/quay-krewe#540",
 	}).Validate(); err != nil {
 		t.Fatalf("an ordinary claim was refused: %v", err)
 	}
@@ -107,12 +107,12 @@ func TestAnOrdinaryClaimIsDeclared(t *testing.T) {
 func TestTheRefusalNamesTheHolderAndHowOldTheClaimIs(t *testing.T) {
 	now := time.Now().UTC()
 	held := &job.Held{
-		Claim: "atlantic-blue/krewe#540", Holder: "0123456789abcdef01234567",
+		Claim: "atlantic-blue/quay-krewe#540", Holder: "0123456789abcdef01234567",
 		Title: "a job claims the work it holds", TakenAt: now.Add(-14 * time.Minute),
 	}
 	refusal := held.Refusal(now)
 	for _, want := range []string{
-		"atlantic-blue/krewe#540", "0123456789abcdef01234567", "a job claims the work it holds",
+		"atlantic-blue/quay-krewe#540", "0123456789abcdef01234567", "a job claims the work it holds",
 		"14 minutes", "krewe job show",
 	} {
 		if !strings.Contains(refusal, want) {

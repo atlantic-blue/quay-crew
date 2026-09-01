@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // A plan is read off what the session answered, in one shape the system can find. Anything it cannot

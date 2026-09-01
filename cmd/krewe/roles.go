@@ -6,10 +6,10 @@ import (
 	"io"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/display"
-	"github.com/atlantic-blue/krewe/internal/origin"
-	"github.com/atlantic-blue/krewe/internal/role"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
+	"github.com/atlantic-blue/quay-krewe/internal/origin"
+	"github.com/atlantic-blue/quay-krewe/internal/role"
 )
 
 // runRole drives the system's roles from the command line: what it holds, what a workspace holds, and

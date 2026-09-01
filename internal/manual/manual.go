@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/features"
+	"github.com/atlantic-blue/quay-krewe/features"
 )
 
 // Commands is the command list, which is also what `krewe` prints with no arguments. It lives here so

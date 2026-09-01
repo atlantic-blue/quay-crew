@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/role"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/role"
 	"github.com/cucumber/godog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

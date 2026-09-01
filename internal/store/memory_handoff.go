@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // What a session leaves behind when it reaches its workspace's context ceiling, and the movement that

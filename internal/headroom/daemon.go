@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/room"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/room"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 )
 
 // A Source takes one sample of the machine. It is an interface so the control plane can be built

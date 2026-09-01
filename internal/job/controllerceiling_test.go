@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // A session that has filled its context window is given no new work on the job it is doing, and the

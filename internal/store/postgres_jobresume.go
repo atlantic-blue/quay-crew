@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // The steps a job finished, and the two answers to a job that failed: continue it, or refuse it.

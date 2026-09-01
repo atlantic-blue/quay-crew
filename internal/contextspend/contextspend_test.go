@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/contextspend"
+	"github.com/atlantic-blue/quay-krewe/internal/contextspend"
 )
 
 // A conversation nobody has spoken in has filled nothing, which is not the same as having filled it

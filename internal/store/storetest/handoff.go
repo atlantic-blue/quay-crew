@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/store"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // runJobHandoffConformance holds both stores to what handing a job over means.

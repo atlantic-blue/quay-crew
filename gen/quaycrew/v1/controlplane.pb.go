@@ -12261,8 +12261,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\n" +
 	"GetHistory\x12\x1e.quaycrew.v1.GetHistoryRequest\x1a\x1f.quaycrew.v1.GetHistoryResponse\x12P\n" +
 	"\vGetHeadroom\x12\x1f.quaycrew.v1.GetHeadroomRequest\x1a .quaycrew.v1.GetHeadroomResponse\x12J\n" +
-	"\tGetHealth\x12\x1d.quaycrew.v1.GetHealthRequest\x1a\x1e.quaycrew.v1.GetHealthResponseB\xac\x01\n" +
-	"\x0fcom.quaycrew.v1B\x11ControlplaneProtoP\x01Z9github.com/atlantic-blue/krewe/gen/quaycrew/v1;quaycrewv1\xa2\x02\x03QXX\xaa\x02\vQuaycrew.V1\xca\x02\vQuaycrew\\V1\xe2\x02\x17Quaycrew\\V1\\GPBMetadata\xea\x02\fQuaycrew::V1b\x06proto3"
+	"\tGetHealth\x12\x1d.quaycrew.v1.GetHealthRequest\x1a\x1e.quaycrew.v1.GetHealthResponseB\xb1\x01\n" +
+	"\x0fcom.quaycrew.v1B\x11ControlplaneProtoP\x01Z>github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1;quaycrewv1\xa2\x02\x03QXX\xaa\x02\vQuaycrew.V1\xca\x02\vQuaycrew\\V1\xe2\x02\x17Quaycrew\\V1\\GPBMetadata\xea\x02\fQuaycrew::V1b\x06proto3"
 
 var (
 	file_quaycrew_v1_controlplane_proto_rawDescOnce sync.Once
