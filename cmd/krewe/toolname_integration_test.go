@@ -76,7 +76,7 @@ func runs(t *testing.T, binary, address, home string, args ...string) invocation
 	t.Helper()
 
 	command := exec.Command(binary, args...)
-	command.Env = append(command.Environ(), "QC_GRPC_ADDR="+address, "QUAY_HOME="+home, "HOME="+home)
+	command.Env = append(command.Environ(), "QC_GRPC_ADDR="+address, "KREWE_HOME="+home, "HOME="+home)
 	var out, said bytes.Buffer
 	command.Stdout, command.Stderr = &out, &said
 	err := command.Run()

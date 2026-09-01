@@ -167,7 +167,7 @@ func ran(t *testing.T, system *aFirstRun, running int, typed string, args ...str
 	}
 
 	command := exec.Command("make", append([]string{"-C", "..", "--no-print-directory",
-		"QUAY_HOME=" + system.home, "BINDIR=" + system.bin}, args...)...)
+		"KREWE_HOME=" + system.home, "BINDIR=" + system.bin}, args...)...)
 	command.Env = append(os.Environ(),
 		"PATH="+system.dockerd+string(os.PathListSeparator)+os.Getenv("PATH"))
 	command.Stdin = strings.NewReader(typed)

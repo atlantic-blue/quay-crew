@@ -132,7 +132,21 @@ jobs:
       # the tool writes as well as the data the stack mounts. Made here, by this user, before compose
       # can make it as root.
       - name: Make the system's directory
-        run: mkdir -p "$HOME/.quay/data"
+        run: mkdir -p "$HOME/.krewe/data"
+
+      # The compose project name prefixes every named volume it makes, so the database lives in
+      # <project>_postgres-data and a stack started under a different project name comes up on an
+      # empty volume with every job, session and secret still sitting in the old one. Nothing says
+      # why: the stack starts and the database is empty. The project stays quaycrew for that reason,
+      # and this is the daemon's own answer for what the volume is called under it, rather than a
+      # reading of compose's documentation.
+      - name: The database volume the ordinary project name makes
+        run: |
+          set -euo pipefail
+          docker compose -p quaycrew -f deploy/docker-compose.yml up -d postgres
+          docker volume ls --format '{{.Name}}'
+          docker volume ls --format '{{.Name}}' | grep -x quaycrew_postgres-data
+          docker compose -p quaycrew -f deploy/docker-compose.yml down -v
 
       # The compose project name prefixes every named volume it makes, so the database lives in
       # <project>_postgres-data and a stack started under a different project name comes up on an
@@ -227,7 +241,7 @@ jobs:
       - name: Read the system's token
         run: |
           set -euo pipefail
-          token_file="$HOME/.quay/data/system.token"
+          token_file="$HOME/.krewe/data/system.token"
           for i in $(seq 1 15); do
             sudo test -s "$token_file" && break
             sleep 2
