@@ -163,6 +163,11 @@ func (s *Server) AnswerFlowRun(ctx context.Context, req *quaycrewv1.AnswerFlowRu
 	}
 	answered, err := s.flows.Answer(ctx, *run, req.GetAnswer())
 	if err != nil {
+		// An answer the run cannot serve is the operator's typing rather than a fault in the system,
+		// so it comes back as a refusal saying what to type. The run is still asking.
+		if errors.Is(err, flow.ErrNotASentence) {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
 		return nil, status.Errorf(codes.Internal, "answer run %s: %v", run.ID, err)
 	}
 	return &quaycrewv1.AnswerFlowRunResponse{Run: s.flowRun(ctx, &answered)}, nil

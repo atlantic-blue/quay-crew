@@ -258,6 +258,22 @@ answers plausibly instead of stopping. That is the same failure `expect_file` ex
 leaves the session in the mode it is born in. Validated through `model.PermissionModeNamed`, which
 is what `flow.Parse` already does, and refused with the same list of what would work.
 
+**Held against the repository, because a repository is reached over the network.** The clone, the
+push and the pull request are all network commands, and the narrower modes ask a person before they
+run one. Nobody stands beside a dispatched job, so the approval never arrives: the system used to
+admit the pair, spend the session, and say so at the end. `model.PermissionModeReachesTheNetwork` is
+the one place that answers whether a mode may run a network command, and both the declaration and the
+controller read it. A job that carries a repository and cannot reach it is refused at the write,
+naming the repository, the mode and what to type instead. The mode a job runs in is its own where it
+named one and the system's where it did not, so the pair is held again at the control plane, once the
+project's repository and the system's own mode are both filled in. A crew configured to be born in
+the mode that reaches the network admits what the default configuration refuses.
+
+**Nothing widens a mode on the job's behalf.** A repository on the project could have made every job
+declared in it born in the widest mode instead, and that is an upgrade quietly granting what nobody
+asked for, which is the worst way to learn a setting exists. The refusal costs a sentence. The run it
+replaces costs a session and its budget.
+
 **`expect_file`, text, optional, default empty.** A path that must be in the session's working
 directory after the task. Relative only. An absolute path is refused. A path with a `..` part is
 refused. Both rules are `flow.usableExpectFile`, unchanged.
@@ -335,10 +351,141 @@ there was nothing to measure the address shape against.
 
 **A job at the top that states none is not refused.** The system cannot write the sentence, and a
 tree that runs an errand needs none, so the tool says one is missing and how to write it, the way it
-already says which skills a session starts without. What is still missing is the gate: nothing reads
-the sentence back against what was delivered. That is the second half of
-[#520](https://github.com/atlantic-blue/quay-crew/issues/520), a run that stops at the first thing a
-person can open and asks whether it is what they wanted.
+already says which skills a session starts without.
+
+**The gate is in the flow engine, and section 14b describes it.** A graph says which of its steps
+builds the first thing a person can open, and a run of it stops there once and asks whether that
+thing does what the sentence says. Where a caller declares its jobs directly rather than through a
+graph, the sentence still reaches every session and nothing reads it back.
+
+### The plan, and the person who approves it
+
+The sentence reaches every session and nothing ever holds the brief against it. That is the gap this
+closes, and it sits before every other gate the system has: a job that states the sentence writes its
+plan, and a person approves the plan before any work starts.
+
+The failure is the one section 14b already describes, one step earlier. A person says one sentence.
+Something turns that sentence into a brief. The system executes the brief faithfully and fast, and
+nothing compares the two, because reading the brief costs nearly as much as reading the result: one
+of them ran to 1,109 words for a 1,505 word result. So a misreading of one sentence becomes two days
+of correct work in the wrong direction, and it looks like progress the whole way. 14b stops the run
+at the first thing a person can open, which costs one step. This stops it before the first step,
+which costs one task.
+
+**The sentence is the trigger, and it adds no field.** A job that states the sentence and hangs under
+nothing is planned. A job that states none is an errand, which section 3 above already says needs no
+sentence: there is nothing to write a plan from and nothing to hold the plan against, which is the
+argument 14b makes for refusing a usable node with no sentence. Right against what. A job declared
+under another is never planned either: it is one part of a plan a person already approved, and
+stopping at every job in a tree puts a person back in the loop for all of them, which is the cost the
+system exists to remove.
+
+**`plan`, text, written by the controller.** The steps the session wrote, one per line, in the shape
+`Step 1: read the design`. At most `job.PlanSteps`, which is seven, each held to the title's ceiling.
+So a whole plan is at most about 1,400 bytes against a brief of 16,384, which is the whole point:
+reading the plan has to cost less than reading the result, and a plan as long as the work buys
+nothing. The number seven is chosen rather than measured. What replaces it is the distribution of
+steps a job actually records, which `krewe job step` already writes down: after fifty jobs, the
+ninety fifth percentile of steps recorded per job.
+
+**`plan_approved`, boolean, written by the control plane.** Whether a person said yes. The two are
+separate columns rather than one state word, because a plan on a row nobody has approved is the plan
+a person is being asked about, and the same plan with the flag set is the thing the work is held to.
+
+**The first task asks for the plan and for no work.** It carries the sentence above the brief, the way
+every task for a planned job does, because a plan written from the brief alone carries whatever
+misreading the brief carries. The reply is read for the plan rather than believed, the way a pull
+request address and a base line are read. A reply carrying no plan the system can read is asked once
+more and stops the job the second time, which is the two strike shape the pull request ask already
+has: a job whose plan nobody could read is a job nobody approved.
+
+**Then the job asks, through the mechanism that already exists.** The plan and the question land in
+one movement, so a reader never finds a job asking with no plan on it. Nothing new puts a question to
+a person: the phase is `asking`, the answer is `krewe job answer`, and nothing but an answer moves it.
+
+**`yes` approves and anything else replaces the plan.** This is 14b's rule, one gate earlier. An
+answer that is not the approval is the correction: the job goes back to pending carrying it, and the
+session is given the plan it wrote and what the person said, and writes the plan again from that. So
+an answer of no costs one task and never ends the job, and the person who said no writes no plan.
+Writing the replacement is the system's job, because a person writing the plan by hand is the person
+doing the compression the system exists to do.
+
+**The work is then held to the plan, or the approval is worth nothing.** The approved plan travels
+with the work, and it replaces the ordinary line about recording steps rather than sitting beside it:
+the session records each step it finishes with its number, `krewe job step "2: read the design"`. When
+the job lands, the numbers the record carries are held against the numbers the plan carries, and a
+step of the plan that nothing accounts for stops the job with a reason naming it. What the session
+answered stays on the row, because work that walked off the plan is unapproved rather than lost.
+
+The measurement is arithmetic over a set of numbers. It costs no model call and anybody holding the
+record can work it out again, which is the property the loop detector's own measure was chosen for. A
+model judging whether a plan was followed, or a similarity score over prose, would both be guesses.
+Work the session recorded that the plan never named is not a fault: the plan is a floor rather than a
+ceiling.
+
+```mermaid
+flowchart TD
+    SAID["a person declares a job stating the sentence"] --> PLAN["first task: write the plan,<br/>do no work"]
+    PLAN --> READ{"can the system read<br/>a plan out of the reply?"}
+    READ -->|"no, first time"| PLAN
+    READ -->|"no, a second time"| NOPLAN(["stopped: nobody could approve<br/>a plan nobody could read"])
+    READ -->|"yes"| ASK{"asking: here is the sentence,<br/>here is the plan"}
+    ASK -->|"anything but yes"| AGAIN["the answer is the correction,<br/>and the session writes the plan again"]
+    AGAIN --> ASK
+    ASK -->|"yes"| WORK["the work, carrying the approved plan"]
+    WORK --> HELD{"does the record account for<br/>every step of the plan?"}
+    HELD -->|"yes"| DONE(["done"])
+    HELD -->|"no"| DRIFT(["stopped, naming the steps<br/>nothing accounted for"])
+```
+
+**What it does not do.** It reads no brief and judges no wording: nothing here compares the brief with
+the sentence, because that comparison needs a judgement no rule can make. What it does is put a short
+thing a person can read in front of them while stopping is still cheap. It reaches one job rather than
+a tree: a child is not planned and is not held to its parent's plan, so a tree still spends whatever
+the approved plan set it going on. And a plan a person approves without reading is a plan that
+approves itself, which no system can prevent and the ceiling is the only defence against.
+
+
+**`claim`, text, optional, default empty.** The piece of work this job is doing: an issue, a branch,
+or a name two people would both use for the same thing. Empty claims nothing. It is held to the
+title's ceiling, and it is stored lowercased with any run of space inside it taken down to one,
+because two people naming the same work from memory write it two ways and a claim that misses over a
+capital letter is a claim that did nothing.
+
+**A second job that claims work another job is holding is refused, and the refusal names that job.**
+The failure it answers happened twice in one run: two sessions picked up the same issue and built it
+under different names, and the first anybody knew was two pull requests conflicting on files both of
+them had created. The two designs disagreed in small places, which is the expensive part. Nothing was
+in the other's way in the filesystem, because `quay-crew#255` already gives each session its own
+working copy. They were in each other's way over the work itself.
+
+It is not a lock on a file. It is a record of intent, which is what was missing: both sessions would
+have read it before starting. So the claim is on the row, `quay job list` carries a column of what is
+claimed, and `quay job show` says it.
+
+**A claim ends three ways, and the third is the one to test.** The job settles, into any of the three
+terminal phases and not only `done`. Somebody stops it. Or nothing moves the job for longer than a
+claim lives, which is the crashed session: the container went, no controller is renewing anything,
+and the row is all that is left. Without the third, one dead container holds a piece of work for as
+long as the system runs, and every test about claiming still passes.
+
+The life is two hours, chosen rather than measured, and it is a constant rather than a setting
+because a system given no number would hold work forever. What it has to outlast is the longest gap
+between two movements of a job that is alive. A running job is not one of them: its controller renews
+the lease every tick and every renewal moves the row. The two long gaps are a job waiting for a
+person to answer its question and a job queued behind everything else in its workspace. The
+measurement that would replace the number is the distribution of that gap, which nothing takes yet.
+
+**The scope is the workspace**, which is the boundary this design already uses for concurrency and
+for fairness. Two projects inside one workspace are the same people's work, so a claim in one is a
+claim in the other.
+
+**Checked at the write, and only there.** Every other rule on a declaration is checked again at the
+dispatch, and this one is not: a job stopped hours later because somebody else claimed its work in
+the meantime is a refusal nobody can act on, and the second declaration was refused at its own write
+anyway. The check is a read inside the transaction that writes the row, under a lock taken on the
+claim, because a check made before the write is a check two callers declaring at the same moment both
+pass. No unique index does it instead, because an index cannot say that holding has run out.
 
 **`after`, text array, optional, default empty.** Identifiers of other job this job waits for.
 Every identifier must name a job that exists. A cycle is refused, and the refusal names the two
@@ -354,6 +501,18 @@ the model is already working and abandoning it mid sentence gains nothing.
 **`budget_tokens`, bigint, optional, default 0.** What this job and everything under it may spend.
 Zero means it draws from its parent, and a root with zero draws from the workspace. Negative is
 refused. A value above the parent's remaining budget is refused, and the refusal says both numbers.
+
+**`escalation`, text, optional, default empty.** What this job does when it goes in circles: `ask`,
+which puts the question to the operator, or `role:<name>`, which hands the job to another role in a
+conversation of its own. Empty is asking, which is what a job whose author never thought about
+looping gets, because it is the only route that needs nothing else to be true and cannot make the
+work worse. A role the workspace does not hold is refused at the write, by name.
+
+`model:<name>` is refused, and the refusal says what to write instead. A role declares a model and
+nothing reads it yet, the runner taking one model for the whole system, so a job declaring that route
+would read as a decision that had been taken and change nothing. `docs/ROLES.md` records the gap and
+[#354](https://github.com/atlantic-blue/quay-crew/issues/354) owns closing it. Once it closes, the
+route is a role that runs on the other model, which is what `role:<name>` already says.
 
 **`labels`, jsonb, optional, default empty.** Free text pairs, so a caller finds its own job later.
 At most 16 pairs. Each key and each value at most 63 characters, which is the ceiling Kubernetes
@@ -408,13 +567,48 @@ the work being wrong rather than the run. `features/resuming.feature` is the sha
 
 **A continued attempt says what moved under its base, and the answer is read.** A resume puts a
 session back into the working directory it left, and what that work stands on moved while it was
-stopped. The system runs no git, so it states the shape it will read and reads the answer against it,
-exactly as it does with the address of a pull request: the continued task asks for one line opening
-with `Base:`, and where the job names a repository and the answer carries no such line, the session is
-asked once more and the job stops if the second answer carries none either. The reason names the
-repository and says it asked twice, and what the attempt produced stays on the row, because the end of
-an attempt is not the end of its work. A job that names no repository is not held to it, since the
-system knows of no base it was away from.
+stopped. Nothing runs git here, so the system states the shape it will read and reads the answer
+against it, exactly as it does with the address of a pull request: the continued task asks for one
+line opening with `Base:`, and where the job names a repository and the answer carries no such line,
+the session is asked once more and the job stops if the second answer carries none either. The reason
+names the repository and says it asked twice, and what the attempt produced stays on the row, because
+the end of an attempt is not the end of its work. A job that names no repository is not held to it,
+since the system knows of no base it was away from.
+
+**A job that stops without a pull request has its branch pushed, and the reason says where its work
+is.** The last word on this path used to be an instruction to a person: open the container, and push
+what is inside it. The product of the job then sat where no command reached it and the operator became
+the transport, which is the opposite of what a system is for.
+
+The bytes were never in the container alone. A session's working directory is a bind mount the system
+made itself and a workspace's volume is another, so the system was holding the work the whole time and
+had no way to name it.
+
+So the system publishes rather than asking. Where a job that names a repository is about to stop
+without one, the system looks at what the session left behind and pushes the branch it is on. A push
+applies nothing, so it needs nobody's approval; a merge runs the pipeline and a pull request is a
+decision, so the system does neither, and the reason says which step is left. This is the one place
+the system runs git itself, and it runs it inside the session's own container: the control plane is a
+static binary with no shell, and the credential that reaches the remote belongs to the workspace and
+is already in there.
+
+**Five outcomes, and the empty one matters most.** A reason that names a branch nobody made sends the
+operator looking for work that was never done, so the states are held apart rather than collapsed:
+the branch is on the remote, whether the system put it there or the session had; there are commits and
+the push was refused; a repository is there and nothing was committed to it; the session holds no
+repository at all; and the system could not look, which is never reported as one of the other four. In
+every state but the first the reason names the directory the work is in, on the machine that runs the
+sandboxes, and the command that reads it. No reason it writes may send a person into a container.
+
+**One command reads work out of a session.** `krewe read <session> [<path>]` lists what a session made
+or prints one file out of it, reading the directory rather than the container, so it answers for a
+session whose sandbox has gone. Before it, the only road into a finished session was to attach, which
+is a person driving a terminal: it does not compose into a script, a flow or a report.
+**A job in a mode that could never push is published too.** The mode holds the session and not the
+system, so the reason that explains the mode ends with what became of the work in the same way. What
+a narrow mode costs a job is the pull request, never the branch.
+
+`features/publishing.feature` is the shape of both halves.
 
 **`session`, text, empty until a session exists.** The session the job runs in. This is how a
 reader gets from the job to the conversation, and it is what `quay attach` takes.
@@ -432,6 +626,15 @@ running and empty when done.
 
 **`spent_tokens`, bigint, default 0.** What this job's own session has cost, read by the same
 reader the flow ceiling uses, `Server.SessionTokens` in `internal/controlplane/flows.go`.
+
+**`looped_step`, integer, default 0, and `escalated_to`, text, default empty.** The step this job went
+in circles on, and the route the system took when it did, in the shape the route was declared. Zero
+and empty for a job that never has. `escalated_to` being set is what makes a second loop stop the job
+rather than escalate it again: escalating twice is the system going round the same loop with more
+steps in it.
+
+**The attempts, in `job_attempts`, one row per task.** What each attempt at a step produced, and how
+like the earlier attempts at that step it was. See the section below.
 
 **`observed_version`, integer, default 0.** The `version` of the declaration this status describes.
 The record carries a `version` integer that increases on every write to a declared field. A
@@ -460,6 +663,11 @@ purpose. The list, so a test can be written against it:
 - A job whose `expect_file` holds a `..` part is refused.
 - A job whose `repository` is not an owner and a name is refused, and the refusal says how to write
   one.
+- A job that names a repository and a mode that cannot reach the network is refused, and the refusal
+  names both and gives the mode to declare it in. A job that takes its repository from its project is
+  refused on the same rule, and a job that names no repository is admitted in every mode.
+- A job running in a mode that cannot reach the network is not asked a second time for its pull
+  request, and the reason it stops names the mode.
 - A job that names a repository and answers without a pull request against it is asked again, and
   stopped if the second answer names none either.
 - A job that names no repository, in a project that records one, works in the project's.
@@ -468,6 +676,25 @@ purpose. The list, so a test can be written against it:
 - A job whose brief negates one of those phrases is declared, because "do not merge the pull request"
   is not an instruction to merge it.
 - A step of a flow is not held to that rule, because the graph around it holds the wait.
+- A job at the top that states the sentence is asked for its plan first, and its first task tells it
+  to do no work.
+- A job that states no sentence, and a job declared under another, are asked for no plan at all.
+- A plan of eight steps, a step over the title's ceiling, and a plan numbered with a gap or a repeat
+  are each refused, and the session is asked again.
+- A session that answers twice with no plan the system can read stops the job, and the reason says it
+  was asked twice.
+- An answer of `yes` approves the plan, and the work that follows carries it.
+- Any other answer replaces the plan: the job goes back to pending and the session is given the plan
+  it wrote and what the person said.
+- A job whose record accounts for every step of the approved plan finishes, and says nothing.
+- A job whose record misses a step of the approved plan stops, and the reason names that step.
+- A job that claims a piece of work another job is holding is refused, and the refusal names that
+  job, its title, and how old the claim is.
+- The same piece of work written another way, with different capitals or extra space, is the same
+  claim and is refused the same.
+- A job that claims work a settled or stopped job claimed is declared.
+- A job that claims work nothing has moved for longer than a claim lives is declared.
+- A job with a claim of 201 bytes is refused.
 - A job whose `after` names an identifier that does not exist is refused.
 - A job whose `after` closes a cycle is refused, and the refusal names both identifiers.
 - A job with `parent` in the request is refused, and the refusal says the parent comes from the
@@ -505,7 +732,66 @@ The one edge worth reading twice is `running` back to `pending`. A controller th
 marked running with a lease nobody holds. The next controller reads the task row, and the shape of
 that recovery is section 4.
 
+### A job that goes in circles
+
+Nothing compared what a session produced against what it had just produced, so a session going
+nowhere and a session working hard were the same picture from outside: one phase word and a growing
+bill. On the acceptance run of 30 August 2026 a session that could not get a check green tried the
+same shape of fix several times and gave the same reasoning each time, and the operator was the loop
+detector, only where he happened to read the transcript.
+
+**What an attempt is, and what a step is.** An attempt is one task: what it produced is the answer
+where it answered and the failure where it did not. The step is how many steps its session has
+recorded plus one, so the first attempt is at step 1 and the attempt after two finished steps is at
+step 3. Attempts are only ever compared with attempts at the same step, and that is what keeps a
+working session out of this: a session that finished something is somewhere new.
+
+**The measure.** The overlap of the sets of three word runs two pieces of text hold, over everything
+either of them holds. Runs of three words rather than words, because two answers about one repository
+share nearly every word and very few of the same sentences. It reads text the system already has, so
+it costs no model call and anybody holding the record can work the number out again.
+
+**The rule.** Three attempts at one step, of which the last two were each as alike as the threshold
+to an attempt before them, are a loop. Two is a retry; the third is what says the second changed
+nothing. An attempt that finished the job is never one, however like the last it reads, and neither
+is a task an operator halted.
+
+```mermaid
+flowchart TD
+    LAND["a task lands"] --> RECORD["record the attempt: what it said,<br/>and how alike the earlier attempts<br/>at this step it is"]
+    RECORD --> DONE{"did it finish the job?"}
+    DONE -->|"yes"| LANDIT["land it, and the record keeps<br/>the attempt either way"]
+    DONE -->|"no"| THREE{"three attempts at this step<br/>the system cannot tell apart?"}
+    THREE -->|"no"| LANDIT
+    THREE -->|"yes"| ALREADY{"has this job escalated before?"}
+    ALREADY -->|"yes"| STOP(["stopped: going in circles again<br/>after the escalation"])
+    ALREADY -->|"no, and it declared ask"| ASK(["asking: the question carries<br/>what each attempt said"])
+    ALREADY -->|"no, and it declared a role"| HAND(["pending, running as that role,<br/>in a conversation of its own"])
+```
+
+**The threshold is provisional, and its error has a direction.** A detector that fires on real
+progress stops work that was going to finish, so it sits an order of magnitude above anything
+different work scores rather than as low as it could go. Measured on the 304 paragraphs of
+`CHANGELOG.md` over sixty words: across the 46,056 pairs of different paragraphs the median is 0 and
+the ninety ninth percentile is 0.024, while a paragraph held against itself with every number changed
+scores at least 0.654. The measurement is `internal/job/loopcalibration_test.go`, so it runs on every
+build rather than sitting in prose. What it does not catch is an attempt reworded from scratch, which
+scores like different work.
+
+**What replaces the number.** Every attempt writes its similarity whether or not it loops, so after
+fifty jobs the threshold is measured on attempts rather than on prose: read where an attempt followed
+by a finished step sits against where an attempt on a job that ended failed or stopped sits, and put
+the number at the ninety fifth percentile of the first. It is the shape the lease length already has.
+
+**A job escalates once.** The route is a property of the job, declared while somebody is writing it,
+because the moment a job is going nowhere is the worst moment to be working out what to do about it.
+A job handed to another role starts in a conversation of its own, since a role is read only when a
+session is born, and the task it is given carries what the earlier attempts said so the new one does
+not make them again. The attempts at a step are counted across the handoff, so a new role saying what
+the last one said is the handoff itself changing nothing, and the job stops for a person to read.
+
 ## 4. The controller loop
+
 
 A controller is a loop. It watches, it compares what is declared against what exists, it acts to
 close the gap, and it records what happened. It is an ordinary workload. Nothing about sitting near
@@ -655,18 +941,115 @@ flowchart TD
     WAKE --> START
 ```
 
+### The fifth comparison: is this system doing anything at all
+
+The four queries above make reality match what was declared. This one asks whether they are working,
+and it is the only comparison in the loop that is about the loop rather than about a row.
+
+**Nothing running with something held is a state that is always wrong.** It is not a slow system and
+it is not a busy machine, because a busy machine has jobs running on it. It says the room is held by
+sandboxes doing nothing, and that nothing will change on its own, because the thing that would give
+the room back is the thing that has stopped.
+
+On 31 August 2026 twenty five jobs were declared at once against a workspace allowing eight running.
+Fifteen finished. Then nothing ran at all. Five jobs sat held, each saying that a sandbox asks for
+100 per cent of a processor and that 0 per cent of 1200 per cent is unallocated. Twelve sandboxes
+were idle, every one of them for an hour or more, and between them they held the whole processor
+allocation. The workspace reclaim time was thirty minutes and not one container came back. An
+operator drained thirty three sessions by hand to free a resource the reclaim was already meant to
+free. See issue 575.
+
+```mermaid
+flowchart TD
+    TICK(["tick, after the four above"]) --> MOVING{"is any job<br/>running or asking?"}
+    MOVING -->|"yes"| WELL["nothing to do:<br/>a full machine with work<br/>on it is a healthy machine"]
+    MOVING -->|"no"| WAITING{"is any job held<br/>for want of room?"}
+    WAITING -->|"no"| IDLE["nothing to do:<br/>an idle system"]
+    WAITING -->|"yes"| BOXES["read the sandboxes<br/>nothing is holding open,<br/>idle longest first"]
+    BOXES --> ATTACHED{"is somebody in it,<br/>or cannot the system tell?"}
+    ATTACHED -->|"yes"| NEXT["try the next one"]
+    NEXT --> ATTACHED
+    ATTACHED -->|"no"| TAKE["reclaim it: the container goes,<br/>its whole reservation goes back,<br/>everything else stays"]
+    TAKE --> SAY["job.unstuck on the job<br/>the room was freed for"]
+    SAY --> AGAIN["the next tick starts it"]
+    NEXT -->|"none left"| STUCK["say it: nothing running,<br/>work waiting, nothing to take"]
+```
+
+**Three faults were found and all three were real.**
+
+*Reclaim ran and found nothing to take.* `putAway` is on every tick and never conditional, so the
+loop was reaching it. But reclaim never looks at the machine: its only inputs are the workspace
+reclaim time, the session `updated_at` and whether somebody is attached. And the batch starved.
+The controller read twenty settled sessions per tick, ordered by how long ago each was touched. A
+reclaimed session stays settled, and with no archive time set nothing ever moves it, so once twenty
+reclaimed rows sat at the front the batch was all of them and the reclaim never reached a container
+again. That is why the two rules are two queries now, each in its own order.
+
+*The processor is released, and only when the container goes.* Both axes are one reservation and
+neither moves without the other. `Ledger.ReleaseSession` is the only path that gives a placed
+sandbox's room back, and only `closeSandbox` and the reaper call it. So an idle sandbox holds a
+whole processor while using almost none of one. That is correct scheduler arithmetic and it is what
+kubernetes does. The mismatch is that a pod ends and a session does not, so the fix is not to change
+the arithmetic but to take the container back.
+
+*Nothing noticed.* No query anywhere paired running against held. The health probe is the closest
+thing and does not cover it: it asks whether the system can write, because a control plane once
+served every listing and dispatched nothing for an hour, which is issue 400. This incident is that
+failure again one layer up, with every write landing.
+
+**What it does.** One container per tick, and the one idle longest. One is enough to start the queue
+again, and taking twelve would throw away eleven warm containers to answer a question that one
+answers. The workspace reclaim clock is not read: that clock exists to save memory on a quiet system
+and is unset until three measurements are taken, while this question needs no measurement.
+
+**What it never does.** It never takes a container an operator is attached to, and a system that
+cannot tell reads that as attached. It never takes a session a live job names, because the query it
+reads leaves those out. It never stops a session that is doing work.
+
+**What a person reads.** A job the machine turns away while nothing at all is running carries the
+room arithmetic and then one more sentence saying the system is stopped rather than busy. `hold`
+already writes a reason only when the sentence changes, so it is written once and not every five
+seconds. Where the system frees room, `job.unstuck` goes on the job it freed the room for, naming
+the container it took and how long that container had been idle.
+
+**Why the pair, and not the pressure.** A full machine is healthy. Eight jobs running and seventeen
+waiting is exactly what admission is for, and reclaiming there takes a container from a session that
+is about to get its next task.
+
+**Why not refuse the declaration earlier.** Section 5.1 already decided that a job the machine cannot
+host stays pending for as long as it takes and is never admitted and then killed. Refusing at
+declaration would turn away work the machine can do in ten minutes, and it would not have moved the
+five jobs in the incident, which were declared while the machine still had room. At declaration
+nothing knows what the machine holds when the job's turn comes.
+
+**Why not evict.** Evicting is issue 478, and its trigger is different: the machine in danger,
+measured against what the runtime actually holds. This one fires when the machine is idle and the
+queue is stopped, which issue 478 would read as a healthy machine. Issue 477 holds a sandbox to what
+it asked for, which reduces how often either fires and replaces neither.
+
 ### What it watches
 
 Rows in `job`, in the store, by polling. Not the log. This is the same split the flow engine
 already made and for the same reason: publishing is lossy, so a controller whose next action
 depended on a record arriving would sit forever with nothing to say why.
 
-Three queries per tick, each on an index:
+Six queries per tick, each on an index:
 
 - jobs in `pending` whose `after` identifiers have all reached a terminal phase, oldest declared
   first;
 - jobs in `waiting` whose dependencies have now ended, which moves it back to `pending`;
-- jobs in `running` or `asking` whose `lease_until` has passed.
+- jobs in `running` or `asking` whose `lease_until` has passed;
+- the sessions that still hold a container and nothing is holding open, oldest touched first;
+- the sessions whose container has already gone, longest reclaimed first;
+- whether any job is running or asking at all, which is a probe rather than a count.
+
+The last one is the fifth comparison, and it costs one index lookup on a system with a million
+finished jobs. Only when it says nothing is moving does the loop read a seventh: the jobs the
+machine turned away. A working system never pays for that one.
+
+The two session queries are two rather than one because a reclaimed session never leaves the second
+set where no archive time is set. Reading both from one batch let those rows crowd out the sandboxes
+behind them, and the reclaim stopped reaching a container at all. See the fifth comparison above.
 
 A system with a thousand finished jobs and one pending does one row of work per tick. That
 is the property `DueFlowRuns` already has and it is worth keeping.
@@ -684,9 +1067,10 @@ morning.
 
 ### What it does
 
-One of: nothing, claim, dispatch, adopt an answer, stop, or wake dependents. Never more than one
-job per tick moves from `pending` to `running`, so the concurrency limit is enforced by
-construction rather than by counting after the fact.
+One of: nothing, claim, dispatch, adopt an answer, stop, wake dependents, put a session away, or
+take one container back because the queue has stopped. Never more than one job per tick moves from
+`pending` to `running`, so the concurrency limit is enforced by construction rather than by counting
+after the fact, and never more than one container is taken back for the same reason.
 
 ### What it writes
 
@@ -991,6 +1375,14 @@ been built, and the next job counts it. Kubernetes calls this assuming the pod o
 **A system that cannot read its runtime admits the work and says so.** A system whose sessions do not run
 on a container runtime has no arithmetic to do, and stopping dead there would be worse than the system
 that counted.
+
+**A reservation ends with the container and at no other moment.** `Ledger.ReleaseSession` is the
+only path that gives a placed sandbox's room back, and only `closeSandbox` and the reaper call it.
+Both axes go together: there is no path that returns memory and keeps the processor. That is the
+kubernetes shape and it holds while a pod's life is its work's life. A session is not a pod: it
+outlives its job, so an idle sandbox holds a whole processor while using almost none of one, and on
+31 August 2026 twelve of them held a whole machine while five jobs waited. The answer is not in the
+arithmetic. It is the fifth comparison in section 4, which takes the container back.
 
 **What this does not do.** Nothing holds a sandbox to what it asked for, which is issue 477, and
 nothing stops anything once a machine is in trouble anyway, which is issue 478.
@@ -1805,6 +2197,40 @@ deployment change and not a logic change, and it needs slices 1 and 5 first.
 **Nothing inside the container adopts the trace context.** Named in 8c. The system writes one span per
 attempt and the inside of the attempt is opaque.
 
+### What reads the plan before it runs, and what carries a run back into it
+
+The omission above is that the system generates no judgement. Two gaps sit either side of that
+sentence, and closing them does not close it. In each one the machine stops where judgement is
+absent, and a person supplies it.
+
+**Nothing checks the drawing before it runs, with more than one reader.**
+[#520](https://github.com/atlantic-blue/quay-crew/issues/520) states the sentence,
+[#576](https://github.com/atlantic-blue/quay-crew/issues/576) writes the plan and holds it for
+approval, [#577](https://github.com/atlantic-blue/quay-crew/issues/577) reads the words the brief
+dropped, [#580](https://github.com/atlantic-blue/quay-crew/issues/580) lists the claims the plan
+rests on, and [#532](https://github.com/atlantic-blue/quay-crew/issues/532) adds one role that reads
+the plan. All of them read the drawing once, with one reader, and none of them orders the work by
+what a wrong claim costs.
+
+**Nothing carries what a run learned back into the drawing.** A session found that the video
+platform refuses a request for captions from the function's own address. The fact stayed in that
+session's transcript. The plan still said fetch them there, and the issues still described the
+product as designed.
+
+Three issues cover the two gaps, in the order they should be built.
+
+1. [#587](https://github.com/atlantic-blue/quay-crew/issues/587) marks the claim that decides whether
+   to build at all, settles it with a spike job before the build starts, and repairs `after`, which
+   is declared and validated today and never released.
+2. [#586](https://github.com/atlantic-blue/quay-crew/issues/586) has several roles read the same
+   brief through different lenses, and puts only the questions none of them settled to a person.
+3. [#588](https://github.com/atlantic-blue/quay-crew/issues/588) carries a fact a run discovered back
+   onto the claim it disproves, stops the plan that rests on it, and reports it on the issues that
+   describe the product.
+
+None of the three writes a plan, ranks a claim, or decides that a question matters. Each one records
+a value, and stops.
+
 ## 11. The session lifecycle
 
 The question is when the system starts putting sessions away. The answer today is that it never does.
@@ -2021,7 +2447,13 @@ The rule, in three lines:
 - A session named only by terminal job, and reclaimed for longer than the workspace's archive time,
   is wanted archived. The controller archives it, which is `ArchiveSession` with no operator.
 
-Each rule is a fourth query per tick, on the same index the other three use. The controller keeps
+The last two rules are two queries and not one, and that is what went wrong. A reclaimed session
+stays settled, and where no archive time is set nothing ever moves it, so one batch ordered by how
+long ago each row was touched fills with rows nothing can act on and never reaches a container. On
+31 August 2026 twelve idle sandboxes held a whole machine behind twenty of those rows. See issue 575
+and the fifth comparison in section 4.
+
+Each rule is a query per tick, on the same index the other three use. The controller keeps
 nothing in memory, which is the property section 4 depends on.
 
 ```mermaid
@@ -2340,6 +2772,12 @@ flowchart LR
 The right half does not change shape. It stays one conversation, and it stays the driver's. What
 changes is that the driver now declares jobs rather than dispatching tasks, so the left half shows
 what the right half asked for.
+
+**The browser takes the same shape, and it took it first.** `quay-crew#547` built the briefing at the
+front door of `krewe web`, and its job rows are this tree: roots at the top, children under them, the
+session as a cell rather than a level. A page cannot drill, so it draws the depth instead, and a block
+keeps only the branches holding a row that answers it. The console's own version of this is
+`quay-crew#474`, and the two must not grow into different shapes.
 
 ## 13. Surviving an upgrade
 
@@ -2717,6 +3155,69 @@ makes the design safe.
 Postgres is the state. The event log is the export. A run pins its version. A wait is a column, an
 ask moves on an answer and on nothing else, and a dispatch is idempotent per step and attempt. This
 section adds one table and one node type, and it changes none of those.
+
+## 14b. The first usable path
+
+A run stops once, at the first thing a person can open, and asks whether it is the product. This is
+the second half of `quay-crew#520`, and it shipped on 31 August 2026.
+
+The failure it answers is in section 3's `product` field. A tree of jobs built a design document
+faithfully and delivered it complete, every check was green, and the operator opened it two days
+later and could not use it. Section 3 gives the sentence to every session. It does not give a run
+anywhere to stop, so nothing ever measures what was built against the sentence while stopping is
+still cheap.
+
+**What a graph declares.** Two lines, and both are optional until the first one is used.
+
+- **`product`, at the top of the file.** The one sentence a run of this graph serves, held to the
+  same ceiling a job's is, `job.ProductLimit`. It goes onto the job carrying the run, so every step
+  under it carries the same one and every session doing a step is given it above its brief. Nothing
+  new does that: the inheritance in section 3 already does.
+- **`usable: true`, on one dispatch.** This step builds the thing a person opens, and it replies
+  with the address.
+
+**Three refusals at import**, because a refusal in the middle of a run arrives hours later with
+nothing pointing back at the file.
+
+- Two nodes marked usable, because a run stops once and which one is first is a property of the file
+  rather than a race in the run.
+- A node that is not a dispatch, because only a dispatch builds anything.
+- A usable node with no `product`, because the question is the sentence. Without it the operator is
+  shown an address and asked whether it is right, which is the question that was never worth asking:
+  right against what.
+
+**What the run does.** The step lands, and instead of following its edge the run goes to `asking`
+with a question naming the address the step replied with and the sentence the run serves. It holds
+nothing while it waits, which is already true of every asking run. A step that replied with no
+address stops the run instead, with a reason saying so, because a question naming something nobody
+can open is a gate that passes by being empty.
+
+It stops once. The run records that it asked in its own state rather than counting attempts, so a
+graph that sends the work round again over the same step does not put a question the operator has
+already answered, and the second time round the sentence is the new one.
+
+**What an answer does.** `yes` follows the edge and changes nothing. Anything else is the sentence
+the operator wanted instead: it is held to the sentence's ceiling, written onto the job carrying the
+run, and the run follows the same edge. So the run does not end, and every step declared after it
+carries the new sentence.
+
+**The order matters and it is the one thing here that is not obvious.** A step reads what it serves
+off the job above it as it is written down, so the replacement lands on that job before the step is
+declared, not in the transaction that declares it. Written a moment later it would reach every step
+except the one the answer was about, which is the step the answer was for.
+
+```mermaid
+flowchart TD
+    PAGE["dispatch: the first thing a person can open"] --> ASK{"the run stops and asks:<br/>here is the address, here is the sentence"}
+    ASK -->|"yes"| ON["the run carries on, the sentence unchanged"]
+    ASK -->|"anything else"| NEW["the sentence is replaced on the job carrying the run"]
+    NEW --> ON
+    ON --> NEXT["every step after this is declared with the sentence the run serves now"]
+```
+
+**What it does not do.** It is the flow engine's, so it reaches a tree of jobs only where a flow runs
+one. A caller that declares its jobs directly has nowhere to stop, and no graph in `flows/` marks a
+step yet, because none of the three builds a first usable path.
 
 ## 15. Delivery order
 

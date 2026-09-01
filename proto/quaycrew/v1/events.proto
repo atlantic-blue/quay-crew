@@ -105,6 +105,9 @@ message JobEvent {
   //   job.asked      it put a question to a person
   //   job.told       a person answered that question
   //   job.stopped    a person stopped it, or a limit did, or its claim did not hold
+  //   job.looped     three attempts at one step were too alike to tell apart
+  //   job.held       the machine had no room for its sandbox, so it is waiting rather than running
+  //   job.unstuck    nothing was running while this job waited, so the crew took a container back
   //
   // Internal, which nothing outside should depend on:
   //

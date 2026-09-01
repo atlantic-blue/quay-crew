@@ -5,7 +5,7 @@ could not use it, because section 3 of the document said the address carries a v
 and nobody had written down that a person arrives holding a link
 ([#520](https://github.com/atlantic-blue/quay-crew/issues/520)).
 
-`plan-critic` ships in [`roles/`](roles/) as the sixteenth role. It reads the design, the
+`plan-critic` ships in [`roles/`](roles/) as the seventeenth role. It reads the design, the
 contracts and the build order before any code exists, against the one sentence the job carries
 ([#523](https://github.com/atlantic-blue/quay-crew/pull/523)). It runs on opus, receives `job`,
 `context` and `skills`, and declares no verbs, so it may call nothing. Its answer is the report.
@@ -32,4 +32,4 @@ Two things this does not do. No test proves the role finds a real defect in a re
 the finding is the model's job; what is held is the manifest, the seven classes and the rules in
 the brief the session is actually handed, read back off the memory file in its container and out
 of the database. And nothing runs it: no flow graph names it, and an operator declares the job or
-writes it into a graph, which is true of all sixteen.
+writes it into a graph, which is true of all seventeen.

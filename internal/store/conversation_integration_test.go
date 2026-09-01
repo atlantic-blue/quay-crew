@@ -115,6 +115,9 @@ func (p *heldProvider) Remove(context.Context, string) error                 { r
 func (p *heldProvider) Stranded(context.Context) ([]string, error)           { return nil, nil }
 func (p *heldProvider) Attached(context.Context, string) (bool, error)       { return false, nil }
 func (p *heldProvider) RuntimeRunning(context.Context, string) (bool, error) { return false, nil }
+func (p *heldProvider) Existing(context.Context, string) (sandbox.Sandbox, bool, error) {
+	return p.box, true, nil
+}
 
 // conversationOn is the conversation a command line names, whichever of the two flags carries it.
 func conversationOn(argv []string) string {
