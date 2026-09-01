@@ -30,6 +30,12 @@ type fakeClient struct {
 	workspaces []*quaycrewv1.Workspace
 	projects   []*quaycrewv1.Project
 	sessions   []*quaycrewv1.Session
+	// jobs is what the two top levels count to fill their running and asking columns. A double with
+	// none is a system where nothing has been declared, which is most of these cases.
+	jobs []*quaycrewv1.Job
+	// jobsErr is a system that will not answer for its jobs at all. The counts are then absent and the
+	// listing still draws, which is what a workspace listing has to do.
+	jobsErr error
 
 	attachErr        error
 	restartErr       error
@@ -67,6 +73,23 @@ func (f *fakeClient) GetHealth(context.Context, *quaycrewv1.GetHealthRequest, ..
 		return nil, f.healthErr
 	}
 	return &quaycrewv1.GetHealthResponse{Components: f.health}, nil
+}
+
+func (f *fakeClient) ListJobs(_ context.Context, req *quaycrewv1.ListJobsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListJobsResponse, error) {
+	if f.jobsErr != nil {
+		return nil, f.jobsErr
+	}
+	matched := make([]*quaycrewv1.Job, 0, len(f.jobs))
+	for _, one := range f.jobs {
+		if req.GetProject() != "" && one.GetProject() != req.GetProject() {
+			continue
+		}
+		if req.GetPhase() != "" && one.GetPhase() != req.GetPhase() {
+			continue
+		}
+		matched = append(matched, one)
+	}
+	return &quaycrewv1.ListJobsResponse{Jobs: matched}, nil
 }
 
 func (f *fakeClient) ListWorkspaces(context.Context, *quaycrewv1.ListWorkspacesRequest, ...grpc.CallOption) (*quaycrewv1.ListWorkspacesResponse, error) {

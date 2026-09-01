@@ -25,6 +25,11 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		// eye finds its rows without reading them, identifiers and counts are dim so they stop
 		// competing, and the one cell that says how the row is doing is coloured by meaning.
 		Columns: []Column{
+			// The call for a person, in the first column, one character wide, empty on every job that
+			// wants nothing. It never gives way and it is never coloured out of existence: a job
+			// waiting to be answered has to be findable down a screen of forty rows by shape rather
+			// than by reading each phase, and a colour is nothing at all on a terminal without one.
+			{Title: " ", Width: 2, Colour: colourOfAsking},
 			// Headed job because it is the value every job command takes, the way the sessions
 			// listing heads its first column session.
 			{Title: "job", Width: 10, Colour: dim},
@@ -73,6 +78,9 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 				},
 			},
 		},
+		// How many of these are waiting for a person, above the columns, so a screen of forty rows says
+		// it before anybody scrolls. It says nothing when nothing is waiting.
+		Summary: askingSummary(client),
 		// parent is a project id when this view is drilled into from one, and empty at the top level,
 		// which is every job the system holds.
 		List: func(ctx context.Context, project string) ([]Row, error) {
@@ -106,11 +114,23 @@ func sessionOfJob(row Row) (string, error) {
 
 // outcomeColumn is where the word a job ended on sits in its row, which the tests read so a column
 // added in front of it moves one number rather than several.
-const outcomeColumn = 2
+const outcomeColumn = 3
 
 // phaseColumn is where a job's phase sits in its row, which the refusal above reads so it says where
 // the job got to rather than only that it got nowhere.
-const phaseColumn = 1
+const phaseColumn = 2
+
+// theAskingMark is what sits in the first cell of a job that is waiting for a person. One character,
+// on every screen, in the column nothing else is ever drawn in.
+const theAskingMark = "?"
+
+// askingMark is that mark, and nothing at all on a job that is not waiting for anybody.
+func askingMark(phase string) string {
+	if phase == job.PhaseAsking {
+		return theAskingMark
+	}
+	return ""
+}
 
 func phaseOfRow(row Row) string {
 	if len(row.Cells) <= phaseColumn {
@@ -139,6 +159,7 @@ func jobRow(one *quaycrewv1.Job) Row {
 		Label:  one.GetTitle(),
 		State:  stateOfPhase(one.GetPhase()),
 		Cells: []string{
+			askingMark(one.GetPhase()),
 			display.ShortID(one.GetId()),
 			one.GetPhase(),
 			outcomeCell(one.GetOutcome()),
@@ -223,5 +244,27 @@ func colourOfPhase(cell string) string {
 		return dimCode
 	default:
 		return ""
+	}
+}
+
+// askingSummary is the line above the columns: how many of these jobs are waiting for a person. It is
+// empty when none are, which draws nothing, because a line saying nothing is waiting is a line that
+// teaches an operator to stop reading the one place this is announced.
+//
+// A second telling of what the mark in the first column already says, deliberately. The mark is found
+// by scanning the rows and this is read without scanning anything, and the case they both exist for is
+// a listing longer than the screen.
+func askingSummary(client quaycrewv1.ControlPlaneServiceClient) Summariser {
+	return func(ctx context.Context, project string) (string, State) {
+		resp, err := client.ListJobs(ctx, &quaycrewv1.ListJobsRequest{
+			Project: project, Phase: job.PhaseAsking,
+		})
+		if err != nil || len(resp.GetJobs()) == 0 {
+			return "", StateUnknown
+		}
+		if len(resp.GetJobs()) == 1 {
+			return "1 job is waiting for a person", StateBusy
+		}
+		return fmt.Sprintf("%d jobs are waiting for a person", len(resp.GetJobs())), StateBusy
 	}
 }

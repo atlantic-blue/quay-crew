@@ -84,7 +84,7 @@ func TestAJobRowCarriesTheWholeStoryOfOneJob(t *testing.T) {
 	if got.Parent != running.GetSession() {
 		t.Fatalf("the row carries %q as the session, want the whole identifier", got.Parent)
 	}
-	want := []string{"11111111", "running", "-", "backlog-clearer", "read the electricity bill",
+	want := []string{"", "11111111", "running", "-", "backlog-clearer", "read the electricity bill",
 		"22222222", "1", "1m"}
 	if len(got.Cells) != len(want) {
 		t.Fatalf("the row has %d cells, want %d: %q", len(got.Cells), len(want), got.Cells)
@@ -114,8 +114,8 @@ func TestAJobWithNoSessionYetSaysSoRatherThanLeavingTheCellEmpty(t *testing.T) {
 	}
 	// The literal rather than the constant: a case that reads the constant passes against a
 	// constant emptied out, which is the one mistake this is here to catch.
-	if got.Cells[5] != "not yet" {
-		t.Fatalf(`the session cell says %q, want "not yet"`, got.Cells[5])
+	if got.Cells[6] != "not yet" {
+		t.Fatalf(`the session cell says %q, want "not yet"`, got.Cells[6])
 	}
 	if got.State != StateUnknown {
 		t.Fatalf("a pending job is drawn as %v, want no claim at all", got.State)
@@ -130,13 +130,13 @@ func TestAFailedJobIsMarkedForAttention(t *testing.T) {
 	if got.State != StateFailed {
 		t.Fatalf("a failed job is drawn as %v, want failed", got.State)
 	}
-	if got.Cells[1] != job.PhaseFailed {
-		t.Fatalf("the phase cell says %q, want %q", got.Cells[1], job.PhaseFailed)
+	if got.Cells[phaseColumn] != job.PhaseFailed {
+		t.Fatalf("the phase cell says %q, want %q", got.Cells[phaseColumn], job.PhaseFailed)
 	}
 	// Three tries is the number that says this is not a one off, and it is the reason the column is
 	// there at all.
-	if got.Cells[6] != "3" {
-		t.Fatalf("the attempts cell says %q, want 3", got.Cells[6])
+	if got.Cells[7] != "3" {
+		t.Fatalf("the attempts cell says %q, want 3", got.Cells[7])
 	}
 }
 
