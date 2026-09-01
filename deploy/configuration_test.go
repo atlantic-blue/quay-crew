@@ -78,9 +78,15 @@ func TestNothingSendsTheOperatorToARetiredLocation(t *testing.T) {
 		"docs/SANDBOX.md",
 		"docs/WORKSPACE.md",
 	}, oneSystemDirectory...)
-	// The makefile reads the retired variable on purpose, for one release, so a shell profile that
-	// exports it still points the stack at the operator's own directory.
-	readsTheRetiredOne := append([]string{"Makefile"}, theWordsHaveNotMovedYet...)
+	// The retired variable is read on purpose, for one release, so a shell profile that exports it
+	// still points the stack at the operator's own directory. The makefile reads it, the scenario that
+	// proves an operator who exports it still lands in their own system sets it, and the entry that
+	// announces the move says it is still read.
+	readsTheRetiredOne := append([]string{
+		"Makefile",
+		filepath.Join("features", "systemdirectory_steps_test.go"),
+		filepath.Join("changelog.d", "517-the-system-keeps-its-things-in-krewe.md"),
+	}, theWordsHaveNotMovedYet...)
 	retired := []struct {
 		path    string
 		because string
