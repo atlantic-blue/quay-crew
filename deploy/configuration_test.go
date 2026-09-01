@@ -28,7 +28,7 @@ func TestTheStackIsToldWhereItsConfigurationIs(t *testing.T) {
 	}
 }
 
-// TestTheConfigurationPathIsOutsideTheCheckout, and sits under QUAY_HOME, which is where a system keeps
+// TestTheConfigurationPathIsOutsideTheCheckout, and sits under KREWE_HOME, which is where a system keeps
 // what belongs to it on this machine.
 func TestTheConfigurationPathIsOutsideTheCheckout(t *testing.T) {
 	printed := makeVariable(t, "ENV_FILE")
@@ -67,6 +67,26 @@ func TestNothingSendsTheOperatorToARetiredLocation(t *testing.T) {
 
 	// The directory, not the product's name: com.quaycrew.build is a docker label and stays.
 	oneSystemDirectory := []string{home, homeTest, itself}
+	// The documents still send a reader to the directory that went, and the words move in the piece
+	// after this one in docs/RENAME.md. The plan itself keeps naming it, the way the changelog does:
+	// it is the record of the move rather than an instruction. Delete every line but the plan when
+	// the words land.
+	theWordsHaveNotMovedYet := append([]string{
+		"docs/RENAME.md",
+		"docs/ARCHITECTURE.md",
+		"docs/DATABASE.md",
+		"docs/SANDBOX.md",
+		"docs/WORKSPACE.md",
+	}, oneSystemDirectory...)
+	// The retired variable is read on purpose, for one release, so a shell profile that exports it
+	// still points the stack at the operator's own directory. The makefile reads it, the scenario that
+	// proves an operator who exports it still lands in their own system sets it, and the entry that
+	// announces the move says it is still read.
+	readsTheRetiredOne := append([]string{
+		"Makefile",
+		filepath.Join("features", "systemdirectory_steps_test.go"),
+		filepath.Join("changelog.d", "517-the-system-keeps-its-things-in-krewe.md"),
+	}, theWordsHaveNotMovedYet...)
 	retired := []struct {
 		path    string
 		because string
@@ -77,9 +97,19 @@ func TestNothingSendsTheOperatorToARetiredLocation(t *testing.T) {
 			because: "an installed system has no checkout to hold it",
 			allowed: []string{itself},
 		},
-		{path: ".quaycrew/", because: "a system keeps everything it owns in ~/.quay", allowed: oneSystemDirectory},
-		{path: `".quaycrew"`, because: "a system keeps everything it owns in ~/.quay", allowed: oneSystemDirectory},
-		{path: ".config/quay", because: "a system keeps everything it owns in ~/.quay", allowed: oneSystemDirectory},
+		{path: ".quaycrew/", because: "a system keeps everything it owns in ~/.krewe", allowed: oneSystemDirectory},
+		{path: `".quaycrew"`, because: "a system keeps everything it owns in ~/.krewe", allowed: oneSystemDirectory},
+		{path: ".config/quay", because: "a system keeps everything it owns in ~/.krewe", allowed: oneSystemDirectory},
+		{
+			path:    "~/.quay/",
+			because: "a system keeps everything it owns in ~/.krewe, and the tokens, the sealing key and every conversation are in it",
+			allowed: theWordsHaveNotMovedYet,
+		},
+		{
+			path:    "QUAY_HOME",
+			because: "the variable is KREWE_HOME, and the retired one is read for one release rather than written down",
+			allowed: readsTheRetiredOne,
+		},
 	}
 
 	tracked, err := exec.Command("git", "-C", "..", "ls-files").Output()
@@ -125,7 +155,7 @@ func TestTheSystemsDirectoryIsMadeBeforeComposeCouldMakeIt(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "system")
 
 	out, err := exec.Command("make", "-C", "..", "--no-print-directory",
-		"config", "QUAY_HOME="+home).CombinedOutput()
+		"config", "KREWE_HOME="+home).CombinedOutput()
 	if err != nil {
 		t.Fatalf("make config: %v\n%s", err, out)
 	}

@@ -140,15 +140,22 @@ var everywhereKeys = [][2]string{
 	{"q", "Quit"},
 }
 
-// logo is the wordmark: the same block letters as always, at half the height. Every row carries two
-// rows of the original through the half block characters, so this is the logo rather than the name
-// written out in text, and it costs three rows instead of six.
+// logo is the wordmark: block letters at half the height. Every row carries two rows of the letters
+// through the half block characters, so this is the logo rather than the name written out in text,
+// and it costs three rows instead of six.
 //
 // Three rows is what the header costs, because the logo is the tallest thing in it.
+//
+// The product is Quay Krewe and the command is krewe, so the mark spells the word a person types.
+// Five letters rather than four is seven columns more, 43 rather than 36, and what that costs is the
+// narrowest console it is drawn in. Beside a header carrying the build and the address, it is drawn
+// from 80 columns up rather than from 73. Under that the header keeps the build and the way to help,
+// and the mark gives way rather than being drawn over the top of them. Both numbers are measured
+// against this tree.
 var logo = []string{
-	" ▄█▀▀▀▀█▄ ██    ██ ▄█▀▀▀█▄ ▀█▄  ▄█▀ ",
-	" ██ ▄▄ ██ ██    ██ ██▀▀▀██   ▀██▀   ",
-	"  ▀▀▀██▀   ▀▀▀▀▀▀  ▀▀   ▀▀    ▀▀    ",
+	" ██  ▄█▀ ██▀▀▀█▄ ██▀▀▀▀▀ ██     ██ ██▀▀▀▀▀ ",
+	" ██▀▀█▄  ██▀▀██  ██▀▀▀   ██ ▄█▄ ██ ██▀▀▀   ",
+	" ▀▀   ▀▀ ▀▀   ▀▀ ▀▀▀▀▀▀▀  ▀▀   ▀▀  ▀▀▀▀▀▀▀ ",
 }
 
 // withLogo puts the wordmark against the right edge, growing the header to fit it when the header is

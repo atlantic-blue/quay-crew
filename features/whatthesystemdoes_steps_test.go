@@ -125,7 +125,7 @@ func theRealTool(ctx context.Context) console.CommandRunner {
 		command.Env = append(os.Environ(),
 			"QC_GRPC_ADDR="+address,
 			"QC_TOKEN="+token,
-			"QUAY_HOME="+home,
+			"KREWE_HOME="+home,
 			"HOME="+home,
 		)
 		// Both streams, because a refusal comes back on the error one and that is what the operator

@@ -13,7 +13,7 @@ import (
 // stopped isolating anything the moment the directory stopped following it, and the failure would
 // have been silent: the tests pass either way, and the operator finds out later.
 //
-// A case that is about the directory itself still sets QUAY_HOME to whatever it needs.
+// A case that is about the directory itself still sets KREWE_HOME to whatever it needs.
 func TestMain(m *testing.M) {
 	temporary, err := os.MkdirTemp("", "krewe-home-")
 	if err != nil {
