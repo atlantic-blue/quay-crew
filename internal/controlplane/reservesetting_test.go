@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/capacity"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/capacity"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
 )
 
 // The two reserve settings were named after the word this level used to take, and a configuration

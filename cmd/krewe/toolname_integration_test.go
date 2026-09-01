@@ -11,12 +11,12 @@ import (
 	"strings"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/secrets"
-	"github.com/atlantic-blue/krewe/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/secrets"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 	"google.golang.org/grpc"
 )
 
@@ -76,7 +76,7 @@ func runs(t *testing.T, binary, address, home string, args ...string) invocation
 	t.Helper()
 
 	command := exec.Command(binary, args...)
-	command.Env = append(command.Environ(), "QC_GRPC_ADDR="+address, "QUAY_HOME="+home, "HOME="+home)
+	command.Env = append(command.Environ(), "QC_GRPC_ADDR="+address, "KREWE_HOME="+home, "HOME="+home)
 	var out, said bytes.Buffer
 	command.Stdout, command.Stderr = &out, &said
 	err := command.Run()

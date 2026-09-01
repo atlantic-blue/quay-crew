@@ -18,15 +18,15 @@ import (
 	"sort"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/deploy"
-	"github.com/atlantic-blue/krewe/internal/flow"
-	"github.com/atlantic-blue/krewe/internal/hook"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/origin"
-	"github.com/atlantic-blue/krewe/internal/role"
-	"github.com/atlantic-blue/krewe/internal/session"
-	"github.com/atlantic-blue/krewe/internal/skill"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/deploy"
+	"github.com/atlantic-blue/quay-krewe/internal/flow"
+	"github.com/atlantic-blue/quay-krewe/internal/hook"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/origin"
+	"github.com/atlantic-blue/quay-krewe/internal/role"
+	"github.com/atlantic-blue/quay-krewe/internal/session"
+	"github.com/atlantic-blue/quay-krewe/internal/skill"
 	"github.com/google/uuid"
 )
 
@@ -447,6 +447,22 @@ type Store interface {
 	// failed, in the same statement, so two resumes leave one attempt.
 	ResumeJob(ctx context.Context, id string, event *job.Event) (*job.Job, error)
 	RefuseJob(ctx context.Context, id, reason string, event *job.Event) (*job.Job, error)
+	// RecordJobHandoff writes down the state a fresh session starts this job from, written by the
+	// session that reached its workspace's context ceiling. Only from running, the way a step is,
+	// because a handoff on a job nobody is doing is a note about work that already ended.
+	//
+	// session is the conversation that wrote it, and it is the system's to supply rather than the
+	// caller's to name: it is what tells a handoff waiting to be taken up from one a fresh session
+	// already holds.
+	RecordJobHandoff(ctx context.Context, id, left, tried, session string, event *job.Event) (*job.Job, error)
+	// HandOffJob puts a running job back to pending and lets go of its session, so the controller
+	// starts it in a fresh conversation carrying the handoff. Only from running and only for the
+	// controller holding the lease, in the same statement, so a controller that lost the row cannot
+	// take another one's job away from the session doing it.
+	//
+	// The job does not restart. Its steps, its pull request, its answer and its identity all stay: what
+	// changes is which conversation carries the rest of it.
+	HandOffJob(ctx context.Context, id string, back job.Requeue, event *job.Event) (*job.Job, error)
 	// What a controller needs of the store. RunnableJob is the job it may start, HeldJob is what
 	// it holds and has to come back to, and ExpiredJob is what a controller that went away left
 	// behind. Every write is conditional in the same statement as its condition, which is what keeps
@@ -489,6 +505,11 @@ type Store interface {
 	ReplaceJobProduct(ctx context.Context, id, product string, event *job.Event) (*job.Job, error)
 	// ListJobEvents returns one job's own history, oldest first.
 	ListJobEvents(ctx context.Context, id string) ([]*job.Event, error)
+	// What reads back the pull requests the crew opened. UnsettledPullRequests is the job whose pull
+	// request is still worth reading, longest unread first, and RecordPullRequest keeps what the forge
+	// said. Neither is a movement of the job: the job ended when it ended, and what happened to the
+	// work afterwards happened on the forge.
+	job.PullRequestStore
 	// RecordSteer writes one steer and adds it to the count on each job in counted, in one
 	// transaction. Counted is the job it landed on and every job above it, so the count on the job at
 	// the top is the score of the whole tree. The row and the counts are written together because a

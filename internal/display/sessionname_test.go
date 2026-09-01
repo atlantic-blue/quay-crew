@@ -3,7 +3,7 @@ package display
 import (
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 )
 
 // Three names can be on a session and a listing has one cell, so the order they are read in decides

@@ -25,6 +25,10 @@ Feature: A job that failed is continued rather than repeated
     And a project named "house-bills"
     And a job titled "sort the listing" in the repository "atlantic-blue/quay-crew" whose session is still working
 
+  # The job above is declared with the settle gate off, so every scenario here ends where continuing
+  # one ends. A gated job is held back until a reviewer and a tester have read its work, which is
+  # features/settling.feature.
+
   Scenario: What a session finished outlives the attempt that failed
     Given the session running that job records "read the issue"
     And the session running that job records "cut the worktree from origin/main"

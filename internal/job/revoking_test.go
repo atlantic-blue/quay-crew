@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // theCredentials records what the system was asked to take back, which is the whole of what a

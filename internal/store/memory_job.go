@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // CreateJob writes a job and the record of its declaration together, under one lock,
@@ -316,6 +316,8 @@ func matchesJob(held *job.Job, filter job.Filter) bool {
 		return false
 	case filter.Phase != "" && held.Phase != filter.Phase:
 		return false
+	case filter.Outcome != "" && held.Outcome != filter.Outcome:
+		return false
 	// A job that has not finished is not late in the window, it is outside the question: the
 	// window is about jobs that ended.
 	case filter.FinishedSince != nil && held.FinishedAt == nil:
@@ -426,6 +428,15 @@ func (m *Memory) jobMatching(limit int, matches func(*job.Job) bool) []*job.Job 
 			continue
 		}
 		kept := cloneJob(*held)
+		// The handoffs, because the conversation a job runs in is derived from them: each handover
+		// moves the name on, and a controller reading a job without them would dispatch the rest of the
+		// job straight back into the conversation that was full. The steps are deliberately not
+		// attached here, because the Postgres store does not attach them either and the looser of the
+		// two doubles is the one that manufactures a green suite.
+		kept.Handoffs = append([]job.Handoff(nil), m.jobHandoffs[held.ID]...)
+		if len(kept.Handoffs) == 0 {
+			kept.Handoffs = nil
+		}
 		found = append(found, &kept)
 	}
 	sort.SliceStable(found, func(i, j int) bool {
@@ -621,11 +632,15 @@ func (m *Memory) LandJob(_ context.Context, id string, landed job.Landing, event
 	}
 	now := time.Now().UTC()
 	found.Phase, found.Answer, found.Reason = landed.Phase, landed.Answer, landed.Reason
+	found.Outcome = landed.Outcome
 	// Unless the landing read none and the row already carries one: a step that named the pull request
 	// wrote it before any answer landed, and a job that failed carries no answer to read.
 	if landed.PullRequest != "" {
 		found.PullRequest = landed.PullRequest
 	}
+	// What read this work before it settled, so a settled job says whether anything independent
+	// agreed with its answer rather than leaving a reader to open two conversations.
+	found.Reviewed, found.Tested = landed.Reviewed, landed.Tested
 	found.SpentTokens, found.ObservedVersion = landed.SpentTokens, found.Version
 	// The hold goes with the job. A lease left on finished job would read as held forever.
 	found.LeaseOwner, found.LeaseUntil = "", nil

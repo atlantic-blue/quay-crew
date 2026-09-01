@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/deploy"
-	"github.com/atlantic-blue/krewe/internal/flow"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/deploy"
+	"github.com/atlantic-blue/quay-krewe/internal/flow"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -87,6 +87,10 @@ type Memory struct {
 	// jobs rather than on the row, which is the table the Postgres store keeps, so a listing here
 	// carries what a listing there carries.
 	jobSteps map[string][]job.Step
+	// jobHandoffs is what each job's sessions wrote down when they stopped taking work at the context
+	// ceiling, in the order they wrote them. Beside the jobs for the reason the steps are, so this
+	// store and the Postgres one carry the same thing on one job.
+	jobHandoffs map[string][]job.Handoff
 	// jobAttempts is what each attempt at each job said, in the order the attempts were made, beside
 	// the jobs for the same reason the steps are.
 	jobAttempts map[string][]job.Attempt

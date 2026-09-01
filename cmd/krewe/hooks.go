@@ -6,8 +6,8 @@ import (
 	"io"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/hook"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/hook"
 )
 
 // runHook drives the system's hooks from the command line: what it enforces, what a workspace runs

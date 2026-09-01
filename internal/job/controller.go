@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/capacity"
-	"github.com/atlantic-blue/krewe/internal/publish"
-	"github.com/atlantic-blue/krewe/internal/telemetry"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/capacity"
+	"github.com/atlantic-blue/quay-krewe/internal/publish"
+	"github.com/atlantic-blue/quay-krewe/internal/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 )
 
@@ -75,6 +75,15 @@ var ErrNotAsking = errors.New("job: that job is not waiting to be told anything"
 // of them: resuming twice must leave one attempt rather than two tasks against one conversation.
 var ErrNotFailed = errors.New("job: that job did not fail, so there is nothing to continue")
 
+// ErrNothingHandedOver is what a store says when a job would be moved to a fresh session and the
+// session that had it wrote nothing down.
+//
+// The condition lives in the write rather than in a read before it, for the reason every other one
+// here does: the session is still answering while the controller decides, so a handoff written a
+// moment later must not be missed and a job with none must not be moved on a stale read. What it
+// protects is the only thing a fresh session would have to start from.
+var ErrNothingHandedOver = errors.New("job: that job has no handoff, so a fresh session would start from nothing")
+
 // Requeue is a job put back to pending, and why it is waiting again.
 type Requeue struct {
 	// Owner is the controller giving the job up. The write applies only where that controller still
@@ -87,13 +96,23 @@ type Requeue struct {
 
 // Landing is what came of a job, written onto the row in one movement.
 type Landing struct {
-	Phase       string
-	Answer      string
+	Phase  string
+	Answer string
+	// Outcome is the one word the answer stated, read off it rather than reported by the model, the
+	// way the pull request address is. Empty on every landing that is not an answer: a job the model
+	// never finished has nothing to state.
+	Outcome     string
 	Reason      string
 	SpentTokens int64
 	// PullRequest is the address the answer named, where the job named a repository. It is read off
 	// the answer rather than reported by the model, the way an expectation is.
 	PullRequest string
+	// Reviewed and Tested are the gates that passed this work, in sessions that did not do it. They
+	// are written here rather than as the gate runs, because until the job lands they can be read off
+	// the record of those sessions, and a status a controller has to remember is a status the next
+	// controller does not have.
+	Reviewed bool
+	Tested   bool
 	// Attempt is what this attempt at the job produced, with how like the earlier attempts at the same
 	// step it was. It is written in the same transaction as the landing, keyed on the task, so a
 	// controller reading a task a dead one already read leaves one row rather than two.
@@ -106,6 +125,10 @@ type Store interface {
 	// RunnableJob is the job this controller may start: pending with nothing it waits for, oldest
 	// declared first. Job under a parent is included, because a flow run declares every step under
 	// its own job. Job that names a role is included, and the controller runs it as that role.
+	//
+	// Both this and HeldJob carry the job's handoffs, because the conversation a job runs in is
+	// derived from them: each handover moves the name on, and a controller reading a job without them
+	// would send the rest of that job straight back into the conversation that was full.
 	RunnableJob(ctx context.Context, limit int) ([]*Job, error)
 	// HeldJob is the job this controller is holding: running, with a session, under a lease that
 	// is this controller's and has not run out. Another controller's job is not this one's to move.
@@ -131,6 +154,12 @@ type Store interface {
 	// ReleaseJob puts job back to pending. It applies only to running job with no session under a
 	// lease that has run out, which is the one state that says for certain no task was ever sent.
 	ReleaseJob(ctx context.Context, id string, events []*Event) (*Job, error)
+	// HandOffJob puts a running job back to pending and lets go of its session, so the next start
+	// dispatches into a fresh conversation carrying what the last one wrote down. It applies only
+	// where this controller still holds the lease, in the same statement, for the reason a requeue
+	// does: a controller that lost the row must not take another one's job away from the session
+	// doing it. The job does not restart, and nothing it produced is dropped.
+	HandOffJob(ctx context.Context, id string, back Requeue, event *Event) (*Job, error)
 	// RequeueJob puts a running job back to pending because the system could not start it. It applies
 	// only where this controller still holds the lease, in the same statement, so a controller that
 	// lost the row cannot put another controller's job back under it.
@@ -231,6 +260,19 @@ type Spend interface {
 	SessionTokens(ctx context.Context, session string) int64
 }
 
+// Windows is how full one session's context window is, and how big that window is.
+//
+// A different question from what the conversation cost, and the one that decides whether the session
+// should be given anything else to do: cost only grows, while the window empties again when the model
+// compacts. See ceiling.go for what the controller does with it.
+//
+// An implementation that cannot tell answers zero for the size, and a window of no size never refuses
+// anything. A controller with no reader wired refuses nothing at all, which is every controller before
+// this and is what a system that cannot measure should do.
+type Windows interface {
+	SessionWindow(ctx context.Context, session string) (used, size int64)
+}
+
 // Redactor takes what the system is about to write down and removes anything the workspace keeps
 // sealed. Everything recorded here is persisted, and what a model says can carry a value somebody
 // pasted into a conversation. A nil redactor writes the text as it is, which is what a test wants
@@ -304,7 +346,10 @@ type Controller struct {
 	attached Attachment
 	// room is the machine. Nil admits everything, which is the system this controller had before
 	// admission was arithmetic, and it says so in the log rather than quietly.
-	room     Room
+	room Room
+	// windows is how full each session's context window is. Nil refuses nothing, which is every
+	// controller before the ceiling existed.
+	windows  Windows
 	exporter Exporter
 	// publisher pushes the branch a finished job left behind, and says where the work is. Nil cannot
 	// reach a session's files at all, and the reason says that rather than naming a path this system
@@ -412,6 +457,13 @@ func (c *Controller) exported(ctx context.Context, events ...*Event) {
 // Redacting returns a controller that takes every line it writes through the system redactor.
 func (c *Controller) Redacting(redactor Redactor) *Controller {
 	c.redactor = redactor
+	return c
+}
+
+// Measuring gives the controller a reader for how full each session's context window is, which is
+// what turns the ceiling on. A controller with none gives every session new work, however full it is.
+func (c *Controller) Measuring(windows Windows) *Controller {
+	c.windows = windows
 	return c
 }
 
@@ -545,6 +597,9 @@ func (c *Controller) start(ctx context.Context, one *Job, moving *stillMoving) {
 	// of this process, so it is the same trace after a controller has died and another took over.
 	ctx = telemetry.Under(ctx, one.TraceID, one.ParentSpanID)
 
+	// The conversation this attempt runs in. It is named after the job, so a dispatch made twice lands
+	// where the job has been all along, and it moves on once per handoff: a session that reached the
+	// ceiling is exactly the conversation this attempt must not land in.
 	handle := ConversationFor(one)
 	limits := c.limitsIn(ctx, one.Workspace)
 	lease := Lease{Owner: c.owner, Until: time.Now().UTC().Add(limits.Lease(c.lease))}
@@ -592,8 +647,17 @@ func (c *Controller) start(ctx context.Context, one *Job, moving *stillMoving) {
 	//
 	// The handle is derived from the job, so a dispatch that has to be made again lands in the same
 	// conversation rather than starting a second one.
+	//
+	// What that conversation is asked for is normally the job. Where it has already filled its context
+	// window, it is the handoff instead and then nothing else: a job continued after a failure goes
+	// back into the session that did the work, and that session can be the full one, which is how the
+	// task that ends a job came to be run in the fullest window the job ever had.
+	text := Asked(claimed)
+	if c.pastTheCeiling(ctx, claimed, limits.ContextCeiling()) {
+		text = AskedForAHandoff(claimed, limits.ContextCeiling())
+	}
 	sent, err := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-		Project: claimed.Project, Handle: handle, Text: Asked(claimed),
+		Project: claimed.Project, Handle: handle, Text: text,
 		PermissionMode: claimed.Mode, Detach: true,
 		// The name this job was declared with, so a listing says which conversation is doing which job
 		// while they are all still running. It reaches the session only when the session is made, so a
@@ -785,19 +849,13 @@ func (c *Controller) release(ctx context.Context, one *Job) {
 // died in between left a task running with nothing on the row to say so, and putting that job back
 // to pending would send a second task and pay for it twice.
 func (c *Controller) sessionNamedAfter(ctx context.Context, one *Job) string {
-	listed, err := c.plane.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: one.Project})
+	sessions, err := c.sessionsIn(ctx, one.Project)
 	if err != nil {
 		c.logger.WarnContext(ctx, "could not read the system's sessions", "job", one.ID, "error", err)
 		// Nothing is released on a read that failed: releasing here is what would pay twice.
 		return unknownSession
 	}
-	handle := ConversationFor(one)
-	for _, session := range listed.GetSessions() {
-		if session.GetHandle() == handle {
-			return session.GetId()
-		}
-	}
-	return ""
+	return sessions[ConversationFor(one)]
 }
 
 // unknownSession is what a failed read answers with. It is not a session and it is not "no session":
@@ -861,6 +919,13 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 		c.requeue(ctx, one, waitingForRoom(last.GetFailure()), turnedAway)
 		return
 	}
+	// The last task was the system asking this session for a handoff, because its context window had
+	// reached the workspace's ceiling. What came back is not an answer to the job, so it is read
+	// before the landing below rather than written onto the row as what the job produced.
+	if AskingForAHandoff(last.GetPrompt()) {
+		c.handOn(ctx, one)
+		return
+	}
 
 	landing := Landing{
 		Phase: PhaseDone, Answer: last.GetReply(),
@@ -908,6 +973,11 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 	// and it costs more than a branch nobody pushed.
 	if kind == EventAnswered && one.Resuming != "" && one.Repository != "" &&
 		MovedUnderIt(landing.Answer) == "" {
+		// The ceiling comes first, because the session that would answer this ask is the one whose
+		// window is full, and asking it again is the thing this gate exists to stop.
+		if c.handsOffInstead(ctx, one) {
+			return
+		}
 		if c.askWhatMovedUnderIt(ctx, one, tasks) {
 			return
 		}
@@ -918,6 +988,13 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 		// Nothing is landed here. The job stays running while the session is asked, so a controller
 		// that dies between the ask and the answer finds a running job with two tasks and reads them
 		// the way this one would have.
+		//
+		// The ceiling comes first. This is the ask the issue behind the gate is about: the last task of
+		// a long job is the one that opens the pull request, and it was being run in the fullest window
+		// the job ever had.
+		if c.handsOffInstead(ctx, one) {
+			return
+		}
 		if c.askForThePullRequest(ctx, one, len(tasks)) {
 			return
 		}
@@ -946,6 +1023,30 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 	if kind != EventAnswered && last.GetStatus() != StatusTaskStopped &&
 		c.wentInCircles(ctx, whole, attempt, turnedAway) {
 		return
+	}
+	// Last, because the gate reads the change and the change is the pull request: a gate asked before
+	// the address is in hand would be asked to read work it cannot find. Nothing settles here on the
+	// session's own account, which is the whole of this: two sessions that did not do the work have to
+	// agree first, and while they are being asked the job stays running.
+	if kind == EventAnswered && Gated(one) {
+		switch decided := c.gate(ctx, one, landing.PullRequest, tasks); {
+		case decided.held:
+			return
+		case decided.passed:
+			landing.Reviewed, landing.Tested = true, true
+		default:
+			landing.Phase, landing.Reason, kind = PhaseStopped, decided.reason, EventStopped
+		}
+	}
+	// The outcome last, because it is the word that settles the job and the asks above may have moved
+	// the answer this reads. It is read on the answering path alone: a task that failed, or that an
+	// operator stopped, has no answer, and a word invented for one would be the system reporting an
+	// outcome nobody stated.
+	if kind == EventAnswered {
+		if landing.Outcome = OutcomeIn(landing.Answer); landing.Outcome == "" {
+			landing.Phase, landing.Reason, kind =
+				PhaseStopped, NoOutcomeStated(landing.Answer), EventStopped
+		}
 	}
 	c.land(ctx, one, landing, kind)
 }
@@ -1109,6 +1210,260 @@ func (c *Controller) askWhatMovedUnderIt(ctx context.Context, one *Job, tasks []
 	return true
 }
 
+// pastTheCeiling says whether the conversation this job is in has filled enough of its context window
+// that this workspace gives it no new task.
+//
+// Three ways of answering no, and each is deliberate. A controller with no reader wired refuses
+// nothing, which is every controller before this. A job with no session has no window to be full. And
+// a window nothing has told the system the size of is not measured, so it is not full either: the size
+// comes from the model runtime by way of a session writing it down, and a gate that read silence as
+// full would stop every job on a system nobody has told yet.
+func (c *Controller) pastTheCeiling(ctx context.Context, one *Job, ceiling int) bool {
+	if c.windows == nil || one.Session == "" {
+		return false
+	}
+	used, size := c.windows.SessionWindow(ctx, one.Session)
+	return PastTheCeiling(used, size, ceiling)
+}
+
+// handsOffInstead sends the session at the ceiling the one task it has left, in place of the ask the
+// controller was about to make, and says whether it went.
+//
+// The handoff ask is not a task on top of the work. It replaces it, and it is the last task that
+// conversation gets for this job: a gate that asked for a handoff and then sent the work anyway would
+// have spent a task to change nothing.
+//
+// No record of its own is written, for the reason the two asks write none: the task is the record, in
+// the session krewe job show already names, and the movement that follows it writes one.
+func (c *Controller) handsOffInstead(ctx context.Context, one *Job) bool {
+	ceiling := c.limitsIn(ctx, one.Workspace).ContextCeiling()
+	if !c.pastTheCeiling(ctx, one, ceiling) {
+		return false
+	}
+	if _, err := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+		Project: one.Project, Handle: ConversationFor(one),
+		Text: AskedForAHandoff(one, ceiling), PermissionMode: one.Mode, Detach: true,
+		Role: one.Role, Job: one.ID,
+	}); err != nil {
+		// A system that cannot ask lands the job the way it was going to, rather than holding a row
+		// open waiting for a task nobody sent.
+		c.logger.WarnContext(ctx, "could not ask a session at the context ceiling for a handoff",
+			"job", one.ID, "session", one.Session, "error", err)
+		return false
+	}
+	c.logger.InfoContext(ctx, "a session reached its workspace's context ceiling, so it was asked to hand over",
+		"job", one.ID, "session", one.Session, "ceiling", ceiling)
+	// The hold moves on, because the job is still this controller's and a task is in flight again.
+	c.renew(ctx, one)
+	return true
+}
+
+// handOn gives the rest of a job to a fresh session, once the one at the ceiling has written what it
+// leaves behind.
+//
+// The job does not restart. It goes back to pending with its steps, its pull request and its identity
+// intact, and the next start dispatches into a conversation named one further on, carrying the
+// handoff. What changes is which session is doing it.
+//
+// A session that was asked and wrote nothing stops the job instead. Handing an empty record to a fresh
+// session would have it pay for every discovery the last one made, which costs more than leaving the
+// work where a person can find it, and a job carried on from nothing reads afterwards exactly like one
+// that handed over well.
+func (c *Controller) handOn(ctx context.Context, one *Job) {
+	ctx = telemetry.Under(ctx, one.TraceID, one.ParentSpanID)
+	ceiling := c.limitsIn(ctx, one.Workspace).ContextCeiling()
+	used, size := int64(0), int64(0)
+	if c.windows != nil {
+		used, size = c.windows.SessionWindow(ctx, one.Session)
+	}
+	// Whether anything was written down is the store's to answer, in the same statement as the
+	// movement, rather than read off the row this controller is holding. That row came from a listing,
+	// which carries what a listing carries, and the session is still answering while this decides.
+	record := c.event(ctx, one, EventHandedOn, HandedOverAt(ShareOf(used, size), ceiling))
+	if _, err := c.store.HandOffJob(ctx, one.ID, Requeue{Owner: c.owner}, record); err != nil {
+		if errors.Is(err, ErrNothingHandedOver) {
+			c.land(ctx, one, Landing{Phase: PhaseStopped, Reason: NothingHandedOver(one, ceiling),
+				SpentTokens: c.spentBy(ctx, one.Session)}, EventStopped)
+			return
+		}
+		if !errors.Is(err, ErrHeld) {
+			c.logger.WarnContext(ctx, "could not give the rest of a job to a fresh session",
+				"job", one.ID, "error", err)
+		}
+		return
+	}
+	c.exported(ctx, record)
+	c.logger.InfoContext(ctx, "the rest of a job goes to a fresh session",
+		"job", one.ID, "session", one.Session, "at", ShareOf(used, size), "ceiling", ceiling)
+}
+
+// gateOutcome is what the gate decided about a job whose work has landed.
+//
+// Held means a task is in flight and the row is not this tick's to move. Passed means every gate
+// agreed, so the job may settle. A reason stops the job, because a gate that could not be run, or
+// whose answer could not be read, has passed nothing.
+//
+// The zero value is one gate having passed, which is what carries the loop on to the next.
+type gateOutcome struct {
+	held   bool
+	passed bool
+	reason string
+}
+
+// gate holds a job back until two sessions that did not do the work have passed it.
+//
+// Everything it needs is read rather than remembered, which is what makes it safe to run twice: the
+// tasks of the two gate sessions are the record of what the system asked and what came back, and a
+// controller that took this row over after another died reads the same tasks and reaches the same
+// answer. The one thing that lands on the row is which gates passed, written when the job lands.
+//
+// The two run one after the other rather than at once. A change the reviewer failed does not need
+// testing, so the order saves a container and a bill, and it puts the cheaper judgement first.
+func (c *Controller) gate(ctx context.Context, one *Job, address string, tasks []*quaycrewv1.Task) gateOutcome {
+	// How many times this work has already been round. It is counted off the tasks the working session
+	// has run, by the sentence the system writes when it sends work back, for the reason the continued
+	// ask is recognised that way: a counter in a field is a thing the next controller does not have.
+	sentBack := timesTheGateSentItBack(tasks)
+	sessions, err := c.sessionsIn(ctx, one.Project)
+	if err != nil {
+		// A read that failed is not a verdict. The job stays running and a later tick asks again, which
+		// is the safe direction: landing it here would settle work on nothing having read it.
+		c.logger.WarnContext(ctx, "could not read the sessions a job's gate would run in",
+			"job", one.ID, "error", err)
+		return gateOutcome{held: true}
+	}
+	for _, gate := range []struct {
+		named  string
+		handle string
+		asked  func(*Job, string) string
+	}{
+		{GateReviewer, ReviewerFor(one.ID), AskedToReview},
+		{GateTester, TesterFor(one.ID), AskedToTest},
+	} {
+		decided := c.passes(ctx, one, gate.named, gate.handle, gate.asked(one, address), sessions[gate.handle], sentBack)
+		if decided.held || decided.reason != "" {
+			return decided
+		}
+	}
+	return gateOutcome{passed: true}
+}
+
+// passes asks one gate about this work, reads what it said, and says what that means for the job.
+//
+// session is the conversation this gate has run in before, and empty where it has never run. asked is
+// what the gate is sent when it has not been asked about this round of the work yet.
+func (c *Controller) passes(ctx context.Context, one *Job, gate, handle, asked, session string,
+	sentBack int) gateOutcome {
+	var judged []*quaycrewv1.Task
+	if session != "" {
+		resp, err := c.plane.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session})
+		if err != nil {
+			c.logger.WarnContext(ctx, "could not read what a job's gate said",
+				"job", one.ID, "gate", gate, "session", session, "error", err)
+			return gateOutcome{held: true}
+		}
+		judged = resp.GetTasks()
+	}
+	// One task per round. The work has been round sentBack+1 times, so a gate holding no more tasks
+	// than the number of send backs has not read what is in front of it now, and is asked.
+	if len(judged) <= sentBack {
+		return c.askTheGate(ctx, one, gate, handle, asked)
+	}
+	last := judged[len(judged)-1]
+	if last.GetStatus() == StatusRunning {
+		c.renew(ctx, one)
+		return gateOutcome{held: true}
+	}
+	// A gate whose own task failed or was halted judged nothing. The job does not settle on it, for
+	// the reason the prover already gives: a check that quietly passes when it could not be run is the
+	// same false green as no check at all.
+	if last.GetStatus() == StatusFailed || last.GetStatus() == StatusTaskStopped {
+		return gateOutcome{reason: TheGateCouldNotRun(gate, last.GetFailure())}
+	}
+	verdict := Verdict(last.GetReply())
+	switch {
+	case !verdict.Said:
+		return gateOutcome{reason: TheGateSaidNothing(gate)}
+	case verdict.Passed:
+		return gateOutcome{}
+	case sentBack > 0:
+		// Round two, and it still does not pass. Every ask is a task somebody pays for, so this is
+		// where it ends, with what the gate said on the row rather than in a conversation.
+		return gateOutcome{reason: FailedTheGate(gate, verdict.Reason, one)}
+	default:
+		return c.sendItBack(ctx, one, gate, verdict.Reason)
+	}
+}
+
+// askTheGate sends one gate the work to read, and says what that means for the job.
+func (c *Controller) askTheGate(ctx context.Context, one *Job, gate, handle, asked string) gateOutcome {
+	// No role and no job. The role is what would give this session material it has no business
+	// holding, and the job is what mints its credential: a session running no job holds none, so what
+	// it may call on the system is nothing. That is the boundary, and it is the credential rather than
+	// a sentence in the text above.
+	if _, err := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+		Project: one.Project, Handle: handle, Text: asked, Detach: true,
+		Title: gate + ": " + one.Title,
+	}); err != nil {
+		// The job stays running and a later tick asks again. A machine with no room for the gate's
+		// container is a moment rather than a verdict, which is the reasoning a job turned away for
+		// want of a sandbox already gets, and landing the job here would settle it unread.
+		c.logger.WarnContext(ctx, "a job is waiting for a session to pass it",
+			"job", one.ID, "gate", gate, "error", err)
+		c.renew(ctx, one)
+		return gateOutcome{held: true}
+	}
+	c.renew(ctx, one)
+	return gateOutcome{held: true}
+}
+
+// sendItBack gives the work back to the session that did it, carrying what the gate said.
+//
+// The job stays running, so a controller that dies between the ask and the answer finds a running job
+// and reads the tasks the way this one would have. No record of its own is written, for the reason
+// the pull request ask writes none: the task is the record, in the session `krewe job show` already
+// names, and it is what the count of rounds is read from.
+func (c *Controller) sendItBack(ctx context.Context, one *Job, gate, reason string) gateOutcome {
+	if _, err := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+		Project: one.Project, Handle: ConversationFor(one), Text: SentBack(gate, reason, one),
+		PermissionMode: one.Mode, Detach: true, Role: one.Role, Job: one.ID,
+	}); err != nil {
+		c.logger.WarnContext(ctx, "could not send a job back to the session that did the work",
+			"job", one.ID, "gate", gate, "session", one.Session, "error", err)
+		// Nothing passed this work and it cannot be handed back, so the job stops with what the gate
+		// said rather than settling on an answer nothing agreed with.
+		return gateOutcome{reason: FailedTheGate(gate, reason, one)}
+	}
+	c.renew(ctx, one)
+	return gateOutcome{held: true}
+}
+
+// timesTheGateSentItBack is how many of a session's tasks were the gate handing the work back.
+func timesTheGateSentItBack(tasks []*quaycrewv1.Task) int {
+	sent := 0
+	for _, one := range tasks {
+		if SentBackByTheGate(one.GetPrompt()) {
+			sent++
+		}
+	}
+	return sent
+}
+
+// sessionsIn is every conversation this project holds, by handle, which is how a controller finds the
+// sessions its gates run in. A gate's conversation is named after the job, so it is found rather than
+// recorded: a handle on the row is a second thing that can be out of date.
+func (c *Controller) sessionsIn(ctx context.Context, project string) (map[string]string, error) {
+	listed, err := c.plane.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: project})
+	if err != nil {
+		return nil, err
+	}
+	by := make(map[string]string, len(listed.GetSessions()))
+	for _, session := range listed.GetSessions() {
+		by[session.GetHandle()] = session.GetId()
+	}
+	return by, nil
+}
+
 // renew moves this controller's hold on, which is what says it is still alive. A hold that stops
 // moving is the only signal another controller has that this one went away.
 func (c *Controller) renew(ctx context.Context, one *Job) {
@@ -1123,6 +1478,10 @@ func (c *Controller) land(ctx context.Context, one *Job, landed Landing, kind st
 	detail := landed.Reason
 	if detail == "" {
 		detail = fmt.Sprintf("%d tokens in session %s", landed.SpentTokens, one.Session)
+	}
+	// The word this job ended on, so a reader counting a tree reads the records rather than the rows.
+	if landed.Outcome != "" {
+		detail = landed.Outcome + ", " + detail
 	}
 	// The address first, because it is the one line in this record somebody opens.
 	if landed.PullRequest != "" {

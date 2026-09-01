@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/name"
+	"github.com/atlantic-blue/quay-krewe/internal/name"
 )
 
 func TestIsSlug(t *testing.T) {

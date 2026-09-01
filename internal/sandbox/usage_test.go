@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 )
 
 // transcript writes a conversation the way the model's command line tool does: one record per line,

@@ -93,6 +93,14 @@ Feature: The operator can find the files the model reads
     Then the project's context names the words a system is made of
     And the project's context says how to set a context
 
+  # The manual is the system describing itself to a session, so the name in it is the name that
+  # session repeats back to a person. It said Quay System, which is the name the product had before
+  # this one.
+  Scenario: The manual names the product
+    When the operator loads the manual as the project's context
+    And the operator asks where context lives
+    Then the project's context names the product
+
   # A level could be written and never read back, so it could only be overwritten. Adding a paragraph
   # meant already holding the whole text, and during an acceptance run the only way to recover a
   # workspace's context before adding to it was to read the contexts table in the database directly.

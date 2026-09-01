@@ -60,7 +60,7 @@ func usableClaim(claim string) error {
 	}
 	if len(claim) > ClaimLimit {
 		return fmt.Errorf("the claim is %d bytes and the ceiling is %d: name the piece of work in one line, "+
-			"as atlantic-blue/krewe#540, and say what is to be done in the brief", len(claim), ClaimLimit)
+			"as atlantic-blue/quay-krewe#540, and say what is to be done in the brief", len(claim), ClaimLimit)
 	}
 	return nil
 }

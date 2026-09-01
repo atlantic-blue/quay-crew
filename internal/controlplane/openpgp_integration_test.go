@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/secrets"
-	"github.com/atlantic-blue/krewe/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/secrets"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // A workspace mounts an OpenPGP key, and the commit a session makes carries a signature from that
@@ -160,7 +160,7 @@ func assertSignedBy(t *testing.T, said, fingerprint string) {
 // only, and no expiry: it lives as long as the temporary directory holding it.
 func anOpenPGPKey(t *testing.T, home, address, passphrase string) string {
 	t.Helper()
-	gpgSays(t, home, passphrase, "--quick-generate-key", "Quay System Test <"+address+">", "ed25519", "sign", "0")
+	gpgSays(t, home, passphrase, "--quick-generate-key", "Quay Krewe Test <"+address+">", "ed25519", "sign", "0")
 	listed := gpgSays(t, home, passphrase, "--list-secret-keys", "--with-colons", address)
 	for _, line := range strings.Split(listed, "\n") {
 		if fields := strings.Split(line, ":"); fields[0] == "fpr" && len(fields) > 9 {

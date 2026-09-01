@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/capacity"
-	"github.com/atlantic-blue/krewe/internal/job"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/capacity"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -152,7 +152,20 @@ func (c *system) ListTasks(_ context.Context, req *quaycrewv1.ListTasksRequest) 
 }
 
 // lands closes the open task of the session the controller started, the way a model answering does.
-func (c *system) lands(reply string) {
+//
+// It ends the answer with an outcome, because a session that followed the brief it was given ends
+// with one and a double looser than the real thing manufactures a green suite. A test about an
+// answer that states none says so with landsExactly.
+func (c *system) lands(reply string) { c.landsExactly(landed(reply)) }
+
+// landed is what the row carries after lands, so an assertion says the answer it meant rather than
+// repeating the shape of the line.
+func landed(reply string) string {
+	return reply + "\n\n" + job.OutcomeMarker + " " + job.OutcomeProved
+}
+
+// landsExactly closes the open task with exactly this answer, outcome or no outcome.
+func (c *system) landsExactly(reply string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, tasks := range c.tasks {
@@ -409,6 +422,18 @@ func (r *rows) recordStep(id, summary string) {
 	one.Steps = append(one.Steps, job.Step{Job: id, Seq: len(one.Steps) + 1, Summary: summary})
 }
 
+// handoff writes what the session doing a job leaves behind, by hand, the way the control plane
+// writes one over the credential that session holds. The conversation it names is the one the row
+// says is doing the job, which is what the real write records.
+func (r *rows) handoff(id, left, tried string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one := r.held[id]
+	one.Handoffs = append(one.Handoffs, job.Handoff{
+		Job: id, Seq: len(one.Handoffs) + 1, Left: left, Tried: tried, Session: one.Session,
+	})
+}
+
 // claim puts a lease on a row by hand, which is what a controller that then died left behind.
 func (r *rows) claim(id, owner string, until time.Time) {
 	r.mu.Lock()
@@ -590,6 +615,35 @@ func (r *rows) RequeueJob(_ context.Context, id string, back job.Requeue, events
 	return &kept, nil
 }
 
+// HandOffJob puts a running job back to pending and lets go of its session, the way a store does when
+// the session doing it reached the context ceiling and wrote what it leaves behind. Only where this
+// controller still holds the lease, which is the condition a requeue carries.
+func (r *rows) HandOffJob(_ context.Context, id string, back job.Requeue, event *job.Event) (*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such job")
+	}
+	if one.Phase != job.PhaseRunning || one.LeaseOwner != back.Owner {
+		return nil, job.ErrHeld
+	}
+	// The condition the real stores put in the statement: a job with nothing written down is not moved,
+	// because a fresh session would start from nothing. A double that let it through would be the
+	// looser of the two, and the suite would stay green while the system lost the work.
+	if len(one.Handoffs) == 0 {
+		return nil, job.ErrNothingHandedOver
+	}
+	one.Phase, one.Session, one.Reason = job.PhasePending, "", ""
+	one.LeaseOwner, one.LeaseUntil = "", nil
+	one.StartedAt, one.UpdatedAt = nil, time.Now().UTC()
+	if event != nil {
+		r.record(id, []*job.Event{event})
+	}
+	kept := *one
+	return &kept, nil
+}
+
 func (r *rows) RenewLease(_ context.Context, id string, lease job.Lease) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -628,12 +682,17 @@ func (r *rows) LandJob(_ context.Context, id string, landed job.Landing, event *
 	}
 	now := time.Now().UTC()
 	one.Phase, one.Answer, one.Reason = landed.Phase, landed.Answer, landed.Reason
+	one.Outcome = landed.Outcome
 	// Kept where the landing read none, the way both stores keep it: a step that named the pull request
 	// wrote the address before any answer landed, and a double that dropped it would let a test pass
 	// over work the real system keeps.
 	if landed.PullRequest != "" {
 		one.PullRequest = landed.PullRequest
 	}
+	// What read this work before it settled, the way both stores keep it. A double that dropped these
+	// would report every job as passed by nothing, or worse, let a test pass over a row the real system
+	// writes differently.
+	one.Reviewed, one.Tested = landed.Reviewed, landed.Tested
 	one.SpentTokens, one.ObservedVersion = landed.SpentTokens, one.Version
 	one.LeaseOwner, one.LeaseUntil = "", nil
 	one.FinishedAt, one.UpdatedAt = &now, now
@@ -795,7 +854,7 @@ func TestDeclaredJobRunsAndTheAnswerLandsOnTheRecord(t *testing.T) {
 	if got.Phase != job.PhaseDone {
 		t.Fatalf("the job is %q, want done", got.Phase)
 	}
-	if got.Answer != "the bill is due on the 14th" {
+	if got.Answer != landed("the bill is due on the 14th") {
 		t.Fatalf("the answer is %q", got.Answer)
 	}
 	if got.StartedAt == nil || got.FinishedAt == nil {
@@ -981,7 +1040,7 @@ func TestAJobPutBackForWantOfASandboxRunsOnALaterTick(t *testing.T) {
 	if got.Phase != job.PhaseDone {
 		t.Fatalf("the job is %q saying %q, want done", got.Phase, got.Reason)
 	}
-	if got.Answer != "the bill is due on the 14th" {
+	if got.Answer != landed("the bill is due on the 14th") {
 		t.Fatalf("the answer is %q", got.Answer)
 	}
 	// The reason the wait was written under is gone, so nothing says the job is waiting for a machine
@@ -1029,7 +1088,7 @@ func TestAnAnswerThatDoesNotCarryWhatWasClaimedStopsTheJob(t *testing.T) {
 		t.Fatalf("the reason is %q, want it to name what was claimed", got.Reason)
 	}
 	// The answer stays, because what the model said is how somebody works out why the claim failed.
-	if got.Answer != "the bill is due on the 14th" {
+	if got.Answer != landed("the bill is due on the 14th") {
 		t.Fatalf("the answer is %q, want what the model said", got.Answer)
 	}
 }

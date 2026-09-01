@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/display"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
 )
 
 // The console showed ten columns and the command line four, so a session's cost, its mode and how

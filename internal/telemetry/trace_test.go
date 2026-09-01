@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/telemetry"
+	"github.com/atlantic-blue/quay-krewe/internal/telemetry"
 )
 
 // The trace is what joins a row to a span to a log line, so the shape of these identifiers is a

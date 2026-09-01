@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/atlantic-blue/krewe/internal/statusline"
+	"github.com/atlantic-blue/quay-krewe/internal/statusline"
 )
 
 // statusLineLimit is how much of standard input this will read. The runtime hands over one line of

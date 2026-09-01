@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 )
 
 // asked runs one invocation and hands back what it printed and whether it was refused, because every

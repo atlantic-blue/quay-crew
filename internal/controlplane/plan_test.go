@@ -5,13 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/secrets"
-	"github.com/atlantic-blue/krewe/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/secrets"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // A job that states the sentence writes its plan, a person approves it, and the work is held to it.
@@ -193,7 +193,10 @@ func TestAnApprovedPlanTheWorkDidNotFollowStopsTheJob(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("AnswerJob: %v", err)
 	}
-	system.runner.Reply = "built the page"
+	// Stating its outcome, because a session that read its task states one and an answer without it
+	// stops the job before it is ever held against the plan.
+	const built = "built the page\n\n" + job.OutcomeMarker + " " + job.OutcomeProved
+	system.runner.Reply = built
 	system.server.TickJob(ctx)
 	system.landed(t)
 
@@ -213,7 +216,7 @@ func TestAnApprovedPlanTheWorkDidNotFollowStopsTheJob(t *testing.T) {
 			t.Fatalf("the reason is %q, want it to name %q", got.GetReason(), phrase)
 		}
 	}
-	if got.GetAnswer() != "built the page" {
+	if got.GetAnswer() != built {
 		t.Fatalf("the work is not on the row: the answer is %q", got.GetAnswer())
 	}
 }

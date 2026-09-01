@@ -68,7 +68,7 @@ of `checklist.md`, which is about 150 of its 379 lines.
 
 **Licence.** MIT, read at
 [LICENSE](https://github.com/github/spec-kit/blob/main/LICENSE). The copyright holder is GitHub, Inc.
-Quay is Apache 2.0, so MIT text may be copied with the notice kept.
+Quay Krewe is Apache 2.0, so MIT text may be copied with the notice kept.
 
 **Which failure, and how.**
 [#520](https://github.com/atlantic-blue/quay-crew/issues/520). The crew built the design document
@@ -97,7 +97,7 @@ whether a written plan answers a person's sentence is the expensive judgement, n
 a specification.
 
 **Why no existing role covers it.** `architect` writes the contracts, so asking it to review them
-makes it the only reader of its own work. Quay already refuses that shape: `docs/ROLES.md` says a
+makes it the only reader of its own work. Quay Krewe already refuses that shape: `docs/ROLES.md` says a
 second opinion that read the first opinion is not a second opinion. `assessor` reads an existing
 codebase, and at this moment no code exists. `verifier` reads a finished slice against its contracts,
 which is the same question one step too late. Nothing in the fifteen reads a plan.
@@ -215,5 +215,5 @@ rule 45, which no role states.
   writes, so a brief is not the thing they publish. That reasoning is an inference and not a reading.
 - The BMAD trademark notice: I read it and it names the marks and not the text. I am not a lawyer and
   this is my reading of the file.
-- `quay role list` needs a control plane, and this session had none. I read the fifteen roles from
+- `krewe role list` needs a control plane, and this session had none. I read the fifteen roles from
   [`roles/`](../roles) in the repository at commit f48a48a instead.

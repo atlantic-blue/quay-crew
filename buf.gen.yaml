@@ -3,7 +3,7 @@ managed:
   enabled: true
   override:
     - file_option: go_package_prefix
-      value: github.com/atlantic-blue/krewe/gen
+      value: github.com/atlantic-blue/quay-krewe/gen
 plugins:
   - local: protoc-gen-go
     out: gen

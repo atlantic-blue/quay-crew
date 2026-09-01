@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/capacity"
+	"github.com/atlantic-blue/quay-krewe/internal/capacity"
 )
 
 // The shape of the incident. Nine jobs were admitted inside one reading of the machine, because a

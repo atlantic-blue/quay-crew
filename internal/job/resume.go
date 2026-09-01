@@ -278,7 +278,8 @@ func AskedWhatMoved(repository string) string {
 	return fmt.Sprintf("This job was continued after it failed, and its answer %s it is working on, so "+
 		"nobody can tell whether this work stands on %s as it is now. Fetch the branch this work is based "+
 		"on and answer with that one line. %s This answer ends the job, so put the address of your pull "+
-		"request in it as well. Change nothing else.", theSecondAsk, repository, SayWhatMoved())
+		"request in it as well, and state its outcome. %s Change nothing else.",
+		theSecondAsk, repository, SayWhatMoved(), EndsWithAnOutcome())
 }
 
 // AskingWhatMoved says whether a task the system sent was that ask.

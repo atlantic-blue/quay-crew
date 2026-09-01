@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/display"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"github.com/cucumber/godog"
 )
 
@@ -45,6 +45,10 @@ func initializeBriefingSteps(sc *godog.ScenarioContext) {
 		if err := declareJob(ctx, &quaycrewv1.CreateJobRequest{
 			Title: title, Brief: "sort it",
 			Repository: "atlantic-blue/quay-crew", Mode: model.PermissionModeOnTheNetwork(),
+			// With the settle gate off, so this scenario ends where the briefing it is about ends. A
+			// gated job is held back until a reviewer and a tester have passed it, which is
+			// features/settling.feature.
+			Ungated: true,
 		}); err != nil {
 			return err
 		}

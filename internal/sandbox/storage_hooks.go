@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/hook"
+	"github.com/atlantic-blue/quay-krewe/internal/hook"
 )
 
 // HooksDir is what a workspace's own hooks directory is called under its directory in the data

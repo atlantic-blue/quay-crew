@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/auth"
+	"github.com/atlantic-blue/quay-krewe/internal/auth"
 )
 
 // systemToken is the token this tool presents on every call, or nothing when it holds none.
@@ -21,7 +21,7 @@ func systemToken(getenv func(string) string, read func(string) ([]byte, error)) 
 	}
 	dir := getenv("QC_DATA_HOST")
 	if dir == "" {
-		home, err := quayHome()
+		home, err := kreweHome()
 		if err != nil {
 			return ""
 		}

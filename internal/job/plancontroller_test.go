@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // The gate itself, driven one tick at a time. A job that states the sentence writes its plan, stops
@@ -173,7 +173,7 @@ func TestAPlanApprovedAndThenNotFollowedStopsTheJob(t *testing.T) {
 	}
 	// What the work produced is not thrown away. It is unapproved, which is a different thing from
 	// lost, and the operator reads the answer next to the reason.
-	if got.Answer != "built the page" {
+	if got.Answer != landed("built the page") {
 		t.Fatalf("the answer is %q, want the work to still be on the row", got.Answer)
 	}
 }
@@ -203,7 +203,7 @@ func TestAPlanApprovedAndFollowedFinishesInSilence(t *testing.T) {
 	if got.Reason != "" {
 		t.Fatalf("a job that followed its plan carries a reason: %q", got.Reason)
 	}
-	if got.Answer != "the page takes a link and gives the text back" {
+	if got.Answer != landed("the page takes a link and gives the text back") {
 		t.Fatalf("the answer is %q", got.Answer)
 	}
 }

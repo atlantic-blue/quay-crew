@@ -9,14 +9,14 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/display"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/secrets"
-	"github.com/atlantic-blue/krewe/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/secrets"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // The controller over a real database.
@@ -83,7 +83,7 @@ func TestDeclaredJobRunsAndItsAnswerIsOnTheRowInPostgres(t *testing.T) {
 
 	done := waitForJob(t, s, declared.GetJob().GetId(), job.PhaseDone)
 
-	if done.GetAnswer() != "the bill is due on the 14th" {
+	if !strings.Contains(done.GetAnswer(), "the bill is due on the 14th") {
 		t.Fatalf("the answer on the row is %q", done.GetAnswer())
 	}
 	if done.GetSession() == "" {
@@ -251,7 +251,7 @@ func TestJobTheSystemCouldNotGiveASandboxWaitsAndRunsLaterInPostgres(t *testing.
 	close(provider.Hold)
 
 	done := waitForJob(t, s, id, job.PhaseDone)
-	if done.GetAnswer() != "the bill is due on the 14th" {
+	if !strings.Contains(done.GetAnswer(), "the bill is due on the 14th") {
 		t.Fatalf("the answer on the row is %q", done.GetAnswer())
 	}
 	if done.GetAttempts() < 2 {

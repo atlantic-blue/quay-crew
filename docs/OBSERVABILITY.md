@@ -1,6 +1,6 @@
 # Observability
 
-Quay System is meant to be fully auditable and observable: structured logs, an audit stream,
+Quay Krewe is meant to be fully auditable and observable: structured logs, an audit stream,
 distributed traces, and metrics including token spend, all through OpenTelemetry into Grafana, Loki,
 Tempo and Prometheus.
 
@@ -83,7 +83,7 @@ You can confirm the whole picture in one command. On a stack that has been up an
 docker logs quaycrew-otel-collector-1 2>&1 | grep -c "ResourceSpans"
 ```
 
-That count grows as you use `quay`, because the collector's debug exporter summarises every batch it
+That count grows as you use `krewe`, because the collector's debug exporter summarises every batch it
 receives. Swap `ResourceSpans` for `ResourceMetrics` and it stays at `0`, because nothing creates an
 instrument.
 
@@ -119,9 +119,9 @@ flowchart LR
 ## The headroom: whether the machine has room for another session
 
 The system knew nothing about the machine it ran on. On 27 August 2026 the host ran out of memory and
-the kernel killed 18 sandboxes, three monitors and a build in one event. Nothing in quay reported it
+the kernel killed 18 sandboxes, three monitors and a build in one event. Nothing in krewe reported it
 before, during or after: the console kept drawing a healthy system, and every number that mattered had
-to be read from outside quay with `docker stats`. Issue 405 is that fault.
+to be read from outside krewe with `docker stats`. Issue 405 is that fault.
 
 So the control plane reads the daemon it already talks to, on its own timer, and everything else
 reads that last sample.
@@ -132,7 +132,7 @@ flowchart LR
     S --> L["the last sample, held in the process"]
     L --> H["the header: one figure and one word"]
     L --> V["the room view: one line per sandbox"]
-    L --> R["quay room: the same numbers as text"]
+    L --> R["krewe room: the same numbers as text"]
 ```
 
 **The header never reads the daemon.** It redraws every second, and `docker stats --no-stream` waits
@@ -199,7 +199,7 @@ another sandbox is never drawn as healthy, however small a fraction of the machi
 threshold is the measured request in `internal/capacity/measured.go`, not a fraction.
 
 ```
-quay room
+krewe room
 ```
 
 Inside a sandbox that reads the machine the session stands on, which is the question a session about
@@ -316,7 +316,7 @@ The shortest way to see it working, from a cold start:
 
 ```
 make up
-quay task <workspace>/<project> "remember the number"
+krewe task <workspace>/<project> "remember the number"
 ```
 
 Then open `http://localhost:3000`, choose Explore, pick Tempo and search. The task is one span, named

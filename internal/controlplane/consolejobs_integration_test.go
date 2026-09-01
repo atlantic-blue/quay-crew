@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/console"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/secrets"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/console"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/secrets"
 )
 
 // The console's jobs view over the whole path: a real Postgres, the real control plane, and the real
@@ -91,7 +91,7 @@ func TestTheConsoleListsTheJobsTheSystemActuallyHolds(t *testing.T) {
 	if running.Parent == "" {
 		t.Fatalf("the started job carries no session, so there is nothing to descend into: %q", running.Cells)
 	}
-	if running.Cells[4] == "not yet" {
+	if running.Cells[5] == "not yet" {
 		t.Fatal("the started job says it has no session yet, and the controller gave it one")
 	}
 	if running.Cells[1] != job.PhaseRunning && running.Cells[1] != job.PhaseDone {
@@ -102,8 +102,8 @@ func TestTheConsoleListsTheJobsTheSystemActuallyHolds(t *testing.T) {
 	if !ok {
 		t.Fatalf("the pending job is not in the listing: %v", rows)
 	}
-	if waitingRow.Cells[4] != "not yet" {
-		t.Fatalf("a job nothing has started says its session is %q", waitingRow.Cells[4])
+	if waitingRow.Cells[5] != "not yet" {
+		t.Fatalf("a job nothing has started says its session is %q", waitingRow.Cells[5])
 	}
 
 	// Scoped to one project, which is the same call the view makes when it is drilled into from one.

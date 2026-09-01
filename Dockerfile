@@ -1,4 +1,4 @@
-# Multi stage build for any Quay System service. Pick the service with --build-arg SERVICE=<name>.
+# Multi stage build for any Quay Krewe service. Pick the service with --build-arg SERVICE=<name>.
 #
 # Two runtime stages. Most services use "runtime", an unprivileged distroless image. The control
 # plane uses "runtime-docker": it creates each session's sandbox as a container on the host daemon

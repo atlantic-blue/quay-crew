@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/store"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // runJobConformance holds both stores to the job contract.
@@ -79,6 +79,12 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		// Nothing has answered yet, so nothing says where the work went.
 		if found.PullRequest != "" {
 			t.Fatalf("a job nobody has run says its pull request is %q", found.PullRequest)
+		}
+		// And nothing has read it, so nothing passed it. A store that answered true here would report
+		// every job as independently checked, which is the exact false green the gate exists to end.
+		if found.Ungated || found.Reviewed || found.Tested {
+			t.Fatalf("a job nobody has run says ungated=%v reviewed=%v tested=%v",
+				found.Ungated, found.Reviewed, found.Tested)
 		}
 		if found.Phase != job.PhasePending {
 			t.Fatalf("the job opens in phase %q, want pending", found.Phase)
@@ -282,6 +288,41 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	// The filter the phase cannot be. Two jobs are done, one of them could not do its work, and a
+	// reader that had to open both to tell them apart is the reading this exists to end.
+	t.Run("a listing narrows by outcome", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+
+		proved := landedWith(t, s, workspace, project, "read the electricity bill", job.OutcomeProved)
+		blocked := landedWith(t, s, workspace, project, "read the water bill", job.OutcomeBlocked)
+
+		for _, one := range []struct {
+			outcome string
+			want    string
+		}{{job.OutcomeProved, proved}, {job.OutcomeBlocked, blocked}} {
+			listed, err := s.ListJobs(ctx, job.Filter{Project: project, Outcome: one.outcome})
+			if err != nil {
+				t.Fatalf("ListJobs: %v", err)
+			}
+			if len(listed) != 1 || listed[0].ID != one.want {
+				t.Fatalf("the jobs that ended %q are %d rows, want the one", one.outcome, len(listed))
+			}
+		}
+		listed, err := s.ListJobs(ctx, job.Filter{Project: project, Outcome: job.OutcomeDecide})
+		if err != nil {
+			t.Fatalf("ListJobs: %v", err)
+		}
+		if len(listed) != 0 {
+			t.Fatalf("an outcome nothing ended with matched %d rows", len(listed))
+		}
+		// Both are done, which is the point: the phase cannot tell them apart.
+		if listed, _ = s.ListJobs(ctx, job.Filter{Project: project, Phase: job.PhaseDone}); len(listed) != 2 {
+			t.Fatalf("the done jobs are %d rows, want both", len(listed))
+		}
+	})
+
 	// The window and the cap the briefing reads block three with. The order is the part that is easy
 	// to get wrong, so the jobs below are declared in the reverse of the order they finished in: a
 	// store that kept ordering by created_at answers this exactly backwards.
@@ -458,7 +499,8 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			ID: store.NewID(), Workspace: workspace, Project: project,
 			Title: "read the electricity bill", Brief: "open it", Version: 3,
 			Phase: job.PhaseDone, Session: "session-1", Attempts: 2,
-			Answer: "the bill is due on the 14th", Reason: "it answered", Question: "which bill",
+			Answer: "the bill is due on the 14th", Outcome: job.OutcomeProved,
+			Reason: "it answered", Question: "which bill",
 			Told:        "the electricity one",
 			SpentTokens: 1234, ObservedVersion: 3, StartedAt: &started, FinishedAt: &finished,
 		}
@@ -478,6 +520,7 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			{"session", found.Session, declared.Session},
 			{"attempts", found.Attempts, declared.Attempts},
 			{"answer", found.Answer, declared.Answer},
+			{"outcome", found.Outcome, declared.Outcome},
 			{"reason", found.Reason, declared.Reason},
 			{"question", found.Question, declared.Question},
 			{"told", found.Told, declared.Told},
@@ -598,6 +641,25 @@ func declaredJob(t *testing.T, s store.Store, workspace, project, title string) 
 		t.Fatalf("CreateJob: %v", err)
 	}
 	return declared.ID
+}
+
+// landedWith is a job that ran and ended on one word, written the way the controller writes it: the
+// row is declared, claimed and landed, so the outcome comes off a landing rather than being seeded.
+// A test that seeded it would pass against a store that never writes the column.
+func landedWith(t *testing.T, s store.Store, workspace, project, title, outcome string) string {
+	t.Helper()
+	ctx := context.Background()
+	id := declaredJob(t, s, workspace, project, title)
+	if _, err := s.StartJob(ctx, id, aLease("controller-a"),
+		[]*job.Event{startedEvent(id, workspace, project)}); err != nil {
+		t.Fatalf("StartJob: %v", err)
+	}
+	if _, err := s.LandJob(ctx, id, job.Landing{
+		Phase: job.PhaseDone, Answer: "it is done", Outcome: outcome,
+	}, answeredEvent(id, workspace, project)); err != nil {
+		t.Fatalf("LandJob: %v", err)
+	}
+	return id
 }
 
 func declaredEvent(declared *job.Job) *job.Event {
@@ -889,13 +951,21 @@ func runJobControllerConformance(t *testing.T, newDataset func(t *testing.T) Ope
 		const address = "https://github.com/atlantic-blue/quay-crew/pull/454"
 		landed, err := s.LandJob(ctx, id, job.Landing{
 			Phase: job.PhaseDone, Answer: "the bill is due on the 14th", SpentTokens: 1234,
-			PullRequest: address,
+			PullRequest: address, Outcome: job.OutcomeProved,
 		}, answeredEvent(id, workspace, project))
 		if err != nil {
 			t.Fatalf("LandJob: %v", err)
 		}
 		if landed.Phase != job.PhaseDone || landed.Answer != "the bill is due on the 14th" {
 			t.Fatalf("the job landed as %q saying %q", landed.Phase, landed.Answer)
+		}
+		// The word the job ended on, which is what a flow branches on and a listing filters by. The
+		// answer beside it is the explanation rather than the signal.
+		if landed.Outcome != job.OutcomeProved {
+			t.Fatalf("the job landed with the outcome %q, want %q", landed.Outcome, job.OutcomeProved)
+		}
+		if reread, err := s.GetJob(ctx, id); err != nil || reread.Outcome != job.OutcomeProved {
+			t.Fatalf("the job reads back with the outcome %v (%v), want %q", reread, err, job.OutcomeProved)
 		}
 		// Where the work went is on the row, so a reader finds it without opening the answer.
 		if landed.PullRequest != address {
@@ -923,6 +993,81 @@ func runJobControllerConformance(t *testing.T, newDataset func(t *testing.T) Ope
 		found, _ := s.GetJob(ctx, id)
 		if found.Phase != job.PhaseDone {
 			t.Fatalf("the second landing moved the job to %q", found.Phase)
+		}
+	})
+
+	// A settled job says whether anything independent agreed with its answer. It is written in the
+	// same statement as the phase, so a reader can never find a job that is done and no record of what
+	// read it, and a job the gate did not pass reads differently from one it did.
+	t.Run("what passed a job before it settled lands with the phase", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+
+		// The fail first: a job that landed with neither gate having passed it keeps saying so, however
+		// often it is read back.
+		unread := declaredJob(t, s, workspace, project, "sort the listing")
+		if _, err := s.StartJob(ctx, unread, aLease("controller-a"), []*job.Event{startedEvent(unread, workspace, project)}); err != nil {
+			t.Fatalf("StartJob: %v", err)
+		}
+		if _, err := s.LandJob(ctx, unread, job.Landing{
+			Phase: job.PhaseStopped, Reason: "the reviewer failed this work twice",
+		}, answeredEvent(unread, workspace, project)); err != nil {
+			t.Fatalf("LandJob: %v", err)
+		}
+		stopped, err := s.GetJob(ctx, unread)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		if stopped.Reviewed || stopped.Tested {
+			t.Fatalf("a job nothing passed reads back as reviewed=%v tested=%v",
+				stopped.Reviewed, stopped.Tested)
+		}
+
+		passed := declaredJob(t, s, workspace, project, "sort the listing again")
+		if _, err := s.StartJob(ctx, passed, aLease("controller-a"), []*job.Event{startedEvent(passed, workspace, project)}); err != nil {
+			t.Fatalf("StartJob: %v", err)
+		}
+		landed, err := s.LandJob(ctx, passed, job.Landing{
+			Phase: job.PhaseDone, Answer: "opened the pull request", Reviewed: true, Tested: true,
+		}, answeredEvent(passed, workspace, project))
+		if err != nil {
+			t.Fatalf("LandJob: %v", err)
+		}
+		if !landed.Reviewed || !landed.Tested {
+			t.Fatalf("the job landed as reviewed=%v tested=%v, want both", landed.Reviewed, landed.Tested)
+		}
+		reread, err := s.GetJob(ctx, passed)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		if !reread.Reviewed || !reread.Tested {
+			t.Fatalf("the job reads back as reviewed=%v tested=%v, want both", reread.Reviewed, reread.Tested)
+		}
+	})
+
+	// The gate is refusable, so the declaration carries the answer and the store keeps it. A store that
+	// lost this would gate a job the caller declared without one, or worse, gate none of them.
+	t.Run("a job declared with the gate off reads back with the gate off", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+
+		declared := &job.Job{
+			ID: store.NewID(), Workspace: workspace, Project: project,
+			Title: "sort the listing", Brief: "make the listing sort by the clock it shows",
+			Repository: "atlantic-blue/quay-crew", Ungated: true,
+			Version: 1, Phase: job.PhasePending,
+		}
+		if err := s.CreateJob(ctx, declared, declaredEvent(declared)); err != nil {
+			t.Fatalf("CreateJob: %v", err)
+		}
+		found, err := s.GetJob(ctx, declared.ID)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		if !found.Ungated {
+			t.Fatal("a job declared with the gate off reads back with the gate on")
 		}
 	})
 
@@ -1520,6 +1665,40 @@ func runWorkspaceLimitsConformance(t *testing.T, newDataset func(t *testing.T) O
 		if limits.Reclaim() != 0 || limits.Archive() != 0 {
 			t.Fatalf("the times read as %s and %s, and unset has to read as zero so the controller "+
 				"does nothing", limits.Reclaim(), limits.Archive())
+		}
+		// The one number on this row that ships set rather than unset. The row says nothing and the
+		// reader supplies the system's own, which comes from a standard rather than from a measurement
+		// of this crew. A store that answered with a number of its own would put the decision in two
+		// places.
+		if limits.ContextCeilingPercent != 0 {
+			t.Fatalf("a workspace nobody configured carries a context ceiling of %d on the row, want none",
+				limits.ContextCeilingPercent)
+		}
+		if limits.ContextCeiling() != job.DefaultContextCeiling {
+			t.Fatalf("a workspace nobody configured reads a ceiling of %d, want the system's own %d",
+				limits.ContextCeiling(), job.DefaultContextCeiling)
+		}
+	})
+
+	t.Run("a context ceiling is written whole and read back", func(t *testing.T) {
+		open := newDataset(t)
+		s := open(t)
+		ctx := context.Background()
+		workspace, _ := aProject(t, s)
+
+		if _, err := s.SetWorkspaceLimits(ctx, job.Limits{
+			Workspace: workspace, ContextCeilingPercent: 55,
+		}); err != nil {
+			t.Fatalf("SetWorkspaceLimits: %v", err)
+		}
+
+		read, err := open(t).WorkspaceLimits(ctx, workspace)
+		if err != nil {
+			t.Fatalf("WorkspaceLimits: %v", err)
+		}
+		if read.ContextCeiling() != 55 {
+			t.Fatalf("the context ceiling reads back as %d, want the 55 that was written",
+				read.ContextCeiling())
 		}
 	})
 

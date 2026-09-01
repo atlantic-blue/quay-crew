@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/job"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 	"github.com/cucumber/godog"
 )
 
@@ -35,6 +35,10 @@ func initializeResumingSteps(sc *godog.ScenarioContext) {
 				// In the mode that reaches the network: a job that works in a repository is only declared in
 				// that one, because the clone, the push and the pull request all need it.
 				Role: everyVerbRole, Repository: repository, Mode: "dangerous",
+				// With the settle gate off, so every scenario in this file ends where continuing a job
+				// ends. A gated job is held back until a reviewer and a tester have passed it, which is
+				// features/settling.feature.
+				Ungated: true,
 			}); err != nil {
 				return err
 			}

@@ -20,25 +20,26 @@ import (
 	"sync"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/auth"
-	"github.com/atlantic-blue/krewe/internal/capacity"
-	"github.com/atlantic-blue/krewe/internal/deploy"
-	"github.com/atlantic-blue/krewe/internal/display"
-	"github.com/atlantic-blue/krewe/internal/flow"
-	"github.com/atlantic-blue/krewe/internal/headroom"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/manual"
-	"github.com/atlantic-blue/krewe/internal/messaging"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/name"
-	"github.com/atlantic-blue/krewe/internal/repository"
-	"github.com/atlantic-blue/krewe/internal/role"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/secrets"
-	"github.com/atlantic-blue/krewe/internal/skill"
-	"github.com/atlantic-blue/krewe/internal/store"
-	"github.com/atlantic-blue/krewe/internal/telemetry"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/auth"
+	"github.com/atlantic-blue/quay-krewe/internal/capacity"
+	"github.com/atlantic-blue/quay-krewe/internal/deploy"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
+	"github.com/atlantic-blue/quay-krewe/internal/flow"
+	"github.com/atlantic-blue/quay-krewe/internal/forge"
+	"github.com/atlantic-blue/quay-krewe/internal/headroom"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/manual"
+	"github.com/atlantic-blue/quay-krewe/internal/messaging"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/name"
+	"github.com/atlantic-blue/quay-krewe/internal/repository"
+	"github.com/atlantic-blue/quay-krewe/internal/role"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/secrets"
+	"github.com/atlantic-blue/quay-krewe/internal/skill"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
+	"github.com/atlantic-blue/quay-krewe/internal/telemetry"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -158,6 +159,11 @@ type Config struct {
 	// JobTickEvery is how often the job controller looks at the job the system holds. Zero takes
 	// job.DefaultTickEvery.
 	JobTickEvery time.Duration
+	// Forge reads back the pull requests the crew opened. Nil means the system has nothing to read one
+	// with, and every reading then says unknown, which is what a system with no forge should say.
+	Forge forge.Reader
+	// PullRequestEvery is how often those pull requests are read. Zero takes job.DefaultReadEvery.
+	PullRequestEvery time.Duration
 	// JobLease is how long a controller holds a job before another may take it. Zero takes
 	// job.DefaultLease, which is derived from what a tick costs rather than chosen.
 	JobLease time.Duration
@@ -239,6 +245,9 @@ type Server struct {
 	// headroom keeps the last reading of the machine. Everything that reports it reads the sampler
 	// and never the daemon, so a slow daemon slows the sampler and never a command.
 	headroom *headroom.Sampler
+	// pullRequests reads back the pull requests the crew opened, on its own timer, and keeps what the
+	// forge said on the job. Every page reads the row, so a slow forge slows this and never a command.
+	pullRequests *job.Watcher
 
 	// lastHealth is what the last probe of the parts a dispatch has to write to found. It is kept
 	// rather than taken on demand for the reason the headroom sample is: the part that is down is the
@@ -330,7 +339,15 @@ func NewServer(cfg Config) *Server {
 		Publishing(server).
 		// The signal that stops a reclaim closing a container an operator is typing into. Without it
 		// the controller reclaims nothing, whatever the workspace's times say.
-		Watching(server)
+		Watching(server).
+		// How full each session's context window is, which is what the ceiling is checked against.
+		// Without it a session is given new work however full it is, which is what every version of
+		// this loop did before the ceiling existed.
+		Measuring(server)
+	// And the pull requests those jobs opened are read back on a timer of their own. A job ends when
+	// its session answers; what happens to the work afterwards happens on a forge, which is why this
+	// is not part of the controller's tick.
+	server.pullRequests = job.NewWatcher(cfg.Store, cfg.Forge, cfg.PullRequestEvery)
 	return server
 }
 
@@ -2048,9 +2065,9 @@ func (s *Server) ListSessions(ctx context.Context, req *quaycrewv1.ListSessionsR
 	}
 	for _, session := range sessions {
 		s.withUsage(session)
-		s.withContextWindow(session)
 		s.withContextSpend(session)
 	}
+	s.withContextWindows(ctx, sessions)
 	s.withStaleness(ctx, sessions)
 	if req.GetPresence() {
 		s.withPresence(ctx, sessions)
@@ -2065,8 +2082,8 @@ func (s *Server) GetSession(ctx context.Context, req *quaycrewv1.GetSessionReque
 		return nil, storeError(err, "session")
 	}
 	s.withUsage(session)
-	s.withContextWindow(session)
 	s.withContextSpend(session)
+	s.withContextWindows(ctx, []*quaycrewv1.Session{session})
 	s.withStaleness(ctx, []*quaycrewv1.Session{session})
 	return &quaycrewv1.GetSessionResponse{Session: session}, nil
 }
@@ -2109,7 +2126,8 @@ func (s *Server) withUsage(session *quaycrewv1.Session) {
 	}
 }
 
-// withContextWindow puts how full the model's context window is onto a session.
+// withContextWindows puts how full the model's context window is onto each session, and what this
+// workspace lets it fill.
 //
 // A different question from what the conversation cost, and the one that decides whether it is still
 // worth continuing: cost only grows, while the window empties again when the model compacts. The used
@@ -2119,13 +2137,31 @@ func (s *Server) withUsage(session *quaycrewv1.Session) {
 // A conversation nobody has spoken in is left without a figure. A window nobody has been told the
 // size of is reported as a count with no size, which a listing shows as tokens rather than as a share
 // it made up.
-func (s *Server) withContextWindow(session *quaycrewv1.Session) {
-	carried := s.storage.ConversationContext(boxOf(session), session.GetModelSessionId())
-	if carried.Empty() {
-		return
+// The ceiling goes on beside the two numbers, so a client says what the share means rather than
+// working it out from a limit of its own. It is read once per workspace rather than once per session,
+// the way staleness is: a listing is most of what the console asks for.
+func (s *Server) withContextWindows(ctx context.Context, sessions []*quaycrewv1.Session) {
+	ceilings := map[string]int32{}
+	for _, session := range sessions {
+		carried := s.storage.ConversationContext(boxOf(session), session.GetModelSessionId())
+		if carried.Empty() {
+			continue
+		}
+		workspace := session.GetWorkspace()
+		if _, known := ceilings[workspace]; !known {
+			// A ceiling the system could not read is one it does not state. The listing then shows the
+			// share on its own, which is what it showed before there was a ceiling at all, rather than
+			// marking a row against a number nobody answered with.
+			ceilings[workspace] = 0
+			if limits, err := s.store.WorkspaceLimits(ctx, workspace); err == nil {
+				ceilings[workspace] = int32(limits.ContextCeiling())
+			}
+		}
+		size, _ := s.storage.ContextWindowSize(workspace)
+		session.ContextWindow = &quaycrewv1.ContextWindow{
+			Used: carried.Carried(), Size: size, Ceiling: ceilings[workspace],
+		}
 	}
-	size, _ := s.storage.ContextWindowSize(session.GetWorkspace())
-	session.ContextWindow = &quaycrewv1.ContextWindow{Used: carried.Carried(), Size: size}
 }
 
 // withContextSpend puts where a session's context went onto it, by category.
@@ -2212,14 +2248,22 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	// transcript that exists and starts one under the same name when it does not.
 	// The live sandboxes are a map in this process, so a restart empties it while the row still says
 	// idle. State is on the host, so a fresh container over the same mounts is the same conversation.
-	if _, err := s.sandboxFor(ctx, session); err != nil {
+	box, err := s.sandboxFor(ctx, session)
+	if err != nil {
 		return nil, sandboxError(err, "start sandbox")
+	}
+	// The name the daemon holds rather than the name this build would write. A sandbox that started
+	// before the rename answers to the retired one, and an attach that named the new one would open a
+	// terminal against a container that is not there while the conversation ran on in the one that is.
+	container := sandbox.ContainerName(session.GetId())
+	if named, says := box.(sandbox.Named); says {
+		container = named.Name()
 	}
 	// Inside tmux, so detaching leaves the model running. -A attaches to the session already there
 	// rather than starting a second beside it, and the permission mode is the session's own, or a
 	// session armed to skip permissions asks anyway the moment it is opened.
 	return &quaycrewv1.AttachSessionResponse{
-		Sandbox: sandbox.ContainerName(session.GetId()),
+		Sandbox: container,
 		Argv: []string{"tmux", "new-session", "-A", "-s", sandbox.AttachedSessionName,
 			sandbox.OpenConversation, session.GetModelSessionId(), permissionModeOf(session, s.birthMode)},
 	}, nil

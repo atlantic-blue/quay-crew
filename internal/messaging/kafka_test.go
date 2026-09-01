@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/messaging"
+	"github.com/atlantic-blue/quay-krewe/internal/messaging"
 )
 
 func TestNewClientRequiresSeeds(t *testing.T) {

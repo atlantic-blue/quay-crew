@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/store"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // runJobResumeConformance holds both stores to what continuing a job means.

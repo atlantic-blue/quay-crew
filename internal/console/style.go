@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/statusline"
+	"github.com/atlantic-blue/quay-krewe/internal/statusline"
 	"github.com/charmbracelet/lipgloss"
 )
 

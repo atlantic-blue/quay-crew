@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/atlantic-blue/krewe/internal/hook"
-	"github.com/atlantic-blue/krewe/internal/store"
+	"github.com/atlantic-blue/quay-krewe/internal/hook"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // SeedHooksDir is where the shipped hooks are in the image, and what QC_SEED_HOOKS_DIR defaults to.
