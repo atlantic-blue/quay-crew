@@ -1,14 +1,11 @@
 # The name
 
-The owner decided the name on 31 August 2026. The tool becomes **blue quay**. That decision is
-settled. `docs/RENAME.md` holds the plan that carries it out, and the decisions it asks a person to
-settle.
+The owner decided the name on 31 August 2026. The product is **Quay Krewe** and the command a person
+types is `krewe`. That decision is settled. `docs/RENAME.md` holds the plan that carries it out, and
+the decisions it asks a person to settle.
 
-The tool is still called `krewe` in the code, because none of the rename has landed yet.
-
-This file says what a name has to clear, what was checked, and what nobody has checked yet. It exists
-because the check was made once, after the fact, and the answer cost a rename of 346 files.
-
+This file says what a name must clear. It says what was checked, and what nobody checked yet. It
+exists because the check came once, after the fact, and the answer cost a rename of 346 files.
 ## The bar
 
 A name passes when all four of these hold.
@@ -30,9 +27,9 @@ before it is used, not after.
 
 ## What krewe cleared
 
-A krewe is an organised group that puts on the work. Issue 517 recorded the check: no npm package,
-no crate, no package on the Python Package Index, no Homebrew formula, and `atlantic-blue/krewe` was
-free on GitHub.
+A krewe is an organised group that puts on the work. Issue 517 recorded the check. There was no npm
+package, no crate, no package on the Python Package Index and no Homebrew formula.
+`atlantic-blue/krewe` was free on GitHub.
 
 It carries one known cost. `krewe` is a homophone of "crew", so a person who hears the name may type
 the wrong one. That was accepted rather than missed.
@@ -46,11 +43,13 @@ not have to leave the repository.
 command line tool that runs prompts against models, which is this field. `fabricjs/fabric.js` has
 31,418 stars and owns `fabric` on npm. `hyperledger/fabric` has 16,709 stars and The Linux
 Foundation claims the mark. `fabric/fabric` has 15,490 stars and owns `fabric` on the Python Package
-Index and in Homebrew. Microsoft ships a data platform called Microsoft Fabric. Homebrew already
-shows the collision: the prompt tool could not take `fabric`, so its formula is `fabric-ai`.
+Index and in Homebrew. Microsoft ships a data platform called Microsoft Fabric.
 
-`blueprint` fails the search test. `palantir/blueprint` has 22,021 stars, `Melkeydev/go-blueprint`
-has 8,930, and the word is a noun inside Flask, inside Unreal Engine and inside the Amazon Web
+Homebrew already shows the collision. The prompt tool could not take `fabric`, so its formula is
+`fabric-ai`.
+
+`blueprint` fails the search test. `palantir/blueprint` has 22,021 stars and `Melkeydev/go-blueprint`
+has 8,930. The word is also a noun inside Flask, inside Unreal Engine and inside the Amazon Web
 Services Terraform modules. It also reads as a second word for something this product already names:
 a file under `flows/` declares work in advance.
 
@@ -61,28 +60,33 @@ its `.dev` address. Issue 585 carries the evidence.
 ## What nobody has checked
 
 The trademark registers. The United States Patent and Trademark Office search sits behind a web
-application firewall challenge, and its data programming interface needs a key from 2 October. The
+application firewall challenge. Its data programming interface needs a key from 2 October. The
 United Kingdom Intellectual Property Office search service did not answer from a sandbox.
 
-So no name in this repository has been searched against a live register. A person runs those two
+So nobody searched any name in this repository against a live register. A person runs those two
 searches by hand, restricted to live marks in classes 9 and 42, and writes the answer here. Until
 that line exists, treat the trademark position as unknown rather than as clear.
 
 The addresses are https://tmsearch.uspto.gov/ and https://www.search-for-trademark.service.gov.uk/ .
 
-## blue quay: chosen on 31 August 2026, by the owner
+## Quay Krewe: chosen on 31 August 2026, by the owner
 
-This is a decision, not a screening result. The owner chose the name. Nothing here reopens it.
+This is a decision, not a screening result. The owner chose it, having read issue 585. Nothing here
+reopens it.
 
-The bar above is not satisfied for this name yet. One check is in flight: whether keeping the word
-`quay` inside `blue quay` carries the Red Hat Quay collision forward. Two words differ from one, and
-a search for "blue quay" is not a search for "quay". Nobody has measured which of those a person
-types.
+The name carries one known risk, and it is open rather than cleared. Red Hat holds the mark QUAY. A
+compound name that contains the word can still collide with it. Nobody measured which of the two a
+person types into a search. Read the section above: nobody searched any name in this repository
+against a live register.
 
-When that check answers, its finding goes here, beside `fabric` and `blueprint`. Until then, treat
-the collision question as open rather than as cleared.
+`krewe` clears the bar on its own, and it is the word a person types. So the collision question
+applies to the product name rather than to the command.
 
-Issue 585 recommends keeping `krewe`, and names `hardstand`, `dunnage` and `wharfinger` as three
-names that clear the bar. That recommendation is overtaken. The evidence in it stands.
+## blue quay: refused
 
-The trademark position is unchanged. Read the next section.
+`blue quay` was chosen on 31 August 2026 and refused the same day, before any of its rename landed.
+The plan for it landed on `main` as pull request 592 and `docs/RENAME.md` replaces that plan.
+
+Its cost was the reason. The command was `bluequay`, at eight characters against five, and no short
+alias was free. `bq` is Google's BigQuery tool. It also carried the same open collision
+question that the section above records, without carrying `krewe`, which already cleared the bar.
