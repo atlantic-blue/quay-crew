@@ -52,7 +52,7 @@ func aFinishedJobWithAPullRequest(t *testing.T, s *controlplane.Server, kept sto
 	_, project := aProjectOnPostgres(t, s)
 	declared, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "read the electricity bill", Brief: "open it and say when it is due",
-		Repository: "atlantic-blue/quay-crew",
+		Repository: "atlantic-blue/quay-crew", Mode: model.PermissionModeOnTheNetwork(),
 	})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)
