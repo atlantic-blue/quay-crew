@@ -87,6 +87,9 @@ type crumbEntry struct {
 	parent   string
 	selected int
 	into     string
+	// row is the identifier of what was drilled into, so a place written down can be walked back and
+	// the level it names checked for still being there.
+	row string
 	// typed is what a person would type for that row, which is what the position line is built from.
 	// It is the name for a workspace and a project, and the shortened identifier for a job.
 	typed string
@@ -270,6 +273,12 @@ type Model struct {
 	// terminal is how the console hands the screen to a command it starts. Nil means the terminal
 	// library's own way, which is what runs in front of an operator.
 	terminal Terminal
+	// places is where the console keeps where it was standing, so the next run opens there. Both
+	// halves may be nil, and it then opens at the top every time.
+	places PlaceStore
+	// resuming is a remembered place waiting to be walked back down on the way up. Empty is a console
+	// that was given nothing to resume to.
+	resuming Place
 }
 
 // Terminal hands the screen to a command and turns whatever came back into a message. It is what
@@ -310,6 +319,13 @@ func (m Model) Freshen(end func(selected string) error) Model {
 	return m
 }
 
+// Resuming tells the console where it was standing last time, so it opens there rather than at the
+// top. An empty place is a console that has nothing remembered, which opens where it opens.
+func (m Model) Resuming(where Place) Model {
+	m.resuming = where
+	return m
+}
+
 // WithInfo puts what is already known about the system on the screen straight away, rather than an
 // empty status block that fills in a moment later when the control plane answers.
 func (m Model) WithInfo(info Info) Model {
@@ -346,7 +362,23 @@ func New(registry *Registry, start string, source InfoSource) (Model, error) {
 
 // Init loads the opening view, asks what it is connected to, and starts the refresh clock.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(listCmd(m.active, m.parent), infoCmd(m.source), m.publishCmd(), tickCmd())
+	return tea.Batch(m.Opening(), tickCmd())
+}
+
+// Opening is everything the console does on the way up except start the refresh clock: load the view,
+// ask what it is connected to, say where it is, and walk back down to wherever it was left.
+//
+// It is separate from Init because the clock is the one part nothing else wants. A test or a scenario
+// that ran Init would wait three seconds for a tick to prove something about the first frame.
+//
+// A console with somewhere to resume to loads the top anyway, so the first frame is a listing rather
+// than an empty panel while the levels are walked back down.
+func (m Model) Opening() tea.Cmd {
+	opening := tea.Batch(listCmd(m.active, m.parent), infoCmd(m.source), m.publishCmd())
+	if m.resuming.Empty() {
+		return opening
+	}
+	return tea.Batch(opening, resumeCmd(m.registry, m.resuming))
 }
 
 // publishCmd says which view the console is on, and does nothing when nobody asked.
@@ -427,6 +459,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mode, m.making = modeBrowse, wizard{}
 		}
 		return m, listCmd(m.active, m.parent)
+	case resumedMsg:
+		return m.applyResumed(msg)
 	case infoMsg:
 		m.info = msg.info
 		return m, nil
@@ -453,14 +487,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.conversation, m.err = msg.pane, nil
 		return m, nil
 	case tea.KeyMsg:
-		// The view can change under a key, and whoever draws the header needs to hear about it.
-		before := m.active.Name
+		// The view can change under a key, and whoever draws the header needs to hear about it. Where
+		// the operator is standing can change without the view changing, which is drilling from one
+		// workspace into another's projects, so the place is written on both.
+		before, standing := m.active.Name, m.place()
 		// A key is the operator saying they read the last refusal, so it stops being held here rather
 		// than in each handler. The handlers that set an error set it after this line.
 		m.held = false
 		next, cmd := m.updateKey(msg)
 		if next.active.Name != before {
-			return next, tea.Batch(cmd, next.publishCmd())
+			return next, tea.Batch(cmd, next.publishCmd(), next.rememberCmd())
+		}
+		if next.place().Parent != standing.Parent {
+			return next, tea.Batch(cmd, next.rememberCmd())
 		}
 		return next, cmd
 	default:

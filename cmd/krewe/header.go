@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -191,3 +192,56 @@ const (
 	alternateScreen      = "\033[?1049h"
 	leaveAlternateScreen = "\033[?1049l"
 )
+
+// placeFile is where the console writes down which level it is standing on, so the next one opens
+// there. It sits beside the panel's view file, in the same data directory, for the same reason: two
+// runs of one console share a directory and nothing else.
+func placeFile() (string, error) {
+	home, err := configHome()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "console-place"), nil
+}
+
+// thePlaceStore is how the console remembers where it was. A failure on either half leaves the
+// console opening at the top, which is the behaviour it had before anything was remembered.
+func thePlaceStore() console.PlaceStore {
+	return console.PlaceStore{Load: loadPlace, Save: savePlace}
+}
+
+// loadPlace reads where the console was last standing. Anything unreadable is nowhere, so a file
+// written by an older build, or a half written one, opens the console at the top rather than
+// refusing to open it.
+func loadPlace() (console.Place, error) {
+	path, err := placeFile()
+	if err != nil {
+		return console.Place{}, err
+	}
+	written, err := os.ReadFile(path) //nolint:gosec // a path this process built, under its own data directory
+	if err != nil {
+		return console.Place{}, err
+	}
+	var where console.Place
+	if err := json.Unmarshal(written, &where); err != nil {
+		return console.Place{}, err
+	}
+	return where, nil
+}
+
+// savePlace writes it down. It is rewritten whole every time, because a place is one value and a
+// partly updated one names a level under a parent it was never under.
+func savePlace(where console.Place) error {
+	path, err := placeFile()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	written, err := json.Marshal(where)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, written, 0o644) //nolint:gosec // a view name and two identifiers, not a secret
+}

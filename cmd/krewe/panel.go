@@ -206,7 +206,7 @@ func runBareConsole(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 		Address:   addr,
 		Workspace: current.Workspace,
 		Project:   current.Project,
-	}, conversationBeside(ctx, client), endConversationBeside(ctx, client), publishView)
+	}, conversationBeside(ctx, client), endConversationBeside(ctx, client), publishView, thePlaceStore())
 }
 
 // builtBy is the build that made the panel that is already open, and empty when it did not say, which

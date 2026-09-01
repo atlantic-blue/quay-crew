@@ -133,22 +133,38 @@ func openedOnTheTree(t *testing.T, client quaycrewv1.ControlPlaneServiceClient) 
 }
 
 // settle runs the command a key produced and feeds what came back in, the way the runtime does, so a
-// scenario reads the screen the operator is left with rather than the intent of the keystroke. It
-// keeps going while each message produces another, which is how a drill that lists then clamps lands.
+// scenario reads the screen the operator is left with rather than the intent of the keystroke.
+//
+// A batch is unpacked rather than run whole, because one of the console's own commands is the refresh
+// clock and a table test should not wait three seconds for it.
 func settle(t *testing.T, model Model, cmd tea.Cmd) Model {
 	t.Helper()
-	for range 8 {
-		if cmd == nil {
-			return model
-		}
-		msg := cmd()
-		if msg == nil {
-			return model
-		}
-		model, cmd = update(t, model, msg)
+	return settling(t, model, cmd, 0)
+}
+
+func settling(t *testing.T, model Model, cmd tea.Cmd, depth int) Model {
+	t.Helper()
+	if cmd == nil {
+		return model
 	}
-	t.Fatal("the console kept producing commands, so it never settled on a screen")
-	return model
+	if depth > 12 {
+		t.Fatal("the console kept producing commands, so it never settled on a screen")
+	}
+	switch msg := cmd().(type) {
+	case nil:
+		return model
+	case tea.BatchMsg:
+		for _, inner := range msg {
+			model = settling(t, model, inner, depth+1)
+		}
+		return model
+	case tickMsg:
+		// The refresh clock. Running it would ask for another listing and another tick, for ever.
+		return model
+	default:
+		next, cmd := update(t, model, msg)
+		return settling(t, next, cmd, depth+1)
+	}
 }
 
 // press drives one key and settles whatever it asked for.
