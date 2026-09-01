@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/auth"
-	"github.com/atlantic-blue/krewe/internal/store"
+	"github.com/atlantic-blue/quay-krewe/internal/auth"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // jobCredentialLife is how long a credential minted for a job lasts when the job names no deadline.

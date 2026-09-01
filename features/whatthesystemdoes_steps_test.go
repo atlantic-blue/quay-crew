@@ -7,8 +7,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/features"
-	"github.com/atlantic-blue/krewe/internal/console"
+	"github.com/atlantic-blue/quay-krewe/features"
+	"github.com/atlantic-blue/quay-krewe/internal/console"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cucumber/godog"
 )

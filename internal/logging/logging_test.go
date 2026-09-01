@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/logging"
+	"github.com/atlantic-blue/quay-krewe/internal/logging"
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )

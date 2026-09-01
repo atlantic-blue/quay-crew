@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 )
 
 // firstSystemBuildThatSays is when a system began reporting its own build. A system older than this

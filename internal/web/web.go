@@ -16,7 +16,7 @@ import (
 	"net/http"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"google.golang.org/grpc"
 )
 

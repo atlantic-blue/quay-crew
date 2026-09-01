@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/web"
+	"github.com/atlantic-blue/quay-krewe/internal/web"
 	"github.com/cucumber/godog"
 )
 

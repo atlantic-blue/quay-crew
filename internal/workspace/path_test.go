@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/name"
-	"github.com/atlantic-blue/krewe/internal/workspace"
+	"github.com/atlantic-blue/quay-krewe/internal/name"
+	"github.com/atlantic-blue/quay-krewe/internal/workspace"
 )
 
 func TestParsePathReadsTheLevels(t *testing.T) {

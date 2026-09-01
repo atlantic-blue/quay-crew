@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // CreateJob writes a job and the record of its declaration together, under one lock,

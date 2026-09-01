@@ -7,8 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/capacity"
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/capacity"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // A machine, as the controller sees it. It answers the one question a controller asks before it

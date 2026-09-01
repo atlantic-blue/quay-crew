@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/manual"
+	"github.com/atlantic-blue/quay-krewe/internal/manual"
 )
 
 // The guard is over the whole old surface, rather than over the words somebody remembered.

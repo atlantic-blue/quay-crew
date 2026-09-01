@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/capacity"
+	"github.com/atlantic-blue/quay-krewe/internal/capacity"
 )
 
 // DockerProvider gives each session its own long lived container. The container starts once, the

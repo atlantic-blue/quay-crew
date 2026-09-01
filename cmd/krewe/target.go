@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 )
 
 // The flags a deploy target is declared with. Three values, each named, because three bare words in

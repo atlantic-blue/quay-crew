@@ -3,7 +3,7 @@ package main
 import (
 	"io"
 
-	"github.com/atlantic-blue/krewe/internal/browser"
+	"github.com/atlantic-blue/quay-krewe/internal/browser"
 )
 
 // runRender draws a url into a picture and says what it drew, so a session can look at what it built

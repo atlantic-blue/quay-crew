@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 )
 
 // Where a session's work is. The bytes survive the container, on a mount the system made itself, so

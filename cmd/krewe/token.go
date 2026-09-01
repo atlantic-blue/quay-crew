@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/auth"
+	"github.com/atlantic-blue/quay-krewe/internal/auth"
 )
 
 // systemToken is the token this tool presents on every call, or nothing when it holds none.

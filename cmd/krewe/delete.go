@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/workspace"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/workspace"
 )
 
 // runWorkspaceDelete removes a workspace, everything under it, and everything those held.

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/repository"
+	"github.com/atlantic-blue/quay-krewe/internal/repository"
 )
 
 // The address somebody typed and the address somebody pasted are one address.
@@ -35,7 +35,7 @@ func TestAnAddressThatIsNotAnOwnerAndANameIsRefused(t *testing.T) {
 			t.Errorf("%q was accepted as a repository", typed)
 			continue
 		}
-		if !strings.Contains(err.Error(), "atlantic-blue/quay-crew") {
+		if !strings.Contains(err.Error(), "atlantic-blue/quay-krewe") {
 			t.Errorf("the refusal of %q says %q, want it to say what to type instead", typed, err)
 		}
 	}

@@ -83,10 +83,10 @@ func Kind(word string) (string, error) {
 func Usable(address string) error {
 	if TooLong(address) {
 		return fmt.Errorf("the repository is %d bytes and the ceiling is %d: a repository is an owner and a "+
-			"name, so write it as atlantic-blue/quay-crew", len(address), Limit)
+			"name, so write it as atlantic-blue/quay-krewe", len(address), Limit)
 	}
 	if !Shaped(address) {
-		return fmt.Errorf("%q is not an owner and a name: write it as atlantic-blue/quay-crew, or paste "+
+		return fmt.Errorf("%q is not an owner and a name: write it as atlantic-blue/quay-krewe, or paste "+
 			"the address of the repository", address)
 	}
 	return nil

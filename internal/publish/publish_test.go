@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/publish"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/publish"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 )
 
 // What the system finds when it goes looking for the work a session finished, and what it does about
@@ -127,7 +127,7 @@ func TestAPushTheRemoteRefusedIsHeldAndCarriesWhatGitSaid(t *testing.T) {
 	git := &aSessionWhoseGitSays{
 		branch:      "sort-the-listing",
 		unpublished: "a9f1c2d",
-		pushFails:   "remote: Permission to atlantic-blue/krewe.git denied\nfatal: unable to access",
+		pushFails:   "remote: Permission to atlantic-blue/quay-krewe.git denied\nfatal: unable to access",
 	}
 	found := publish.Read(context.Background(), git, aPlace)
 

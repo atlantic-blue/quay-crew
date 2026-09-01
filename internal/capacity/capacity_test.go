@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/capacity"
+	"github.com/atlantic-blue/quay-krewe/internal/capacity"
 )
 
 // The machine that broke: a runtime holding 7,653 mebibytes and fourteen processors, with the system's
