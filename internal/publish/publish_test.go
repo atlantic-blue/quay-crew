@@ -127,7 +127,7 @@ func TestAPushTheRemoteRefusedIsHeldAndCarriesWhatGitSaid(t *testing.T) {
 	git := &aSessionWhoseGitSays{
 		branch:      "sort-the-listing",
 		unpublished: "a9f1c2d",
-		pushFails:   "remote: Permission to atlantic-blue/krewe.git denied\nfatal: unable to access",
+		pushFails:   "remote: Permission to atlantic-blue/quay-krewe.git denied\nfatal: unable to access",
 	}
 	found := publish.Read(context.Background(), git, aPlace)
 

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // A job that names a repository does not settle on its own answer. Two sessions that did not do the
