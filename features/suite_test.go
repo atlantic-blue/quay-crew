@@ -805,6 +805,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeShippedRoleVerbSteps(sc)
 	initializeRoleSkillSteps(sc)
 	initializeRoleSessionSteps(sc)
+	initializePlanCriticSteps(sc)
 	initializeStoppedReasonSteps(sc)
 	initializeHookVersionSteps(sc)
 	initializeImportedSkillSteps(sc)
