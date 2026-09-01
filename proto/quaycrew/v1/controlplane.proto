@@ -684,6 +684,41 @@ message ReadSessionWorkResponse {
   repeated SessionWorkEntry entries = 5;
 }
 
+// DirectoryKind says which of the system's two directories an answer names.
+enum DirectoryKind {
+  DIRECTORY_KIND_UNSPECIFIED = 0;
+  // The workspace's shared folder, which every session in that workspace reads.
+  DIRECTORY_KIND_SHARED = 1;
+  // One session's own working directory.
+  DIRECTORY_KIND_WORKING = 2;
+}
+
+// LocateDirectoryRequest asks where an address is on the machine, so a person can put a file in it by
+// hand.
+//
+// It answers with nothing running. The layout belongs to the system rather than to the tool, and the
+// case that has no answer today is the one where every sandbox is gone: reading a bind mount off a
+// live container needs a live container.
+message LocateDirectoryRequest {
+  // workspace is the workspace id, and is required: every directory this answers for is inside one.
+  string workspace = 1;
+  // project is the project id, and narrows session to the project holding it.
+  string project = 2;
+  // session is the session handle. With one, the answer is that session's own working directory;
+  // without one, it is the workspace's shared folder.
+  string session = 3;
+}
+message LocateDirectoryResponse {
+  // host is the directory on the machine running the sandboxes, which is where a person puts a file.
+  // It is made if it is not there, because a path nobody can copy into is not an answer.
+  string host = 1;
+  // sandbox is where the same directory appears inside a container, which is what a session calls the
+  // file once it is in there.
+  string sandbox = 2;
+  // kind says which of the two directories this is.
+  DirectoryKind kind = 3;
+}
+
 // SecretRef names a secret a workspace has set. It carries no value and there is no call that returns
 // one: a value the backend holds must not become readable because a client asked politely. The only
 // reader is the system itself, at the moment a task needs it.
@@ -1921,6 +1956,9 @@ service ControlPlaneService {
   rpc SetContext(SetContextRequest) returns (SetContextResponse);
   // Reads a file, or a listing, out of the work a session left behind, without attaching to it.
   rpc ReadSessionWork(ReadSessionWorkRequest) returns (ReadSessionWorkResponse);
+  // Says where an address is on the machine, so a person can put a file in it by hand. It reads the
+  // layout rather than a running container, so it answers when nothing is running.
+  rpc LocateDirectory(LocateDirectoryRequest) returns (LocateDirectoryResponse);
 
   rpc ImportSkill(ImportSkillRequest) returns (ImportSkillResponse);
   rpc ListSkills(ListSkillsRequest) returns (ListSkillsResponse);

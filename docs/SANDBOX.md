@@ -549,6 +549,22 @@ belongs to a session rather than to a project, because two conversations sharing
 changing files under the other. All three are read write, and all three survive the container being
 replaced.
 
+You do not have to work those paths out. Every level on disk is a generated identifier, so
+`krewe where <address>` says which directory an address is kept in, and where a session sees the same
+directory:
+
+```
+krewe where acme
+```
+
+It answers with two lines. The first is the directory on this machine, which is
+`~/.krewe/data/workspaces/<workspace>/volume` with the workspace's own identifier in it. The second
+says every session in that workspace reads the same directory at `/home/agent/shared`.
+
+The path is alone on the first line, so `cd "$(krewe where acme)"` works. It reads the layout rather
+than a container, so it answers when nothing is running, and it makes the directory if it is not
+there. A session address answers with that session's own working directory instead.
+
 That is also how you give a session context. Write it with an editor:
 
 ```
