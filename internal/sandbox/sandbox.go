@@ -7,6 +7,7 @@ import (
 	"context"
 	"io"
 	"path"
+	"strings"
 
 	"github.com/atlantic-blue/krewe/internal/capacity"
 )
@@ -33,6 +34,13 @@ type Process interface {
 type Sandbox interface {
 	Exec(ctx context.Context, spec Spec) (Process, error)
 	Close(ctx context.Context) error
+}
+
+// Named is a sandbox that knows what its runtime calls it. Anything that hands a container name to a
+// person asks the sandbox rather than building the name from the session, because a sandbox adopted
+// from before the rename answers to the retired name and not to the one this build writes.
+type Named interface {
+	Name() string
 }
 
 // Config describes the sandbox a session needs.
@@ -192,13 +200,53 @@ const (
 // refused before it reaches the store.
 func SecretFilePath(name string) string { return path.Join(SecretsPath, name) }
 
-const ContainerPrefix = "quaycrew-"
+// ContainerPrefix is what a sandbox container is called, and it is the name this build writes.
+const ContainerPrefix = "krewe-"
+
+// RetiredContainerPrefix is what a sandbox that started before the rename is called. Every reader
+// takes both for one release, because a container the system cannot see is one it cannot drain, cannot
+// remove and cannot adopt: the next start of that session puts a second container beside the first,
+// and the memory the first holds is never given back. The release that stops reading it is named in
+// the changelog.
+const RetiredContainerPrefix = "quaycrew-"
 
 // SessionIDLength is how many characters a session identifier has, which is what tells a sandbox
-// container from every other container the daemon holds. The name alone is not enough: the compose
-// project is called quaycrew too, so its own services carry the same prefix.
+// container from every other container the daemon holds. The prefix alone is not enough: the compose
+// project is called quaycrew, so its own services are quaycrew-postgres-1 and friends, and a reader
+// looser than the exact shape takes the whole stack with it.
 const SessionIDLength = 24
 
 // ContainerName is derived here rather than rebuilt by everything that needs to reach into a session
 // from outside the provider.
 func ContainerName(sessionID string) string { return ContainerPrefix + sessionID }
+
+// ContainerNames are the names one session's container can carry, the name this build writes first.
+// A reader that reaches into a session tries them in this order, so a sandbox started since the
+// rename costs no second lookup, and one started before it is still found.
+func ContainerNames(sessionID string) []string {
+	return []string{ContainerName(sessionID), RetiredContainerPrefix + sessionID}
+}
+
+// SessionOf is the session a container belongs to, under either name, and false for a container that
+// is not a sandbox at all. The system's own services are containers too, and nobody stops one of them
+// to make room for a session.
+func SessionOf(container string) (string, bool) {
+	for _, prefix := range []string{ContainerPrefix, RetiredContainerPrefix} {
+		rest, found := strings.CutPrefix(container, prefix)
+		if !found || len(rest) != SessionIDLength || !hexadecimal(rest) {
+			continue
+		}
+		return rest, true
+	}
+	return "", false
+}
+
+// hexadecimal says whether every character is one a session identifier is made of.
+func hexadecimal(text string) bool {
+	for _, letter := range text {
+		if (letter < '0' || letter > '9') && (letter < 'a' || letter > 'f') {
+			return false
+		}
+	}
+	return true
+}

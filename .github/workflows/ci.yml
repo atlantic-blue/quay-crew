@@ -110,14 +110,15 @@ jobs:
       # internal/sandbox went unrun for their whole life.
       - name: Integration tests
         env:
-          QC_TEST_SANDBOX_IMAGE: quaycrew-sandbox-claude:local
+          QC_TEST_SANDBOX_IMAGE: krewe-sandbox-claude:local
         run: go test -tags=integration -count=1 -v ./...
 
   containers:
     runs-on: ubuntu-latest
-    # An explicit compose workspace name so the stack's containers (qcci-controlplane-1, ...) do not
-    # share the "quaycrew-" prefix the sandbox containers use, which would make the count below match
-    # the whole stack. Without this the workspace defaults to the checkout directory ("quaycrew").
+    # An explicit compose workspace name, so this stack's containers are qcci-controlplane-1 and
+    # friends. Without it the workspace defaults to the checkout directory. The counts below filter
+    # sandbox containers by name, and a sandbox is now krewe- followed by its session, so neither the
+    # stack here nor a stack under the ordinary project name can be counted as one.
     env:
       COMPOSE_PROJECT_NAME: qcci
       # The network a sandbox joins to reach the control plane, named after this stack the way the
@@ -132,6 +133,20 @@ jobs:
       # can make it as root.
       - name: Make the system's directory
         run: mkdir -p "$HOME/.quay/data"
+
+      # The compose project name prefixes every named volume it makes, so the database lives in
+      # <project>_postgres-data and a stack started under a different project name comes up on an
+      # empty volume with every job, session and secret still sitting in the old one. Nothing says
+      # why: the stack starts and the database is empty. The project stays quaycrew for that reason,
+      # and this is the daemon's own answer for what the volume is called under it, rather than a
+      # reading of compose's documentation.
+      - name: The database volume the ordinary project name makes
+        run: |
+          set -euo pipefail
+          docker compose -p quaycrew -f deploy/docker-compose.yml up -d postgres
+          docker volume ls --format '{{.Name}}'
+          docker volume ls --format '{{.Name}}' | grep -x quaycrew_postgres-data
+          docker compose -p quaycrew -f deploy/docker-compose.yml down -v
 
       - name: Build images
         run: docker compose -f deploy/docker-compose.yml build
@@ -247,13 +262,13 @@ jobs:
           test "$(printf '%s' "$out" | head -1)" = "hello from ci"
 
           # The task must have run inside a sandbox container, not in the control plane itself.
-          test "$(docker ps --filter 'name=quaycrew-' --quiet | wc -l)" -eq 1
+          test "$(docker ps --filter 'name=krewe-' --quiet | wc -l)" -eq 1
 
           # A second task on the same session reuses that one sandbox.
           handle=$(printf '%s' "$out" | sed -n 's/.*handle \([a-f0-9]*\))$/\1/p')
           test -n "$handle"
           go run ./cmd/krewe task "smoke/bills/$handle" "second task" >/dev/null
-          test "$(docker ps --filter 'name=quaycrew-' --quiet | wc -l)" -eq 1
+          test "$(docker ps --filter 'name=krewe-' --quiet | wc -l)" -eq 1
 
       # The point of this step: prove a session can reach the system and reach nothing else of it. The
       # session container above is on the network the compose file made, so the name the system hands
@@ -266,7 +281,7 @@ jobs:
       - name: A session resolves the system and cannot resolve the store
         run: |
           set -euo pipefail
-          sandbox=$(docker ps --filter 'name=quaycrew-' --format '{{.Names}}' | head -1)
+          sandbox=$(docker ps --filter 'name=krewe-' --format '{{.Names}}' | head -1)
           system=$(docker compose -f deploy/docker-compose.yml ps -q controlplane)
           test -n "$sandbox" && test -n "$system"
           echo "sandbox: $sandbox"
@@ -436,12 +451,12 @@ jobs:
 
           # Stand in for what the model writes into its own conversation store, and for a note
           # something inside the sandbox writes into its own memory.
-          docker exec "quaycrew-$session" sh -c 'echo remembered > /home/agent/.claude/note'
-          docker exec "quaycrew-$session" sh -c 'echo "the bills project" >> /home/agent/workspace/CLAUDE.md'
+          docker exec "krewe-$session" sh -c 'echo remembered > /home/agent/.claude/note'
+          docker exec "krewe-$session" sh -c 'echo "the bills project" >> /home/agent/workspace/CLAUDE.md'
 
           # Destroy the container, exactly as stopping a session does, and restart the control plane
           # so it does not hold a handle to something that no longer exists.
-          docker rm -f "quaycrew-$session"
+          docker rm -f "krewe-$session"
           docker compose -f deploy/docker-compose.yml restart controlplane
           for i in $(seq 1 30); do
             go run ./cmd/krewe workspace list >/dev/null 2>&1 && break
@@ -449,8 +464,8 @@ jobs:
           done
 
           go run ./cmd/krewe task "durable-state/bills/$handle" "second task" >/dev/null
-          kept=$(docker exec "quaycrew-$session" cat /home/agent/.claude/note)
-          context=$(docker exec "quaycrew-$session" cat /home/agent/workspace/CLAUDE.md)
+          kept=$(docker exec "krewe-$session" cat /home/agent/.claude/note)
+          context=$(docker exec "krewe-$session" cat /home/agent/workspace/CLAUDE.md)
           echo "conversation store: $kept"
           echo "session memory:"
           echo "$context"
@@ -476,7 +491,7 @@ jobs:
         run: |
           docker compose -f deploy/docker-compose.yml down -v
           # Sandboxes outlive the control plane today; see issue #35.
-          docker rm -f $(docker ps -aq --filter 'name=quaycrew-') 2>/dev/null || true
+          docker rm -f $(docker ps -aq --filter 'name=krewe-') 2>/dev/null || true
 
 
   # A change that touches behaviour carries a changelog entry and a scenario, or says in the pull
