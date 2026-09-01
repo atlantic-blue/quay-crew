@@ -115,6 +115,13 @@ type recordingRunner struct {
 	// has to be able to say what it answers the second time. The last one repeats rather than the
 	// queue running dry, so a scenario that means "and it keeps saying that" says it once.
 	says []string
+	// answers is a phrase against what the double answers a task carrying it, tried before the queue
+	// above and first match winning.
+	//
+	// It exists because more than one conversation can be in flight at once: a job held back until a
+	// reviewer and a tester have read its work has three, and a queue by position would make a
+	// scenario about the gate into a scenario about the order the system happens to ask in.
+	answers [][2]string
 }
 
 // failTheNextTask makes the next task the model is asked to run fail. Under the lock, because a
@@ -141,8 +148,22 @@ func (r *recordingRunner) willSay(answer string) {
 	r.says = append(r.says, answer)
 }
 
+// willAnswer says what the double answers a task carrying a phrase, whenever that task arrives.
+func (r *recordingRunner) willAnswer(whenAsked, answer string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.answers = append(r.answers, [2]string{whenAsked, answer})
+}
+
 // answerFor is what the double says to the nth task, one indexed. The caller holds the lock.
 func (r *recordingRunner) answerFor(asked int, text string) string {
+	// What was asked wins over how many have been asked, because a scenario naming a phrase is being
+	// specific and a queue by position is not.
+	for _, pair := range r.answers {
+		if strings.Contains(text, pair[0]) {
+			return pair[1]
+		}
+	}
 	if len(r.says) == 0 {
 		return "you said: " + text
 	}
@@ -759,6 +780,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeJobLeaseSteps(sc)
 	initializeAskingSteps(sc)
 	initializeResumingSteps(sc)
+	initializeSettlingSteps(sc)
 	initializePlanSteps(sc)
 	initializeLoopingSteps(sc)
 	initializeCapabilitySteps(sc)

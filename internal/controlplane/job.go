@@ -33,7 +33,8 @@ func (s *Server) CreateJob(ctx context.Context, req *quaycrewv1.CreateJobRequest
 		After: req.GetAfter(), BudgetTokens: req.GetBudgetTokens(), Labels: req.GetLabels(),
 		Requires: req.GetRequires(), Repository: req.GetRepository(), Product: req.GetProduct(),
 		Claim: req.GetClaim(), Escalation: req.GetEscalation(),
-		ID: req.GetId(), Parent: req.GetParent(),
+		Ungated: req.GetUngated(),
+		ID:      req.GetId(), Parent: req.GetParent(),
 	}
 	if req.GetDeadline() != nil {
 		at := req.GetDeadline().AsTime()
@@ -143,6 +144,7 @@ func (s *Server) PrepareJob(ctx context.Context, under string, declaration job.D
 		After: tidy.After, Deadline: tidy.Deadline, BudgetTokens: tidy.BudgetTokens,
 		Labels: tidy.Labels, Requires: tidy.Requires, Repository: tidy.Repository,
 		Product: tidy.Product, Claim: tidy.Claim, Escalation: tidy.Escalation,
+		Ungated: tidy.Ungated,
 		Version: 1, Phase: job.PhasePending,
 	}
 	// Where the work lands, when the declaration did not say. It is the project's, because a project
@@ -397,6 +399,7 @@ func asJob(from *job.Job) *quaycrewv1.Job {
 		After: from.After, BudgetTokens: from.BudgetTokens, Labels: from.Labels,
 		Requires: from.Requires, Repository: from.Repository, PullRequest: from.PullRequest, Claim: from.Claim,
 		Product: from.Product, Steers: int32(from.Steers),
+		Ungated: from.Ungated, Reviewed: from.Reviewed, Tested: from.Tested,
 		Plan: from.Plan, PlanApproved: from.PlanApproved,
 		Parent: from.Parent, Depth: int32(from.Depth), Version: int32(from.Version),
 		Phase: from.Phase, Session: from.Session, Attempts: int32(from.Attempts),

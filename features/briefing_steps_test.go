@@ -45,6 +45,10 @@ func initializeBriefingSteps(sc *godog.ScenarioContext) {
 		if err := declareJob(ctx, &quaycrewv1.CreateJobRequest{
 			Title: title, Brief: "sort it",
 			Repository: "atlantic-blue/quay-crew", Mode: model.PermissionModeOnTheNetwork(),
+			// With the settle gate off, so this scenario ends where the briefing it is about ends. A
+			// gated job is held back until a reviewer and a tester have passed it, which is
+			// features/settling.feature.
+			Ungated: true,
 		}); err != nil {
 			return err
 		}
