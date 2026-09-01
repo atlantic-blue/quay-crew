@@ -87,6 +87,9 @@ func (f *fakeClient) ListJobs(_ context.Context, req *quaycrewv1.ListJobsRequest
 		if req.GetPhase() != "" && one.GetPhase() != req.GetPhase() {
 			continue
 		}
+		if req.GetParent() != "" && one.GetParent() != req.GetParent() {
+			continue
+		}
 		matched = append(matched, one)
 	}
 	return &quaycrewv1.ListJobsResponse{Jobs: matched}, nil

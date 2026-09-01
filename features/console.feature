@@ -70,7 +70,7 @@ Feature: The operator sees the system from the console
     Then the console is on the "projects" view
     When the operator presses "enter" in the console
     Then the console is on the "jobs" view
-    And the console screen says "read the electric"
+    And the console is showing 1 row
 
   # And back up. Escape from every level, including the one the console opens on, which has nowhere
   # to go and must not take the console with it.

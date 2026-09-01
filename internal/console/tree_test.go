@@ -53,6 +53,12 @@ func (t *treeClient) ListJobs(_ context.Context, req *quaycrewv1.ListJobsRequest
 		if req.GetPhase() != "" && one.GetPhase() != req.GetPhase() {
 			continue
 		}
+		if req.GetParent() != "" && one.GetParent() != req.GetParent() {
+			continue
+		}
+		if req.GetRootsOnly() && one.GetParent() != "" {
+			continue
+		}
 		matched = append(matched, one)
 	}
 	return &quaycrewv1.ListJobsResponse{Jobs: matched}, nil
@@ -510,7 +516,7 @@ func TestTheConsoleSaysWhereItIsAsAnAddress(t *testing.T) {
 func TestAJobIsAddressedByItsIdentifierAndReadByItsTitle(t *testing.T) {
 	one := jobRow(aJob("3333333333333333cccccccc", job.PhaseRunning, func(j *quaycrewv1.Job) {
 		j.Title = "read the electricity bill"
-	}))
+	}), 0)
 
 	if one.Typed() != "33333333" {
 		t.Fatalf("a job is typed as %q, want the shortened identifier a listing prints", one.Typed())

@@ -368,7 +368,7 @@ func (m Model) act(key string) (Model, tea.Cmd) {
 // perform runs an action, whether it was confirmed or never needed to be.
 func (m Model) perform(action Action, row Row) (Model, tea.Cmd) {
 	if action.Descend != "" {
-		return m.descendInto(action.Descend, row)
+		return m.descendInto(action.Descend, row, row.ID)
 	}
 	if action.Shell != nil {
 		return m, m.shellCmd(action, row)
@@ -451,6 +451,11 @@ func runCmd(action Action, row Row) tea.Cmd {
 }
 
 // drill descends into the selected row's child resource, remembering where to come back to.
+//
+// DrillBy is read here rather than inside descendInto, because it belongs to this one destination.
+// A key that descends somewhere else scopes by the row itself: the jobs listing descends into its
+// session's work on enter and into the job's own steps on S, and one narrowing for both would send
+// the second to the wrong rows.
 func (m Model) drill() (Model, tea.Cmd) {
 	if m.active.DrillTo == "" {
 		return m, nil
@@ -459,20 +464,6 @@ func (m Model) drill() (Model, tea.Cmd) {
 	if !hasRow {
 		return m, nil
 	}
-	return m.descendInto(m.active.DrillTo, row)
-}
-
-// descendInto opens a resource scoped to one row, remembering where to come back to. It is what both
-// enter and a key bound to Descend do, so escape behaves the same however you got there.
-func (m Model) descendInto(name string, row Row) (Model, tea.Cmd) {
-	child, found := m.registry.Get(name)
-	if !found {
-		m.err = fmt.Errorf("console: %s descends into unknown resource %q", m.active.Name, name)
-		return m, nil
-	}
-	// What the child is scoped by, which is the row itself everywhere except jobs: a job descends
-	// into its session's tasks, and a job with no session yet says so rather than opening an empty
-	// listing under a heading that promises one.
 	scope := row.ID
 	if m.active.DrillBy != nil {
 		narrowed, err := m.active.DrillBy(row)
@@ -481,6 +472,17 @@ func (m Model) descendInto(name string, row Row) (Model, tea.Cmd) {
 			return m, nil
 		}
 		scope = narrowed
+	}
+	return m.descendInto(m.active.DrillTo, row, scope)
+}
+
+// descendInto opens a resource scoped to one thing, remembering where to come back to. It is what
+// both enter and a key bound to Descend do, so escape behaves the same however you got there.
+func (m Model) descendInto(name string, row Row, scope string) (Model, tea.Cmd) {
+	child, found := m.registry.Get(name)
+	if !found {
+		m.err = fmt.Errorf("console: %s descends into unknown resource %q", m.active.Name, name)
+		return m, nil
 	}
 	m.stack = append(m.stack, crumbEntry{
 		resource: m.active.Name, parent: m.parent, selected: m.selected,

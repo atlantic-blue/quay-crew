@@ -63,6 +63,17 @@ func initializeKeysSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// How many rows the console is drawing, read off the console rather than off a listing a step made
+	// on the side. A width sensitive assertion on a cell is not this: a column added later cuts a title
+	// one character shorter and the scenario starts failing for a reason that is not about it.
+	sc.Step(`^the console is showing (\d+) rows?$`, func(ctx context.Context, want int) error {
+		if got := len(consoleFrom(ctx).model.Listed()); got != want {
+			return fmt.Errorf("the console is showing %d rows, want %d:\n%s",
+				got, want, consoleFrom(ctx).model.View())
+		}
+		return nil
+	})
+
 	sc.Step(`^the console is on the "([^"]*)" view$`, func(ctx context.Context, view string) error {
 		drawn := consoleFrom(ctx).model.View()
 		if !strings.Contains(drawn, "<"+view+">") {

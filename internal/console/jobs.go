@@ -40,11 +40,15 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "outcome", Width: 9, Colour: colourOfOutcome},
 			// Gives way third: a system where every job names a role has a column of one word, and by
 			// then the title is worth more than it is.
-			{Title: "role", Width: 16, Give: 3, Colour: colourOfName},
+			{Title: "role", Width: 16, Give: 4, Colour: colourOfName},
 			// The flexible column, because it is the line an operator reads to know what this is.
 			{Title: "title", Width: 0},
 			// Gives way second, since a job with no session yet has nothing here anyway.
 			{Title: "session", Width: 10, Give: 2, Colour: dim},
+			// How many jobs this one declared, which is what says a row is a run rather than a single
+			// piece of work. Gives way after the session, because a run with no steps on screen reads
+			// as a run that did nothing.
+			{Title: "steps", Width: 6, Give: 3, Colour: dim},
 			// Gives way first. It is the count that only matters once something has gone wrong twice.
 			{Title: "attempts", Width: 8, Give: 1, Colour: dim},
 			{Title: "age", Width: 6, Colour: colourOfAge},
@@ -61,6 +65,14 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		DrillTo: "tasks",
 		DrillBy: sessionOfJob,
 		Actions: []Action{
+			{
+				// The steps of a run, which enter cannot be: enter goes to the work running under this
+				// job, and a run declares jobs rather than doing the work itself. Uppercase, beside every
+				// other key that acts on the row under the cursor.
+				Key:     "S",
+				Label:   "Steps",
+				Descend: "steps",
+			},
 			{
 				// The same key, in the same meaning, as the sessions view: backspace stops the thing
 				// under the cursor and asks first. A job that stopped by itself and one somebody
@@ -83,6 +95,16 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		Summary: askingSummary(client),
 		// parent is a project id when this view is drilled into from one, and empty at the top level,
 		// which is every job the system holds.
+		// Inside a project this lists the jobs that were declared rather than the ones a run declared
+		// for itself: a run and its own steps side by side read as unrelated work. The steps are one key
+		// away on the run, and the count in the steps column is what says they are there.
+		//
+		// The whole listing is read and narrowed here rather than asked for narrowed, because the count
+		// of a run's steps comes out of the same answer. Asking for the roots would cost a second call
+		// to count what the first one already returned.
+		//
+		// At the top level nothing is narrowed. That listing is the flat one, and a flat listing that
+		// hid every step would be answering a question nobody asked it.
 		List: func(ctx context.Context, project string) ([]Row, error) {
 			resp, err := client.ListJobs(ctx, &quaycrewv1.ListJobsRequest{Project: project})
 			if err != nil {
@@ -90,7 +112,10 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			}
 			rows := make([]Row, 0, len(resp.GetJobs()))
 			for _, one := range resp.GetJobs() {
-				rows = append(rows, jobRow(one))
+				if project != "" && one.GetParent() != "" {
+					continue
+				}
+				rows = append(rows, jobRow(one, childrenOf(one.GetId(), resp.GetJobs())))
 			}
 			return rows, nil
 		},
@@ -147,7 +172,7 @@ const noSessionYet = "not yet"
 //
 // Parent is the session rather than the project, because the parent is what a drilled down view
 // scopes by, and what this view descends into is the session's tasks.
-func jobRow(one *quaycrewv1.Job) Row {
+func jobRow(one *quaycrewv1.Job, steps int) Row {
 	// The identifiers stay whole: they are what stopping and descending use. Only the cells shorten.
 	session := noSessionYet
 	if one.GetSession() != "" {
@@ -166,6 +191,7 @@ func jobRow(one *quaycrewv1.Job) Row {
 			one.GetRole(),
 			oneLine(one.GetTitle()),
 			session,
+			stepsCell(steps),
 			fmt.Sprintf("%d", one.GetAttempts()),
 			display.Age(one.GetCreatedAt()),
 		},
@@ -267,4 +293,68 @@ func askingSummary(client quaycrewv1.ControlPlaneServiceClient) Summariser {
 		}
 		return fmt.Sprintf("%d jobs are waiting for a person", len(resp.GetJobs())), StateBusy
 	}
+}
+
+// Steps are the jobs one job declared: the steps of a flow run, or the work a job broke itself into.
+// It is the jobs listing scoped the other way, by parent rather than by project, so a run and its
+// steps read identically and only what they are narrowed by differs.
+//
+// A resource of its own rather than a second meaning for the jobs listing, because a lister reads one
+// parent and the jobs listing already reads that parent as a project. Two narrowings through one field
+// is how a view starts listing the wrong rows.
+func Steps(client quaycrewv1.ControlPlaneServiceClient) Resource {
+	steps := Jobs(client)
+	steps.Name, steps.Aliases = "steps", []string{"step", "children"}
+	// The count belongs to the level above: these rows are already the steps of one job, and a step
+	// with steps of its own carries its own count in the same column.
+	steps.Summary = askingSummary(client)
+	steps.List = func(ctx context.Context, parent string) ([]Row, error) {
+		if parent == "" {
+			return nil, fmt.Errorf("open the steps of a job from the jobs listing: there are no steps without one")
+		}
+		resp, err := client.ListJobs(ctx, &quaycrewv1.ListJobsRequest{Parent: parent})
+		if err != nil {
+			return nil, err
+		}
+		// The steps of a step. A listing narrowed to one parent holds the children and not the
+		// grandchildren, so counting inside it would tell every nested run it declared nothing. The
+		// project is read off the children rather than passed in, because a lister is given one
+		// identifier and it is the parent.
+		among := resp.GetJobs()
+		if len(among) > 0 {
+			if whole, err := client.ListJobs(ctx, &quaycrewv1.ListJobsRequest{
+				Project: among[0].GetProject(),
+			}); err == nil {
+				among = whole.GetJobs()
+			}
+		}
+		rows := make([]Row, 0, len(resp.GetJobs()))
+		for _, one := range resp.GetJobs() {
+			rows = append(rows, jobRow(one, childrenOf(one.GetId(), among)))
+		}
+		return rows, nil
+	}
+	return steps
+}
+
+// childrenOf is how many of these jobs name one as their parent, which is what the steps cell says.
+func childrenOf(id string, among []*quaycrewv1.Job) int {
+	count := 0
+	for _, one := range among {
+		if one.GetParent() == id {
+			count++
+		}
+	}
+	return count
+}
+
+// noSteps is what the steps cell says on a job that declared none, which is most of them. An empty
+// cell reads as a column that failed to fill, and a zero reads as a measurement of nothing.
+const noSteps = "-"
+
+func stepsCell(count int) string {
+	if count == 0 {
+		return noSteps
+	}
+	return fmt.Sprintf("%d", count)
 }

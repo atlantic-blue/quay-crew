@@ -75,7 +75,7 @@ func TestAJobRowCarriesTheWholeStoryOfOneJob(t *testing.T) {
 		one.Session, one.Attempts = "2222222222222222bbbbbbbb", 1
 	})
 
-	got := jobRow(running)
+	got := jobRow(running, 0)
 
 	// The identifiers stay whole: stopping the job and descending into what it did both use them.
 	if got.ID != running.GetId() {
@@ -85,7 +85,7 @@ func TestAJobRowCarriesTheWholeStoryOfOneJob(t *testing.T) {
 		t.Fatalf("the row carries %q as the session, want the whole identifier", got.Parent)
 	}
 	want := []string{"", "11111111", "running", "-", "backlog-clearer", "read the electricity bill",
-		"22222222", "1", "1m"}
+		"22222222", "-", "1", "1m"}
 	if len(got.Cells) != len(want) {
 		t.Fatalf("the row has %d cells, want %d: %q", len(got.Cells), len(want), got.Cells)
 	}
@@ -107,7 +107,7 @@ func TestAJobRowCarriesTheWholeStoryOfOneJob(t *testing.T) {
 // A pending job has no session, which is the normal state rather than a fault. An empty cell reads as
 // something missing, so the row says which it is.
 func TestAJobWithNoSessionYetSaysSoRatherThanLeavingTheCellEmpty(t *testing.T) {
-	got := jobRow(aJob("1111111111111111aaaaaaaa", job.PhasePending, nil))
+	got := jobRow(aJob("1111111111111111aaaaaaaa", job.PhasePending, nil), 0)
 
 	if got.Parent != "" {
 		t.Fatalf("a pending job carries %q as its session, want none", got.Parent)
@@ -125,7 +125,7 @@ func TestAJobWithNoSessionYetSaysSoRatherThanLeavingTheCellEmpty(t *testing.T) {
 func TestAFailedJobIsMarkedForAttention(t *testing.T) {
 	got := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseFailed, func(one *quaycrewv1.Job) {
 		one.Session, one.Attempts = "2222222222222222bbbbbbbb", 3
-	}))
+	}), 0)
 
 	if got.State != StateFailed {
 		t.Fatalf("a failed job is drawn as %v, want failed", got.State)
@@ -135,8 +135,8 @@ func TestAFailedJobIsMarkedForAttention(t *testing.T) {
 	}
 	// Three tries is the number that says this is not a one off, and it is the reason the column is
 	// there at all.
-	if got.Cells[7] != "3" {
-		t.Fatalf("the attempts cell says %q, want 3", got.Cells[7])
+	if got.Cells[8] != "3" {
+		t.Fatalf("the attempts cell says %q, want 3", got.Cells[8])
 	}
 }
 
@@ -185,7 +185,7 @@ func TestStoppingAJobAsksFirstAndUsesTheWholeIdentifier(t *testing.T) {
 		t.Fatalf("Stop answers to %v, want the keys the sessions view already stops on", action.Keys())
 	}
 
-	row := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseRunning, nil))
+	row := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseRunning, nil), 0)
 	if err := action.Run(context.Background(), row); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestEnterOnAJobOpensWhatItDid(t *testing.T) {
 		}},
 	}
 	model := newTestModel(t, Jobs(client), Tasks(client))
-	model, _ = update(t, model, rowsFor(model, jobRow(client.jobs[0])))
+	model, _ = update(t, model, rowsFor(model, jobRow(client.jobs[0], 0)))
 
 	model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
@@ -276,7 +276,7 @@ func TestEnterOnAJobOpensWhatItDid(t *testing.T) {
 func TestEnterOnAJobWithNoSessionYetSaysWhy(t *testing.T) {
 	client := &jobClient{jobs: []*quaycrewv1.Job{aJob("1111111111111111aaaaaaaa", job.PhasePending, nil)}}
 	model := newTestModel(t, Jobs(client), Tasks(client))
-	model, _ = update(t, model, rowsFor(model, jobRow(client.jobs[0])))
+	model, _ = update(t, model, rowsFor(model, jobRow(client.jobs[0], 0)))
 
 	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
@@ -323,13 +323,13 @@ func actionNamed(resource Resource, label string) (Action, bool) {
 func TestTheOutcomeCellSaysWhatTheJobEndedOn(t *testing.T) {
 	done := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseDone, func(one *quaycrewv1.Job) {
 		one.Outcome = job.OutcomeBlocked
-	}))
+	}), 0)
 	if done.Cells[outcomeColumn] != job.OutcomeBlocked {
 		t.Fatalf("the outcome cell says %q, want %q", done.Cells[outcomeColumn], job.OutcomeBlocked)
 	}
 	// A job that has not ended on a word says so rather than leaving a hole in the row. The literal
 	// rather than the constant, because a case reading the constant passes against it emptied out.
-	running := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseRunning, nil))
+	running := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseRunning, nil), 0)
 	if running.Cells[outcomeColumn] != "-" {
 		t.Fatalf(`the outcome cell of a running job says %q, want "-"`, running.Cells[outcomeColumn])
 	}

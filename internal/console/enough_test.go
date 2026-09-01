@@ -164,12 +164,12 @@ func (c *countlessClient) ListJobs(context.Context, *quaycrewv1.ListJobsRequest,
 // terminal has colour. A colour alone is a claim that disappears on a monochrome terminal and in a
 // listing where half the rows are yellow already.
 func TestAJobWaitingForAPersonIsMarkedInTheRowItself(t *testing.T) {
-	asking := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseAsking, nil))
+	asking := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseAsking, nil), 0)
 	if asking.Cells[0] != "?" {
 		t.Fatalf("a job waiting for a person carries %q in its first cell, want the mark", asking.Cells[0])
 	}
 	for _, quiet := range []string{job.PhaseRunning, job.PhaseDone, job.PhasePending, job.PhaseFailed} {
-		if got := jobRow(aJob("1111111111111111aaaaaaaa", quiet, nil)); got.Cells[0] != "" {
+		if got := jobRow(aJob("1111111111111111aaaaaaaa", quiet, nil), 0); got.Cells[0] != "" {
 			t.Fatalf("a %s job carries %q in the mark column, want nothing", quiet, got.Cells[0])
 		}
 	}

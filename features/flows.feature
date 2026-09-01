@@ -46,6 +46,22 @@ Feature: A flow runs a graph across sessions
     And the system was asked to run 0 tasks
     And the run's step is a job under the run, one level deeper
 
+  # A run declares jobs, and a person reading a project needs to see that. The project lists the run
+  # itself, with its steps one key under it, so a run and the work it declared never read as unrelated
+  # jobs side by side.
+  Scenario: The console lists a run in its project and holds the steps under it
+    When the operator starts the flow "fix-red" in the project, without driving the system
+    And the operator is at the console
+    And the operator presses "enter" in the console
+    And the operator presses "enter" in the console
+    Then the console is on the "jobs" view
+    And the console is showing 1 row
+    When the operator presses "S" in the console
+    Then the console is on the "steps" view
+    And the console is showing 1 row
+    When the operator presses "esc" in the console
+    Then the console is on the "jobs" view
+
   Scenario: A run whose step is running holds no call open
     Given the model takes longer over a task than anybody will wait
     When the operator starts the flow "fix-red" in the project, without driving the system
