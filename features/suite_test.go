@@ -788,6 +788,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeWizardModeSteps(sc)
 	initializeDetachSteps(sc)
 	initializeDispatchingSteps(sc)
+	initializeSandboxNameSteps(sc)
 	initializeWaitsSteps(sc)
 	initializeDegradedSteps(sc)
 	initializeHeadroomSteps(sc)

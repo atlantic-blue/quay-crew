@@ -268,3 +268,46 @@ func TestTwoStacksOnOneMachineDoNotShareASessionNetwork(t *testing.T) {
 			theirs)
 	}
 }
+
+// TestTheComposeProjectDoesNotMove, because the volume the database lives in is named after it.
+//
+// Compose prefixes every named volume and every network with the project name, so the database sits
+// in <project>_postgres-data. Start the stack under a different project and compose makes an empty
+// volume of the new name, mounts that, and every job, session, task and secret stays in the old one.
+// The stack comes up. The database is empty. Nothing anywhere says why.
+//
+// So this is a guard on a name rather than a test of behaviour, and it fails loudly the day somebody
+// renames the project along with everything else. What the daemon itself answers is checked in
+// continuous integration, where there is one: the containers job starts the store under this project
+// name and asserts the volume it makes.
+func TestTheComposeProjectDoesNotMove(t *testing.T) {
+	const project = "quaycrew"
+	const volume = "postgres-data"
+
+	contents, err := os.ReadFile("docker-compose.yml")
+	if err != nil {
+		t.Fatalf("reading the compose file: %v", err)
+	}
+	var compose struct {
+		Name    string              `yaml:"name"`
+		Volumes map[string]struct{} `yaml:"volumes"`
+	}
+	if err := yaml.Unmarshal(contents, &compose); err != nil {
+		t.Fatalf("parsing the compose file: %v", err)
+	}
+
+	if compose.Name != project {
+		t.Fatalf("the compose project is %q, so the database is in %q while every existing stack keeps its rows in %q",
+			compose.Name, compose.Name+"_"+volume, project+"_"+volume)
+	}
+	if _, declared := compose.Volumes[volume]; !declared {
+		t.Fatalf("the compose file declares no %q volume, so this test guards a name nothing uses", volume)
+	}
+
+	// The makefile passes the project to every compose command it runs, so a project renamed there
+	// alone moves the volume just as completely.
+	if told := makeVariable(t, "COMPOSE_PROJECT"); told != project {
+		t.Fatalf("make runs compose under the project %q and the file says %q, so which volume the stack "+
+			"mounts depends on how it was started", told, project)
+	}
+}

@@ -31,9 +31,18 @@ func TestTheDriftCheckNamesConfigurationTheOperatorDoesNotHave(t *testing.T) {
 				"localhost inside its own container",
 		},
 		{
+			name: "a copy that pins the image by its retired name",
+			file: "deploy/testdata/partial.env",
+			want: []string{"quaycrew-sandbox-claude:local", "krewe-sandbox-claude:local"},
+			because: "an upgrade never rewrites the operator's own file, so it still pins a tag the " +
+				"build stops producing, and the first task after that fails on a missing image and " +
+				"reads as a broken system rather than as a rename",
+		},
+
+		{
 			name:    "a copy with everything in it",
 			file:    "deploy/testdata/complete.env",
-			absent:  []string{"does not set"},
+			absent:  []string{"does not set", "retired"},
 			because: "there is no drift, and a note about nothing trains the operator to skip the notes",
 		},
 		{
