@@ -8659,6 +8659,10 @@ type Job struct {
 	// both use for the same thing. A second job claiming it is refused while this one still holds it,
 	// so two sessions cannot build the same slice. Empty claims nothing.
 	Claim string `protobuf:"bytes,40,opt,name=claim,proto3" json:"claim,omitempty"`
+	// ungated is a job declared with the settle gate off: it settles on its own answer, and nothing
+	// independent has to agree first. It is stated in the negative so that a declaration saying nothing
+	// is gated, which is the direction a boundary has to default in.
+	Ungated bool `protobuf:"varint,47,opt,name=ungated,proto3" json:"ungated,omitempty"`
 	// What the system assigned, and the caller may not.
 	// parent is which job asked for this one, read from the credential the caller presented
 	// and never from the request. depth is zero for a root and the parent's depth plus one otherwise.
@@ -8687,7 +8691,13 @@ type Job struct {
 	// pull_request is the address the answer named, read off the answer rather than reported by the
 	// model. It is what a reader opens to see the work, without opening a sandbox.
 	PullRequest string `protobuf:"bytes,34,opt,name=pull_request,json=pullRequest,proto3" json:"pull_request,omitempty"`
-	SpentTokens int64  `protobuf:"varint,24,opt,name=spent_tokens,json=spentTokens,proto3" json:"spent_tokens,omitempty"`
+	// reviewed and tested are what passed this work before it settled, each in a session that did not
+	// do the work: a reviewer that read the change against what the job was asked for, and a tester
+	// that ran the repository's own gates and read their output. A settled job carrying neither was
+	// either declared with the gate off or never reached one.
+	Reviewed    bool  `protobuf:"varint,48,opt,name=reviewed,proto3" json:"reviewed,omitempty"`
+	Tested      bool  `protobuf:"varint,49,opt,name=tested,proto3" json:"tested,omitempty"`
+	SpentTokens int64 `protobuf:"varint,24,opt,name=spent_tokens,json=spentTokens,proto3" json:"spent_tokens,omitempty"`
 	// steps are what the session doing this job said it finished, in the order it finished them. A job
 	// that failed is continued from them rather than started again. A listing leaves them out, the way
 	// it leaves out the answer.
@@ -8695,7 +8705,7 @@ type Job struct {
 	// handoffs are what a session wrote down when it stopped taking work on this job at the context
 	// ceiling: what is left, and what it tried that did not work. The newest goes in front of the
 	// session that carries the job on. A listing leaves them out, the way it leaves out the answer.
-	Handoffs []*JobHandoff `protobuf:"bytes,47,rep,name=handoffs,proto3" json:"handoffs,omitempty"`
+	Handoffs []*JobHandoff `protobuf:"bytes,50,rep,name=handoffs,proto3" json:"handoffs,omitempty"`
 	// resuming is the failure this attempt is continuing past, and empty for a job nobody continued.
 	// It is what the job failed with, moved off the reason by the resume, so a job going again does not
 	// sit pending reading as one the machine is holding back.
@@ -8902,6 +8912,13 @@ func (x *Job) GetClaim() string {
 	return ""
 }
 
+func (x *Job) GetUngated() bool {
+	if x != nil {
+		return x.Ungated
+	}
+	return false
+}
+
 func (x *Job) GetParent() string {
 	if x != nil {
 		return x.Parent
@@ -8977,6 +8994,20 @@ func (x *Job) GetPullRequest() string {
 		return x.PullRequest
 	}
 	return ""
+}
+
+func (x *Job) GetReviewed() bool {
+	if x != nil {
+		return x.Reviewed
+	}
+	return false
+}
+
+func (x *Job) GetTested() bool {
+	if x != nil {
+		return x.Tested
+	}
+	return false
 }
 
 func (x *Job) GetSpentTokens() int64 {
@@ -9402,6 +9433,10 @@ type CreateJobRequest struct {
 	// asking. It is declared rather than decided in the moment, because the moment a job is going
 	// nowhere is the worst moment to be working out what to do about it.
 	Escalation string `protobuf:"bytes,18,opt,name=escalation,proto3" json:"escalation,omitempty"`
+	// ungated declares this job with the settle gate off, so it settles on its own answer. A job that
+	// names a repository is otherwise passed by a reviewer and a tester, in sessions that did not do
+	// the work, before it settles. Stated in the negative, so a caller that says nothing gets the gate.
+	Ungated bool `protobuf:"varint,19,opt,name=ungated,proto3" json:"ungated,omitempty"`
 	// id and parent are here to be refused rather than ignored. The system assigns the identifier, and
 	// the parent is read from the credential the caller presented: a caller that could set its own
 	// parent could set its own depth, and the depth limit would bound nothing.
@@ -9551,6 +9586,13 @@ func (x *CreateJobRequest) GetEscalation() string {
 		return x.Escalation
 	}
 	return ""
+}
+
+func (x *CreateJobRequest) GetUngated() bool {
+	if x != nil {
+		return x.Ungated
+	}
+	return false
 }
 
 func (x *CreateJobRequest) GetId() string {
@@ -11900,7 +11942,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xdb\f\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xa9\r\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -11924,7 +11966,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"repository\x12\x18\n" +
 	"\aproduct\x18$ \x01(\tR\aproduct\x12\x16\n" +
 	"\x06steers\x18% \x01(\x05R\x06steers\x12\x14\n" +
-	"\x05claim\x18( \x01(\tR\x05claim\x12\x16\n" +
+	"\x05claim\x18( \x01(\tR\x05claim\x12\x18\n" +
+	"\aungated\x18/ \x01(\bR\aungated\x12\x16\n" +
 	"\x06parent\x18\x0f \x01(\tR\x06parent\x12\x14\n" +
 	"\x05depth\x18\x10 \x01(\x05R\x05depth\x12\x18\n" +
 	"\aversion\x18\x11 \x01(\x05R\aversion\x12\x14\n" +
@@ -11935,10 +11978,12 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x06reason\x18\x16 \x01(\tR\x06reason\x12\x1a\n" +
 	"\bquestion\x18\x17 \x01(\tR\bquestion\x12\x12\n" +
 	"\x04told\x18# \x01(\tR\x04told\x12!\n" +
-	"\fpull_request\x18\" \x01(\tR\vpullRequest\x12!\n" +
+	"\fpull_request\x18\" \x01(\tR\vpullRequest\x12\x1a\n" +
+	"\breviewed\x180 \x01(\bR\breviewed\x12\x16\n" +
+	"\x06tested\x181 \x01(\bR\x06tested\x12!\n" +
 	"\fspent_tokens\x18\x18 \x01(\x03R\vspentTokens\x12*\n" +
 	"\x05steps\x18& \x03(\v2\x14.quaycrew.v1.JobStepR\x05steps\x123\n" +
-	"\bhandoffs\x18/ \x03(\v2\x17.quaycrew.v1.JobHandoffR\bhandoffs\x12\x1a\n" +
+	"\bhandoffs\x182 \x03(\v2\x17.quaycrew.v1.JobHandoffR\bhandoffs\x12\x1a\n" +
 	"\bresuming\x18' \x01(\tR\bresuming\x12\x12\n" +
 	"\x04plan\x18- \x01(\tR\x04plan\x12#\n" +
 	"\rplan_approved\x18. \x01(\bR\fplanApproved\x12\x1e\n" +
@@ -11987,7 +12032,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x05tried\x18\x03 \x01(\tR\x05tried\x12\x18\n" +
 	"\asession\x18\x04 \x01(\tR\asession\x129\n" +
 	"\n" +
-	"written_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\twrittenAt\"\xef\x04\n" +
+	"written_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\twrittenAt\"\x89\x05\n" +
 	"\x10CreateJobRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x14\n" +
@@ -12010,7 +12055,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x05claim\x18\x11 \x01(\tR\x05claim\x12\x1e\n" +
 	"\n" +
 	"escalation\x18\x12 \x01(\tR\n" +
-	"escalation\x12\x0e\n" +
+	"escalation\x12\x18\n" +
+	"\aungated\x18\x13 \x01(\bR\aungated\x12\x0e\n" +
 	"\x02id\x18\f \x01(\tR\x02id\x12\x16\n" +
 	"\x06parent\x18\r \x01(\tR\x06parent\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +

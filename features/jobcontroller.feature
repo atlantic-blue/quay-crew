@@ -89,8 +89,10 @@ Feature: A controller makes declared jobs happen
     When the controller ticks
     Then the session was asked to open a pull request against "atlantic-blue/quay-crew", and not to merge
 
+  # With the gate off, so this scenario is about the address and nothing else. A gated job is held
+  # back until a reviewer and a tester have passed it, which is features/settling.feature.
   Scenario: A job whose answer names its pull request is done, and says where the work is
-    Given a job titled "sort the listing" in the repository "atlantic-blue/quay-crew"
+    Given a job titled "sort the listing" in the repository "atlantic-blue/quay-crew" with the gate off
     And the model will answer "opened https://github.com/atlantic-blue/quay-crew/pull/454"
     When the controller ticks
     And the task the controller sent lands
@@ -111,7 +113,7 @@ Feature: A controller makes declared jobs happen
     And the session was asked again for the pull request against "atlantic-blue/quay-crew"
 
   Scenario: The session opens the pull request when asked, and the job is done
-    Given a job titled "sort the listing" in the repository "atlantic-blue/quay-crew"
+    Given a job titled "sort the listing" in the repository "atlantic-blue/quay-crew" with the gate off
     And the model will answer "I made the change and the tests pass"
     And then the model will answer "opened https://github.com/atlantic-blue/quay-crew/pull/454"
     When the controller ticks

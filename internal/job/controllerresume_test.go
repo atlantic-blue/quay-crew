@@ -97,7 +97,7 @@ func TestAContinuedAttemptThatStillSaysNothingStopsTheJobRatherThanBeingAskedAga
 // person reads.
 func TestAContinuedAttemptThatSaysWhatMovedWhenAskedLeavesTheJobDone(t *testing.T) {
 	controller, kept, plane := aController(t)
-	one := kept.add(beingContinued("make the listing sort by the clock it shows"))
+	one := kept.add(withTheGateOff(beingContinued("make the listing sort by the clock it shows")))
 	ctx := context.Background()
 
 	controller.Tick(ctx)
@@ -119,7 +119,7 @@ func TestAContinuedAttemptThatSaysWhatMovedWhenAskedLeavesTheJobDone(t *testing.
 // does what it was told, and it costs one task.
 func TestAContinuedAttemptThatSaysWhatMovedStraightAwayIsDoneInOneTask(t *testing.T) {
 	controller, kept, plane := aController(t)
-	one := kept.add(beingContinued("make the listing sort by the clock it shows"))
+	one := kept.add(withTheGateOff(beingContinued("make the listing sort by the clock it shows")))
 	ctx := context.Background()
 
 	controller.Tick(ctx)
@@ -140,7 +140,7 @@ func TestAContinuedAttemptThatSaysWhatMovedStraightAwayIsDoneInOneTask(t *testin
 // would be a gate nobody could pass on the first try.
 func TestAJobThatWasNeverContinuedIsNotAskedWhatMovedUnderItsBase(t *testing.T) {
 	controller, kept, plane := aController(t)
-	one := kept.add(inARepository("make the listing sort by the clock it shows"))
+	one := kept.add(withTheGateOff(inARepository("make the listing sort by the clock it shows")))
 	ctx := context.Background()
 
 	controller.Tick(ctx)

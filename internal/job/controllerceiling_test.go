@@ -231,6 +231,12 @@ func TestTheFreshSessionFinishesTheJobThatWasDeclared(t *testing.T) {
 	controller.Tick(ctx)
 	plane.lands("Done, and it is open at " + thePullRequest)
 	controller.Tick(ctx)
+	// A job that names a repository does not settle on its own answer, so the two gates read what the
+	// fresh session did before the job ends. See gate.go.
+	plane.landsIn(job.ReviewerFor(one.ID), "Verdict: pass it does what the brief asked")
+	controller.Tick(ctx)
+	plane.landsIn(job.TesterFor(one.ID), "Verdict: pass 540 test files ran, 6034 tests, all green")
+	controller.Tick(ctx)
 
 	got := kept.get(one.ID)
 	if got.Phase != job.PhaseDone {

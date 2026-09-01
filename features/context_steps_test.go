@@ -89,6 +89,23 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// The product's name, written here rather than read out of the manual package: a step that read the
+	// text it is checking would pass whatever that text was changed to.
+	sc.Step(`^the project's context names the product$`, func(ctx context.Context) error {
+		projects := contextFrom(ctx).scoped("project")
+		if len(projects) != 1 {
+			return fmt.Errorf("%d project directories, want 1", len(projects))
+		}
+		body := projects[0].GetBody()
+		if !strings.Contains(body, "Quay Krewe") {
+			return fmt.Errorf("the manual never names the product, so a session cannot say what it is running in:\n%s", body)
+		}
+		if strings.Contains(body, "Quay System") {
+			return fmt.Errorf("the manual calls the product by the name it had before this one:\n%s", body)
+		}
+		return nil
+	})
+
 	sc.Step(`^the project's context says how to set a context$`, func(ctx context.Context) error {
 		projects := contextFrom(ctx).scoped("project")
 		if len(projects) != 1 {

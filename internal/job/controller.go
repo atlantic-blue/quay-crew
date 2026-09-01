@@ -103,6 +103,12 @@ type Landing struct {
 	// PullRequest is the address the answer named, where the job named a repository. It is read off
 	// the answer rather than reported by the model, the way an expectation is.
 	PullRequest string
+	// Reviewed and Tested are the gates that passed this work, in sessions that did not do it. They
+	// are written here rather than as the gate runs, because until the job lands they can be read off
+	// the record of those sessions, and a status a controller has to remember is a status the next
+	// controller does not have.
+	Reviewed bool
+	Tested   bool
 	// Attempt is what this attempt at the job produced, with how like the earlier attempts at the same
 	// step it was. It is written in the same transaction as the landing, keyed on the task, so a
 	// controller reading a task a dead one already read leaves one row rather than two.
@@ -839,19 +845,13 @@ func (c *Controller) release(ctx context.Context, one *Job) {
 // died in between left a task running with nothing on the row to say so, and putting that job back
 // to pending would send a second task and pay for it twice.
 func (c *Controller) sessionNamedAfter(ctx context.Context, one *Job) string {
-	listed, err := c.plane.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: one.Project})
+	sessions, err := c.sessionsIn(ctx, one.Project)
 	if err != nil {
 		c.logger.WarnContext(ctx, "could not read the system's sessions", "job", one.ID, "error", err)
 		// Nothing is released on a read that failed: releasing here is what would pay twice.
 		return unknownSession
 	}
-	handle := ConversationFor(one)
-	for _, session := range listed.GetSessions() {
-		if session.GetHandle() == handle {
-			return session.GetId()
-		}
-	}
-	return ""
+	return sessions[ConversationFor(one)]
 }
 
 // unknownSession is what a failed read answers with. It is not a session and it is not "no session":
@@ -1019,6 +1019,20 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 	if kind != EventAnswered && last.GetStatus() != StatusTaskStopped &&
 		c.wentInCircles(ctx, whole, attempt, turnedAway) {
 		return
+	}
+	// Last, because the gate reads the change and the change is the pull request: a gate asked before
+	// the address is in hand would be asked to read work it cannot find. Nothing settles here on the
+	// session's own account, which is the whole of this: two sessions that did not do the work have to
+	// agree first, and while they are being asked the job stays running.
+	if kind == EventAnswered && Gated(one) {
+		switch decided := c.gate(ctx, one, landing.PullRequest, tasks); {
+		case decided.held:
+			return
+		case decided.passed:
+			landing.Reviewed, landing.Tested = true, true
+		default:
+			landing.Phase, landing.Reason, kind = PhaseStopped, decided.reason, EventStopped
+		}
 	}
 	c.land(ctx, one, landing, kind)
 }
@@ -1267,6 +1281,173 @@ func (c *Controller) handOn(ctx context.Context, one *Job) {
 	c.exported(ctx, record)
 	c.logger.InfoContext(ctx, "the rest of a job goes to a fresh session",
 		"job", one.ID, "session", one.Session, "at", ShareOf(used, size), "ceiling", ceiling)
+}
+
+// gateOutcome is what the gate decided about a job whose work has landed.
+//
+// Held means a task is in flight and the row is not this tick's to move. Passed means every gate
+// agreed, so the job may settle. A reason stops the job, because a gate that could not be run, or
+// whose answer could not be read, has passed nothing.
+//
+// The zero value is one gate having passed, which is what carries the loop on to the next.
+type gateOutcome struct {
+	held   bool
+	passed bool
+	reason string
+}
+
+// gate holds a job back until two sessions that did not do the work have passed it.
+//
+// Everything it needs is read rather than remembered, which is what makes it safe to run twice: the
+// tasks of the two gate sessions are the record of what the system asked and what came back, and a
+// controller that took this row over after another died reads the same tasks and reaches the same
+// answer. The one thing that lands on the row is which gates passed, written when the job lands.
+//
+// The two run one after the other rather than at once. A change the reviewer failed does not need
+// testing, so the order saves a container and a bill, and it puts the cheaper judgement first.
+func (c *Controller) gate(ctx context.Context, one *Job, address string, tasks []*quaycrewv1.Task) gateOutcome {
+	// How many times this work has already been round. It is counted off the tasks the working session
+	// has run, by the sentence the system writes when it sends work back, for the reason the continued
+	// ask is recognised that way: a counter in a field is a thing the next controller does not have.
+	sentBack := timesTheGateSentItBack(tasks)
+	sessions, err := c.sessionsIn(ctx, one.Project)
+	if err != nil {
+		// A read that failed is not a verdict. The job stays running and a later tick asks again, which
+		// is the safe direction: landing it here would settle work on nothing having read it.
+		c.logger.WarnContext(ctx, "could not read the sessions a job's gate would run in",
+			"job", one.ID, "error", err)
+		return gateOutcome{held: true}
+	}
+	for _, gate := range []struct {
+		named  string
+		handle string
+		asked  func(*Job, string) string
+	}{
+		{GateReviewer, ReviewerFor(one.ID), AskedToReview},
+		{GateTester, TesterFor(one.ID), AskedToTest},
+	} {
+		decided := c.passes(ctx, one, gate.named, gate.handle, gate.asked(one, address), sessions[gate.handle], sentBack)
+		if decided.held || decided.reason != "" {
+			return decided
+		}
+	}
+	return gateOutcome{passed: true}
+}
+
+// passes asks one gate about this work, reads what it said, and says what that means for the job.
+//
+// session is the conversation this gate has run in before, and empty where it has never run. asked is
+// what the gate is sent when it has not been asked about this round of the work yet.
+func (c *Controller) passes(ctx context.Context, one *Job, gate, handle, asked, session string,
+	sentBack int) gateOutcome {
+	var judged []*quaycrewv1.Task
+	if session != "" {
+		resp, err := c.plane.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session})
+		if err != nil {
+			c.logger.WarnContext(ctx, "could not read what a job's gate said",
+				"job", one.ID, "gate", gate, "session", session, "error", err)
+			return gateOutcome{held: true}
+		}
+		judged = resp.GetTasks()
+	}
+	// One task per round. The work has been round sentBack+1 times, so a gate holding no more tasks
+	// than the number of send backs has not read what is in front of it now, and is asked.
+	if len(judged) <= sentBack {
+		return c.askTheGate(ctx, one, gate, handle, asked)
+	}
+	last := judged[len(judged)-1]
+	if last.GetStatus() == StatusRunning {
+		c.renew(ctx, one)
+		return gateOutcome{held: true}
+	}
+	// A gate whose own task failed or was halted judged nothing. The job does not settle on it, for
+	// the reason the prover already gives: a check that quietly passes when it could not be run is the
+	// same false green as no check at all.
+	if last.GetStatus() == StatusFailed || last.GetStatus() == StatusTaskStopped {
+		return gateOutcome{reason: TheGateCouldNotRun(gate, last.GetFailure())}
+	}
+	verdict := Verdict(last.GetReply())
+	switch {
+	case !verdict.Said:
+		return gateOutcome{reason: TheGateSaidNothing(gate)}
+	case verdict.Passed:
+		return gateOutcome{}
+	case sentBack > 0:
+		// Round two, and it still does not pass. Every ask is a task somebody pays for, so this is
+		// where it ends, with what the gate said on the row rather than in a conversation.
+		return gateOutcome{reason: FailedTheGate(gate, verdict.Reason, one)}
+	default:
+		return c.sendItBack(ctx, one, gate, verdict.Reason)
+	}
+}
+
+// askTheGate sends one gate the work to read, and says what that means for the job.
+func (c *Controller) askTheGate(ctx context.Context, one *Job, gate, handle, asked string) gateOutcome {
+	// No role and no job. The role is what would give this session material it has no business
+	// holding, and the job is what mints its credential: a session running no job holds none, so what
+	// it may call on the system is nothing. That is the boundary, and it is the credential rather than
+	// a sentence in the text above.
+	if _, err := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+		Project: one.Project, Handle: handle, Text: asked, Detach: true,
+		Title: gate + ": " + one.Title,
+	}); err != nil {
+		// The job stays running and a later tick asks again. A machine with no room for the gate's
+		// container is a moment rather than a verdict, which is the reasoning a job turned away for
+		// want of a sandbox already gets, and landing the job here would settle it unread.
+		c.logger.WarnContext(ctx, "a job is waiting for a session to pass it",
+			"job", one.ID, "gate", gate, "error", err)
+		c.renew(ctx, one)
+		return gateOutcome{held: true}
+	}
+	c.renew(ctx, one)
+	return gateOutcome{held: true}
+}
+
+// sendItBack gives the work back to the session that did it, carrying what the gate said.
+//
+// The job stays running, so a controller that dies between the ask and the answer finds a running job
+// and reads the tasks the way this one would have. No record of its own is written, for the reason
+// the pull request ask writes none: the task is the record, in the session `krewe job show` already
+// names, and it is what the count of rounds is read from.
+func (c *Controller) sendItBack(ctx context.Context, one *Job, gate, reason string) gateOutcome {
+	if _, err := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+		Project: one.Project, Handle: ConversationFor(one), Text: SentBack(gate, reason, one),
+		PermissionMode: one.Mode, Detach: true, Role: one.Role, Job: one.ID,
+	}); err != nil {
+		c.logger.WarnContext(ctx, "could not send a job back to the session that did the work",
+			"job", one.ID, "gate", gate, "session", one.Session, "error", err)
+		// Nothing passed this work and it cannot be handed back, so the job stops with what the gate
+		// said rather than settling on an answer nothing agreed with.
+		return gateOutcome{reason: FailedTheGate(gate, reason, one)}
+	}
+	c.renew(ctx, one)
+	return gateOutcome{held: true}
+}
+
+// timesTheGateSentItBack is how many of a session's tasks were the gate handing the work back.
+func timesTheGateSentItBack(tasks []*quaycrewv1.Task) int {
+	sent := 0
+	for _, one := range tasks {
+		if SentBackByTheGate(one.GetPrompt()) {
+			sent++
+		}
+	}
+	return sent
+}
+
+// sessionsIn is every conversation this project holds, by handle, which is how a controller finds the
+// sessions its gates run in. A gate's conversation is named after the job, so it is found rather than
+// recorded: a handle on the row is a second thing that can be out of date.
+func (c *Controller) sessionsIn(ctx context.Context, project string) (map[string]string, error) {
+	listed, err := c.plane.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: project})
+	if err != nil {
+		return nil, err
+	}
+	by := make(map[string]string, len(listed.GetSessions()))
+	for _, session := range listed.GetSessions() {
+		by[session.GetHandle()] = session.GetId()
+	}
+	return by, nil
 }
 
 // renew moves this controller's hold on, which is what says it is still alive. A hold that stops

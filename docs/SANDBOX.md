@@ -33,20 +33,20 @@ You need Docker and a Claude subscription.
    make install
    ```
 
-   It writes `~/.quay/env` if there is none, builds the command line tool over whatever `quay` your
+   It writes `~/.krewe/env` if there is none, builds the command line tool over whatever `krewe` your
    shell runs, builds the hooks and the sandbox image, and brings the stack up. It then prints the
    commands in step 3, because it cannot mint your credential for you.
 
    ```mermaid
    flowchart TD
-       ONE["make install"] --> CONFIG["config: write ~/.quay/env if there is none"]
-       CONFIG --> TOOL["tool: build quay over the copy your shell runs"]
+       ONE["make install"] --> CONFIG["config: write ~/.krewe/env if there is none"]
+       CONFIG --> TOOL["tool: build krewe over the copy your shell runs"]
        TOOL --> HOOKS["hooks: build what every session runs under"]
        HOOKS --> IMAGE["sandbox-image: build the container a session is"]
        IMAGE --> ASK{"is this system already up?"}
        ASK -- "no" --> UP["up: bring the stack up"]
        ASK -- "yes" --> COST["say what replacing the services costs, and wait"]
-       COST -- "quay typed, or YES=1" --> UP
+       COST -- "krewe typed, or YES=1" --> UP
        COST -- "anything else" --> REFUSE["refuse, and exit non zero"]
        UP --> NEXT["print the commands it cannot run for you"]
    ```
@@ -63,35 +63,35 @@ You need Docker and a Claude subscription.
 3. Create a workspace, a project, and give it the token:
 
    ```
-   quay workspace create demo
-   quay project create house-bills
-   quay secret set CLAUDE_CODE_OAUTH_TOKEN <token from step 1>
+   krewe workspace create demo
+   krewe project create house-bills
+   krewe secret set CLAUDE_CODE_OAUTH_TOKEN <token from step 1>
    ```
 
    Creating something moves you into it, so each line lands where the one above it left you, and
-   `quay use` says where that is. The secret is scoped to the workspace, and a task runs inside a
+   `krewe use` says where that is. The secret is scoped to the workspace, and a task runs inside a
    project. The control plane reads the secret when running a task and injects it into that
    session's sandbox; it is never part of the message or the event log.
 
 4. Ask something and get a real reply:
 
    ```
-   quay task "say pong"
+   krewe task "say pong"
    ```
 
    You are already in `demo/house-bills`, so nothing needs saying twice. To reach somewhere else for
-   one task without moving, put the address first: `quay task demo/gardening "order the bulbs"`.
+   one task without moving, put the address first: `krewe task demo/gardening "order the bulbs"`.
 
-   `quay task` waits for the answer, which is what a short question wants. Real work takes minutes, so
-   `quay task --dispatch` starts the task and lets go of it: the system runs it, and
-   `quay task list <session>` reads it back.
+   `krewe task` waits for the answer, which is what a short question wants. Real work takes minutes, so
+   `krewe task --dispatch` starts the task and lets go of it: the system runs it, and
+   `krewe task list <session>` reads it back.
 
-   A new sandbox container (`quaycrew-<session id>`) starts on the first task and is reused for the
+   A new sandbox container (`krewe-<session id>`) starts on the first task and is reused for the
    rest of the session. A second task on the same session continues the same conversation.
 
 ### Which model and which image a task runs
 
-`make install` writes `~/.quay/env` from `deploy/env.example` and never touches it again. Edit that
+`make install` writes `~/.krewe/env` from `deploy/env.example` and never touches it again. Edit that
 file to change what a task is, then run `make up` to bring the stack back on it. The stack reads the
 file on every command, so `make upgrade` cannot quietly bring it back as something else. The
 variables can still be given on the command line for a one off.
@@ -116,7 +116,7 @@ session down cleanly first, and it clears the sandbox containers the system has 
 leaves those sessions to be ended by the replacement rather than put down.
 
 It does not check that the stack came up healthy. It exits when compose has started the containers,
-which is not the same as Postgres accepting connections. `make ps` and `quay version` say whether the
+which is not the same as Postgres accepting connections. `make ps` and `krewe version` say whether the
 system is answering.
 
 ## The gated integration test
@@ -179,11 +179,11 @@ sequenceDiagram
     participant DB as "store"
     participant SBX as "sandbox"
 
-    YOU->>CP: "quay task --dispatch 'read the repository'"
+    YOU->>CP: "krewe task --dispatch 'read the repository'"
     CP->>DB: "name the conversation, before the task"
     CP->>SBX: "claude --session-id <conversation> -p ..."
     Note over CP,SBX: "the task is what makes the name true"
-    YOU->>CP: "quay attach <session>, while the task runs"
+    YOU->>CP: "krewe attach <session>, while the task runs"
     CP->>DB: "read the name the session holds"
     CP-->>YOU: "open-conversation <conversation>"
     Note over YOU,SBX: "the operator lands in the conversation doing the work"
@@ -217,9 +217,9 @@ other name findable rather than quietly adopting it.
 - **A transcript written under a name a session does not hold is not deleted, and not shown either.**
   Attaching used to name a conversation of its own while a first task was running, so a sandbox built
   before this can hold two transcripts for one session. Both are still on the host, under
-  `~/.quay/data/workspaces/<workspace>/claude/projects/`, and the system reads the one the session holds.
+  `~/.krewe/data/workspaces/<workspace>/claude/projects/`, and the system reads the one the session holds.
   Open another by name from inside the container:
-  `docker exec -it quaycrew-<session id> claude --resume <conversation id>`.
+  `docker exec -it krewe-<session id> claude --resume <conversation id>`.
 - **A system with no data directory cannot see any transcript**, so it falls back to what this process
   has watched a model runtime open. That memory does not survive a restart, and a session whose first
   task ran before the restart would be told to start its conversation again. Set `QC_DATA_DIR`, which
@@ -227,12 +227,12 @@ other name findable rather than quietly adopting it.
 
 ## Getting inside a conversation
 
-`quay task` waits for its answer, and `quay task --dispatch` starts a task and returns. To sit inside
+`krewe task` waits for its answer, and `krewe task --dispatch` starts a task and returns. To sit inside
 the conversation, with its history, and keep typing:
 
 ```
-quay sessions
-quay attach 5d013d07
+krewe sessions
+krewe attach 5d013d07
 ```
 
 or press `a` on a session in the console.
@@ -259,7 +259,7 @@ that carries the token, and the conversation comes back with it, because the con
 host rather than in the container. Or reach the old container with the token on the command:
 
 ```
-docker exec -it -e CLAUDE_CODE_OAUTH_TOKEN=<token> quaycrew-<session id> claude --resume <conversation id>
+docker exec -it -e CLAUDE_CODE_OAUTH_TOKEN=<token> krewe-<session id> claude --resume <conversation id>
 ```
 
 Pressing `s` instead gives you a shell in the same container. That shows you the room; attaching
@@ -269,7 +269,7 @@ shows you the conversation.
 
 Two questions, both asked of the container by name and neither needing anything written down:
 
-- **is a client on the conversation** (`tmux list-clients -t quay`), so a reclaim never closes a
+- **is a client on the conversation** (`tmux list-clients -t krewe`), so a reclaim never closes a
   container somebody is typing into.
 - **is a model runtime in the process table** (`/proc`), so a conversation answering with nobody
   watching it is not read as an empty container.
@@ -288,8 +288,8 @@ passing build, and the build, the linter, the type check and the whole test suit
 layout that is wrong. The image carries a browser now, so a session can look:
 
 ```
-quay render http://localhost:3000
-quay render localhost:3000 home.png 390x844 dark 2s
+krewe render http://localhost:3000
+krewe render localhost:3000 home.png 390x844 dark 2s
 ```
 
 The url comes first. Everything after it is recognised by its shape rather than its position, so any
@@ -333,10 +333,10 @@ readable from inside a container, so the session sees exit 137 and reads it as a
 real gate: a linter, a build and an install were each killed part way through and the session
 reported a partial check.
 
-`quay room` reads the machine's own accounting and says what is true:
+`krewe room` reads the machine's own accounting and says what is true:
 
 ```
-quay room
+krewe room
 ```
 
 It names what this sandbox advertises, what is free, what it holds, and what an out of memory killer
@@ -451,14 +451,14 @@ environment variable or a file is a separate choice. A Kubernetes Secret is read
 `secretKeyRef` or mounted through a `secret` volume; a Docker secret is given a target and lands
 under `/run/secrets`. Neither writes the presentation into the store.
 
-`quay secret set` is the environment. `quay secret mount` is a file:
+`krewe secret set` is the environment. `krewe secret mount` is a file:
 
 ```
-quay secret mount gitconfig ~/.gitconfig
-cat ~/.gitconfig | quay secret mount gitconfig
+krewe secret mount gitconfig ~/.gitconfig
+cat ~/.gitconfig | krewe secret mount gitconfig
 ```
 
-It lands at `/run/secrets/<name>`, one file per secret, and `quay secret list` says so. The directory
+It lands at `/run/secrets/<name>`, one file per secret, and `krewe secret list` says so. The directory
 is created with the container and is memory backed, owned by the sandbox user and shut to everybody
 else, so a mounted value never reaches the container's writable layer or the host's disk.
 
@@ -468,8 +468,8 @@ the life of that container, for example through `docker inspect`. A file in a me
 is not.
 
 Two things to know. The value is written when the sandbox is made, so a session already running was
-made before you mounted it: stop the session to get one that has it. And `quay secret set` trims,
-because a token gains a newline from the tool that printed it, while `quay secret mount` does not,
+made before you mounted it: stop the session to get one that has it. And `krewe secret set` trims,
+because a token gains a newline from the tool that printed it, while `krewe secret mount` does not,
 because a file's bytes are the file.
 
 ## Who a session commits as
@@ -477,7 +477,7 @@ because a file's bytes are the file.
 A session commits as you, and it has to be told who that is. Mount your own git configuration:
 
 ```
-quay secret mount <workspace> gitconfig ~/.gitconfig
+krewe secret mount <workspace> gitconfig ~/.gitconfig
 ```
 
 The image ships a git configuration holding one line, `[include] path = /run/secrets/gitconfig`, so
@@ -492,7 +492,7 @@ workspace that mounts none is told not to sign. The system writes its answer aft
 takes the last value it reads.
 
 ```
-quay secret mount <workspace> GIT_SSH_SIGNING_KEY ~/.ssh/id_ed25519
+krewe secret mount <workspace> GIT_SSH_SIGNING_KEY ~/.ssh/id_ed25519
 ```
 
 Mounted, not set. Setting it is refused, and the refusal says this instead. A private key in the
@@ -508,7 +508,7 @@ mount that key and a session signs as you do everywhere else. Export it first:
 
 ```
 gpg --armor --export-secret-keys <key id> > /tmp/signing-key.asc
-quay secret mount <workspace> GPG_SIGNING_KEY /tmp/signing-key.asc
+krewe secret mount <workspace> GPG_SIGNING_KEY /tmp/signing-key.asc
 rm /tmp/signing-key.asc
 ```
 
@@ -519,7 +519,7 @@ If the key has a passphrase, and most do, mount that too. Without it gpg has not
 key with, and the commit fails saying so:
 
 ```
-quay secret mount <workspace> GPG_SIGNING_KEY_PASSPHRASE ~/.quay/passphrase
+krewe secret mount <workspace> GPG_SIGNING_KEY_PASSPHRASE ~/.krewe/passphrase
 ```
 
 gpg in a sandbox runs in batch, with no terminal to ask on. That is deliberate: a passphrase prompt
@@ -535,9 +535,9 @@ A sandbox is a container, and a container's filesystem is thrown away with it. S
 directories that matter are mounted in from the host:
 
 ```
-~/.quay/data/workspaces/<workspace>/claude    ->  /home/agent/.claude
-~/.quay/data/workspaces/<workspace>/volume    ->  /home/agent/shared
-~/.quay/data/workspaces/<workspace>/projects/<project>/sessions/<session>/workspace
+~/.krewe/data/workspaces/<workspace>/claude    ->  /home/agent/.claude
+~/.krewe/data/workspaces/<workspace>/volume    ->  /home/agent/shared
+~/.krewe/data/workspaces/<workspace>/projects/<project>/sessions/<session>/workspace
                                               ->  /home/agent/workspace
 ```
 
@@ -552,13 +552,13 @@ replaced.
 That is also how you give a session context. Write it with an editor:
 
 ```
-echo "Supplier is Octopus, account 123." >> ~/.quay/data/workspaces/<workspace>/projects/<project>/sessions/<session>/workspace/CLAUDE.md
+echo "Supplier is Octopus, account 123." >> ~/.krewe/data/workspaces/<workspace>/projects/<project>/sessions/<session>/workspace/CLAUDE.md
 ```
 
 That session reads it on the next task, because the model already looks for `CLAUDE.md` in its
 working directory. Nothing is prepended to your message and nothing is charged for a task that does
 not need it. An agent can also write these files, which is the trade for keeping the conversation in
-the same place. `quay context set` is the same thing said as a command, and it holds what it writes
+the same place. `krewe context set` is the same thing said as a command, and it holds what it writes
 in the store, so a level survives a session being replaced. See
 [`docs/WORKSPACE.md`](WORKSPACE.md).
 
@@ -570,7 +570,7 @@ volume is the answer: one clone, and a working tree per session.
 
 ```
 /home/agent/shared/repos/<name>                    the one clone
-/home/agent/shared/worktrees/$QC_SESSION_ID/<name>  this session's working tree, on branch quay/$QC_SESSION_ID
+/home/agent/shared/worktrees/$QC_SESSION_ID/<name>  this session's working tree, on branch krewe/$QC_SESSION_ID
 ```
 
 `QC_SESSION_ID` is on every sandbox, and it is the identifier the system shows for the session. The
