@@ -87,6 +87,19 @@ Feature: The operator sees the system from the console
     When the operator presses "esc" in the console
     Then the console is on the "workspaces" view
 
+  # A console that opens at the top every time makes a person walk back down to where they were a
+  # minute ago. The top is what it opens on when it has nothing remembered.
+  Scenario: The console opens where it was last left
+    Given a job titled "read the electricity bill"
+    When the operator is at the console
+    And the operator presses "enter" in the console
+    And the operator presses "enter" in the console
+    Then the console is on the "jobs" view
+    When the operator closes the console and opens it again
+    Then the console is on the "jobs" view
+    And the console is showing 1 row
+    And the console screen says "jobs(acme/house-bills)"
+
   # A console that does not say where it is makes a person guess. The address is the one they could
   # type back: the workspace, then the project, then the job.
   Scenario: The console says where it is, as an address a person could type

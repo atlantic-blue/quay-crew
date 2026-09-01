@@ -106,7 +106,8 @@ func InfoFrom(client quaycrewv1.ControlPlaneServiceClient, known Info) InfoSourc
 // beside is how the console opens a conversation next to itself when the key for it is pressed. It is
 // handed in because picking which conversation, and how to open it, belongs to the command line.
 func Run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, known Info,
-	beside func(selected string) ([]string, error), freshen func(selected string) error) error {
+	beside func(selected string) ([]string, error), freshen func(selected string) error,
+	places PlaceStore) error {
 	registry, err := NewDefaultRegistry(client)
 	if err != nil {
 		return err
@@ -118,7 +119,7 @@ func Run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, known
 	// Show what is already known while the control plane is still being asked, rather than an empty
 	// block that fills in a moment later.
 	model = model.WithInfo(known).WithClient(client).Beside(beside).Freshen(freshen).
-		WithCommandRunner(TheToolItself())
+		WithCommandRunner(TheToolItself()).Remembering(places).Resuming(resume(places))
 	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx))
 	if _, err := program.Run(); err != nil {
 		return fmt.Errorf("console: %w", err)
@@ -189,7 +190,7 @@ func HeaderHeight(registry *Registry, view string, info Info, width, height int)
 // this view's keys rather than the keys of the view it opened on.
 func RunBare(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, known Info,
 	beside func(selected string) ([]string, error), freshen func(selected string) error,
-	publish func(view string) error) error {
+	publish func(view string) error, places PlaceStore) error {
 	registry, err := NewDefaultRegistry(client)
 	if err != nil {
 		return err
@@ -199,10 +200,25 @@ func RunBare(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, k
 		return err
 	}
 	model = model.WithInfo(known).WithClient(client).Beside(beside).Freshen(freshen).
-		WithCommandRunner(TheToolItself()).WithoutHeader().WithViewPublisher(publish)
+		WithCommandRunner(TheToolItself()).WithoutHeader().WithViewPublisher(publish).
+		Remembering(places).Resuming(resume(places))
 	program := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx))
 	if _, err := program.Run(); err != nil {
 		return fmt.Errorf("console: %w", err)
 	}
 	return nil
+}
+
+// resume is where the console was last standing, and nowhere when it cannot be read. A place that
+// cannot be loaded is a console that opens at the top, which is what it did before it remembered
+// anything: it is not worth refusing to open over.
+func resume(places PlaceStore) Place {
+	if places.Load == nil {
+		return Place{}
+	}
+	where, err := places.Load()
+	if err != nil {
+		return Place{}
+	}
+	return where
 }

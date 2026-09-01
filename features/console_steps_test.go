@@ -33,6 +33,9 @@ type consoleWorld struct {
 	terminalErr error
 	// contextFile is a file a scenario wrote for the guided setup's context stage to read.
 	contextFile string
+	// place is where the console was standing, kept in memory the way the tool keeps it in a file, so
+	// a scenario can close one console and open another over the same system.
+	place console.Place
 }
 
 type consoleKey struct{}
@@ -119,6 +122,16 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 
 	// The sessions listing, driven as the real console. It is where the scenarios about how a row is
 	// drawn belong, because a workspace row has three cells and a session row has twelve.
+	// Closing the console and opening another over the same system, which is the whole of what
+	// remembering is for. The place goes through the same seam the tool writes to a file.
+	sc.Step(`^the operator closes the console and opens it again$`, func(ctx context.Context) error {
+		c := consoleFrom(ctx)
+		if c.place.Empty() {
+			return fmt.Errorf("the console wrote down nowhere, so there is nothing to open again")
+		}
+		return c.openModel(worldFrom(ctx))
+	})
+
 	sc.Step(`^the operator looks at the sessions listing$`, func(ctx context.Context) error {
 		return consoleFrom(ctx).openModelOn(worldFrom(ctx), "sessions")
 	})
@@ -643,8 +656,16 @@ func (c *consoleWorld) openModel(w *world) error {
 	if err != nil {
 		return err
 	}
-	c.model = model.WithInfo(described).WithTerminal(recordingTerminal(c))
-	return c.refresh()
+	c.model = model.WithInfo(described).WithTerminal(recordingTerminal(c)).
+		Remembering(c.notebook()).Resuming(c.place)
+	// Everything the console does on the way up bar the clock, which is what walks a remembered place
+	// back down. Init would also start the three second refresh and a scenario should not wait for it.
+	next, err := drive(c.model, c.model.Opening())
+	if err != nil {
+		return err
+	}
+	c.model = next
+	return nil
 }
 
 // refresh reloads the active view, which is what the key for it does and what the clock does on its
@@ -828,4 +849,17 @@ func (c *consoleWorld) openModelOn(w *world, view string) error {
 		}
 	}
 	return c.press(tea.KeyMsg{Type: tea.KeyEnter})
+}
+
+// notebook is where a scenario's console keeps the level it is standing on. The tool keeps it in a
+// file under the system's directory; a scenario keeps it in memory, so closing one console and
+// opening another goes through the same seam the tool goes through.
+func (c *consoleWorld) notebook() console.PlaceStore {
+	return console.PlaceStore{
+		Load: func() (console.Place, error) { return c.place, nil },
+		Save: func(where console.Place) error {
+			c.place = where
+			return nil
+		},
+	}
 }

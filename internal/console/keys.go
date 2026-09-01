@@ -486,7 +486,7 @@ func (m Model) descendInto(name string, row Row, scope string) (Model, tea.Cmd) 
 	}
 	m.stack = append(m.stack, crumbEntry{
 		resource: m.active.Name, parent: m.parent, selected: m.selected,
-		into: row.Name(), typed: row.Typed(),
+		row: row.ID, into: row.Name(), typed: row.Typed(),
 	})
 	m.active, m.parent = child, scope
 	m.rows, m.summary, m.selected, m.top, m.filter, m.err = nil, summary{}, 0, 0, "", nil
