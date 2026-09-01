@@ -9,6 +9,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/capacity"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // The flags a ceiling is set with. Each is its own number, so setting one and leaving the rest is a
@@ -29,6 +30,10 @@ const (
 	// the command that would take it, and none has been run.
 	flagReclaim = "--reclaim"
 	flagArchive = "--archive"
+	// How full a session's context window may be here before the system gives it no new task on the
+	// job it is doing. It is the one number on this row that ships set rather than unset, and where it
+	// came from is printed beside it.
+	flagContextCeiling = "--context-ceiling"
 )
 
 // runLimits reads and sets what a workspace lets its sessions declare.
@@ -43,9 +48,10 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 	}
 	if len(rest) > 1 {
 		return fmt.Errorf("usage: krewe limits [<workspace>] [%s <n>] [%s <n>] [%s <n>] "+
-			"[%s <duration>] [%s <duration>] [%s <duration>] [%s <mebibytes>] [%s <per cent>]",
+			"[%s <duration>] [%s <duration>] [%s <duration>] [%s <mebibytes>] [%s <per cent>] "+
+			"[%s <per cent>]",
 			flagMaxDepth, flagMaxRunning, flagBudgetTokens, flagLease, flagReclaim, flagArchive,
-			flagRequestMemory, flagRequestProcessor)
+			flagRequestMemory, flagRequestProcessor, flagContextCeiling)
 	}
 	typed := ""
 	if len(rest) == 1 {
@@ -77,6 +83,7 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 		{flagBudgetTokens, func(n int64) { asked.BudgetTokens = n }},
 		{flagRequestMemory, func(n int64) { asked.RequestMemoryMib = int32(n) }},
 		{flagRequestProcessor, func(n int64) { asked.RequestProcessorPercent = int32(n) }},
+		{flagContextCeiling, func(n int64) { asked.ContextCeilingPercent = int32(n) }},
 	} {
 		if !values.has(given.flag) {
 			continue
@@ -126,6 +133,7 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 		timeMeans(asked.GetReclaimSeconds(), "no session here gives its container back"))
 	fmt.Fprintf(out, "archive        %s%s\n", lengthOr(asked.GetArchiveSeconds()),
 		timeMeans(asked.GetArchiveSeconds(), "nothing here is filed away on its own"))
+	fmt.Fprintf(out, "ctx ceiling    %d%%%s\n", ceilingOf(asked), ceilingMeans(asked))
 	if !setting {
 		fmt.Fprintf(out, "\nraise one with krewe limits %s %s <n>\n", located.Path, flagMaxDepth)
 	}
@@ -207,5 +215,25 @@ func limitsFlagsTaken() map[string]bool {
 		flagMaxDepth: true, flagMaxRunning: true, flagBudgetTokens: true, flagLease: true,
 		flagReclaim: true, flagArchive: true,
 		flagRequestMemory: true, flagRequestProcessor: true,
+		flagContextCeiling: true,
 	}
+}
+
+// ceilingOf is the share of its context window a session here may fill before the system gives it no
+// new task, which is the workspace's where it set one and the system's where it did not.
+func ceilingOf(limits *quaycrewv1.WorkspaceLimits) int32 {
+	if set := limits.GetContextCeilingPercent(); set > 0 {
+		return set
+	}
+	return job.DefaultContextCeiling
+}
+
+// ceilingMeans says where the number came from, because this one is not measured and reads exactly
+// like the ones that are. It also says what happens at it, since a limit that only prints a share
+// tells an operator nothing about what the system does when a session reaches it.
+func ceilingMeans(limits *quaycrewv1.WorkspaceLimits) string {
+	if limits.GetContextCeilingPercent() > 0 {
+		return "  (a session past this hands the rest of its job to a fresh one)"
+	}
+	return "  (the system's own, from a standard rather than from any measurement of this system)"
 }

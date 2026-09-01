@@ -55,6 +55,11 @@ func SessionCells(one *quaycrewv1.Session, workspaceName, projectName string) []
 //
 // Blank for a conversation nobody has spoken in, the way the token columns are: a session with no
 // conversation behind it has not filled anything.
+//
+// A share on its own says nothing about whether it is a problem. The column used to print one and an
+// operator had to hold the workspace's ceiling in their head to read it, so the word beside the number
+// says what the system is about to do: over means this session is given no new work on its job and
+// hands the rest over, and near means it is inside the band below that.
 func ContextLabel(session *quaycrewv1.Session) string {
 	window := session.GetContextWindow()
 	if window.GetUsed() <= 0 {
@@ -63,7 +68,32 @@ func ContextLabel(session *quaycrewv1.Session) string {
 	if window.GetSize() <= 0 {
 		return Tokens(window.GetUsed())
 	}
-	return strconv.FormatInt(Share(window.GetUsed(), window.GetSize()), 10) + "%"
+	share := Share(window.GetUsed(), window.GetSize())
+	return strconv.FormatInt(share, 10) + "%" + againstTheCeiling(share, window.GetCeiling())
+}
+
+// NearBand is how far below the ceiling a session starts reading as near it, in points of the share.
+//
+// The band rather than a second setting, because the standard the ceiling comes from names a band
+// rather than a point: quality falls off between 50 and 70 per cent of a window and is poor past 70.
+// So a ceiling of 70 marks a session from 50, and a ceiling an operator moves takes its band with it.
+// It is as provisional as the ceiling internal/job refuses work at, and it lives here because saying
+// which sessions are near one is a listing's job: the gate itself reads no band at all.
+const NearBand = 20
+
+// againstTheCeiling is the word beside the share, and nothing where the system stated no ceiling. A
+// mark against a number nobody answered with would be the console inventing a limit.
+func againstTheCeiling(share int64, ceiling int32) string {
+	switch {
+	case ceiling <= 0:
+		return ""
+	case share >= int64(ceiling):
+		return " over"
+	case share >= int64(ceiling)-NearBand:
+		return " near"
+	default:
+		return ""
+	}
 }
 
 // Spend is where a session's context went, in the form the accounting works in.

@@ -117,6 +117,12 @@ commands:
                                           it. If the job dies part way, what is on that record is
                                           where it carries on from, and what is not on it is done a
                                           second time
+  job handoff "<what is left>"            hand the rest of the job you are running to a fresh
+    ["<what you tried>"]                  session, which is what the system asks you for when your
+                                          context window reaches this workspace's ceiling. The next
+                                          session is given those words, and what you recorded as
+                                          finished, and nothing else you can see: it starts in an
+                                          empty working directory, so push your branch and name it
   job resume <job>                        carry on with a job that failed, from the first step it
                                           did not finish. It keeps its session, so its working
                                           directory, its branch and its pull request are where it
@@ -150,11 +156,16 @@ commands:
     [--lease <duration>]                  a settled session keeps its container before the system
     [--reclaim <duration>]                takes it back and then files it away. Max depth starts at
     [--archive <duration>]                zero, so no session declares a job until you raise it. The
-                                          reclaim and archive times start unset, and unset means the
+    [--context-ceiling <per cent>]        reclaim and archive times start unset, and unset means the
                                           system does nothing. The lease is the system's hold on a job
                                           and not the credential a session runs under: a credential
                                           lasts as long as its job, and this setting does not reach
-                                          it. A session may read none of this and set none of it
+                                          it. The context ceiling is how full a session's context
+                                          window may get before the system gives it no new task and
+                                          asks it to hand the rest of its job over. It starts at 70
+                                          per cent, which comes from a standard rather than from any
+                                          measurement of this system, and 100 turns the gate off. A
+                                          session may read none of this and set none of it
   task [<address>] <text>                 start or continue a session, and wait here for the
                                           answer. For a short question, where the reply is the
                                           point

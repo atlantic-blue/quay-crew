@@ -211,6 +211,10 @@ message ContextWindow {
   // model runtime last told a session in this workspace. Zero where nothing has told it yet, which a
   // listing shows as a count rather than as a guessed share.
   int64 size = 2;
+  // ceiling is the share of the window past which this workspace gives a session no new task, so a
+  // client says what the number means rather than working it out from a limit of its own. Zero where
+  // the system did not say, and a client that reads zero marks nothing.
+  int32 ceiling = 3;
 }
 
 // Usage is what a conversation has cost, in tokens.
@@ -1399,6 +1403,10 @@ message Job {
   // that failed is continued from them rather than started again. A listing leaves them out, the way
   // it leaves out the answer.
   repeated JobStep steps = 38;
+  // handoffs are what a session wrote down when it stopped taking work on this job at the context
+  // ceiling: what is left, and what it tried that did not work. The newest goes in front of the
+  // session that carries the job on. A listing leaves them out, the way it leaves out the answer.
+  repeated JobHandoff handoffs = 50;
   // resuming is the failure this attempt is continuing past, and empty for a job nobody continued.
   // It is what the job failed with, moved off the reason by the resume, so a job going again does not
   // sit pending reading as one the machine is holding back.
@@ -1481,6 +1489,31 @@ message JobStep {
   string summary = 2;
   // finished_at is when the session recorded it.
   google.protobuf.Timestamp finished_at = 3;
+}
+
+// JobHandoff is what one session wrote down when it stopped taking work on a job.
+//
+// A session used to run until its context window was full, so the last task of a long job, the one
+// that opens the pull request and writes the answer, was done where the model is worst. Past the
+// workspace's ceiling the system now gives that session no new task. What it asks for instead is
+// this: the state a fresh session starts from, so the job carries on rather than starting again.
+//
+// What the session did is already on the record as steps, so a handoff carries the two halves the
+// record did not have.
+message JobHandoff {
+  // seq is where this handoff sits in the order they were written, counting from one.
+  int32 seq = 1;
+  // left is what is still to do, in the session's own words. It is the whole content of a handoff,
+  // so a handoff that says nothing here is refused rather than written.
+  string left = 2;
+  // tried is what this session tried that did not work, which is what stops the next one paying for
+  // the same dead end. Empty is honest: a session that hit nothing says nothing.
+  string tried = 3;
+  // session is the conversation that wrote it, which is how the system tells a handoff waiting to be
+  // taken up from one already taken up.
+  string session = 4;
+  // written_at is when the session wrote it.
+  google.protobuf.Timestamp written_at = 5;
 }
 
 // CreateJobRequest declares a job. Every rule is checked here, while the caller is
@@ -1633,6 +1666,27 @@ message RecordJobStepResponse {
   Job job = 1;
 }
 
+// RecordJobHandoffRequest writes down the state a fresh session starts from, on the job the caller is
+// running.
+//
+// Written by the session doing the work, over the credential the system minted for that job, for the
+// reason a step is: a caller that could name any job could write on any job's record. Handing over is
+// not a verb a role grants either. A role that could withhold it would leave a session at the ceiling
+// with no way to stop, which is the state this whole behaviour exists to end.
+message RecordJobHandoffRequest {
+  // left is what is still to do. Empty is refused: a handoff carrying nothing leaves a fresh session
+  // starting from nothing, which is the cost this exists to stop paying.
+  string left = 1;
+  // tried is what this session tried that did not work. Empty is accepted, and the record says so.
+  string tried = 2;
+  // id names the job the handoff belongs to, and only the caller's own is accepted. Empty is the
+  // caller's own job.
+  string id = 3;
+}
+message RecordJobHandoffResponse {
+  Job job = 1;
+}
+
 // ResumeJobRequest continues a job that failed, from the first step it did not finish.
 //
 // The operator's call. It puts the job back to pending with its session, so a controller starts it
@@ -1740,6 +1794,14 @@ message WorkspaceLimits {
   // request_processor_percent is the processor share one sandbox here asks for, in per cent of one
   // processor, which is the unit the room view prints beside the memory. Zero takes the system's own.
   int32 request_processor_percent = 9;
+  // context_ceiling_percent is how full a session's context window may be here before the system
+  // gives it no new task. Zero takes the system's own, which is 70.
+  //
+  // Unlike the other numbers on this row, the system ships this one set rather than unset. It is
+  // taken from the standard quay-crew#539 names, which says quality falls off between 50 and 70 per
+  // cent of a window and is poor past 70, and from no measurement anybody has taken here. A
+  // workspace that wants the gate off sets it to 100, which refuses nothing until the window is full.
+  int32 context_ceiling_percent = 10;
 }
 
 message GetWorkspaceLimitsRequest {
@@ -1853,6 +1915,9 @@ service ControlPlaneService {
   // job that failed from the first step it did not finish, and RefuseJob is the other answer to a
   // failure: end it, so nobody continues it.
   rpc RecordJobStep(RecordJobStepRequest) returns (RecordJobStepResponse);
+  // RecordJobHandoff is the session at the context ceiling saying what it leaves behind, so the next
+  // session carries the job on rather than starting it again.
+  rpc RecordJobHandoff(RecordJobHandoffRequest) returns (RecordJobHandoffResponse);
   rpc ResumeJob(ResumeJobRequest) returns (ResumeJobResponse);
   rpc RefuseJob(RefuseJobRequest) returns (RefuseJobResponse);
 

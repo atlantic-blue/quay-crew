@@ -426,6 +426,15 @@ func (m *Memory) jobMatching(limit int, matches func(*job.Job) bool) []*job.Job 
 			continue
 		}
 		kept := cloneJob(*held)
+		// The handoffs, because the conversation a job runs in is derived from them: each handover
+		// moves the name on, and a controller reading a job without them would dispatch the rest of the
+		// job straight back into the conversation that was full. The steps are deliberately not
+		// attached here, because the Postgres store does not attach them either and the looser of the
+		// two doubles is the one that manufactures a green suite.
+		kept.Handoffs = append([]job.Handoff(nil), m.jobHandoffs[held.ID]...)
+		if len(kept.Handoffs) == 0 {
+			kept.Handoffs = nil
+		}
 		found = append(found, &kept)
 	}
 	sort.SliceStable(found, func(i, j int) bool {

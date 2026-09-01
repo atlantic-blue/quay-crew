@@ -107,11 +107,19 @@ func Asked(one *Job) string {
 	// A job that owes a person a plan writes the plan and nothing else. It comes before what it was
 	// told, because what a planned job was told is the correction to a plan rather than the answer to
 	// a question: a session given CarryOn here would be told to carry on with work it has not started.
+	// It comes before a handoff for the same reason: a job with no approved plan has no work to carry
+	// on with, so the session taking it over is owed the plan rather than the record.
 	if WaitingForItsPlan(one) {
 		if one.Told != "" {
 			return WriteThePlanAgain(one)
 		}
 		return WriteThePlan(one)
+	}
+	// A handoff waiting to be taken up comes next. The conversation this task is going to has never
+	// seen the job, so what it gets is the brief and the record together, which is where it differs
+	// from a job being continued in the conversation that did the work. See ceiling.go.
+	if HandingOver(one) {
+		return HandedOn(one)
 	}
 	if one.Told != "" {
 		return CarryOn(one)

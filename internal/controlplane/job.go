@@ -407,6 +407,7 @@ func asJob(from *job.Job) *quaycrewv1.Job {
 		Escalation: from.Escalation, LoopedStep: int32(from.LoopedStep), EscalatedTo: from.EscalatedTo,
 		Attempted:   asJobAttempts(from.Attempted),
 		Steps:       asJobSteps(from.Steps),
+		Handoffs:    asJobHandoffs(from.Handoffs),
 		SpentTokens: from.SpentTokens, ObservedVersion: int32(from.ObservedVersion),
 		TraceId: from.TraceID, ParentSpanId: from.ParentSpanID,
 		CreatedAt: timestamppb.New(from.CreatedAt), UpdatedAt: timestamppb.New(from.UpdatedAt),
@@ -451,6 +452,21 @@ func asJobSteps(from []job.Step) []*quaycrewv1.JobStep {
 		})
 	}
 	return steps
+}
+
+// asJobHandoffs puts what each session left behind on the wire.
+func asJobHandoffs(from []job.Handoff) []*quaycrewv1.JobHandoff {
+	if len(from) == 0 {
+		return nil
+	}
+	handoffs := make([]*quaycrewv1.JobHandoff, 0, len(from))
+	for _, one := range from {
+		handoffs = append(handoffs, &quaycrewv1.JobHandoff{
+			Seq: int32(one.Seq), Left: one.Left, Tried: one.Tried, Session: one.Session,
+			WrittenAt: timestamppb.New(one.WrittenAt),
+		})
+	}
+	return handoffs
 }
 
 // RunJobController makes reality match the job the system holds, until ctx is done. It blocks, so

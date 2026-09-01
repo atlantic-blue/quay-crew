@@ -78,6 +78,7 @@ const (
 	ControlPlaneService_AskJob_FullMethodName                   = "/quaycrew.v1.ControlPlaneService/AskJob"
 	ControlPlaneService_AnswerJob_FullMethodName                = "/quaycrew.v1.ControlPlaneService/AnswerJob"
 	ControlPlaneService_RecordJobStep_FullMethodName            = "/quaycrew.v1.ControlPlaneService/RecordJobStep"
+	ControlPlaneService_RecordJobHandoff_FullMethodName         = "/quaycrew.v1.ControlPlaneService/RecordJobHandoff"
 	ControlPlaneService_ResumeJob_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ResumeJob"
 	ControlPlaneService_RefuseJob_FullMethodName                = "/quaycrew.v1.ControlPlaneService/RefuseJob"
 	ControlPlaneService_RecordSteer_FullMethodName              = "/quaycrew.v1.ControlPlaneService/RecordSteer"
@@ -171,6 +172,9 @@ type ControlPlaneServiceClient interface {
 	// job that failed from the first step it did not finish, and RefuseJob is the other answer to a
 	// failure: end it, so nobody continues it.
 	RecordJobStep(ctx context.Context, in *RecordJobStepRequest, opts ...grpc.CallOption) (*RecordJobStepResponse, error)
+	// RecordJobHandoff is the session at the context ceiling saying what it leaves behind, so the next
+	// session carries the job on rather than starting it again.
+	RecordJobHandoff(ctx context.Context, in *RecordJobHandoffRequest, opts ...grpc.CallOption) (*RecordJobHandoffResponse, error)
 	ResumeJob(ctx context.Context, in *ResumeJobRequest, opts ...grpc.CallOption) (*ResumeJobResponse, error)
 	RefuseJob(ctx context.Context, in *RefuseJobRequest, opts ...grpc.CallOption) (*RefuseJobResponse, error)
 	// The score of a job: one command marks a moment, and the report reads the marks back.
@@ -794,6 +798,16 @@ func (c *controlPlaneServiceClient) RecordJobStep(ctx context.Context, in *Recor
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) RecordJobHandoff(ctx context.Context, in *RecordJobHandoffRequest, opts ...grpc.CallOption) (*RecordJobHandoffResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecordJobHandoffResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_RecordJobHandoff_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) ResumeJob(ctx context.Context, in *ResumeJobRequest, opts ...grpc.CallOption) (*ResumeJobResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ResumeJobResponse)
@@ -993,6 +1007,9 @@ type ControlPlaneServiceServer interface {
 	// job that failed from the first step it did not finish, and RefuseJob is the other answer to a
 	// failure: end it, so nobody continues it.
 	RecordJobStep(context.Context, *RecordJobStepRequest) (*RecordJobStepResponse, error)
+	// RecordJobHandoff is the session at the context ceiling saying what it leaves behind, so the next
+	// session carries the job on rather than starting it again.
+	RecordJobHandoff(context.Context, *RecordJobHandoffRequest) (*RecordJobHandoffResponse, error)
 	ResumeJob(context.Context, *ResumeJobRequest) (*ResumeJobResponse, error)
 	RefuseJob(context.Context, *RefuseJobRequest) (*RefuseJobResponse, error)
 	// The score of a job: one command marks a moment, and the report reads the marks back.
@@ -1202,6 +1219,9 @@ func (UnimplementedControlPlaneServiceServer) AnswerJob(context.Context, *Answer
 }
 func (UnimplementedControlPlaneServiceServer) RecordJobStep(context.Context, *RecordJobStepRequest) (*RecordJobStepResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RecordJobStep not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) RecordJobHandoff(context.Context, *RecordJobHandoffRequest) (*RecordJobHandoffResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecordJobHandoff not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ResumeJob(context.Context, *ResumeJobRequest) (*ResumeJobResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResumeJob not implemented")
@@ -2322,6 +2342,24 @@ func _ControlPlaneService_RecordJobStep_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_RecordJobHandoff_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordJobHandoffRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).RecordJobHandoff(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_RecordJobHandoff_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).RecordJobHandoff(ctx, req.(*RecordJobHandoffRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ResumeJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ResumeJobRequest)
 	if err := dec(in); err != nil {
@@ -2780,6 +2818,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RecordJobStep",
 			Handler:    _ControlPlaneService_RecordJobStep_Handler,
+		},
+		{
+			MethodName: "RecordJobHandoff",
+			Handler:    _ControlPlaneService_RecordJobHandoff_Handler,
 		},
 		{
 			MethodName: "ResumeJob",

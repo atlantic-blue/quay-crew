@@ -22,7 +22,7 @@ import (
 // happen; nothing here dispatches anything.
 func runJob(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: krewe job <create|list|show|stop|ask|answer|step|resume|refuse>")
+		return fmt.Errorf("usage: krewe job <create|list|show|stop|ask|answer|step|handoff|resume|refuse>")
 	}
 	switch args[0] {
 	case "create":
@@ -39,13 +39,15 @@ func runJob(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, ar
 		return runJobAnswer(ctx, client, args[1:], out)
 	case "step":
 		return runJobStep(ctx, client, args[1:], out)
+	case "handoff":
+		return runJobHandoff(ctx, client, args[1:], out)
 	case "resume":
 		return runJobResume(ctx, client, args[1:], out)
 	case "refuse":
 		return runJobRefuse(ctx, client, args[1:], out)
 	default:
 		return fmt.Errorf("there is no job %s command: "+
-			"krewe job <create|list|show|stop|ask|answer|step|resume|refuse>", args[0])
+			"krewe job <create|list|show|stop|ask|answer|step|handoff|resume|refuse>", args[0])
 	}
 }
 
@@ -438,6 +440,14 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 			fmt.Fprintf(out, "  %d. %s\n", step.GetSeq(), step.GetSummary())
 		}
 	}
+	// What each session left behind when it stopped taking work at the context ceiling. The newest is
+	// what the session doing it now was handed, so a reader can tell what it was told to carry on from.
+	for _, handed := range one.GetHandoffs() {
+		fmt.Fprintf(out, "handed over %d, left: %s\n", handed.GetSeq(), handed.GetLeft())
+		if handed.GetTried() != "" {
+			fmt.Fprintf(out, "  tried already: %s\n", handed.GetTried())
+		}
+	}
 	// How to answer a failure, said where somebody is already looking at one. Both ways, because
 	// which of the two this is is the reader's to decide and nothing else can.
 	if one.GetPhase() == job.PhaseFailed {
@@ -648,6 +658,31 @@ func runJobStep(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	steps := recorded.GetSteps()
 	fmt.Fprintf(out, "step %d of %s: %s\n", len(steps), display.ShortID(recorded.GetId()), args[0])
 	fmt.Fprintln(out, "if this job stops before it is done, it carries on from here rather than from nothing.")
+	return nil
+}
+
+// runJobHandoff writes down the state a fresh session starts this job from.
+//
+// It names no job, the way krewe job step names none: the system reads which job is handing over from
+// the credential this session holds. A caller that could name any job could write on any job's record.
+func runJobHandoff(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) < 1 || len(args) > 2 {
+		return fmt.Errorf("usage: krewe job handoff \"<what is left>\" [\"<what you tried that did not work>\"]")
+	}
+	tried := ""
+	if len(args) == 2 {
+		tried = args[1]
+	}
+	resp, err := client.RecordJobHandoff(ctx, &quaycrewv1.RecordJobHandoffRequest{
+		Left: args[0], Tried: tried,
+	})
+	if err != nil {
+		return err
+	}
+	handed := resp.GetJob()
+	fmt.Fprintf(out, "handed over %s\n", display.ShortID(handed.GetId()))
+	fmt.Fprintln(out, "the rest of this job goes to a fresh session, which is given those words, what you "+
+		"recorded as finished, and nothing else you can see.")
 	return nil
 }
 

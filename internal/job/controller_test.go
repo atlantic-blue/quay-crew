@@ -409,6 +409,18 @@ func (r *rows) recordStep(id, summary string) {
 	one.Steps = append(one.Steps, job.Step{Job: id, Seq: len(one.Steps) + 1, Summary: summary})
 }
 
+// handoff writes what the session doing a job leaves behind, by hand, the way the control plane
+// writes one over the credential that session holds. The conversation it names is the one the row
+// says is doing the job, which is what the real write records.
+func (r *rows) handoff(id, left, tried string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one := r.held[id]
+	one.Handoffs = append(one.Handoffs, job.Handoff{
+		Job: id, Seq: len(one.Handoffs) + 1, Left: left, Tried: tried, Session: one.Session,
+	})
+}
+
 // claim puts a lease on a row by hand, which is what a controller that then died left behind.
 func (r *rows) claim(id, owner string, until time.Time) {
 	r.mu.Lock()
@@ -586,6 +598,35 @@ func (r *rows) RequeueJob(_ context.Context, id string, back job.Requeue, events
 	one.LeaseOwner, one.LeaseUntil = "", nil
 	one.StartedAt, one.UpdatedAt = nil, time.Now().UTC()
 	r.record(id, events)
+	kept := *one
+	return &kept, nil
+}
+
+// HandOffJob puts a running job back to pending and lets go of its session, the way a store does when
+// the session doing it reached the context ceiling and wrote what it leaves behind. Only where this
+// controller still holds the lease, which is the condition a requeue carries.
+func (r *rows) HandOffJob(_ context.Context, id string, back job.Requeue, event *job.Event) (*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such job")
+	}
+	if one.Phase != job.PhaseRunning || one.LeaseOwner != back.Owner {
+		return nil, job.ErrHeld
+	}
+	// The condition the real stores put in the statement: a job with nothing written down is not moved,
+	// because a fresh session would start from nothing. A double that let it through would be the
+	// looser of the two, and the suite would stay green while the system lost the work.
+	if len(one.Handoffs) == 0 {
+		return nil, job.ErrNothingHandedOver
+	}
+	one.Phase, one.Session, one.Reason = job.PhasePending, "", ""
+	one.LeaseOwner, one.LeaseUntil = "", nil
+	one.StartedAt, one.UpdatedAt = nil, time.Now().UTC()
+	if event != nil {
+		r.record(id, []*job.Event{event})
+	}
 	kept := *one
 	return &kept, nil
 }

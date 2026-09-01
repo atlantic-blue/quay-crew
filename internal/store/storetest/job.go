@@ -1602,6 +1602,40 @@ func runWorkspaceLimitsConformance(t *testing.T, newDataset func(t *testing.T) O
 			t.Fatalf("the times read as %s and %s, and unset has to read as zero so the controller "+
 				"does nothing", limits.Reclaim(), limits.Archive())
 		}
+		// The one number on this row that ships set rather than unset. The row says nothing and the
+		// reader supplies the system's own, which comes from a standard rather than from a measurement
+		// of this crew. A store that answered with a number of its own would put the decision in two
+		// places.
+		if limits.ContextCeilingPercent != 0 {
+			t.Fatalf("a workspace nobody configured carries a context ceiling of %d on the row, want none",
+				limits.ContextCeilingPercent)
+		}
+		if limits.ContextCeiling() != job.DefaultContextCeiling {
+			t.Fatalf("a workspace nobody configured reads a ceiling of %d, want the system's own %d",
+				limits.ContextCeiling(), job.DefaultContextCeiling)
+		}
+	})
+
+	t.Run("a context ceiling is written whole and read back", func(t *testing.T) {
+		open := newDataset(t)
+		s := open(t)
+		ctx := context.Background()
+		workspace, _ := aProject(t, s)
+
+		if _, err := s.SetWorkspaceLimits(ctx, job.Limits{
+			Workspace: workspace, ContextCeilingPercent: 55,
+		}); err != nil {
+			t.Fatalf("SetWorkspaceLimits: %v", err)
+		}
+
+		read, err := open(t).WorkspaceLimits(ctx, workspace)
+		if err != nil {
+			t.Fatalf("WorkspaceLimits: %v", err)
+		}
+		if read.ContextCeiling() != 55 {
+			t.Fatalf("the context ceiling reads back as %d, want the 55 that was written",
+				read.ContextCeiling())
+		}
 	})
 
 	t.Run("the reclaim and archive times are written whole and read back", func(t *testing.T) {
