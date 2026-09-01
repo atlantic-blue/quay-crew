@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/panel"
+	"github.com/atlantic-blue/quay-krewe/internal/panel"
 	"github.com/cucumber/godog"
 )
 

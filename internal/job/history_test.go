@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // The arithmetic a reader trusts, and the two ways it can lie: a total taken over the page rather

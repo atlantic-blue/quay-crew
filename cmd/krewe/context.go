@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/workspace"
+	"github.com/atlantic-blue/quay-krewe/internal/workspace"
 )
 
 // contextFile is where the current address is kept, under the configuration directory. One line,

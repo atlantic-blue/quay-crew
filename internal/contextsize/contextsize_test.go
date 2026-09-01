@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/contextsize"
+	"github.com/atlantic-blue/quay-krewe/internal/contextsize"
 )
 
 // The size in the issue, so the numbers in these tests are the ones a person read out of the store

@@ -5,9 +5,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/publish"
-	"github.com/atlantic-blue/krewe/internal/repository"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/publish"
+	"github.com/atlantic-blue/quay-krewe/internal/repository"
 )
 
 // A job that names a repository ends in a pull request against it.
@@ -38,11 +38,11 @@ func usableRepository(address string) error {
 	}
 	if repository.TooLong(address) {
 		return fmt.Errorf("the repository is %d bytes and the ceiling is %d: a repository is an owner and a "+
-			"name, so write it as atlantic-blue/quay-crew", len(address), RepositoryLimit)
+			"name, so write it as atlantic-blue/quay-krewe", len(address), RepositoryLimit)
 	}
 	if !repository.Shaped(address) {
 		return fmt.Errorf("job works in the repository %q, which is not an owner and a name: write it as "+
-			"atlantic-blue/quay-crew, or paste the address of the repository", address)
+			"atlantic-blue/quay-krewe, or paste the address of the repository", address)
 	}
 	return nil
 }

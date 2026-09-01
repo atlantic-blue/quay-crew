@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/contextspend"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/contextspend"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 )
 
 // The records a transcript is made of, written the way the model's command line tool writes them.

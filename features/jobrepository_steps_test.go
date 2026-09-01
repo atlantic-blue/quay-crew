@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/job"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 	"github.com/cucumber/godog"
 )
 
@@ -70,7 +70,7 @@ func initializeJobRepositorySteps(sc *godog.ScenarioContext) {
 	})
 
 	sc.Step(`^the system refuses it and says how to write a repository$`,
-		theRefusalSays("atlantic-blue/quay-crew"))
+		theRefusalSays("atlantic-blue/quay-krewe"))
 
 	sc.Step(`^the model will answer "([^"]*)"$`, func(ctx context.Context, answer string) error {
 		worldFrom(ctx).runner.willSay(answer)

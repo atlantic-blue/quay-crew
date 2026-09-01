@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // What each attempt at a job said, and what the system does when three of them at one step say the

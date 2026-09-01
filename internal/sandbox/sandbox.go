@@ -9,7 +9,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/capacity"
+	"github.com/atlantic-blue/quay-krewe/internal/capacity"
 )
 
 // Spec describes a command to run inside a Sandbox.

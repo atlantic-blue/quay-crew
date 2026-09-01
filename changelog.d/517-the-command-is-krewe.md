@@ -10,7 +10,8 @@ type instead, whatever follows it, because the word left off a list of remembere
 the word somebody types next. A rename that leaves nothing behind answers with "command not found",
 which reads as a broken install rather than as a rename.
 
-The Go module path moved with it, to `github.com/atlantic-blue/krewe`.
+The Go module path moved with it, and the piece that renames the repository moves it again, to
+`github.com/atlantic-blue/quay-krewe`.
 
 This is the first piece of [#517](https://github.com/atlantic-blue/quay-crew/issues/517). The rest of
 the rename is planned in [docs/RENAME.md](docs/RENAME.md), and each piece says what it moved in its

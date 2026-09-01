@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/logging"
-	"github.com/atlantic-blue/krewe/internal/messaging"
+	"github.com/atlantic-blue/quay-krewe/internal/logging"
+	"github.com/atlantic-blue/quay-krewe/internal/messaging"
 	"github.com/cucumber/godog"
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"

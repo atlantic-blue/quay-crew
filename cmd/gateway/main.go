@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/logging"
-	"github.com/atlantic-blue/krewe/internal/telemetry"
+	"github.com/atlantic-blue/quay-krewe/internal/logging"
+	"github.com/atlantic-blue/quay-krewe/internal/telemetry"
 )
 
 func main() {

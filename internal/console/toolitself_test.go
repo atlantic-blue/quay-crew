@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/console"
+	"github.com/atlantic-blue/quay-krewe/internal/console"
 )
 
 // The runner the console actually ships with, driven against a real program rather than a double.

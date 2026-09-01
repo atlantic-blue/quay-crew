@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/hook"
+	"github.com/atlantic-blue/quay-krewe/internal/hook"
 )
 
 // The settings file is the only thing that makes a hook run. Everything else about a hook can be
