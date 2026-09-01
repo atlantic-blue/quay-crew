@@ -84,7 +84,8 @@ func TestAJobRowCarriesTheWholeStoryOfOneJob(t *testing.T) {
 	if got.Parent != running.GetSession() {
 		t.Fatalf("the row carries %q as the session, want the whole identifier", got.Parent)
 	}
-	want := []string{"11111111", "running", "backlog-clearer", "read the electricity bill", "22222222", "1", "1m"}
+	want := []string{"11111111", "running", "-", "backlog-clearer", "read the electricity bill",
+		"22222222", "1", "1m"}
 	if len(got.Cells) != len(want) {
 		t.Fatalf("the row has %d cells, want %d: %q", len(got.Cells), len(want), got.Cells)
 	}
@@ -113,8 +114,8 @@ func TestAJobWithNoSessionYetSaysSoRatherThanLeavingTheCellEmpty(t *testing.T) {
 	}
 	// The literal rather than the constant: a case that reads the constant passes against a
 	// constant emptied out, which is the one mistake this is here to catch.
-	if got.Cells[4] != "not yet" {
-		t.Fatalf(`the session cell says %q, want "not yet"`, got.Cells[4])
+	if got.Cells[5] != "not yet" {
+		t.Fatalf(`the session cell says %q, want "not yet"`, got.Cells[5])
 	}
 	if got.State != StateUnknown {
 		t.Fatalf("a pending job is drawn as %v, want no claim at all", got.State)
@@ -134,8 +135,8 @@ func TestAFailedJobIsMarkedForAttention(t *testing.T) {
 	}
 	// Three tries is the number that says this is not a one off, and it is the reason the column is
 	// there at all.
-	if got.Cells[5] != "3" {
-		t.Fatalf("the attempts cell says %q, want 3", got.Cells[5])
+	if got.Cells[6] != "3" {
+		t.Fatalf("the attempts cell says %q, want 3", got.Cells[6])
 	}
 }
 
@@ -316,4 +317,45 @@ func actionNamed(resource Resource, label string) (Action, bool) {
 		}
 	}
 	return Action{}, false
+}
+
+// The column the phase cannot be. Two rows read "done" and one of them could not do its work.
+func TestTheOutcomeCellSaysWhatTheJobEndedOn(t *testing.T) {
+	done := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseDone, func(one *quaycrewv1.Job) {
+		one.Outcome = job.OutcomeBlocked
+	}))
+	if done.Cells[outcomeColumn] != job.OutcomeBlocked {
+		t.Fatalf("the outcome cell says %q, want %q", done.Cells[outcomeColumn], job.OutcomeBlocked)
+	}
+	// A job that has not ended on a word says so rather than leaving a hole in the row. The literal
+	// rather than the constant, because a case reading the constant passes against it emptied out.
+	running := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseRunning, nil))
+	if running.Cells[outcomeColumn] != "-" {
+		t.Fatalf(`the outcome cell of a running job says %q, want "-"`, running.Cells[outcomeColumn])
+	}
+}
+
+func TestEveryOutcomeIsColouredOrLeftAlone(t *testing.T) {
+	for outcome, want := range map[string]string{
+		job.OutcomeProved:   ansiGreenCode,
+		job.OutcomeUnproved: "",
+		job.OutcomeBlocked:  ansiRedCode,
+		job.OutcomeDecide:   ansiYellowCode,
+		"-":                 "",
+		"reticulating":      "",
+	} {
+		if got := colourOfOutcome(outcome); got != want {
+			t.Errorf("colourOfOutcome(%q) = %q, want %q", outcome, got, want)
+		}
+	}
+	// Every word the job package hands out is answered here, so a fifth outcome cannot arrive
+	// uncoloured without this saying so.
+	for _, known := range job.Outcomes() {
+		if _, answered := map[string]bool{
+			job.OutcomeProved: true, job.OutcomeUnproved: true,
+			job.OutcomeBlocked: true, job.OutcomeDecide: true,
+		}[known]; !answered {
+			t.Fatalf("the console says nothing about the outcome %q", known)
+		}
+	}
 }

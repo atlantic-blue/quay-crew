@@ -152,7 +152,20 @@ func (c *system) ListTasks(_ context.Context, req *quaycrewv1.ListTasksRequest) 
 }
 
 // lands closes the open task of the session the controller started, the way a model answering does.
-func (c *system) lands(reply string) {
+//
+// It ends the answer with an outcome, because a session that followed the brief it was given ends
+// with one and a double looser than the real thing manufactures a green suite. A test about an
+// answer that states none says so with landsExactly.
+func (c *system) lands(reply string) { c.landsExactly(landed(reply)) }
+
+// landed is what the row carries after lands, so an assertion says the answer it meant rather than
+// repeating the shape of the line.
+func landed(reply string) string {
+	return reply + "\n\n" + job.OutcomeMarker + " " + job.OutcomeProved
+}
+
+// landsExactly closes the open task with exactly this answer, outcome or no outcome.
+func (c *system) landsExactly(reply string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, tasks := range c.tasks {
@@ -669,6 +682,7 @@ func (r *rows) LandJob(_ context.Context, id string, landed job.Landing, event *
 	}
 	now := time.Now().UTC()
 	one.Phase, one.Answer, one.Reason = landed.Phase, landed.Answer, landed.Reason
+	one.Outcome = landed.Outcome
 	// Kept where the landing read none, the way both stores keep it: a step that named the pull request
 	// wrote the address before any answer landed, and a double that dropped it would let a test pass
 	// over work the real system keeps.
@@ -840,7 +854,7 @@ func TestDeclaredJobRunsAndTheAnswerLandsOnTheRecord(t *testing.T) {
 	if got.Phase != job.PhaseDone {
 		t.Fatalf("the job is %q, want done", got.Phase)
 	}
-	if got.Answer != "the bill is due on the 14th" {
+	if got.Answer != landed("the bill is due on the 14th") {
 		t.Fatalf("the answer is %q", got.Answer)
 	}
 	if got.StartedAt == nil || got.FinishedAt == nil {
@@ -1026,7 +1040,7 @@ func TestAJobPutBackForWantOfASandboxRunsOnALaterTick(t *testing.T) {
 	if got.Phase != job.PhaseDone {
 		t.Fatalf("the job is %q saying %q, want done", got.Phase, got.Reason)
 	}
-	if got.Answer != "the bill is due on the 14th" {
+	if got.Answer != landed("the bill is due on the 14th") {
 		t.Fatalf("the answer is %q", got.Answer)
 	}
 	// The reason the wait was written under is gone, so nothing says the job is waiting for a machine
@@ -1074,7 +1088,7 @@ func TestAnAnswerThatDoesNotCarryWhatWasClaimedStopsTheJob(t *testing.T) {
 		t.Fatalf("the reason is %q, want it to name what was claimed", got.Reason)
 	}
 	// The answer stays, because what the model said is how somebody works out why the claim failed.
-	if got.Answer != "the bill is due on the 14th" {
+	if got.Answer != landed("the bill is due on the 14th") {
 		t.Fatalf("the answer is %q, want what the model said", got.Answer)
 	}
 }

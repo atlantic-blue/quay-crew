@@ -61,10 +61,22 @@ func (a *answering) Run(_ context.Context, _ sandbox.Sandbox, req model.Request)
 	a.asked = append(a.asked, asked{text: req.Text, credential: req.Env[auth.TokenEnv] != ""})
 	for _, pair := range a.says {
 		if strings.Contains(req.Text, pair[0]) {
-			return model.Response{Reply: pair[1], ModelSessionID: req.ModelSessionID}, nil
+			return model.Response{Reply: outcomeIfAsked(req.Text, pair[1]), ModelSessionID: req.ModelSessionID}, nil
 		}
 	}
 	return model.Response{Reply: "you said: " + req.Text, ModelSessionID: req.ModelSessionID}, nil
+}
+
+// outcomeIfAsked ends a reply with an outcome where the task asked for one, the way the double in
+// internal/model does and the way a session that read its task would. A double that ignored the line
+// would be looser than the thing it stands in for: every job here would stop for stating no outcome,
+// and every test about the gate would be a test about that. A reply that already states one is left
+// as it is, which is how a test says the word it means.
+func outcomeIfAsked(asked, reply string) string {
+	if !strings.Contains(asked, model.OutcomeMarker) || strings.Contains(reply, model.OutcomeMarker) {
+		return reply
+	}
+	return reply + "\n\n" + model.OutcomeMarker + " " + model.FakeOutcome
 }
 
 // timesAsked is how many tasks this model was given carrying a phrase.

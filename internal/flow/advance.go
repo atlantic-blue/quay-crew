@@ -131,6 +131,10 @@ type Event struct {
 	Failed bool
 	// Answer is what the operator said to an ask node.
 	Answer string
+	// Outcome is the word the step ended on, from the fixed set a job is held to, and empty where the
+	// step never answered. It is the key a choice node branches on: the reply beside it is the prose,
+	// and two readings of one sentence give two answers.
+	Outcome string
 	// Unmet says what the node claimed would prove the task worked, and did not. Empty when the node
 	// claimed nothing or the claim held. The engine fills it in, because checking it touches the
 	// world; what to do about it is here, where it can be read.
@@ -230,6 +234,10 @@ func Advance(graph Graph, run Run, event Event) (Run, []Command, error) {
 			return run, nil, fmt.Errorf("flow: run %s sits on %s, which is not a dispatch, so no task result belongs to it", run.ID, run.Node)
 		}
 		run.State["result.reply"] = event.Reply
+		// The word the step ended on, beside the prose rather than inside it. This is what a choice
+		// node is meant to read: "the work is done and proved" and "the work cannot be done" are one
+		// sentence apart in a reply and two different edges here.
+		run.State[OutcomeKey] = event.Outcome
 		// True when the model errored and true when the step did not do what the node said would show
 		// it worked, because both are the step failing to do its job and the field is called failed. It
 		// used to carry only the first, so a run halted over an unmet claim read `result.failed false`

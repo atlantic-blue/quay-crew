@@ -189,7 +189,10 @@ type Carrier struct {
 	Phase    string
 	Question string
 	Answer   string
-	Reason   string
+	// Outcome is the word the run ended on, which is the word its last step ended on. A run whose job
+	// read done while stating nothing would be the one job in the system that settles on prose.
+	Outcome string
+	Reason  string
 }
 
 // RecordedTransition is a transition as read back: the order it happened in, what arrived, and
@@ -543,6 +546,7 @@ func (e *Engine) carrier(ctx context.Context, id string, run Run, records []*job
 		kind, detail = EventRunAsked, fmt.Sprintf("at %s: %s", run.Node, run.Question)
 	case StatusDone:
 		on.Phase, on.Answer = job.PhaseDone, run.State["result.reply"]
+		on.Outcome = run.State[OutcomeKey]
 		kind, detail = EventRunFinished,
 			fmt.Sprintf("done at %s after %d transitions, %d tokens", run.Node, run.Transitions, run.Spent)
 	case StatusFailed:
@@ -597,10 +601,11 @@ func (e *Engine) Worked(ctx context.Context, run Run, step *job.Job) (Run, error
 
 	run.Status = StatusRunning
 	return e.advance(ctx, graph, run, where{carrier: step.Parent, answers: step.ID}, Event{
-		Kind:   EventTaskFinished,
-		Node:   run.Node,
-		Reply:  replyOf(step),
-		Failed: step.Phase == job.PhaseFailed,
+		Kind:    EventTaskFinished,
+		Node:    run.Node,
+		Reply:   replyOf(step),
+		Outcome: step.Outcome,
+		Failed:  step.Phase == job.PhaseFailed,
 		// Job halted over a claim it did not meet is the reducer's unmet: the system knows the job
 		// did not happen and does not know why, so the run stops rather than branching.
 		Unmet: unmetOf(step),
@@ -609,11 +614,16 @@ func (e *Engine) Worked(ctx context.Context, run Run, step *job.Job) (Run, error
 
 // replyOf is what the step said, as the run reads it. Job that failed carries the reason instead,
 // because there is no answer and a graph branching on the reply has to have something to read.
+//
+// The line stating the outcome comes out, and the word arrives beside it as result.outcome. The whole
+// answer stays on the job, which is the record of what the session said; what a graph reads is the
+// prose. Leaving the line in would put a machine signal inside every prompt built from a reply, and
+// would break every graph that compares one, since no answer is the word "green" any more.
 func replyOf(step *job.Job) string {
 	if step.Phase == job.PhaseFailed {
 		return step.Reason
 	}
-	return step.Answer
+	return job.WithoutTheOutcome(step.Answer)
 }
 
 // unmetOf is the claim the step did not meet, empty where it claimed nothing or the claim held.

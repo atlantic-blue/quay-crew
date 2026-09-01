@@ -316,6 +316,8 @@ func matchesJob(held *job.Job, filter job.Filter) bool {
 		return false
 	case filter.Phase != "" && held.Phase != filter.Phase:
 		return false
+	case filter.Outcome != "" && held.Outcome != filter.Outcome:
+		return false
 	// A job that has not finished is not late in the window, it is outside the question: the
 	// window is about jobs that ended.
 	case filter.FinishedSince != nil && held.FinishedAt == nil:
@@ -630,6 +632,7 @@ func (m *Memory) LandJob(_ context.Context, id string, landed job.Landing, event
 	}
 	now := time.Now().UTC()
 	found.Phase, found.Answer, found.Reason = landed.Phase, landed.Answer, landed.Reason
+	found.Outcome = landed.Outcome
 	// Unless the landing read none and the row already carries one: a step that named the pull request
 	// wrote it before any answer landed, and a job that failed carries no answer to read.
 	if landed.PullRequest != "" {

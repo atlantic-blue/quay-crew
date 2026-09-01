@@ -99,7 +99,7 @@ func (e *echoingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.Requ
 	defer e.mu.Unlock()
 	e.asked++
 	return model.Response{
-		Reply:          "you said: " + req.Text,
+		Reply:          statingTheOutcome("you said: "+req.Text, req.Text),
 		ModelSessionID: fmt.Sprintf("conversation-%d", e.asked),
 	}, nil
 }
@@ -280,7 +280,10 @@ func (m *modeRecordingRunner) Run(_ context.Context, _ sandbox.Sandbox, req mode
 		m.modes = map[string]string{}
 	}
 	m.modes[req.Text] = req.PermissionMode
-	return model.Response{Reply: "done", ModelSessionID: "conversation-" + req.Text}, nil
+	return model.Response{
+		Reply:          statingTheOutcome("done", req.Text),
+		ModelSessionID: "conversation-" + req.Text,
+	}, nil
 }
 
 // modeOf is the mode the task carrying this prompt ran in. Matched on what the graph wrote rather

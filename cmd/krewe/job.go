@@ -72,6 +72,7 @@ const (
 	flagNoGate         = "--no-gate"
 	flagParent         = "--parent"
 	flagPhase          = "--phase"
+	flagOutcome        = "--outcome"
 	flagRoots          = "--roots"
 )
 
@@ -237,7 +238,8 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		return err
 	}
 	if len(rest) > 1 {
-		return fmt.Errorf("usage: krewe job list [<workspace>/<project>] [%s <phase>] [%s <key>=<value>]", flagPhase, flagLabel)
+		return fmt.Errorf("usage: krewe job list [<workspace>/<project>] [%s <phase>] [%s <outcome>] "+
+			"[%s <key>=<value>]", flagPhase, flagOutcome, flagLabel)
 	}
 	typed := ""
 	if len(rest) == 1 {
@@ -248,6 +250,7 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	where := systemWide("jobs")
 	request := &quaycrewv1.ListJobsRequest{
 		Parent: values.first(flagParent), RootsOnly: values.has(flagRoots), Phase: values.first(flagPhase),
+		Outcome: values.first(flagOutcome),
 	}
 	if !readsTheSystem(typed) {
 		located, err := locate(ctx, client, typed)
@@ -294,13 +297,14 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 			holding = one.GetReason()
 		}
 		if where.where == "" {
-			fmt.Fprintf(out, "%-10s %-24s %-2d %-8s %s%s\n", display.ShortID(one.GetId()),
-				addresses[one.GetProject()], one.GetDepth(), phaseOf(one), claimColumn(one, claiming),
-				truncateLine(one.GetTitle()))
+			fmt.Fprintf(out, "%-10s %-24s %-2d %-8s %-9s %s%s\n", display.ShortID(one.GetId()),
+				addresses[one.GetProject()], one.GetDepth(), phaseOf(one), outcomeOf(one),
+				claimColumn(one, claiming), truncateLine(one.GetTitle()))
 			continue
 		}
-		fmt.Fprintf(out, "%-10s %-2d %-8s %s%s\n",
-			display.ShortID(one.GetId()), one.GetDepth(), phaseOf(one), claimColumn(one, claiming),
+		fmt.Fprintf(out, "%-10s %-2d %-8s %-9s %s%s\n",
+			display.ShortID(one.GetId()), one.GetDepth(), phaseOf(one), outcomeOf(one),
+			claimColumn(one, claiming),
 			truncateLine(one.GetTitle()))
 	}
 	// Said once, under the listing, because an operator reading a column of "held" needs to know it
@@ -346,6 +350,18 @@ func phaseOf(one *quaycrewv1.Job) string {
 		return "held"
 	}
 	return one.GetPhase()
+}
+
+// outcomeOf is the word a job ended on, and a dash where nothing has stated one.
+//
+// A dash rather than a blank, because an empty cell in the middle of a row reads as a column that
+// failed to fill rather than as a job that has not ended. A job that ended without stating one reads
+// the same as one still running here, and the reason on `krewe job show` is what says which.
+func outcomeOf(one *quaycrewv1.Job) string {
+	if one.GetOutcome() == "" {
+		return "-"
+	}
+	return one.GetOutcome()
 }
 
 // heldForRoom says whether this job is pending because the system would not start it. Only the system
@@ -404,6 +420,11 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	// steer reads as an error rather than as a measurement.
 	fmt.Fprintf(out, "%s, read them with krewe steers %s\n",
 		job.Steers(int(one.GetSteers())), display.ShortID(one.GetId()))
+	// The word the job ended on, above the prose, because that is what it is: the signal, with the
+	// explanation under it. A reader that had to decide from the answer is the reading this ends.
+	if one.GetOutcome() != "" {
+		fmt.Fprintf(out, "outcome: %s, %s\n", one.GetOutcome(), job.OutcomeMeans(one.GetOutcome()))
+	}
 	// Why it stopped, before anything else, because a job that halted and a job that went quiet read
 	// the same without it.
 	if one.GetReason() != "" {
@@ -876,7 +897,8 @@ func jobFlagsTaken() map[string]bool {
 	for _, name := range []string{
 		flagTitle, flagBrief, flagRole, flagMode, flagExpectFile, flagExpectContains, flagRepository,
 		flagProduct, flagClaim, flagEscalate, flagNoGate,
-		flagAfter, flagDeadline, flagBudgetTokens, flagLabel, flagRequires, flagPhase, flagRoots,
+		flagAfter, flagDeadline, flagBudgetTokens, flagLabel, flagRequires, flagPhase, flagOutcome,
+		flagRoots,
 		// Taken so it can be refused with the sentence that says where a parent comes from,
 		// rather than with the tool's general refusal of flags.
 		flagParent,

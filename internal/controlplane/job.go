@@ -312,6 +312,13 @@ func (s *Server) ListJobs(ctx context.Context, req *quaycrewv1.ListJobsRequest) 
 		return nil, status.Errorf(codes.InvalidArgument,
 			"%q is not a phase; use one of %s", phase, strings.Join(job.Phases(), ", "))
 	}
+	// Held to the same four words the session was offered. A filter that took any word would answer
+	// nothing for a typo, and a listing that says nothing reads exactly like a system with no such
+	// jobs in it.
+	if outcome := req.GetOutcome(); outcome != "" && !job.KnownOutcome(outcome) {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"%q is not an outcome; use one of %s", outcome, strings.Join(job.Outcomes(), ", "))
+	}
 	if req.GetLimit() < 0 {
 		return nil, status.Errorf(codes.InvalidArgument,
 			"a listing cannot return %d jobs; leave the limit out for every row, or give a count above zero",
@@ -320,6 +327,7 @@ func (s *Server) ListJobs(ctx context.Context, req *quaycrewv1.ListJobsRequest) 
 	filter := job.Filter{
 		Workspace: req.GetWorkspace(), Project: req.GetProject(),
 		Parent: req.GetParent(), Root: req.GetRootsOnly(), Phase: req.GetPhase(),
+		Outcome:  req.GetOutcome(),
 		LabelKey: req.GetLabelKey(), LabelValue: req.GetLabelValue(),
 		Limit: int(req.GetLimit()),
 	}
@@ -403,7 +411,8 @@ func asJob(from *job.Job) *quaycrewv1.Job {
 		Plan: from.Plan, PlanApproved: from.PlanApproved,
 		Parent: from.Parent, Depth: int32(from.Depth), Version: int32(from.Version),
 		Phase: from.Phase, Session: from.Session, Attempts: int32(from.Attempts),
-		Answer: from.Answer, Reason: from.Reason, Question: from.Question, Resuming: from.Resuming,
+		Answer: from.Answer, Outcome: from.Outcome,
+		Reason: from.Reason, Question: from.Question, Resuming: from.Resuming,
 		Escalation: from.Escalation, LoopedStep: int32(from.LoopedStep), EscalatedTo: from.EscalatedTo,
 		Attempted:   asJobAttempts(from.Attempted),
 		Steps:       asJobSteps(from.Steps),

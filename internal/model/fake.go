@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -10,7 +11,11 @@ import (
 
 // FakeRunner is a Runner for tests. It records the last request and returns a canned response.
 type FakeRunner struct {
-	Reply     string
+	Reply string
+	// Exact answers with Reply and nothing else, whatever the task asked for. It is how a test says "a
+	// session that did not do as it was told", which is the only way to write the sad path of a rule
+	// the double otherwise follows.
+	Exact     bool
 	SessionID string
 	Err       error
 	LastReq   Request
@@ -62,5 +67,28 @@ func (f *FakeRunner) Run(ctx context.Context, _ sandbox.Sandbox, req Request) (R
 	if sessionID == "" {
 		sessionID = conversationOf(req, "fake-session")
 	}
-	return Response{Reply: f.Reply, ModelSessionID: sessionID}, nil
+	return Response{Reply: f.answer(req), ModelSessionID: sessionID}, nil
+}
+
+// OutcomeMarker opens the line a job asks a session to end its answer with. It is the same word
+// internal/job holds as job.OutcomeMarker, spelled here because internal/job imports this package and
+// a double cannot import what imports it. internal/job holds the two together in a test.
+const OutcomeMarker = "Outcome:"
+
+// FakeOutcome is the word this double states when the task it was given asked for one. It is
+// deliberately the ordinary one: a test about a session that states nothing, or something else, sets
+// Reply itself.
+const FakeOutcome = "proved"
+
+// answer is what the double says, which follows the task it was handed the way a model does.
+//
+// A task that asks for an outcome gets one. Every job says so beside its brief, so a double that
+// ignored it would be looser than the thing it stands in for: every job would stop, and every test
+// about a job would be a test about that. A reply that already states an outcome is left alone, which
+// is how a test says the word it means.
+func (f *FakeRunner) answer(req Request) string {
+	if f.Exact || !strings.Contains(req.Text, OutcomeMarker) || strings.Contains(f.Reply, OutcomeMarker) {
+		return f.Reply
+	}
+	return f.Reply + "\n\n" + OutcomeMarker + " " + FakeOutcome
 }

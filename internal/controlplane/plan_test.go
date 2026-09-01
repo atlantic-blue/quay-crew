@@ -193,7 +193,10 @@ func TestAnApprovedPlanTheWorkDidNotFollowStopsTheJob(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("AnswerJob: %v", err)
 	}
-	system.runner.Reply = "built the page"
+	// Stating its outcome, because a session that read its task states one and an answer without it
+	// stops the job before it is ever held against the plan.
+	const built = "built the page\n\n" + job.OutcomeMarker + " " + job.OutcomeProved
+	system.runner.Reply = built
 	system.server.TickJob(ctx)
 	system.landed(t)
 
@@ -213,7 +216,7 @@ func TestAnApprovedPlanTheWorkDidNotFollowStopsTheJob(t *testing.T) {
 			t.Fatalf("the reason is %q, want it to name %q", got.GetReason(), phrase)
 		}
 	}
-	if got.GetAnswer() != "built the page" {
+	if got.GetAnswer() != built {
 		t.Fatalf("the work is not on the row: the answer is %q", got.GetAnswer())
 	}
 }

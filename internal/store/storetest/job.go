@@ -288,6 +288,41 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	// The filter the phase cannot be. Two jobs are done, one of them could not do its work, and a
+	// reader that had to open both to tell them apart is the reading this exists to end.
+	t.Run("a listing narrows by outcome", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+
+		proved := landedWith(t, s, workspace, project, "read the electricity bill", job.OutcomeProved)
+		blocked := landedWith(t, s, workspace, project, "read the water bill", job.OutcomeBlocked)
+
+		for _, one := range []struct {
+			outcome string
+			want    string
+		}{{job.OutcomeProved, proved}, {job.OutcomeBlocked, blocked}} {
+			listed, err := s.ListJobs(ctx, job.Filter{Project: project, Outcome: one.outcome})
+			if err != nil {
+				t.Fatalf("ListJobs: %v", err)
+			}
+			if len(listed) != 1 || listed[0].ID != one.want {
+				t.Fatalf("the jobs that ended %q are %d rows, want the one", one.outcome, len(listed))
+			}
+		}
+		listed, err := s.ListJobs(ctx, job.Filter{Project: project, Outcome: job.OutcomeDecide})
+		if err != nil {
+			t.Fatalf("ListJobs: %v", err)
+		}
+		if len(listed) != 0 {
+			t.Fatalf("an outcome nothing ended with matched %d rows", len(listed))
+		}
+		// Both are done, which is the point: the phase cannot tell them apart.
+		if listed, _ = s.ListJobs(ctx, job.Filter{Project: project, Phase: job.PhaseDone}); len(listed) != 2 {
+			t.Fatalf("the done jobs are %d rows, want both", len(listed))
+		}
+	})
+
 	// The window and the cap the briefing reads block three with. The order is the part that is easy
 	// to get wrong, so the jobs below are declared in the reverse of the order they finished in: a
 	// store that kept ordering by created_at answers this exactly backwards.
@@ -464,7 +499,8 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			ID: store.NewID(), Workspace: workspace, Project: project,
 			Title: "read the electricity bill", Brief: "open it", Version: 3,
 			Phase: job.PhaseDone, Session: "session-1", Attempts: 2,
-			Answer: "the bill is due on the 14th", Reason: "it answered", Question: "which bill",
+			Answer: "the bill is due on the 14th", Outcome: job.OutcomeProved,
+			Reason: "it answered", Question: "which bill",
 			Told:        "the electricity one",
 			SpentTokens: 1234, ObservedVersion: 3, StartedAt: &started, FinishedAt: &finished,
 		}
@@ -484,6 +520,7 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			{"session", found.Session, declared.Session},
 			{"attempts", found.Attempts, declared.Attempts},
 			{"answer", found.Answer, declared.Answer},
+			{"outcome", found.Outcome, declared.Outcome},
 			{"reason", found.Reason, declared.Reason},
 			{"question", found.Question, declared.Question},
 			{"told", found.Told, declared.Told},
@@ -604,6 +641,25 @@ func declaredJob(t *testing.T, s store.Store, workspace, project, title string) 
 		t.Fatalf("CreateJob: %v", err)
 	}
 	return declared.ID
+}
+
+// landedWith is a job that ran and ended on one word, written the way the controller writes it: the
+// row is declared, claimed and landed, so the outcome comes off a landing rather than being seeded.
+// A test that seeded it would pass against a store that never writes the column.
+func landedWith(t *testing.T, s store.Store, workspace, project, title, outcome string) string {
+	t.Helper()
+	ctx := context.Background()
+	id := declaredJob(t, s, workspace, project, title)
+	if _, err := s.StartJob(ctx, id, aLease("controller-a"),
+		[]*job.Event{startedEvent(id, workspace, project)}); err != nil {
+		t.Fatalf("StartJob: %v", err)
+	}
+	if _, err := s.LandJob(ctx, id, job.Landing{
+		Phase: job.PhaseDone, Answer: "it is done", Outcome: outcome,
+	}, answeredEvent(id, workspace, project)); err != nil {
+		t.Fatalf("LandJob: %v", err)
+	}
+	return id
 }
 
 func declaredEvent(declared *job.Job) *job.Event {
@@ -895,13 +951,21 @@ func runJobControllerConformance(t *testing.T, newDataset func(t *testing.T) Ope
 		const address = "https://github.com/atlantic-blue/quay-crew/pull/454"
 		landed, err := s.LandJob(ctx, id, job.Landing{
 			Phase: job.PhaseDone, Answer: "the bill is due on the 14th", SpentTokens: 1234,
-			PullRequest: address,
+			PullRequest: address, Outcome: job.OutcomeProved,
 		}, answeredEvent(id, workspace, project))
 		if err != nil {
 			t.Fatalf("LandJob: %v", err)
 		}
 		if landed.Phase != job.PhaseDone || landed.Answer != "the bill is due on the 14th" {
 			t.Fatalf("the job landed as %q saying %q", landed.Phase, landed.Answer)
+		}
+		// The word the job ended on, which is what a flow branches on and a listing filters by. The
+		// answer beside it is the explanation rather than the signal.
+		if landed.Outcome != job.OutcomeProved {
+			t.Fatalf("the job landed with the outcome %q, want %q", landed.Outcome, job.OutcomeProved)
+		}
+		if reread, err := s.GetJob(ctx, id); err != nil || reread.Outcome != job.OutcomeProved {
+			t.Fatalf("the job reads back with the outcome %v (%v), want %q", reread, err, job.OutcomeProved)
 		}
 		// Where the work went is on the row, so a reader finds it without opening the answer.
 		if landed.PullRequest != address {

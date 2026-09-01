@@ -5,6 +5,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -84,7 +85,7 @@ func TestAControllerThatDiedMidTaskLeavesItsJobToBeAdoptedOnceInPostgres(t *test
 			t.Fatalf("GetJob: %v", err)
 		}
 		if found.Phase == job.PhaseDone {
-			if found.Answer != "the bill is due on the 14th" {
+			if !strings.Contains(found.Answer, "the bill is due on the 14th") {
 				t.Fatalf("the answer is %q, want the one the dead controller's task left behind", found.Answer)
 			}
 			break
@@ -282,7 +283,7 @@ func TestJobAbandonedBeforeItsTaskWasSentRunsAgainInPostgres(t *testing.T) {
 			t.Fatalf("GetJob: %v", err)
 		}
 		if found.Phase == job.PhaseDone {
-			if found.Answer != "the bill is due on the 14th" {
+			if !strings.Contains(found.Answer, "the bill is due on the 14th") {
 				t.Fatalf("the answer is %q", found.Answer)
 			}
 			break

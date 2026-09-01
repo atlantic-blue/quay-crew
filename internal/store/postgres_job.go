@@ -15,7 +15,7 @@ import (
 // listing cannot drift into scanning different things.
 const jobColumns = `id, workspace, project, title, brief, role, role_version, mode, expect_file,
 	expect_contains, after_jobs, deadline, budget_tokens, labels, requires, coalesce(parent, ''), depth, version,
-	phase, session, attempts, answer, reason, question, told, resuming, spent_tokens, observed_version,
+	phase, session, attempts, answer, outcome, reason, question, told, resuming, spent_tokens, observed_version,
 	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product, steers, claim,
 	escalation, looped_step, escalated_to, plan, plan_approved, ungated, reviewed, tested,
 	created_at, updated_at, started_at, finished_at`
@@ -103,17 +103,17 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 	if _, err := tx.Exec(ctx, `
 		insert into jobs (id, workspace, project, title, brief, role, role_version, mode, expect_file,
 			expect_contains, after_jobs, deadline, budget_tokens, labels, requires, parent, depth, version, phase,
-			session, attempts, answer, reason, question, told, spent_tokens, observed_version, started_at,
+			session, attempts, answer, outcome, reason, question, told, spent_tokens, observed_version, started_at,
 			finished_at, lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product,
 			resuming, claim, escalation, ungated, reviewed, tested, created_at, updated_at)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
 			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38,
-			$39, $40, $41, $42, coalesce($43::timestamptz, now()), coalesce($44::timestamptz, now()))`,
+			$39, $40, $41, $42, $43, coalesce($44::timestamptz, now()), coalesce($45::timestamptz, now()))`,
 		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
 		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
 		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
 		afterOrEmpty(declared.Requires), nullIfEmpty(declared.Parent), declared.Depth, declared.Version, declared.Phase,
-		declared.Session, declared.Attempts, declared.Answer, declared.Reason, declared.Question,
+		declared.Session, declared.Attempts, declared.Answer, declared.Outcome, declared.Reason, declared.Question,
 		declared.Told, declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt,
 		declared.LeaseOwner, declared.LeaseUntil, declared.TraceID, declared.ParentSpanID,
 		declared.Repository, declared.PullRequest, declared.Product, declared.Resuming,
@@ -190,6 +190,9 @@ func (p *Postgres) ListJobs(ctx context.Context, filter job.Filter) ([]*job.Job,
 	}
 	if filter.Phase != "" {
 		add(` and phase = $%d`, filter.Phase)
+	}
+	if filter.Outcome != "" {
+		add(` and outcome = $%d`, filter.Outcome)
 	}
 	if filter.LabelKey != "" {
 		// The function rather than the ? operator, because a question mark in a statement sent with
@@ -390,7 +393,7 @@ func scanJob(row rowScanner) (*job.Job, error) {
 	if err := row.Scan(&found.ID, &found.Workspace, &found.Project, &found.Title, &found.Brief,
 		&found.Role, &found.RoleVersion, &found.Mode, &found.ExpectFile, &found.ExpectContains,
 		&found.After, &found.Deadline, &found.BudgetTokens, &labels, &found.Requires, &found.Parent, &found.Depth,
-		&found.Version, &found.Phase, &found.Session, &found.Attempts, &found.Answer, &found.Reason,
+		&found.Version, &found.Phase, &found.Session, &found.Attempts, &found.Answer, &found.Outcome, &found.Reason,
 		&found.Question, &found.Told, &found.Resuming, &found.SpentTokens, &found.ObservedVersion,
 		&found.LeaseOwner, &found.LeaseUntil, &found.TraceID, &found.ParentSpanID,
 		&found.Repository, &found.PullRequest, &found.Product, &found.Steers, &found.Claim,
@@ -726,19 +729,19 @@ func (p *Postgres) LandJob(ctx context.Context, id string, landed job.Landing, e
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	tag, err := tx.Exec(ctx, `
-		update jobs set phase = $2, answer = $3, reason = $4, spent_tokens = $5,
+		update jobs set phase = $2, answer = $3, reason = $4, spent_tokens = $5, outcome = $8,
 			-- What a landing read off the answer, unless it read none and the row already carries one. A
 			-- step that named the pull request wrote it before the answer landed, and a job that failed
 			-- carries no answer at all, so an unconditional write here would erase the address.
 			pull_request = case when $7 <> '' then $7 else pull_request end,
 			-- What read this work before it settled, so a settled job says whether anything independent
 			-- agreed with its answer rather than leaving a reader to open two conversations.
-			reviewed = $8, tested = $9,
+			reviewed = $9, tested = $10,
 			observed_version = version, lease_owner = '', lease_until = null,
 			finished_at = now(), updated_at = now()
 		where id = $1 and phase = $6`,
 		id, landed.Phase, landed.Answer, landed.Reason, landed.SpentTokens, job.PhaseRunning,
-		landed.PullRequest, landed.Reviewed, landed.Tested)
+		landed.PullRequest, landed.Outcome, landed.Reviewed, landed.Tested)
 	if err != nil {
 		return nil, fmt.Errorf("land job: %w", err)
 	}

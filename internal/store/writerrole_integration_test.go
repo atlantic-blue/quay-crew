@@ -165,7 +165,7 @@ func TestAWritingJobRunsAsTheWriterFromASubjectAndItsMaterialInPostgres(t *testi
 	if done.GetRole() != "writer" {
 		t.Fatalf("the job ran as %q", done.GetRole())
 	}
-	if done.GetAnswer() != draft {
+	if !strings.Contains(done.GetAnswer(), draft) {
 		t.Errorf("the job answered %q", done.GetAnswer())
 	}
 

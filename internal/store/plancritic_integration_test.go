@@ -141,7 +141,10 @@ func TestAPlanCriticJobIsRefusedWhenTheRoleStopsReceivingContextInPostgres(t *te
 // reaches done on its own, and what that gate does is a different test's subject. The sentence the
 // critic reads a plan against is held in features/plancritic.feature.
 func TestAPlanCriticJobRunsInASessionThatReceivesTheContextInPostgres(t *testing.T) {
-	answer := "one finding: section 3 says the address carries an identifier and the sentence says a link"
+	// Ending on an outcome, the way a session that read its task does: an answer stating none stops
+	// the job instead of settling it.
+	answer := "one finding: section 3 says the address carries an identifier and the sentence says a link" +
+		"\n\n" + job.OutcomeMarker + " " + job.OutcomeProved
 	s, boxes := aSystemWithRoles(t, &model.FakeRunner{Reply: answer})
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)

@@ -96,12 +96,14 @@ commands:
                                           whole window even when --limit prints fewer rows. It says
                                           how many it left out
   job list [<address>|system]             the jobs there are, newest first. With no address it
-    [--phase <phase>] [--label k=v]       reads where you are standing and says so, and system reads
-    [--parent <job>] [--roots]            every project. Narrow it further with --phase, --label,
-                                          --parent or --roots
-  job show <job>                          one job whole: what it is, where it got to,
-                                          why it stopped, what came back, and where its session
-                                          spent its context
+    [--phase <phase>] [--outcome <word>]  reads where you are standing and says so, and system reads
+    [--label k=v] [--parent <job>]        every project. Narrow it further with --phase, --outcome,
+    [--roots]                             --label, --parent or --roots. An outcome is one of proved,
+                                          unproved, blocked or decide: the word the session ended on,
+                                          which the phase cannot tell you
+  job show <job>                          one job whole: what it is, where it got to, the word it
+                                          ended on, why it stopped, what came back, and where its
+                                          session spent its context
   job stop <job> [<reason>]               halt a job that has not ended, keeping the reason
   job ask "<question>"                    put a question to a person about the job you are running,
                                           when a decision no measurement settles is in your way.

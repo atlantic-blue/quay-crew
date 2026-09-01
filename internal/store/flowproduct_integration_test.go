@@ -63,7 +63,10 @@ func (a *addressingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.R
 	if a.asked == 1 {
 		reply = theTranscriptAddress
 	}
-	return model.Response{Reply: reply, ModelSessionID: fmt.Sprintf("conversation-%d", a.asked)}, nil
+	return model.Response{
+		Reply:          statingTheOutcome(reply, req.Text),
+		ModelSessionID: fmt.Sprintf("conversation-%d", a.asked),
+	}, nil
 }
 
 // The answer of no, over the database. It is first because it is the answer the whole gate exists
