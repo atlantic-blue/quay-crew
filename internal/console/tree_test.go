@@ -466,3 +466,96 @@ func TestEveryLevelFitsAWindowTooNarrowForItsWidestRow(t *testing.T) {
 		}
 	}
 }
+
+// The position is on screen at every level, written the way a person would type it: the workspace,
+// then the project, then the job. The job is its identifier rather than its title, because that is
+// what a job command takes.
+func TestTheConsoleSaysWhereItIsAsAnAddress(t *testing.T) {
+	client := aSystemWithOneOfEverything()
+	model := openedOnTheTree(t, client)
+
+	// At the top there is nothing to address: the operator is above every workspace.
+	if where := model.Position(); where != "" {
+		t.Fatalf("the console says it is at %q, and at the top there is nowhere to be", where)
+	}
+
+	model = walk(t, model, enter())
+	if where := model.Position(); where != "acme" {
+		t.Fatalf("inside a workspace the console says %q, want acme", where)
+	}
+	screenSays(t, model, "projects(acme)")
+
+	model = walk(t, model, enter())
+	if where := model.Position(); where != "acme/house-bills" {
+		t.Fatalf("inside a project the console says %q, want acme/house-bills", where)
+	}
+	screenSays(t, model, "jobs(acme/house-bills)")
+
+	model = walk(t, model, enter())
+	if where := model.Position(); where != "acme/house-bills/33333333" {
+		t.Fatalf("inside a job the console says %q, want acme/house-bills/33333333", where)
+	}
+	screenSays(t, model, "acme/house-bills/33333333")
+}
+
+// A job is addressed by the shortened identifier a listing prints, never by its title, because no
+// command takes the title. The breadcrumb still reads the title: one is to read and one is to type.
+func TestAJobIsAddressedByItsIdentifierAndReadByItsTitle(t *testing.T) {
+	one := jobRow(aJob("3333333333333333cccccccc", job.PhaseRunning, func(j *quaycrewv1.Job) {
+		j.Title = "read the electricity bill"
+	}))
+
+	if one.Typed() != "33333333" {
+		t.Fatalf("a job is typed as %q, want the shortened identifier a listing prints", one.Typed())
+	}
+	if one.Name() != "read the electricity bill" {
+		t.Fatalf("a job reads as %q, want its title", one.Name())
+	}
+	// A row that says nothing about how it is typed falls back to what it reads as, which is what
+	// every workspace and project row does.
+	plain := Row{ID: "w1", Label: "acme"}
+	if plain.Typed() != "acme" {
+		t.Fatalf("a row with no address of its own is typed as %q, want its name", plain.Typed())
+	}
+}
+
+// The position has to survive the two bars that draw over the footer, because those are exactly the
+// moments a person is typing and needs to know what they are typing at.
+func TestThePositionStaysOnScreenWhileABarIsOpen(t *testing.T) {
+	deep := openedOnTheTree(t, aSystemWithOneOfEverything())
+	deep = walk(t, walk(t, deep, enter()), enter())
+	screenSays(t, deep, "acme/house-bills")
+
+	for _, bar := range []struct {
+		name string
+		key  tea.KeyMsg
+	}{
+		{"the command bar", runes(":")},
+		{"the filter bar", runes("/")},
+	} {
+		t.Run(bar.name, func(t *testing.T) {
+			opened, _ := update(t, deep, bar.key)
+			if !strings.Contains(opened.View(), "acme/house-bills") {
+				t.Fatalf("with %s open the console no longer says where it is:\n%s", bar.name, opened.View())
+			}
+		})
+	}
+}
+
+// Coming back up shortens the address, so the line is never one level behind where the operator is.
+func TestTheAddressShortensOnTheWayBack(t *testing.T) {
+	client := aSystemWithOneOfEverything()
+	model := openedOnTheTree(t, client)
+	for range 3 {
+		model = walk(t, model, enter())
+	}
+	if where := model.Position(); where != "acme/house-bills/33333333" {
+		t.Fatalf("at the deepest level the console says %q", where)
+	}
+	for _, want := range []string{"acme/house-bills", "acme", ""} {
+		model = walk(t, model, escape())
+		if where := model.Position(); where != want {
+			t.Fatalf("after coming back the console says %q, want %q", where, want)
+		}
+	}
+}

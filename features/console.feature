@@ -61,6 +61,24 @@ Feature: The operator sees the system from the console
     When the operator presses "esc" in the console
     Then the console is on the "workspaces" view
 
+  # A console that does not say where it is makes a person guess. The address is the one they could
+  # type back: the workspace, then the project, then the job.
+  Scenario: The console says where it is, as an address a person could type
+    Given a job titled "read the electricity bill"
+    When the operator is at the console
+    And the operator presses "enter" in the console
+    Then the console screen says "projects(acme)"
+    When the operator presses "enter" in the console
+    Then the console screen says "jobs(acme/house-bills)"
+
+  # The command bar and the filter bar draw over the footer, and those are the two moments somebody is
+  # typing at the console and most needs to know what they are typing at.
+  Scenario: The position stays on screen while the command bar is open
+    When the operator is at the console
+    And the operator presses "enter" in the console
+    And the operator presses ":" in the console
+    Then the console screen says "projects(acme)"
+
   # Enter on a project used to open its sessions. It opens the jobs now, so the sessions of one
   # project keep a key of their own rather than becoming a trip through the command bar.
   Scenario: A project still reaches its own sessions in one key

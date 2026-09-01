@@ -339,6 +339,23 @@ func (m Model) trail() []string {
 	return names
 }
 
+// Position is where the operator is standing, written the way they would type it: the workspace, then
+// the project, then the job. It is empty at the top, where they are above every workspace and there
+// is nothing to address.
+//
+// A separate thing from the trail, because the trail is what to read and this is what to type. They
+// are the same words for a workspace and a project, and different ones for a job: the trail carries
+// its title and an address takes its identifier.
+func (m Model) Position() string {
+	typed := make([]string, 0, len(m.stack))
+	for _, entry := range m.stack {
+		if entry.typed != "" {
+			typed = append(typed, entry.typed)
+		}
+	}
+	return strings.Join(typed, "/")
+}
+
 // hintLines fills each column top to bottom before starting the next, the way k9s does, because
 // reading down a column is how you find a key. The view's own actions come first.
 func (m Model) hintLines() []string {
@@ -395,18 +412,20 @@ func (m Model) hintLines() []string {
 	return lines
 }
 
-// panelTop is the framed panel's top edge, titled with the resource, its scope and its count, so
-// both are visible without counting rows: sessions(house-bills)[3].
+// panelTop is the framed panel's top edge, titled with the resource, where the operator is standing
+// and the count, so all three are visible without counting rows: jobs(acme/house-bills)[3].
+//
+// The whole address rather than the nearest thing drilled through, and on the panel rather than in
+// the footer, because the footer is taken by the command bar and the filter bar while either is open.
+// A console that stops saying where it is exactly when somebody is typing at it makes them guess.
 func (m Model) panelTop(count int) string {
 	title := m.active.Name
 	if m.mode == modeHelp {
 		title = "help(" + m.active.Name + ")"
 		return m.titledEdge(title)
 	}
-	// The nearest thing drilled through, not the whole path: the path is already in the status
-	// block, and the title is answering "these rows are which ones".
-	if trail := m.trail(); len(trail) > 0 {
-		title += "(" + trail[len(trail)-1] + ")"
+	if where := m.Position(); where != "" {
+		title += "(" + where + ")"
 	}
 	title += fmt.Sprintf("[%d]", count)
 	if m.filter != "" {
@@ -855,8 +874,9 @@ func (m Model) wizardOffers(offers []string) string {
 	return strings.Join(shown, "")
 }
 
-// breadcrumb is the drill path with the view you are in as a chip, so "me > house-bills <sessions>"
-// says both where you are and what escape goes back to.
+// breadcrumb is the drill path with the view you are in as a chip, so "me > house-bills <jobs>"
+// says both where you are and what escape goes back to. It is the readable form: the typeable one is
+// on the panel above, where it stays on screen while a bar is open over this line.
 func (m Model) breadcrumb() string {
 	line := " "
 	if trail := m.trail(); len(trail) > 0 {

@@ -87,6 +87,9 @@ type crumbEntry struct {
 	parent   string
 	selected int
 	into     string
+	// typed is what a person would type for that row, which is what the position line is built from.
+	// It is the name for a workspace and a project, and the shortened identifier for a job.
+	typed string
 }
 
 // Info is what the system on the other end of the connection is running. The console shows it so the

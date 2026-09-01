@@ -98,9 +98,9 @@ func initializeConsoleJobsSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("the screen does not carry %q, so enter did not open what the job did:\n%s",
 				opening, view)
 		}
-		// The breadcrumb says where the operator is: the tasks of the job they came from.
-		if !strings.Contains(view, "tasks("+one.GetTitle()+")") {
-			return fmt.Errorf("the screen does not say it is showing that job's tasks:\n%s", view)
+		// The panel says where the operator is, as the address they could type: the job they came from.
+		if !strings.Contains(view, "tasks("+display.ShortID(one.GetId())+")") {
+			return fmt.Errorf("the screen does not say it is showing that job's work:\n%s", view)
 		}
 		return nil
 	})

@@ -150,6 +150,9 @@ func jobRow(one *quaycrewv1.Job) Row {
 		},
 		// The whole title, for a view that can show more than a cell can hold.
 		Detail: one.GetTitle(),
+		// What a person types for this job, which is the shortened identifier every job command takes.
+		// The title is what they read, and no command takes it.
+		Address: display.ShortID(one.GetId()),
 	}
 }
 
