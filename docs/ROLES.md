@@ -11,11 +11,11 @@ what has shipped of it.
 A role is imported, pinned to a version, and attached at a level:
 
 ```
-quay role import <directory>
-quay role list [<workspace>]
-quay role show [<workspace>] <name>
-quay role attach [<workspace>|system] <name>
-quay role detach [<workspace>|system] <name>
+krewe role import <directory>
+krewe role list [<workspace>]
+krewe role show [<workspace>] <name>
+krewe role attach [<workspace>|system] <name>
+krewe role detach [<workspace>|system] <name>
 ```
 
 And a step of a flow runs as one. A dispatch node names a role, and that step runs in a session of
@@ -41,7 +41,7 @@ And a job runs as one. A caller names a role when it declares job, and the contr
 that job in a session running as that role:
 
 ```
-quay job create me/quay-crew --role backlog-clearer \
+krewe job create me/quay-crew --role backlog-clearer \
   --title "clear the open pull request backlog" \
   --brief "Read the open pull requests. For each one, declare a job." \
   --requires context
@@ -164,7 +164,7 @@ it, which is the same reason those calls are already refused to the driver.
 **The grant is half of what a session holds.** The other half is the workspace's ceiling, and the two
 mean different things: the role says what a session may do, and the workspace says how much of it.
 The effective capability is the intersection, so a role granting `job.create` in a workspace whose
-`max_depth` is zero creates nothing. Read and set the ceiling with `quay limits`, and see section 5
+`max_depth` is zero creates nothing. Read and set the ceiling with `krewe limits`, and see section 5
 of `docs/ORCHESTRATION.md` for why capability is split across the two.
 
 ```mermaid
@@ -187,7 +187,7 @@ brief nobody follows.
 
 ## Reading one back
 
-`quay role show [<workspace>] <name>` prints what the role is and the brief in full: the version, the
+`krewe role show [<workspace>] <name>` prints what the role is and the brief in full: the version, the
 summary, the model, what it receives, the verbs it may call, and who holds it. A bare name reads what the
 current address can see, and a workspace level address reads the version that workspace pinned.
 
@@ -209,7 +209,7 @@ on one machine: no pull request touched them, nobody reviewed them, nothing vers
 listing the system printed showed them looking exactly like the sixteen that ship in
 [`roles/`](../roles).
 
-So `quay role import` records where it read the files, and the system says it back in every place a
+So `krewe role import` records where it read the files, and the system says it back in every place a
 role is printed:
 
 ```
@@ -248,8 +248,8 @@ has. That is [quay-crew#443](https://github.com/atlantic-blue/quay-crew/issues/4
 A role attaches at the system or at one workspace, which is the outer two of the four levels context
 has. Skills stop in the same place, and nothing has wanted the inner two yet.
 
-`quay role attach system <name>` gives it to every workspace, including the ones made after today.
-`quay role attach <workspace> <name>` gives it to one. The two are separate statements: taking a role
+`krewe role attach system <name>` gives it to every workspace, including the ones made after today.
+`krewe role attach <workspace> <name>` gives it to one. The two are separate statements: taking a role
 off the system leaves a workspace's own attachment alone.
 
 ## Who may attach one
@@ -439,16 +439,16 @@ refusals are the session's to keep. A hook that holds the measurable part of pro
 [quay-crew#508](https://github.com/atlantic-blue/quay-crew/issues/508) and it is not built, so the
 `ste` skill and this brief are prose a model reads rather than a gate a command runs into.
 
-### What a brief asks that quay does not enforce
+### What a brief asks that krewe does not enforce
 
-**Every one of these briefs describes a boundary about files, and quay has no word for a file.** A
+**Every one of these briefs describes a boundary about files, and krewe has no word for a file.** A
 role cannot be told which files it may not touch, may not read, or may not write. `receives` is three
 words, `job`, `context` and `skills`, and none of the three is about the contents of a repository.
 So `test-writer` saying it never sees implementation code, `implementer` saying it never edits a test
 file, `verifier` and `assessor` and `codebase-mapper` saying they are read only, `wrapper` saying it
 writes to `tests/locking/` and nowhere else, and `security` saying it writes the failing test rather
 than the fix, are each a promise the model keeps or does not. The system cannot hold a session to any
-of them, and every role's own file says so at the top under `## What quay does not enforce`.
+of them, and every role's own file says so at the top under `## What krewe does not enforce`.
 
 Two more limits fall out of the same gap. A role session cannot put a question to the operator, so
 the interactive parts of `designer` and `marketing` have nothing behind them here. And this system
@@ -476,7 +476,7 @@ room, and it is the operator's to make.
 - **A role cannot be told which files it may not touch.** That is the whole of the paragraph above,
   and it is the reason every one of the sixteen carries a line saying so.
 - A fresh system is seeded with none of them. Skills and hooks are seeded and roles are not, so an
-  operator runs `quay role import roles/<name>` from a checkout, once per role.
+  operator runs `krewe role import roles/<name>` from a checkout, once per role.
 - Nothing chooses one. A flow graph names a role, or a caller names one when it declares a job, and
   the workspace has to hold it already.
 - Nothing runs the phase. The twelve describe an order and the system does not keep it: a role names

@@ -1,4 +1,4 @@
-// Package features holds the executable specification of Quay System.
+// Package features holds the executable specification of Quay Krewe.
 //
 // The feature files next to this one state what the product does, in language a reader who is not
 // holding the code can follow. The steps below drive the control plane over its real gRPC interface,

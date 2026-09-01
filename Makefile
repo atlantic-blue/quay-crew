@@ -1,4 +1,4 @@
-# Quay System. `make up` (or `make start`) brings the whole stack up in Docker.
+# Quay Krewe. `make up` (or `make start`) brings the whole stack up in Docker.
 # Pass PROJECT=<name> for a fully isolated stack, for example: make up PROJECT=demo
 
 PROJECT ?=

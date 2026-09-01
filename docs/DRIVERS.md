@@ -36,7 +36,7 @@ seam at all.
    where the session identifier and the cost of a task come from.
 3. **The interactive conversation.** `AttachSession` in
    [`internal/controlplane/server.go`](../internal/controlplane/server.go) builds
-   `tmux new-session -A -s quay open-conversation <conversation> <mode>`, and
+   `tmux new-session -A -s krewe open-conversation <conversation> <mode>`, and
    [`deploy/sandbox/open-conversation.sh`](../deploy/sandbox/open-conversation.sh) runs `claude` with
    `--resume`, `--session-id` and `--permission-mode`, deciding between them by looking for a
    transcript at `$HOME/.claude/projects/-home-agent-workspace/<conversation>.jsonl`. The control
@@ -106,7 +106,7 @@ is how the smoke test drives a real task without a subscription and how the firs
 registry run.
 
 The image already assumes what this document argues for, and does not enforce it. The Makefile builds
-`deploy/sandbox/claude.Dockerfile` as `quaycrew-sandbox-claude:local`, and `deploy/env.example` pairs
+`deploy/sandbox/claude.Dockerfile` as `krewe-sandbox-claude:local`, and `deploy/env.example` pairs
 `QC_SANDBOX_IMAGE` with `QC_MODEL=claude-code`. One image per driver is therefore the existing
 convention rather than an open question; what is missing is that nothing checks the pair. A system
 configured with one driver and another driver's image starts, runs, and fails at the first task with
