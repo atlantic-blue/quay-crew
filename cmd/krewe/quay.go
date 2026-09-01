@@ -218,6 +218,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runTask(ctx, client, args[1:], out)
 	case "read":
 		return runRead(ctx, client, args[1:], out)
+	case "where":
+		return runWhere(ctx, client, args[1:], out)
 	case "attach":
 		return runAttach(ctx, client, args[1:], out, os.Stdin)
 	case "web":
@@ -623,7 +625,8 @@ func runWorkspace(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		if err != nil {
 			return err
 		}
-		where := systemWide("workspaces")
+		where := systemWide("workspaces").locatable(
+			"the shared folder of one, which every session in it reads: krewe where <workspace>")
 		if len(resp.GetWorkspaces()) == 0 {
 			where.nothing(out)
 			return nil
@@ -683,14 +686,17 @@ func runProject(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 
 	case "list":
 		scope := ""
-		where := systemWide("projects")
+		where := systemWide("projects").locatable(
+			"the shared folder these work in: krewe where <workspace>")
 		if len(args) > 1 {
 			located, err := locate(ctx, client, args[1])
 			if err != nil {
 				return err
 			}
 			scope = located.WorkspaceID
-			where = narrowedTo("projects", located.Path.Workspace, "krewe project list on its own reads every workspace")
+			where = narrowedTo("projects", located.Path.Workspace,
+				"krewe project list on its own reads every workspace").locatable(
+				"the shared folder these work in: krewe where " + located.Path.Workspace)
 		}
 		resp, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{Workspace: scope})
 		if err != nil {
@@ -1330,9 +1336,11 @@ func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	}
 	// Said out loud, because a listing narrowed to where you are standing looks exactly like a system
 	// with fewer sessions in it, and the operator has no way to tell the two apart.
-	where := systemWide("sessions")
+	locations := "the working directory of one: krewe where <workspace>/<project>/<session>"
+	where := systemWide("sessions").locatable(locations)
 	if !path.IsZero() {
-		where = narrowedTo("sessions", path.String(), "krewe sessions system lists every session")
+		where = narrowedTo("sessions", path.String(),
+			"krewe sessions system lists every session").locatable(locations)
 	}
 	if len(resp.GetSessions()) == 0 {
 		where.nothing(out)

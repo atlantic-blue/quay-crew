@@ -808,6 +808,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeJobWordSteps(sc)
 	initializeHistorySteps(sc)
 	initializeLevelWordSteps(sc)
+	initializeDirectorySteps(sc)
 	initializeVersionSteps(sc)
 	initializeJobSteps(sc)
 	initializeJobMaterialSteps(sc)
