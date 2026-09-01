@@ -91,19 +91,19 @@ func TestTheConsoleListsTheJobsTheSystemActuallyHolds(t *testing.T) {
 	if running.Parent == "" {
 		t.Fatalf("the started job carries no session, so there is nothing to descend into: %q", running.Cells)
 	}
-	if running.Cells[5] == "not yet" {
+	if cellNamed(jobs, running, "session") == "not yet" {
 		t.Fatal("the started job says it has no session yet, and the controller gave it one")
 	}
-	if running.Cells[1] != job.PhaseRunning && running.Cells[1] != job.PhaseDone {
-		t.Fatalf("the started job reads %q, want a phase the controller moved it to", running.Cells[1])
+	if phase := cellNamed(jobs, running, "phase"); phase != job.PhaseRunning && phase != job.PhaseDone {
+		t.Fatalf("the started job reads %q, want a phase the controller moved it to", phase)
 	}
 
 	waitingRow, ok := rowFor(rows, pending.GetId())
 	if !ok {
 		t.Fatalf("the pending job is not in the listing: %v", rows)
 	}
-	if waitingRow.Cells[5] != "not yet" {
-		t.Fatalf("a job nothing has started says its session is %q", waitingRow.Cells[5])
+	if got := cellNamed(jobs, waitingRow, "session"); got != "not yet" {
+		t.Fatalf("a job nothing has started says its session is %q", got)
 	}
 
 	// Scoped to one project, which is the same call the view makes when it is drilled into from one.
@@ -149,8 +149,8 @@ func TestTheConsoleListsTheJobsTheSystemActuallyHolds(t *testing.T) {
 	if !ok {
 		t.Fatalf("the stopped job left the listing: %v", after)
 	}
-	if stopped.Cells[1] != job.PhaseStopped {
-		t.Fatalf("the job reads %q after being stopped from the console, want stopped", stopped.Cells[1])
+	if got := cellNamed(jobs, stopped, "phase"); got != job.PhaseStopped {
+		t.Fatalf("the job reads %q after being stopped from the console, want stopped", got)
 	}
 }
 
@@ -186,4 +186,20 @@ func actionNamed(resource console.Resource, label string) (console.Action, bool)
 		}
 	}
 	return console.Action{}, false
+}
+
+// cellNamed is what a row says under one column heading, found by the heading rather than by counting
+// positions in a slice. A case that counted broke the moment a column was added in front of the one it
+// was about, and it broke in this tier only, which is the tier an untagged run never compiles.
+func cellNamed(view console.Resource, row console.Row, title string) string {
+	for at, column := range view.Columns {
+		if column.Title != title {
+			continue
+		}
+		if at >= len(row.Cells) {
+			return ""
+		}
+		return row.Cells[at]
+	}
+	return ""
 }

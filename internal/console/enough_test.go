@@ -239,3 +239,18 @@ func TestTheJobsSummarySaysJobsWhenThereIsMoreThanOne(t *testing.T) {
 		t.Fatalf("the line above the columns says %q", line)
 	}
 }
+
+// The headings the tiers outside this package look a cell up by. A column renamed here and nowhere
+// else fails an untagged run, which is the only run most changes get: the tagged tier that reads these
+// is not compiled without its build tag, so a rename there is silent until continuous integration.
+func TestTheJobsListingKeepsTheHeadingsOtherTiersLookCellsUpBy(t *testing.T) {
+	headings := map[string]bool{}
+	for _, column := range Jobs(&treeClient{}).Columns {
+		headings[column.Title] = true
+	}
+	for _, wanted := range []string{"phase", "session"} {
+		if !headings[wanted] {
+			t.Fatalf("the jobs listing has no column headed %q, and something outside this package reads it", wanted)
+		}
+	}
+}
