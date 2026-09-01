@@ -54,6 +54,15 @@ func initializeKeysSteps(sc *godog.ScenarioContext) {
 		return c.press(tea.KeyMsg{Type: tea.KeyEsc})
 	})
 
+	// What the console draws, rather than what its model holds. A level that lists the right rows and
+	// draws none of them is a level nobody can read.
+	sc.Step(`^the console screen says "([^"]*)"$`, func(ctx context.Context, want string) error {
+		if drawn := consoleFrom(ctx).model.View(); !strings.Contains(drawn, want) {
+			return fmt.Errorf("the console does not say %q:\n%s", want, drawn)
+		}
+		return nil
+	})
+
 	sc.Step(`^the console is on the "([^"]*)" view$`, func(ctx context.Context, view string) error {
 		drawn := consoleFrom(ctx).model.View()
 		if !strings.Contains(drawn, "<"+view+">") {

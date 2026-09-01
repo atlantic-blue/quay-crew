@@ -53,7 +53,11 @@ func workspaceRow(workspace *quaycrewv1.Workspace) Row {
 	}
 }
 
-// Projects lists the bodies of work inside a workspace, and drills into their sessions.
+// Projects lists the bodies of work inside a workspace, and drills into the jobs declared in them.
+//
+// Jobs rather than sessions, because a job is what a person declares and a session is the layer
+// underneath it. The sessions of one project are still one key away, on s, so the old destination did
+// not become harder to reach.
 func Projects(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "projects",
@@ -65,8 +69,17 @@ func Projects(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "deploys to", Width: 26, Colour: dim},
 			{Title: "age", Width: 0, Colour: dim},
 		},
-		DrillTo: "sessions",
+		DrillTo: "jobs",
 		SortBy:  1,
+		Actions: []Action{
+			{
+				// Where enter used to go. A person who wants the conversations of one project reaches
+				// them in one key, which is what enter cost before jobs took it.
+				Key:     "s",
+				Label:   "Sessions",
+				Descend: "sessions",
+			},
+		},
 		List: func(ctx context.Context, workspace string) ([]Row, error) {
 			resp, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{Workspace: workspace})
 			if err != nil {
@@ -346,9 +359,15 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	}
 }
 
-// Tasks is one session's history, read from the tasks the dispatch path writes, so it
-// answers without starting a container and keeps answering once the sandbox is gone. It has no tool
-// calls and no thinking: opening the conversation is for that.
+// Tasks is the running work: one session, what it was asked, and what came back from each. It is read
+// from the tasks the dispatch path writes, so it answers without starting a container and keeps
+// answering once the sandbox is gone. It has no tool calls and no thinking: opening the conversation
+// is for that, and that is a key here.
+//
+// This is the deepest level of the tree, and the level a person watches something happen on, so the
+// two keys that reach the machine live here: enter opens the conversation and s opens a shell in the
+// sandbox. Both act on the session this view is scoped to rather than on a row, because a job whose
+// session has produced no task yet lists nothing and still has a container worth opening.
 //
 // tasks and task stay as aliases. The word changed and the muscle memory did not, and a view that
 // answers to what somebody already types costs nothing.
@@ -363,10 +382,12 @@ func Tasks(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "answered", Width: 0, Colour: dim},
 		},
 		// Oldest first, the order it happened in, which is the only order a conversation reads in.
-		SortBy: 0,
+		SortBy:  0,
+		Actions: workActions(client),
 		List: func(ctx context.Context, session string) ([]Row, error) {
 			if session == "" {
-				return nil, fmt.Errorf("open a session's history from the sessions view: there is no history without one")
+				return nil, fmt.Errorf(
+					"open the running work from a job or from a session: there is no work to read without one")
 			}
 			resp, err := client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session})
 			if err != nil {
@@ -377,6 +398,36 @@ func Tasks(client quaycrewv1.ControlPlaneServiceClient) Resource {
 				rows = append(rows, turnRow(task))
 			}
 			return rows, nil
+		},
+	}
+}
+
+// workActions are the two keys on the deepest level of the tree: open the conversation, and open a
+// shell in the sandbox it runs in. Both are the same keys, with the same meaning, that the sessions
+// view already binds, because the thing being acted on is the same thing.
+//
+// Both act on the session the view is scoped to. A row here is one task, and a task has no container
+// to open; the session does. Reading the session off a row would also leave a job whose session has
+// answered nothing with no way in, and that is the job somebody is most likely to be watching.
+func workActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
+	return []Action{
+		{
+			Key:     "enter",
+			Also:    []string{"a"},
+			Label:   "Open",
+			OnScope: true,
+			Shell: func(row Row) (*exec.Cmd, error) {
+				return attachCommand(client, row.ID)
+			},
+		},
+		{
+			Key:     "s",
+			Label:   "Shell",
+			OnScope: true,
+			Shell: func(row Row) (*exec.Cmd, error) {
+				return exec.Command("docker", "exec", "-it",
+					"-e", "PS1="+display.ShortID(row.ID)+" $ ", sandbox.ContainerName(row.ID), "sh"), nil
+			},
 		},
 	}
 }

@@ -38,7 +38,7 @@ Feature: The first run is guided
     And the secrets backend holds a token for the workspace named "acme"
     And the context of the project named "house-bills" says "Bills are paid monthly"
     And the workspace named "acme" holds the skill "notes"
-    And the console lists the session the wizard started
+    And the console lists what the wizard made
 
   Scenario: The skill stage says a secret a skill names has to be set on the workspace
     Given the operator imported the "git" skill

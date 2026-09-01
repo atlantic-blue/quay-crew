@@ -11,8 +11,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// Default is the resource the console opens on.
-const Default = "sessions"
+// Default is the resource the console opens on. It is the top of the tree: a first screen of every
+// session in the system is a list with no relation between its rows, and one operator command makes
+// eleven of them. A workspace opens its projects, a project opens its jobs, and a job opens the work
+// running under it. The flat listings stay one word away in the command bar.
+const Default = "workspaces"
 
 // Registry builds the console's resources against a control plane client. Adding a view to the
 // console means adding a Resource here.

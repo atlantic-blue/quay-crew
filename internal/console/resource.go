@@ -128,6 +128,11 @@ type Action struct {
 	// Widens says whether picking this would give the row more than it has now, which is what decides
 	// whether a pick is asked about. Nil means every pick is treated the same way Confirm says.
 	Widens func(row Row, chosen string) bool
+	// OnScope says this key acts on what the view is scoped to rather than on the row under the
+	// cursor, and the row it is handed then carries that scope as its identifier. The running work is
+	// the case: it lists the tasks of one session, and shelling into that session has to work on the
+	// job that has produced no task yet, where there is no row to stand on at all.
+	OnScope bool
 	// Descend opens another resource scoped to the selected row, the way enter does where a view has
 	// somewhere to drill into. It exists because a session already spends enter on opening the
 	// conversation, which is the thing an operator does most, and a history is worth a key of its own

@@ -293,7 +293,9 @@ func initializeIdentifierSteps(sc *godog.ScenarioContext) {
 	})
 
 	sc.Step(`^the operator opens the console over the system$`, func(ctx context.Context) error {
-		return consoleFrom(ctx).openModel(worldFrom(ctx))
+		// On the sessions listing, because every scenario that uses this is about a session row and the
+		// console opens on the tree.
+		return consoleFrom(ctx).openModelOn(worldFrom(ctx), "sessions")
 	})
 
 	sc.Step(`^the refusal says how to send it as the message instead$`, func(ctx context.Context) error {

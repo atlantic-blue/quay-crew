@@ -20,7 +20,7 @@ Feature: The console's keys agree with vim
 
   Scenario: The history is on the key that names the view it opens
     Given a session started by dispatching "hello"
-    When the operator is at the console
+    When the operator is at the console on the "sessions" view
     And the operator presses "t" in the console
     Then the console is on the "tasks" view
 
@@ -28,7 +28,7 @@ Feature: The console's keys agree with vim
   # difference between a key that moved and a key that broke.
   Scenario Outline: A key that moved says what to press now
     Given a session started by dispatching "hello"
-    When the operator is at the console
+    When the operator is at the console on the "sessions" view
     And the operator presses "<pressed>" in the console
     Then the console says to press "<instead>"
     And the console is on the "sessions" view
@@ -45,13 +45,13 @@ Feature: The console's keys agree with vim
   # key is what says so, because the first is a sequence waiting for its other half.
   Scenario: g does not refresh any more, and says where refreshing went
     Given a session started by dispatching "hello"
-    When the operator is at the console
+    When the operator is at the console on the "sessions" view
     And the operator presses "gj" in the console
     Then the console says to press "r"
 
   Scenario: r refreshes
     Given a session started by dispatching "hello"
-    When the operator is at the console
+    When the operator is at the console on the "sessions" view
     And the operator presses "r" in the console
     Then the console lists that session
 
@@ -66,7 +66,7 @@ Feature: The console's keys agree with vim
     Given a session started by dispatching "one"
     And the operator dispatches "two" to a new session
     And the operator dispatches "three" to a new session
-    When the operator is at the console
+    When the operator is at the console on the "sessions" view
     And the operator presses "G" in the console
     Then the cursor is on the last row
     When the operator presses "gg" in the console
@@ -76,7 +76,7 @@ Feature: The console's keys agree with vim
     Given a session started by dispatching "one"
     And the operator dispatches "two" to a new session
     And the operator dispatches "three" to a new session
-    When the operator is at the console
+    When the operator is at the console on the "sessions" view
     And the operator presses "2j" in the console
     Then the cursor is on row 3
 
