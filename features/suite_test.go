@@ -456,6 +456,8 @@ type world struct {
 	// change is the repository a scenario built to stand for the change a session is opening a pull
 	// request for, because the gate reads the change rather than being told about it.
 	change string
+	// processGate is what the shipped process gate answered the last time a scenario fired it.
+	processGate gateAnswer
 	// proseGate is what the shipped prose gate answered the last time a scenario fired it.
 	proseGate gateAnswer
 }
@@ -853,6 +855,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeSigningSteps(sc)
 	initializeSecretFileSteps(sc)
 	initializeProseGateSteps(sc)
+	initializeProcessGateSteps(sc)
 	initializeSystemSecretSteps(sc)
 	initializeGitConfigSteps(sc)
 	initializeWizardModeSteps(sc)

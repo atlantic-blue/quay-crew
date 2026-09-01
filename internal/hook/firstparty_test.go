@@ -271,3 +271,51 @@ func TestTheShippedDeployIdentityGateFiresWhereACommandIsAboutToRun(t *testing.T
 		t.Error("the deploy identity gate carries no bin/hook, so it would fail on its first command")
 	}
 }
+
+// The process gate is bound where it can see the command it refuses, on the same argument as the two
+// gates above: it reads a command line before it runs, so any other event or any other tool is a
+// hook that never fires on the thing it exists to stop.
+//
+// What it declares matters here because it is seeded to the whole system. A binary it names is a
+// binary every sandbox image has to carry, and one that is missing takes the constraint out of every
+// session in the workspace.
+func TestTheShippedProcessGateFiresWhereACommandIsAboutToRun(t *testing.T) {
+	gate := shipped(t, "process-gate")
+
+	if len(gate.Events) != 1 {
+		t.Fatalf("the process gate fires on %d events, and it reads one thing: a command about to run",
+			len(gate.Events))
+	}
+	binding := gate.Events[0]
+	if binding.On != "PreToolUse" {
+		t.Errorf("the process gate fires on %q, and a refusal after the signal has landed is not a gate",
+			binding.On)
+	}
+	if binding.Matcher != "Bash" {
+		t.Errorf("the process gate matches %q, and the command it refuses is run with Bash", binding.Matcher)
+	}
+	// It reads a string and answers. There is nothing for it to wait on, so a session waiting on the
+	// runtime's own default would be waiting on a bug.
+	if binding.TimeoutSeconds == 0 {
+		t.Error("the process gate has no timeout, and it fires on every command a session runs")
+	}
+	// It shells out to nothing, so a declared binary would be a requirement every image has to meet
+	// for no reason, and a missing one refuses every session in the workspace.
+	if len(gate.Binaries) != 0 {
+		t.Errorf("the process gate declares %v, and it runs nothing but itself", gate.Binaries)
+	}
+	// A gate that reads a credential is a gate with something to lose.
+	if len(gate.Secrets) != 0 {
+		t.Errorf("the process gate names %v, and it decides from the command alone", gate.Secrets)
+	}
+	// Whole: the entry point. A hook missing it imports cleanly and dies on its first command.
+	carried := false
+	for _, file := range gate.Files {
+		if file.Path == "bin/hook" {
+			carried = true
+		}
+	}
+	if !carried {
+		t.Error("the process gate carries no bin/hook, so it would fail on its first command")
+	}
+}

@@ -349,6 +349,23 @@ A level is read back with ` + "`krewe context show <address>`" + `, which prints
 nothing else. Setting overwrites, so adding a paragraph means reading the level out first, appending
 to the file, and setting it back.
 
+## What is refused, before you try it
+
+Some rules are checked rather than read. A hook reads the command you are about to run and can
+refuse it. You get the reason and the command does not run.
+
+  a merge                    Push the branch and open a pull request. The merge is the operator's.
+  ending a process           ` + "`kill`" + `, ` + "`pkill`" + `, ` + "`killall`" + `, the multiplexer's kill verbs, ` + "`docker stop`" + `,
+                             ` + "`docker rm -f`" + `, ` + "`docker compose down`" + `, a prune, ` + "`systemctl stop`" + `.
+                             This machine also holds the system and the operator's terminal.
+                             To end this system's own work, run ` + "`krewe job stop`" + ` or ` + "`krewe flow stop`" + `.
+                             To end anything else, ask the operator first.
+  a pull request over
+  infrastructure             Say what the deploy identity may do, in the body.
+
+Writing about a refused command is refused too, because the gate reads the text of the command. Write
+that prose to a file with an editor rather than through a shell string.
+
 ## What this is for
 
 The operator may ask you to do things to the system itself: make a workspace, add a project, set a
