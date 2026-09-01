@@ -114,6 +114,15 @@ type Job struct {
 	// because only one of them existed.
 	Product string
 
+	// Request is what was asked for, in the words it was asked in, kept whole and never rewritten. The
+	// brief was written from it, and the two are read against each other at the write.
+	//
+	// It is not Product. Product says what a person does with what is built and what they get back,
+	// which is an outcome; this is the ask. On the article that failed, "a reader opens the post" and a
+	// brief for a diary of throughput agree completely, so nothing stated as an outcome could have
+	// caught it. See request.go.
+	Request string
+
 	// Plan is what the crew said it would do, one numbered step per line, and PlanApproved says
 	// whether a person approved it. A job that states the sentence writes its plan before it does any
 	// work, and nothing is built until somebody says yes to these lines. See plan.go.
@@ -349,7 +358,10 @@ type Declaration struct {
 	Requires       []string
 	Repository     string
 	Product        string
-	Claim          string
+	// Request is what was asked for, in the words it was asked in. The brief was written from it, and
+	// the two are held against each other at the write.
+	Request string
+	Claim   string
 	// Escalation is what this job does when it goes in circles: "ask", or "role:<name>". Empty is
 	// asking, and every word is refused at the write, where the person who typed it is looking.
 	Escalation string
@@ -368,6 +380,7 @@ func (d Declaration) Tidied() Declaration {
 	d.Mode = strings.TrimSpace(d.Mode)
 	d.ExpectFile = strings.TrimSpace(d.ExpectFile)
 	d.Product = TidySentence(d.Product)
+	d.Request = strings.TrimSpace(d.Request)
 	d.Escalation = strings.ToLower(strings.TrimSpace(d.Escalation))
 	d.Requires = TidyRequires(d.Requires)
 	d.Repository = TidyRepository(d.Repository)
@@ -403,6 +416,10 @@ func (d Declaration) Validate() error {
 		return fmt.Errorf("the sentence is %d bytes and the ceiling is %d, because it is one sentence a person "+
 			"would say: write what somebody does and what they get back, and put the rest in the brief",
 			len(tidy.Product), ProductLimit)
+	case len(tidy.Request) > RequestLimit:
+		return fmt.Errorf("the request is %d bytes and the ceiling is %d, which is the brief's: it is what was "+
+			"asked for in the words it was asked in, so declare the job in more than one piece rather than "+
+			"shortening what somebody said", len(tidy.Request), RequestLimit)
 	case tidy.BudgetTokens < 0:
 		return fmt.Errorf("the budget is %d tokens and a budget cannot be below zero: leave it at zero to draw "+
 			"from the parent, or give a number of tokens", tidy.BudgetTokens)

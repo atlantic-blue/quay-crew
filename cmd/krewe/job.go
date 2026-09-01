@@ -68,6 +68,7 @@ const (
 	flagRequires       = "--requires"
 	flagRepository     = "--repository"
 	flagProduct        = "--product"
+	flagRequest        = "--request"
 	flagClaim          = "--claim"
 	flagEscalate       = "--escalate"
 	flagNoGate         = "--no-gate"
@@ -113,6 +114,7 @@ func runJobCreate(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		Requires:       values[flagRequires],
 		Repository:     values.first(flagRepository),
 		Product:        values.first(flagProduct),
+		Request:        values.first(flagRequest),
 		Claim:          values.first(flagClaim),
 		Escalation:     values.first(flagEscalate),
 		Ungated:        values.has(flagNoGate),
@@ -151,8 +153,22 @@ func runJobCreate(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	fmt.Fprintf(out, "%s. A controller picks it up and runs it; read the answer with krewe job show %s\n",
 		declared.GetPhase(), display.ShortID(declared.GetId()))
 	sayNoSentence(out, declared)
+	sayTheBriefDrifted(out, resp.GetDrifted())
 	sayWhatIsLeftOut(out, resp.GetLeftOut())
 	return nil
+}
+
+// sayTheBriefDrifted names the words of the request the brief never says.
+//
+// It says nothing at all where the brief carries them, and that silence is the feature. A person who
+// reads this line on every job stops reading it, and a check nobody reads is the check that was not
+// built. It refuses nothing either: the system knows the brief dropped words, never that the brief
+// is wrong, and the person who said the request is often not the person at this terminal.
+func sayTheBriefDrifted(out io.Writer, drifted string) {
+	if drifted == "" {
+		return
+	}
+	fmt.Fprintln(out, drifted)
 }
 
 // sayNoSentence tells an operator declaring the job at the top of a tree that nothing says what a
@@ -415,6 +431,16 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	// evidence for this sentence rather than a replacement for it.
 	if one.GetProduct() != "" {
 		fmt.Fprintf(out, "for a person: %s\n", one.GetProduct())
+	}
+	// The request, and the reading of it, are printed for the same reason they are printed at the
+	// write: a job whose brief dropped what was asked for reads exactly like one whose brief did not.
+	// The reading is worked out again here rather than stored, because it is a function of two columns
+	// the row already carries and a third copy could only disagree with them.
+	if one.GetRequest() != "" {
+		fmt.Fprintf(out, "asked for: %s\n", one.GetRequest())
+		if drifted := job.Drifted(one.GetRequest(), one.GetBrief()); drifted != "" {
+			fmt.Fprintln(out, drifted)
+		}
 	}
 	// The score, printed even at zero. Every other field here is hidden when it is empty, and this one
 	// is not: no steers is the best a job can do, and a number that only appears once somebody had to
@@ -898,7 +924,7 @@ func jobFlagsTaken() map[string]bool {
 	taken := map[string]bool{}
 	for _, name := range []string{
 		flagTitle, flagBrief, flagRole, flagMode, flagExpectFile, flagExpectContains, flagRepository,
-		flagProduct, flagClaim, flagEscalate, flagNoGate,
+		flagProduct, flagRequest, flagClaim, flagEscalate, flagNoGate,
 		flagAfter, flagDeadline, flagBudgetTokens, flagLabel, flagRequires, flagPhase, flagOutcome,
 		flagRoots,
 		// Taken so it can be refused with the sentence that says where a parent comes from,

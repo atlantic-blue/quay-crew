@@ -74,11 +74,16 @@ commands:
     [--expect-contains "..."]             names one is not done until its answer names a pull
     [--repository <owner>/<name>]         request against it. --product is one sentence in a
     [--product "..."]                     person's words: what somebody does with what gets built
-    [--claim <piece of work>]             and what they get back. Every job under this one carries
-    [--escalate ask|role:<name>]          it, and it is what the design is read against. --claim is
-                                          the piece of work this job takes, an issue, a branch or a
-                                          name, and a second job claiming it is refused while this
-                                          one holds it, so two sessions cannot build the same slice.
+    [--request "..."]                     and what they get back. Every job under this one carries
+    [--claim <piece of work>]             it, and it is what the design is read against. --request
+    [--escalate ask|role:<name>]          is what was asked for, in the words it was asked in: the
+                                          system keeps it whole, gives it to the session above the
+                                          brief, and says at the write which of its words the brief
+                                          never says. It says nothing where the brief carries them.
+                                          --claim is the piece of work this job takes, an issue, a
+                                          branch or a name, and a second job claiming it is refused
+                                          while this one holds it, so two sessions cannot build the
+                                          same slice.
                                           --escalate says what happens when the job goes in
                                           circles: ask puts the question to you, role:<name> hands
                                           the job to another role in a conversation of its own,

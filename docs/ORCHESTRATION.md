@@ -397,6 +397,71 @@ builds the first thing a person can open, and a run of it stops there once and a
 thing does what the sentence says. Where a caller declares its jobs directly rather than through a
 graph, the sentence still reaches every session and nothing reads it back.
 
+**`request`, text, optional, default empty.** What was asked for, in the words it was asked in. The
+brief was written from it, and the two are read against each other at the moment of the write.
+
+**It is not `product`, and the difference is what makes it worth a field.** Product says what a
+person does with what is built and what they get back, which is an outcome. This is the ask. On the
+article that failed, the product sentence read "a reader opens the post" and the brief was a diary
+of throughput, and the two agree completely: nothing stated as an outcome could ever have caught it.
+
+**The ceiling is the brief's, not the title's.** Every other one line field on this table takes the
+title's ceiling. This one does not, because a ceiling that makes somebody shorten what was said is
+exactly the compression the field exists to catch.
+
+**Nothing rewrites it and no call replaces it.** A product sentence can be replaced, which is the
+path an answer of "no" takes at the first usable path. What was said is not a setting, so the
+request has no such call.
+
+**Every job under it carries the same one**, on the rule the product sentence already follows: a
+child that says nothing carries its parent's, and a child that states a different one is refused
+naming the parent's, because a tree with two requests has none.
+
+**The brief is read against it at the write, and the answer says which words the brief never says.**
+The measure is the content words. Take the words of the request that carry its subject, fold two
+shapes of one word together so `pasting` matches `paste`, and report the ones the brief never says.
+Coverage is the share of the request's words the brief carries, and below two thirds the declaration
+answers with a sentence naming what is missing. Nothing about the model is read, so it costs no call
+and anybody holding the row can work the number out again, which is the argument the loop measure in
+section 3 already makes.
+
+**It refuses nothing, and that is the design rather than a softening.** Every other rule here
+refuses. This one cannot: a false alarm would stop work that was right, and the person who said the
+request is often not the person at the terminal. It is `left_out`'s shape, an answer rather than a
+refusal, said once while somebody is looking. A question to a person instead would be an approval on
+every job, which is the cost this system exists to remove.
+
+**Only where the declaration states its own request.** A child builds one slice of the work and
+cannot carry the whole sentence, so measuring an inherited request would speak about every ordinary
+slice, and a rule that fires on ordinary work is the rule everybody words around. What is measured
+is the one hop this exists for: somebody said a sentence, somebody wrote a brief from it, and the
+two arrive together.
+
+**The session is given the request above its brief, whole.** This is the half that works with nobody
+watching. A summary of what was said is the same compression that caused the fault, so the words go
+across unrewritten, and where the brief dropped some of them the session is told which and told that
+the request wins. It answers by saying so rather than by building the brief as written. Building it
+faithfully is what already happened.
+
+**No column holds the reading and no event carries it.** The coverage is a function of two columns
+the row already holds, neither of which changes after the write, so a third copy could only disagree
+with them. `krewe job show` works it out again and prints the sentence the caller read.
+
+**The threshold is two thirds, measured on the text this repository holds.** The corpus of the right
+shape is a sentence beside the brief written to serve it, and there are 27 of those here: the summary
+and the brief of every role and every skill. The lowest covers 0.778 and the median covers 1.000. The
+two briefs that cost real work cover 0.500 and 0.000. `internal/job/requestcalibration_test.go` runs
+the measurement on every build, the way the loop threshold's does.
+
+**What it does not catch, said plainly.** A brief that keeps every word and inverts the meaning
+scores as faithful: this reads words, not meaning. A brief that renames a thing reports the rename as
+a dropped word, which is the error it makes in the other direction, and it costs a line. On the
+looser corpus of 121 issue titles held against their bodies, one in eight falls below the threshold.
+
+**What replaces the number.** The same shape the lease length and the loop threshold already have.
+Once fifty jobs carry a request, read where a job whose answer the operator kept sits against where a
+job the operator steered or stopped sits, and put the threshold at the fifth percentile of the first.
+
 ### The plan, and the person who approves it
 
 The sentence reaches every session and nothing ever holds the brief against it. That is the gap this
@@ -802,6 +867,18 @@ purpose. The list, so a test can be written against it:
 - A job that claims work a settled or stopped job claimed is declared.
 - A job that claims work nothing has moved for longer than a claim lives is declared.
 - A job with a claim of 201 bytes is refused.
+- A job whose brief carries the words of its request is declared, and the answer says nothing about
+  drift. This is the one to break the code against: a check that speaks about every brief passes
+  every test about finding drift and is worth nothing.
+- A job whose brief drops the words of its request is declared, and the answer names those words.
+- A job that states no request is declared exactly as it was before this existed.
+- A job declared under another carries its parent's request, and one that states a different request
+  is refused naming the parent's.
+- A child is never measured against the request it inherited, so an ordinary slice is declared in
+  silence.
+- The session doing a job is given the request above its brief, and told which of its words the
+  brief never says.
+- A request of 16,385 bytes is refused, and the refusal says the ceiling is the brief's.
 - A job whose `after` names an identifier that does not exist is refused.
 - A job whose `after` closes a cycle is refused, and the refusal names both identifiers.
 - A job with `parent` in the request is refused, and the refusal says the parent comes from the
