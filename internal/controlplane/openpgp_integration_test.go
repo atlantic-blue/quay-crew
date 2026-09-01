@@ -160,7 +160,7 @@ func assertSignedBy(t *testing.T, said, fingerprint string) {
 // only, and no expiry: it lives as long as the temporary directory holding it.
 func anOpenPGPKey(t *testing.T, home, address, passphrase string) string {
 	t.Helper()
-	gpgSays(t, home, passphrase, "--quick-generate-key", "Quay System Test <"+address+">", "ed25519", "sign", "0")
+	gpgSays(t, home, passphrase, "--quick-generate-key", "Quay Krewe Test <"+address+">", "ed25519", "sign", "0")
 	listed := gpgSays(t, home, passphrase, "--list-secret-keys", "--with-colons", address)
 	for _, line := range strings.Split(listed, "\n") {
 		if fields := strings.Split(line, ":"); fields[0] == "fpr" && len(fields) > 9 {

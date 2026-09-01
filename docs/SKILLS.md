@@ -38,8 +38,8 @@ A skill needs both properties, so it gets both layers.
 
 ```mermaid
 flowchart LR
-    A["a repository of skills<br/>files, reviewed, versioned"] -->|"quay skill import"| B["the system's store<br/>pinned to a version"]
-    B -->|"quay skill attach"| C["a workspace"]
+    A["a repository of skills<br/>files, reviewed, versioned"] -->|"krewe skill import"| B["the system's store<br/>pinned to a version"]
+    B -->|"krewe skill attach"| C["a workspace"]
     C --> D["every session in it<br/>files written, secrets injected,<br/>a line in the memory file"]
     E["the sealed secrets store"] -->|"only what the skill names"| D
 ```
@@ -73,7 +73,7 @@ version: 3
 summary: Open pull requests and issues, and push branches.
 binaries: [git, gh]
 secrets:
-  GH_TOKEN: a token with repo scope, set with `quay secret set <workspace> GH_TOKEN`
+  GH_TOKEN: a token with repo scope, set with `krewe secret set <workspace> GH_TOKEN`
 ```
 
 `GH_TOKEN` rather than `GITHUB_TOKEN`, because `gh` reads both and prefers the first, so one name serves
@@ -95,7 +95,7 @@ A skill reaches a session three ways, at the outer two of the four levels contex
 
 The system's own skills directory reaches every session: that is the system level, for skills the operator
 keeps as files on the machine. An imported skill attached to the system reaches every session too, with
-`quay skill attach system <name>`, taking the same word where a workspace goes that `quay context set
+`krewe skill attach system <name>`, taking the same word where a workspace goes that `krewe context set
 system` takes. That is the system level again, reached from the tool rather than from the filesystem,
 which matters because a system on a pod has no directory to drop files into and because setting a system
 up once is the difference from setting each workspace up again. A skill imported and attached to one
@@ -271,14 +271,14 @@ Verified against the repository and a running stack, rather than assumed:
   committer now, from the system's configuration.
 - A workspace's secrets reach that workspace's sandboxes. A session holding the github skill is given
   `GH_TOKEN` because the workspace holds it. A skill naming a secret the workspace has not set is
-  left out of the session instead, and `quay skill list` says which secret left it out and how to set
+  left out of the session instead, and `krewe skill list` says which secret left it out and how to set
   it, so the task still runs and the model is never handed a brief it cannot follow. A manifest
   naming a secret
   starting `QC_` or `CLAUDE_` is refused at validation, because those names are the system's own, and a
   workspace secret starting `QC_` never travels for the same reason.
 - Context already has the four levels, the store, the rendering into files and the reading back, and
   a skill's brief follows that path rather than inventing a second one.
-- Automation graphs run: `internal/flow` over Postgres, with `quay flow` in front of it. The `wait` and `ask` nodes, ceilings and stopping a run are not built yet.
+- Automation graphs run: `internal/flow` over Postgres, with `krewe flow` in front of it. The `wait` and `ask` nodes, ceilings and stopping a run are not built yet.
 
 ## Delivery
 
@@ -289,9 +289,9 @@ if the rest waits:
 2. A git identity in a sandbox, from the workspace, so a commit has an author. Done.
 3. A skill reaches a session from the system's directory: read, mounted read only, refused early, set up.
    Done.
-4. The store: import, pin to a version, attach to a workspace, with `quay skill` on the command line.
+4. The store: import, pin to a version, attach to a workspace, with `krewe skill` on the command line.
    Done. This is one slice of [#179](https://github.com/atlantic-blue/quay-crew/issues/179), whose
-   remaining slices are 6 to 9 below plus a `quay skill show`, all still open.
+   remaining slices are 6 to 9 below plus a `krewe skill show`, all still open.
 5. A repository reaches a sandbox. Built as a workspace level API (records, a clone at sandbox birth
    into the workspace's volume, a working tree per session) and then reworked back out in
    [#210](https://github.com/atlantic-blue/quay-crew/issues/210): a skill is a text file the session

@@ -7,7 +7,7 @@ The evidence is one working session on 13 August 2026. The system context held 1
 The session broke three of them. It did not break the one about committing without approval, because
 that one is not advice on the operator's machine: a hook refused the command and named how to ask.
 
-A quay sandbox had no such gate, so the rule that mattered most was the rule nothing checked. It has
+A krewe sandbox had no such gate, so the rule that mattered most was the rule nothing checked. It has
 one gate now, on the merge, and the rest of this document is the shape every other one takes.
 
 ## What a hook is, and is not
@@ -37,14 +37,14 @@ prompt, and a shorter prompt is followed more closely, so the advice that remain
 ## Where a hook lives
 
 The same three layers as a skill, for the same reasons, and this is deliberate rather than
-convenient. A hook was once built as `quay hook <name>`, compiled into the command line tool. That
+convenient. A hook was once built as `krewe hook <name>`, compiled into the command line tool. That
 made it impossible to write a hook for one workspace, impossible to change one without releasing the
 tool, and impossible to hand one to another system.
 
 ```mermaid
 flowchart LR
-    A["a repository of hooks<br/>files, reviewed, versioned"] -->|"quay hook import"| B["the system's store<br/>pinned to a version"]
-    B -->|"quay hook attach"| C["a workspace, or the whole system"]
+    A["a repository of hooks<br/>files, reviewed, versioned"] -->|"krewe hook import"| B["the system's store<br/>pinned to a version"]
+    B -->|"krewe hook attach"| C["a workspace, or the whole system"]
     C --> D["every session in it<br/>files mounted read only,<br/>a settings file rendered"]
     D --> E["the model runtime<br/>runs the hook on its event"]
 ```
@@ -189,7 +189,7 @@ pull request, and no role merges, since a push applies nothing and a merge runs 
 spends money. A gate an operator has to remember to attach is off in every system nobody set up, which
 is where the boundary matters most. So the rule is not that a seeded hook never refuses. It is that a
 seeded hook refuses something no session is ever meant to do, exactly, and says what to do instead.
-`quay hook detach system merge-gate` is how somebody decides otherwise.
+`krewe hook detach system merge-gate` is how somebody decides otherwise.
 
 The deploy identity gate is seeded on that same rule. Opening a pull request that creates
 infrastructure without saying whether the identity applying it may create anything hands the failure

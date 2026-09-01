@@ -95,6 +95,14 @@ type Job struct {
 	// that pull request. Empty claims nothing and is checked as nothing.
 	Repository string
 
+	// Ungated is a job declared with the settle gate off: it settles on its own answer, and nothing
+	// independent has to agree first. It is stated in the negative so a declaration that says nothing
+	// is gated, which is the direction a boundary has to default in.
+	//
+	// It is refusable rather than optional. A run that has no reviewer and no tester to spare says so
+	// here, once, where somebody is looking, rather than by a gate that quietly passes everything.
+	Ungated bool
+
 	// Product is the one sentence this job serves, in a person's words: what somebody does with what is
 	// built, and what they get back. It is stated on the root and every child carries it.
 	//
@@ -144,6 +152,11 @@ type Job struct {
 	// point of the field: a listing that says a job is done and nothing about where the work went is
 	// the silence this was built to end.
 	PullRequest string
+	// Reviewed and Tested are what passed this work before it settled, each in a session that did not
+	// do the work. They are written when the job lands, so a settled job always states whether anything
+	// independent agreed with its answer. See gate.go.
+	Reviewed bool
+	Tested   bool
 	// SpentTokens is what this job's own session has cost.
 	SpentTokens int64
 	// Steps are what the session doing this job said it finished, in the order it finished them. They
@@ -314,8 +327,11 @@ type Declaration struct {
 	// Escalation is what this job does when it goes in circles: "ask", or "role:<name>". Empty is
 	// asking, and every word is refused at the write, where the person who typed it is looking.
 	Escalation string
-	ID         string
-	Parent     string
+	// Ungated declares this job with the settle gate off. Stated in the negative, so a caller that says
+	// nothing gets the gate.
+	Ungated bool
+	ID      string
+	Parent  string
 }
 
 // Tidied is the declaration as it is stored: the space around the lines it will be read as comes off.
