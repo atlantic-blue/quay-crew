@@ -421,6 +421,16 @@ func asJob(from *job.Job) *quaycrewv1.Job {
 		TraceId: from.TraceID, ParentSpanId: from.ParentSpanID,
 		CreatedAt: timestamppb.New(from.CreatedAt), UpdatedAt: timestamppb.New(from.UpdatedAt),
 	}
+	// What the forge last said about the pull request, as words rather than as a shape a caller has to
+	// interpret. The moment is left unset where nothing has read it, so a caller can tell a reading of
+	// unknown from no reading at all.
+	reading := from.PullRequestState.Or()
+	on.PullRequestStatus, on.PullRequestChecks = reading.Status, reading.Checks
+	on.PullRequestCheck, on.PullRequestReview = reading.FailedCheck, reading.Review
+	on.PullRequestFailed = reading.Failed
+	if !reading.ReadAt.IsZero() {
+		on.PullRequestReadAt = timestamppb.New(reading.ReadAt)
+	}
 	if from.Deadline != nil {
 		on.Deadline = timestamppb.New(*from.Deadline)
 	}
@@ -616,3 +626,16 @@ func (s *Server) modeReachesTheRepository(declared *job.Job) error {
 	}
 	return nil
 }
+
+// RunPullRequests reads back the pull requests the crew opened, on its own timer, until ctx is done.
+// It blocks, so the caller runs it in a goroutine and owns its lifetime, the way the headroom sampler
+// is run.
+//
+// Nothing calls a forge while a page draws. A page reads the row this writes, which is the rule
+// GetHeadroom and GetHealth already hold: reading a service takes as long as that service takes, and
+// a view that waited on one would go blank whenever it was slow.
+func (s *Server) RunPullRequests(ctx context.Context) { s.pullRequests.Run(ctx) }
+
+// ReadPullRequests reads every unsettled pull request once, now. The timer above calls this too; a
+// caller that cannot wait for a tick calls it directly, which is what a test and a scenario do.
+func (s *Server) ReadPullRequests(ctx context.Context) { s.pullRequests.Tick(ctx) }

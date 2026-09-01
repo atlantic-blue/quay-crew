@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/atlantic-blue/quay-krewe/internal/capacity"
+	"github.com/atlantic-blue/quay-krewe/internal/forge"
 	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"github.com/atlantic-blue/quay-krewe/internal/role"
 )
@@ -157,6 +158,13 @@ type Job struct {
 	// point of the field: a listing that says a job is done and nothing about where the work went is
 	// the silence this was built to end.
 	PullRequest string
+	// PullRequestState is what the forge last said about that pull request: whether it is open, merged
+	// or closed, what its checks say, whether a review asked for changes, and when it was read.
+	//
+	// It is unknown throughout until something reads it, and unknown never reads as green. The crew
+	// used to hold the address and nothing else, so a change that merged and a change whose checks went
+	// red an hour later were one picture. See pullrequest.go.
+	PullRequestState forge.Reading
 	// Reviewed and Tested are what passed this work before it settled, each in a session that did not
 	// do the work. They are written when the job lands, so a settled job always states whether anything
 	// independent agreed with its answer. See gate.go.

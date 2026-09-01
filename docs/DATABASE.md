@@ -193,6 +193,15 @@ controller is made disposable: a hold that stops moving is the signal its holder
 controller that finds it reads the task record before it does anything, so an answer that already
 landed is adopted rather than asked for a second time.
 
+It also carries what the forge last said about the pull request the job opened: `pull_request_status`
+(open, merged or closed), `pull_request_checks` (green, red, pending, none), `pull_request_check`
+(the name of the check that failed), `pull_request_review` (approved, changes requested, none),
+`pull_request_read_at` (when the forge was read, null where it never was) and `pull_request_failed`
+(why a reading did not happen). Every one of them defaults to the empty string, and empty reads as
+unknown rather than as a pass. A reader in the control plane writes them every two minutes for each
+pull request that has not merged or closed, so nothing calls a forge while a page draws. See section
+3 of `docs/ORCHESTRATION.md`.
+
 **`job_events`** is what happened to each job, one row per event, written in the same
 transaction as the row it describes. The store is the source of truth, and an export to the log is a
 copy going outward rather than a source it could be rebuilt from.

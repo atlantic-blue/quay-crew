@@ -1398,6 +1398,22 @@ message Job {
   // pull_request is the address the answer named, read off the answer rather than reported by the
   // model. It is what a reader opens to see the work, without opening a sandbox.
   string pull_request = 34;
+  // What the forge last said about that pull request, and when it said it.
+  //
+  // Every one of these is unknown until something reads it, and unknown never reads as green: a pull
+  // request nobody could read must not look like one whose checks passed. A caller reads these rather
+  // than calling a forge, which is the rule GetHeadroom already holds.
+  //
+  // pull_request_status is open, merged or closed. pull_request_checks is green, red, pending, none or
+  // unknown, and pull_request_check names the check that failed. pull_request_review is approved,
+  // changes requested, none or unknown. pull_request_read_at is when the forge was last read, unset
+  // where it never was, and pull_request_failed says why a reading did not happen.
+  string pull_request_status = 52;
+  string pull_request_checks = 53;
+  string pull_request_check = 54;
+  string pull_request_review = 55;
+  google.protobuf.Timestamp pull_request_read_at = 56;
+  string pull_request_failed = 57;
   // reviewed and tested are what passed this work before it settled, each in a session that did not
   // do the work: a reviewer that read the change against what the job was asked for, and a tester
   // that ran the repository's own gates and read their output. A settled job carrying neither was

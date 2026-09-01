@@ -339,7 +339,37 @@ has to point at a pull request or at the result of one, and a phrase the brief n
 gets past it is a brief the system still cannot run, and that is the trade: a refusal that fires on
 ordinary work is the rule everybody learns to word around.
 
-**`product`, text, optional, default empty.** One sentence in a person's words: what somebody does
+**What the system then learns about that pull request.** The address on its own was the whole of what
+the system knew about the work it opened, so a change that merged and a change whose checks went red
+an hour later read the same. A reader in the control plane asks the forge about every pull request
+that has not merged or closed, and keeps four things on the job: whether it is open, merged or
+closed, what its checks say and the name of the check that failed, whether a review asked for
+changes, and when it was read.
+
+**A reading nobody took reads as unknown, and never as green.** It is the rule `GetHeadroom` already
+holds, and for the same reason: an operator decides what to pick up on these words, so a pull request
+that reads as fine because nothing could read it is the one they will not look at. The reason sits
+beside the unknown, so a system with no forge credential says so rather than leaving the operator to
+work it out.
+
+**Where the credential lives, which is the decision this needs first.** Every other credential in the
+system reaches a sandbox through a skill. This one is different: the reader is the control plane
+itself rather than a session. So it is a system secret, `GH_TOKEN` at the system level, the same name
+the github skill already names. One process does the reading, and a credential on a workspace would
+leave the system able to read one workspace's work and not the next one's for no reason a person
+could see. Set once with `gh auth token | krewe secret set system GH_TOKEN`.
+
+**What it costs.** One call for each unsettled pull request every two minutes, in one GraphQL request
+rather than four REST reads, capped at twenty for each tick, longest unread first. A merged or closed
+pull request is read once more and then left alone, and a job that opened none is never read, so
+nothing bills while nothing is open. Two minutes is provisional: what would replace it is the
+measured time from opening a pull request to its checks settling, over the first fifty.
+
+**A page reads the row and never the forge**, which is the rule `GetHeadroom` and `GetHealth` already
+hold. A view that waited on a forge would go blank whenever the forge was slow.
+
+**`product`, text, optional, default empty.**
+ One sentence in a person's words: what somebody does
 with what this job builds, and what they get back. Not the architecture, and not the address shape.
 It is held to the title's ceiling, because a paragraph here is a design document arriving by the back
 door.
