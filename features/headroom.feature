@@ -67,22 +67,22 @@ Feature: The system says how much room the machine has left
     And each line says what its session is doing and how long since its last task
     And the listing says the largest one is working
 
-  Scenario: The header carries one figure and one word
+  Scenario: The answer carries one figure and one word
     Given the machine holds 3628 megabytes of a 7837 megabyte limit
     And the system reads the machine
     When the operator asks how much room there is
-    Then the header carries the figure and the word
-    And the header says the machine is "room"
+    Then the answer carries the figure and the word
+    And the answer says the machine is "room"
 
   # Full has to be readable without reading the number beside it.
-  Scenario: A full machine is readable in the header without reading the number
+  Scenario: A full machine is readable in the answer without reading the number
     Given the machine holds 7200 megabytes of a 7837 megabyte limit
     And the system reads the machine
     When the operator asks how much room there is
-    Then the header says the machine is "full"
+    Then the answer says the machine is "full"
 
-  # The header redraws every second. Reading the daemon takes as long as the daemon takes, so the
-  # header reads the system's last sample and the system reads the machine on a timer of its own.
+  # The answer is asked for over and over. Reading the daemon takes as long as the daemon takes, so a
+  # caller reads the system.s last sample and the system reads the machine on a timer of its own.
   Scenario: Asking the system never reads the machine
     Given the machine holds 3628 megabytes of a 7837 megabyte limit
     And the system reads the machine

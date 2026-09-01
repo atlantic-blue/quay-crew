@@ -2913,20 +2913,21 @@ session on the command line opens that one instead.
 
 What `internal/panel/panel.go` builds, from `Layout.Commands` at line 62:
 
-- A header pane across the full width, running `krewe header`, resized to exactly its own line count.
-- The console below it on the left, running `krewe console`.
+- The console on the left, running `krewe console`, the full height of the window.
 - A conversation on the right, at fifty per cent width, running `krewe attach <session>`.
-- A hook on client resize and on client attach, which puts the header back to its rows.
-- The keyboard starts in the conversation pane.
+- The keyboard starts in the console pane.
+
+There were three panes until `quay-crew#608`. A header pane ran across the full width above the other
+two, held to its own line count by a hook on client resize and on client attach. It carried a wordmark,
+one build string and one memory figure, and it cost three rows of every window. The console draws one
+footer row of its own instead, so those rows are the listing's.
 
 ```mermaid
 flowchart TD
     subgraph WINDOW["one tmux window, session krewe-panel"]
-        HEADER["pane 0: krewe header, full width, fixed rows"]
-        LEFT["pane 1: krewe console"]
-        RIGHT["pane 2: krewe attach, the driver"]
+        LEFT["pane 0: krewe console, with its own footer row"]
+        RIGHT["pane 1: krewe attach, the driver"]
     end
-    HEADER --- LEFT
     LEFT --- RIGHT
 ```
 
@@ -3182,8 +3183,9 @@ The fix is small and it is one field.
 - Add `version` to `GetInfoResponse`, beside `sandbox_build`.
 - `krewe version` prints three lines: this tool, the system, and the sandbox image. Where any two
   differ, it says so in one sentence and names `make upgrade`.
-- The header pane shows the same difference, because that is the surface an operator is already
-  looking at.
+- The console.s footer row shows the same difference, because that is the surface an operator is
+  already looking at. It already gives the whole right of that row to "run make upgrade" when the
+  control plane is too old to say what it is running.
 
 **What this does not give.** A commit count. The tool holds no repository, so it cannot count the
 commits between two builds. It prints both builds and says they differ. Counting them is one `git`

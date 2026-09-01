@@ -137,7 +137,10 @@ func jobRow(one *quaycrewv1.Job) Row {
 		ID:     one.GetId(),
 		Parent: one.GetSession(),
 		Label:  one.GetTitle(),
-		State:  stateOfPhase(one.GetPhase()),
+		// A job is the one row a person reads by its title and types by its identifier, so the position
+		// line takes the short form the listing already prints.
+		Address: display.ShortID(one.GetId()),
+		State:   stateOfPhase(one.GetPhase()),
 		Cells: []string{
 			display.ShortID(one.GetId()),
 			one.GetPhase(),

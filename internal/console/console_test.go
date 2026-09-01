@@ -13,7 +13,6 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"google.golang.org/grpc"
@@ -1468,54 +1467,6 @@ func TestPlainOutputSaysSoWhenThereIsNothing(t *testing.T) {
 
 // ---------- view ----------
 
-// TestTheHeaderIsTheWordmarkTheBuildAndTheWayToEverythingElse.
-//
-// The header is as wide as the console, and the console is half the window once a conversation is
-// beside it. A column of key hints and ten lines of status left no room for the wordmark, so both
-// moved into the help panel and the header keeps what cannot be looked up.
-func TestTheHeaderIsTheWordmarkTheBuildAndTheWayToEverythingElse(t *testing.T) {
-	client := &fakeClient{}
-	model := newTestModel(t, Sessions(client))
-	model.info = Info{
-		Version: "21fca40", Address: "localhost:50051", Workspace: "juliantellez",
-		Project: "quay-crew", Model: "claude-code", Sandbox: "docker", Store: "postgres",
-	}
-	shown := strings.Join(model.headerLines(), "\n")
-
-	if !strings.Contains(shown, "21fca40") {
-		t.Fatalf("the header does not say which build this is:\n%s", shown)
-	}
-	if !strings.Contains(shown, "Help") {
-		t.Fatalf("the header does not say how to reach everything else:\n%s", shown)
-	}
-	if !strings.Contains(shown, logo[0]) {
-		t.Fatalf("the wordmark is missing from the header:\n%s", shown)
-	}
-	for _, moved := range []string{"localhost:50051", "Sandbox engine", "Open", "Restart"} {
-		if strings.Contains(shown, moved) {
-			t.Fatalf("the header still carries %q, which belongs in the help panel:\n%s", moved, shown)
-		}
-	}
-}
-
-// TestTheWordmarkSurvivesAConversationBesideIt, which is the whole reason the rest moved out: the
-// console is half the window then, and the wordmark was the thing that lost.
-func TestTheWordmarkSurvivesAConversationBesideIt(t *testing.T) {
-	// Down to half of a 168 column window, which is what a conversation beside the console leaves.
-	// The wordmark is 43 columns wide and is drawn from 80 console columns up against this status
-	// block, both measured, so 84 is the narrowest case here. Below 80 it genuinely does not fit and
-	// is dropped rather than drawn over the top of something.
-	for _, width := range []int{170, 99, 84} {
-		model := newTestModel(t, Sessions(&fakeClient{}))
-		model.width = width
-		model.info = Info{Version: "21fca40", Address: "localhost:50051", Workspace: "juliantellez"}
-
-		if !strings.Contains(strings.Join(model.headerLines(), "\n"), logo[0]) {
-			t.Fatalf("at %d columns the wordmark is gone:\n%s", width, strings.Join(model.headerLines(), "\n"))
-		}
-	}
-}
-
 // TestTheQuestionMarkListsEveryKey is where the keys the header does not show have to live.
 func TestTheQuestionMarkListsEveryKey(t *testing.T) {
 	client := &fakeClient{}
@@ -1563,59 +1514,6 @@ func TestTheHelpPanelCarriesWhatTheHeaderDropped(t *testing.T) {
 	// And this view's own keys, which also left the header.
 	if !strings.Contains(shown, "Open") {
 		t.Fatalf("the help panel does not say what enter does:\n%s", shown)
-	}
-}
-
-// TestTheWordmarkIsThereBeforeTheSystemAnswers is how it went missing: against a control plane too old
-// to say what it is running, the status block is three lines, and the mark is six.
-func TestTheWordmarkIsThereBeforeTheSystemAnswers(t *testing.T) {
-	model := newTestModel(t, staticResource("sessions"))
-	model, _ = update(t, model, tea.WindowSizeMsg{Width: 150, Height: 30})
-	model, _ = update(t, model, infoMsg{info: Info{Version: "709b79e", Address: "localhost:50051", Workspace: "demo", Project: "default"}})
-
-	if !strings.Contains(model.View(), logo[0]) {
-		t.Fatalf("the wordmark is missing when the status block is short:\n%s", model.View())
-	}
-}
-
-// TestTheWordmarkFitsWhereverTheHeaderDoes. Six lines of block letters cost six rows to say the name
-// and are the first thing dropped when the window is small. One line fits beside the version at every
-// width worth drawing a console in.
-func TestTheWordmarkFitsWhereverTheHeaderDoes(t *testing.T) {
-	// The logo is 43 columns wide, so below 80 it does not fit beside the version and the address and
-	// is dropped rather than drawn over them. Height never stops it: it is drawn on rows the header
-	// has.
-	for _, size := range [][2]int{{140, 30}, {100, 24}, {84, 12}, {140, 3}} {
-		model := newTestModel(t, staticResource("sessions"))
-		model, _ = update(t, model, tea.WindowSizeMsg{Width: size[0], Height: size[1]})
-		model, _ = update(t, model, infoMsg{info: Info{Version: "5fd7bee", Address: "localhost:50051"}})
-
-		if !strings.Contains(model.View(), logo[0]) {
-			t.Fatalf("at %dx%d the wordmark is gone:\n%s", size[0], size[1], model.View())
-		}
-	}
-}
-
-// TestTheHeaderCostsTheLogosRows and nothing more. It sits above both halves of the panel, so every
-// row it takes is a row the list and the conversation lose: the logo is half the height it was, and
-// the header is the logo plus what fits beside it rather than ten lines of status and a column of
-// keys.
-func TestTheHeaderCostsTheLogosRows(t *testing.T) {
-	model := newTestModel(t, Sessions(&fakeClient{}))
-	model.info = Info{
-		Version: "21fca40", Address: "localhost:50051", Workspace: "juliantellez",
-		Model: "claude-code", Sandbox: "docker", Store: "postgres",
-	}
-	if got := len(model.headerLines()); got != len(logo) {
-		t.Fatalf("the header is %d rows and the logo is %d:\n%s",
-			got, len(logo), strings.Join(model.headerLines(), "\n"))
-	}
-	// And it still carries all three things, the version and the way to help beside the logo.
-	shown := strings.Join(model.headerLines(), "\n")
-	for _, want := range []string{"21fca40", "Help", logo[0]} {
-		if !strings.Contains(shown, want) {
-			t.Fatalf("the header does not carry %q:\n%s", want, shown)
-		}
 	}
 }
 
@@ -1698,8 +1596,8 @@ func TestAControlPlaneTooOldToAnswerSaysSo(t *testing.T) {
 	model := newTestModel(t, staticResource("sessions"))
 	model, _ = update(t, model, behindMsg{})
 	view := model.View()
-	if !strings.Contains(view, "Krewe:") || !strings.Contains(view, "older than the tool") || !strings.Contains(view, "make upgrade") {
-		t.Fatalf("the status block does not say the system is behind, or how to fix it:\n%s", view)
+	if !strings.Contains(view, "older than the tool") || !strings.Contains(view, "make upgrade") {
+		t.Fatalf("the footer does not say the system is behind, or how to fix it:\n%s", view)
 	}
 }
 
@@ -2712,25 +2610,6 @@ func TestTheKeyIsInTheHelp(t *testing.T) {
 	}
 }
 
-// TestTheWordmarkIsDrawnInAHeaderOfOneRow. The panel's header pane is one row tall, and a height check
-// left over from the six line wordmark dropped the wordmark from every pane shorter than seven rows.
-// The header was the only thing in it, so there was nothing underneath to starve.
-func TestTheWordmarkIsDrawnInAHeaderOfOneRow(t *testing.T) {
-	registry, err := NewDefaultRegistry(&fakeClient{})
-	if err != nil {
-		t.Fatalf("NewDefaultRegistry: %v", err)
-	}
-	for _, height := range []int{1, 2, 6, 24} {
-		lines, err := HeaderOnly(registry, Default, Info{Version: "b8919a4"}, 200, height)
-		if err != nil {
-			t.Fatalf("HeaderOnly at height %d: %v", height, err)
-		}
-		if !strings.Contains(strings.Join(lines, "\n"), logo[0]) {
-			t.Fatalf("at height %d the wordmark is gone:\n%s", height, strings.Join(lines, "\n"))
-		}
-	}
-}
-
 // TestBigPStartsAFreshConversationAndPEndsNothing. Opening the system comes back to the conversation
 // you were in, because it runs in a tmux session inside the sandbox that is attached to rather than
 // started when it is already there. That is what ctrl-q is for, and it is why the driver could never
@@ -2797,57 +2676,6 @@ func TestNReplacesTheConversationBesideItRatherThanAddingOne(t *testing.T) {
 	model := newTestModel(t, Sessions(&fakeClient{}))
 	if model.conversation != "" {
 		t.Fatal("this test assumes a console that opened nothing")
-	}
-}
-
-// TestTheHeaderSaysWhenTheSandboxImageIsOlderThanTheBuild. `make upgrade` rebuilt the tool and the
-// stack and left the sandbox image alone, so every conversation carried on running the build from
-// before: the krewe inside a sandbox was older than the system, or was not in the image at all. Nothing
-// on screen said so, which is the half that made it cost an evening.
-func TestTheHeaderSaysWhenTheSandboxImageIsOlderThanTheBuild(t *testing.T) {
-	registry, err := NewDefaultRegistry(&fakeClient{})
-	if err != nil {
-		t.Fatalf("NewDefaultRegistry: %v", err)
-	}
-	for _, tc := range []struct {
-		name    string
-		info    Info
-		says    bool
-		because string
-	}{
-		{
-			name:    "an image from an older build",
-			info:    Info{Version: "37b070b", SandboxBuild: "5d8b08f"},
-			says:    true,
-			because: "the sandboxes are running a build the system has moved on from",
-		},
-		{
-			name:    "an image from this build",
-			info:    Info{Version: "37b070b", SandboxBuild: "37b070b"},
-			because: "the image is the build that is running, so there is nothing to say",
-		},
-		{
-			name:    "an image that does not say which build it is",
-			info:    Info{Version: "37b070b"},
-			because: "an image made before this was stamped says nothing, and neither should the system",
-		},
-		{
-			name:    "a tool that does not know its own build",
-			info:    Info{SandboxBuild: "5d8b08f"},
-			because: "with nothing to compare against, older than what",
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			lines, err := HeaderOnly(registry, Default, tc.info, 200, 24)
-			if err != nil {
-				t.Fatalf("HeaderOnly: %v", err)
-			}
-			header := strings.Join(lines, "\n")
-			if said := strings.Contains(header, "make sandbox-image"); said != tc.says {
-				t.Fatalf("the header says the image is stale: %v, want %v, because %s\n%s",
-					said, tc.says, tc.because, header)
-			}
-		})
 	}
 }
 
@@ -3055,75 +2883,6 @@ func TestACellStaysUnderItsOwnTitleWhenAColumnHasGoneAway(t *testing.T) {
 	// The age is the flexible column at the end, and it must still be at the end.
 	if !strings.HasSuffix(strings.TrimRight(line, " "), rows[0].Cells[len(rows[0].Cells)-1]) {
 		t.Fatalf("the last cell is not under the last column:\n%s", line)
-	}
-}
-
-// TestTheHeaderCarriesWhatTheSystemHasCost, beside the build, where the operator is looking while they
-// job rather than only when they go and look at the listing.
-func TestTheHeaderCarriesWhatTheSystemHasCost(t *testing.T) {
-	registry, err := NewDefaultRegistry(&fakeClient{})
-	if err != nil {
-		t.Fatalf("NewDefaultRegistry: %v", err)
-	}
-	spent := sandbox.Usage{Input: 52, Output: 6917, CacheRead: 1723404}
-	lines, err := HeaderOnly(registry, Default, Info{Version: "a348a05", Spent: spent}, 200, 24)
-	if err != nil {
-		t.Fatalf("HeaderOnly: %v", err)
-	}
-	header := strings.Join(lines, "\n")
-	for _, want := range []string{"6.9k", "52", "1.7M"} {
-		if !strings.Contains(header, want) {
-			t.Errorf("the header does not carry %s:\n%s", want, header)
-		}
-	}
-}
-
-// TestASystemThatHasSpentNothingSaysNothingInTheHeader. A row of zeroes beside the build reads as a
-// system that is free, and it is the first thing anybody sees.
-func TestASystemThatHasSpentNothingSaysNothingInTheHeader(t *testing.T) {
-	registry, err := NewDefaultRegistry(&fakeClient{})
-	if err != nil {
-		t.Fatalf("NewDefaultRegistry: %v", err)
-	}
-	lines, err := HeaderOnly(registry, Default, Info{Version: "a348a05"}, 200, 24)
-	if err != nil {
-		t.Fatalf("HeaderOnly: %v", err)
-	}
-	if strings.Contains(strings.Join(lines, "\n"), "⟳") {
-		t.Fatalf("a system nobody has used reports a cost:\n%s", strings.Join(lines, "\n"))
-	}
-}
-
-// TestTheTotalGivesWayBeforeTheWordmark. The header is one row. The wordmark is what makes the panel
-// look like something rather than a terminal with tables in it, and the total is a number the
-// operator can also get from the listing, so the number goes first.
-func TestTheTotalGivesWayBeforeTheWordmark(t *testing.T) {
-	registry, err := NewDefaultRegistry(&fakeClient{})
-	if err != nil {
-		t.Fatalf("NewDefaultRegistry: %v", err)
-	}
-	info := Info{Version: "a348a05", Spent: sandbox.Usage{Input: 52, Output: 6917, CacheRead: 1723404}}
-
-	lostTotal, lostWordmark := 0, 0
-	for width := 200; width >= 20; width-- {
-		lines, err := HeaderOnly(registry, Default, info, width, 24)
-		if err != nil {
-			t.Fatalf("HeaderOnly at %d: %v", width, err)
-		}
-		header := strings.Join(lines, "\n")
-		if lostTotal == 0 && !strings.Contains(header, "⟳") {
-			lostTotal = width
-		}
-		if lostWordmark == 0 && !strings.Contains(header, logo[0]) {
-			lostWordmark = width
-		}
-	}
-	if lostTotal == 0 {
-		t.Fatal("the total never gives way, so at some width it is pushing the wordmark off")
-	}
-	if lostWordmark != 0 && lostWordmark >= lostTotal {
-		t.Fatalf("the wordmark went at %d columns and the total at %d: the total should go first",
-			lostWordmark, lostTotal)
 	}
 }
 
