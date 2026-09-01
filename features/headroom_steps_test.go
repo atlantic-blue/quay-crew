@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/console"
-	"github.com/atlantic-blue/krewe/internal/headroom"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/console"
+	"github.com/atlantic-blue/quay-krewe/internal/headroom"
 	"github.com/cucumber/godog"
 )
 

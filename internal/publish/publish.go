@@ -21,7 +21,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 )
 
 // What the system found, and what it did about it. Five, because a reason that cannot tell them apart

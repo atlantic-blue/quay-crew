@@ -1,4 +1,4 @@
-// Package features holds the executable specification of Quay System.
+// Package features holds the executable specification of Quay Krewe.
 //
 // The feature files next to this one state what the product does, in language a reader who is not
 // holding the code can follow. The steps below drive the control plane over its real gRPC interface,
@@ -28,19 +28,21 @@ import (
 	"sync/atomic"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/auth"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/flow"
-	"github.com/atlantic-blue/krewe/internal/headroom"
-	"github.com/atlantic-blue/krewe/internal/messaging"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/secrets"
-	"github.com/atlantic-blue/krewe/internal/session"
-	"github.com/atlantic-blue/krewe/internal/skill"
-	"github.com/atlantic-blue/krewe/internal/store"
-	"github.com/atlantic-blue/krewe/internal/telemetry"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/auth"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/flow"
+	"github.com/atlantic-blue/quay-krewe/internal/forge"
+	"github.com/atlantic-blue/quay-krewe/internal/headroom"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/messaging"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/secrets"
+	"github.com/atlantic-blue/quay-krewe/internal/session"
+	"github.com/atlantic-blue/quay-krewe/internal/skill"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
+	"github.com/atlantic-blue/quay-krewe/internal/telemetry"
 	"github.com/cucumber/godog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -115,6 +117,17 @@ type recordingRunner struct {
 	// has to be able to say what it answers the second time. The last one repeats rather than the
 	// queue running dry, so a scenario that means "and it keeps saying that" says it once.
 	says []string
+	// exact marks the answers a scenario means literally, so the double leaves them as they are. It is
+	// how a scenario about an answer that states no outcome is written: everything else gets the line a
+	// session that read its task would have written.
+	exact []bool
+	// answers is a phrase against what the double answers a task carrying it, tried before the queue
+	// above and first match winning.
+	//
+	// It exists because more than one conversation can be in flight at once: a job held back until a
+	// reviewer and a tester have read its work has three, and a queue by position would make a
+	// scenario about the gate into a scenario about the order the system happens to ask in.
+	answers [][2]string
 }
 
 // failTheNextTask makes the next task the model is asked to run fail. Under the lock, because a
@@ -139,17 +152,61 @@ func (r *recordingRunner) willSay(answer string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.says = append(r.says, answer)
+	r.exact = append(r.exact, false)
+}
+
+// willSayExactly adds one answer the double must not add anything to, which is what a scenario about
+// an answer that states no outcome needs: the double follows its task otherwise, so an answer meant
+// to be missing the line would arrive carrying one.
+func (r *recordingRunner) willSayExactly(answer string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.says = append(r.says, answer)
+	r.exact = append(r.exact, true)
+}
+
+// willAnswer says what the double answers a task carrying a phrase, whenever that task arrives.
+func (r *recordingRunner) willAnswer(whenAsked, answer string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.answers = append(r.answers, [2]string{whenAsked, answer})
 }
 
 // answerFor is what the double says to the nth task, one indexed. The caller holds the lock.
 func (r *recordingRunner) answerFor(asked int, text string) string {
+	// What was asked wins over how many have been asked, because a scenario naming a phrase is being
+	// specific and a queue by position is not.
+	for _, pair := range r.answers {
+		if strings.Contains(text, pair[0]) {
+			return pair[1]
+		}
+	}
 	if len(r.says) == 0 {
-		return "you said: " + text
+		return statingTheOutcome("you said: "+text, text)
 	}
 	if asked > len(r.says) {
 		asked = len(r.says)
 	}
-	return r.says[asked-1]
+	if r.exact[asked-1] {
+		return r.says[asked-1]
+	}
+	return statingTheOutcome(r.says[asked-1], text)
+}
+
+// statingTheOutcome ends an answer the way a session that read its task ends one.
+//
+// Every job tells its session to state an outcome on a line of its own, and a job whose answer states
+// none does not settle. A double that ignored the instruction would be looser than the thing it
+// stands in for, and every scenario about a job would quietly become a scenario about that. A reply
+// that already states one is left alone, which is how a scenario says the word it means, and a
+// scenario about an answer that states nothing is written with the answer it means.
+func statingTheOutcome(reply, asked string) string {
+	// Read rather than searched, because the double echoes the task it was given and the task carries
+	// the instruction. A substring check would find the word in the instruction and answer nothing.
+	if !strings.Contains(asked, job.OutcomeMarker) || job.OutcomeIn(reply) != "" {
+		return reply
+	}
+	return reply + "\n\n" + job.OutcomeMarker + " " + job.OutcomeProved
 }
 
 // hold makes every task wait, and returns the func that lets them go.
@@ -362,6 +419,13 @@ type world struct {
 	// which reports unknown. A scenario sets it and then asks the system to read it once, because a
 	// scenario that waited for the sampler's own timer would be a scenario with a clock in it.
 	machine headroom.Source
+	// forge is what the system reads a pull request back from. Nil is a system with no forge, which
+	// reports unknown. A scenario writes its answers and then asks the system to read once, because a
+	// scenario that waited for the reader's own timer would be a scenario with a clock in it.
+	forge *forge.Fake
+	// noForgeCredential runs the real reader with nothing to authenticate with, which is what a fresh
+	// crew is. The scenario about it has to reach the real refusal rather than a double repeating it.
+	noForgeCredential bool
 	// startWait and exportWait are the system's budgets. A scenario about a budget running out sets
 	// them short, because a scenario that waits the real minute out is a scenario nobody runs.
 	startWait  time.Duration
@@ -392,6 +456,8 @@ type world struct {
 	// change is the repository a scenario built to stand for the change a session is opening a pull
 	// request for, because the gate reads the change rather than being told about it.
 	change string
+	// proseGate is what the shipped prose gate answered the last time a scenario fired it.
+	proseGate gateAnswer
 }
 
 type worldKey struct{}
@@ -495,6 +561,7 @@ func (w *world) serve() error {
 		Skills: w.skills, SkillsHost: w.skillsDir, SandboxImage: "quaycrew-sandbox:test",
 		StartWait: w.startWait, ExportWait: w.exportWait,
 		Headroom: w.machine, HeadroomEvery: time.Hour,
+		Forge: forgeOf{w}, PullRequestEvery: time.Hour,
 	})
 	// The same options the real main builds the server with, so a scenario about tracing is about
 	// what the system does and not about what the harness added.
@@ -716,9 +783,11 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeKeysSteps(sc)
 	initializeWebSteps(sc)
 	initializeBriefingSteps(sc)
+	initializeBriefingHeaderSteps(sc)
 	initializeFlowSteps(sc)
 	initializeFlowSurfaceSteps(sc)
 	initializePullRequestReviewSteps(sc)
+	initializePullRequestSteps(sc)
 	initializeFirstRunSteps(sc)
 	initializeInstallSteps(sc)
 	initializeFrontDoorSteps(sc)
@@ -746,16 +815,21 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeRequestSteps(sc)
 	initializeJobControllerSteps(sc)
 	initializeJobRepositorySteps(sc)
+	initializeOutcomeSteps(sc)
 	initializePublishingSteps(sc)
 	initializeJobWaitingSteps(sc)
 	initializeFlowStepSteps(sc)
 	initializeJobRoleSteps(sc)
 	initializeTriggerSteps(sc)
 	initializeLifecycleSteps(sc)
+	initializeStalledSteps(sc)
 	initializeJobEventsSteps(sc)
 	initializeJobLeaseSteps(sc)
 	initializeAskingSteps(sc)
 	initializeResumingSteps(sc)
+	initializeContextCeilingSteps(sc)
+	initializeSettlingSteps(sc)
+	initializePlanSteps(sc)
 	initializeLoopingSteps(sc)
 	initializeCapabilitySteps(sc)
 	initializeProductSteps(sc)
@@ -778,11 +852,14 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeDeployIdentityGateSteps(sc)
 	initializeSigningSteps(sc)
 	initializeSecretFileSteps(sc)
+	initializeProseGateSteps(sc)
 	initializeSystemSecretSteps(sc)
 	initializeGitConfigSteps(sc)
 	initializeWizardModeSteps(sc)
 	initializeDetachSteps(sc)
 	initializeDispatchingSteps(sc)
+	initializeSandboxNameSteps(sc)
+	initializeSystemDirectorySteps(sc)
 	initializeWaitsSteps(sc)
 	initializeDegradedSteps(sc)
 	initializeHeadroomSteps(sc)
@@ -799,6 +876,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeShippedRoleVerbSteps(sc)
 	initializeRoleSkillSteps(sc)
 	initializeRoleSessionSteps(sc)
+	initializePlanCriticSteps(sc)
 	initializeStoppedReasonSteps(sc)
 	initializeHookVersionSteps(sc)
 	initializeImportedSkillSteps(sc)
@@ -1436,4 +1514,26 @@ func (w *world) dialAs(token string) quaycrewv1.ControlPlaneServiceClient {
 		return w.client
 	}
 	return quaycrewv1.NewControlPlaneServiceClient(conn)
+}
+
+// pullRequests is the forge this world reads a pull request back from, made on first use so every
+// scenario has one to write answers into. A world with no forge would report unknown, which is a
+// state the scenarios say something about rather than the state they all run in.
+func (w *world) pullRequests() *forge.Fake {
+	if w.forge == nil {
+		w.forge = forge.NewFake()
+	}
+	return w.forge
+}
+
+// forgeOf reads through whichever forge this scenario is running against, chosen at the moment of the
+// call. A system built with one of them would leave a scenario that swaps it afterwards talking to
+// the one the background made.
+type forgeOf struct{ w *world }
+
+func (f forgeOf) Read(ctx context.Context, at forge.Address) (forge.Reading, error) {
+	if f.w.noForgeCredential {
+		return (&forge.GitHub{}).Read(ctx, at)
+	}
+	return f.w.pullRequests().Read(ctx, at)
 }

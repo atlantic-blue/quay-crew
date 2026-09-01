@@ -11,13 +11,13 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/display"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/secrets"
-	"github.com/atlantic-blue/krewe/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/secrets"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
@@ -225,10 +225,24 @@ func systemWith(t *testing.T, runner model.Runner) quaycrewv1.ControlPlaneServic
 // in a running system.
 func systemDoingJobs(t *testing.T, runner model.Runner) (quaycrewv1.ControlPlaneServiceClient, *controlplane.Server) {
 	t.Helper()
+	client, system, _ := systemKeeping(t, store.NewMemory(), runner)
+	return client, system
+}
+
+// systemOver is the same system over a store the caller keeps a handle on, which is how a case that
+// needs a job in a phase nothing here reaches writes one.
+func systemOver(t *testing.T, held store.Store, runner model.Runner) quaycrewv1.ControlPlaneServiceClient {
+	t.Helper()
+	client, _, _ := systemKeeping(t, held, runner)
+	return client
+}
+
+func systemKeeping(t *testing.T, held store.Store, runner model.Runner) (quaycrewv1.ControlPlaneServiceClient, *controlplane.Server, store.Store) {
+	t.Helper()
 	lis := bufconn.Listen(1 << 20)
 	server := grpc.NewServer()
 	system := controlplane.NewServer(controlplane.Config{
-		Store: store.NewMemory(), Runner: runner,
+		Store: held, Runner: runner,
 		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
 	})
 	quaycrewv1.RegisterControlPlaneServiceServer(server, system)
@@ -247,7 +261,7 @@ func systemDoingJobs(t *testing.T, runner model.Runner) (quaycrewv1.ControlPlane
 
 	client := quaycrewv1.NewControlPlaneServiceClient(conn)
 	mustCreate(t, client)
-	return client, system
+	return client, system, held
 }
 
 func mustCreate(t *testing.T, client quaycrewv1.ControlPlaneServiceClient) {

@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -25,7 +25,7 @@ func TestASecondJobClaimingWorkAnotherJobHoldsIsRefused(t *testing.T) {
 
 	first, err := s.CreateJob(context.Background(), &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "build the claim", Brief: "build it",
-		Claim: "atlantic-blue/krewe#540",
+		Claim: "atlantic-blue/quay-krewe#540",
 	})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)
@@ -33,13 +33,13 @@ func TestASecondJobClaimingWorkAnotherJobHoldsIsRefused(t *testing.T) {
 
 	refusal := refusalOf(t, s, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "build the claim as well", Brief: "build it",
-		Claim: "atlantic-blue/krewe#540",
+		Claim: "atlantic-blue/quay-krewe#540",
 	})
 	if status.Code(refusal) != codes.FailedPrecondition {
 		t.Errorf("the refusal is %s, want %s", status.Code(refusal), codes.FailedPrecondition)
 	}
 	for _, want := range []string{
-		"atlantic-blue/krewe#540", first.GetJob().GetId(), "build the claim", "less than a minute",
+		"atlantic-blue/quay-krewe#540", first.GetJob().GetId(), "build the claim", "less than a minute",
 		"krewe job show",
 	} {
 		if !strings.Contains(refusal.Error(), want) {
@@ -65,15 +65,15 @@ func TestAClaimWrittenAnotherWayIsTheSameClaim(t *testing.T) {
 
 	if _, err := s.CreateJob(context.Background(), &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "build the claim", Brief: "build it",
-		Claim: "atlantic-blue/krewe#540",
+		Claim: "atlantic-blue/quay-krewe#540",
 	}); err != nil {
 		t.Fatalf("CreateJob: %v", err)
 	}
 	refusal := refusalOf(t, s, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "build the claim as well", Brief: "build it",
-		Claim: "  Atlantic-Blue/Krewe#540  ",
+		Claim: "  Atlantic-Blue/Quay-Krewe#540  ",
 	})
-	if !strings.Contains(refusal.Error(), "atlantic-blue/krewe#540") {
+	if !strings.Contains(refusal.Error(), "atlantic-blue/quay-krewe#540") {
 		t.Errorf("the refusal is %v, and the two spellings should be one claim", refusal)
 	}
 }
@@ -86,7 +86,7 @@ func TestWorkAStoppedJobClaimedIsClaimedAgain(t *testing.T) {
 
 	first, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "build the claim", Brief: "build it",
-		Claim: "atlantic-blue/krewe#540",
+		Claim: "atlantic-blue/quay-krewe#540",
 	})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)
@@ -99,12 +99,12 @@ func TestWorkAStoppedJobClaimedIsClaimedAgain(t *testing.T) {
 
 	second, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "build the claim", Brief: "build it",
-		Claim: "atlantic-blue/krewe#540",
+		Claim: "atlantic-blue/quay-krewe#540",
 	})
 	if err != nil {
 		t.Fatalf("work a stopped job claimed is still held by it: %v", err)
 	}
-	if second.GetJob().GetClaim() != "atlantic-blue/krewe#540" {
+	if second.GetJob().GetClaim() != "atlantic-blue/quay-krewe#540" {
 		t.Fatalf("the second job claims %q", second.GetJob().GetClaim())
 	}
 }
@@ -116,7 +116,7 @@ func TestAJobReadsBackWhatItClaims(t *testing.T) {
 
 	declared, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "build the claim", Brief: "build it",
-		Claim: "atlantic-blue/krewe#540",
+		Claim: "atlantic-blue/quay-krewe#540",
 	})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)
@@ -125,7 +125,7 @@ func TestAJobReadsBackWhatItClaims(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetJob: %v", err)
 	}
-	if read.GetJob().GetClaim() != "atlantic-blue/krewe#540" {
+	if read.GetJob().GetClaim() != "atlantic-blue/quay-krewe#540" {
 		t.Fatalf("the job claims %q", read.GetJob().GetClaim())
 	}
 }

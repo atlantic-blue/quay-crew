@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 )
 
 // The command that says where a project's work lands.
@@ -108,7 +108,7 @@ func TestARepositoryThatIsNotAnOwnerAndANameIsRefusedByTheTool(t *testing.T) {
 	if err == nil {
 		t.Fatalf("an address that is not an owner and a name was accepted, and said %q", said)
 	}
-	if !strings.Contains(err.Error(), "atlantic-blue/quay-crew") {
+	if !strings.Contains(err.Error(), "atlantic-blue/quay-krewe") {
 		t.Errorf("the refusal says %q, want it to say what to type instead", err)
 	}
 }

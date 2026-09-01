@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/hook"
+	"github.com/atlantic-blue/quay-krewe/internal/hook"
 )
 
 // A hook is imported by somebody who did not write it, and the only moment anybody is looking at it

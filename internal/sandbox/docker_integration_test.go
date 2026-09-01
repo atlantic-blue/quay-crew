@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/skill"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/skill"
 )
 
 // TestDockerProvider creates a real per session container, execs a command inside it, reads the
@@ -475,5 +475,69 @@ func TestAMountedSecretIsAFileTheSandboxUserCanReadAndNobodyElseCan(t *testing.T
 	// The whole reason a mounted credential is safer than one in the environment rests on this.
 	if got := strings.TrimSpace(parts[2]); got != "tmpfs" {
 		t.Fatalf("%s is a %s, want tmpfs", sandbox.SecretsPath, got)
+	}
+}
+
+// TestASandboxFromBeforeTheRenameIsFoundAndRemoved asks the daemon the question the unit tests can
+// only ask the code. An operator upgrades with sessions up, so their containers carry the retired
+// name, and a system that cannot see one does not drain it, does not remove it and starts a second
+// container beside it on the next task, while the first keeps the machine's memory.
+//
+// The container is made here by name rather than through the provider, because the provider can no
+// longer write that name. That is the point: this is the state an upgrade inherits, not a state this
+// build can produce.
+func TestASandboxFromBeforeTheRenameIsFoundAndRemoved(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	provider := sandbox.DockerProvider{Image: "busybox:latest"}
+	id := "0123456789abcdef01234568"
+	retired := "quaycrew-" + id
+	out, err := exec.CommandContext(ctx, "docker", "run", "-d", "--name", retired,
+		"busybox:latest", "sleep", "600").CombinedOutput()
+	if err != nil {
+		t.Fatalf("start a container under the retired name: %v: %s", err, out)
+	}
+	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", retired).Run() })
+
+	stranded, err := provider.Stranded(ctx)
+	if err != nil {
+		t.Fatalf("Stranded: %v", err)
+	}
+	if !slices.Contains(stranded, id) {
+		t.Fatalf("Stranded = %v, and %s is running, so a drain leaves it holding the machine", stranded, retired)
+	}
+
+	box, held, err := provider.Existing(ctx, id)
+	if err != nil {
+		t.Fatalf("Existing: %v", err)
+	}
+	if !held {
+		t.Fatalf("the system reaches into session %s and finds nothing, while %s is up", id, retired)
+	}
+	if got := execOutput(t, ctx, box, "echo", "reached"); got != "reached" {
+		t.Fatalf("the adopted sandbox says %q, want it usable", got)
+	}
+	if named, says := box.(sandbox.Named); !says || named.Name() != retired {
+		t.Fatalf("the sandbox calls itself %v, and an attach opens that name", box)
+	}
+
+	// And creating for that session adopts it rather than putting a second container beside it.
+	again, err := provider.Create(ctx, sandbox.Config{ID: id})
+	if err != nil {
+		t.Fatalf("Create over a sandbox from before the rename: %v", err)
+	}
+	if named, says := again.(sandbox.Named); !says || named.Name() != retired {
+		t.Fatalf("a second container was started beside %s", retired)
+	}
+
+	if err := provider.Remove(ctx, id); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if err := exec.CommandContext(ctx, "docker", "inspect", retired).Run(); err == nil {
+		t.Fatalf("%s is still running after the session was stopped", retired)
+	}
+	if err := provider.Remove(ctx, id); err != nil {
+		t.Fatalf("Remove of an absent container: %v, want success", err)
 	}
 }

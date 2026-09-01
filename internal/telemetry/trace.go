@@ -23,7 +23,7 @@ const TraceparentEnv = "QC_TRACEPARENT"
 
 // Tracer is where the system's own spans come from. One name, so a reader filtering a trace by
 // instrumentation scope gets the system's spans and not the library's.
-const Tracer = "github.com/atlantic-blue/krewe"
+const Tracer = "github.com/atlantic-blue/quay-krewe"
 
 // TraceIDFrom is the trace the context belongs to, and empty when nothing is tracing it. It is the
 // same value internal/logging writes on every line as the correlation id, deliberately: one

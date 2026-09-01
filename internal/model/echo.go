@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 )
 
 // echoModelSessionID is the conversation EchoRunner reports when it was given no name, so a resumed

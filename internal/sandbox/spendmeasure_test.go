@@ -6,7 +6,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/contextspend"
+	"github.com/atlantic-blue/quay-krewe/internal/contextspend"
 )
 
 // largeConversation is the size above which a conversation holds enough for the check against the

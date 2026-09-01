@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/features"
+	"github.com/atlantic-blue/quay-krewe/features"
 )
 
 // TestTheManualNamesTheWords. A session told nothing about the system guesses at the model, and the

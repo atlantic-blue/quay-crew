@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/statusline"
+	"github.com/atlantic-blue/quay-krewe/internal/statusline"
 )
 
 // payload is the shape the model runtime hands its status line command: the whole session, of which

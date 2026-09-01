@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/atlantic-blue/krewe/internal/manual"
+	"github.com/atlantic-blue/quay-krewe/internal/manual"
 )
 
 // runManual prints what krewe is and how to drive it, for a session to be told with. The document

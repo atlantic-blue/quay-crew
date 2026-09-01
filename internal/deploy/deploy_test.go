@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/deploy"
+	"github.com/atlantic-blue/quay-krewe/internal/deploy"
 )
 
 func TestATargetIsReadWhole(t *testing.T) {

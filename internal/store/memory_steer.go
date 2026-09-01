@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // RecordSteer writes one steer and adds it to the count on each job it belongs to, under one lock,

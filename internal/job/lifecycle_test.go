@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/job"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -23,12 +23,18 @@ type eyes struct {
 	watching map[string]bool
 	refuse   error
 	asked    []string
+	// everything says somebody is in every container, which is the one thing that legitimately stops
+	// the system taking one back to start its own queue again.
+	everything bool
 }
 
 func (e *eyes) SessionAttached(_ context.Context, session string) (bool, error) {
 	e.asked = append(e.asked, session)
 	if e.refuse != nil {
 		return false, e.refuse
+	}
+	if e.everything {
+		return true, nil
 	}
 	return e.watching[session], nil
 }

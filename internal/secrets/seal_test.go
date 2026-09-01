@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/secrets"
+	"github.com/atlantic-blue/quay-krewe/internal/secrets"
 )
 
 func TestSealedValueOpensWithItsKeyAndNothingElse(t *testing.T) {

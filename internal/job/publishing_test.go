@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/publish"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/publish"
 )
 
 // Why a job that names a repository stopped without a pull request, and where its work is.
@@ -16,7 +16,7 @@ import (
 // there", which made the operator the transport. These hold the four outcomes apart, and hold all of
 // them to saying something an operator can act on without opening a container.
 
-const theRepository = "atlantic-blue/krewe"
+const theRepository = "atlantic-blue/quay-krewe"
 
 const theHostPath = "/qdata/workspaces/e5b4c0ac/projects/12e5b9b0/sessions/145c0173/workspace"
 
@@ -54,7 +54,7 @@ func TestAJobWhoseSessionHoldsNoRepositorySaysSoAndNamesTheDirectory(t *testing.
 func TestWorkThatCouldNotBePushedNamesTheBranchAndThePath(t *testing.T) {
 	said := job.NoPullRequest(theRepository, "145c0173", publish.Work{
 		State: publish.Held, Branch: "sort-the-listing", Host: theHostPath,
-		Why: "remote: Permission to atlantic-blue/krewe.git denied",
+		Why: "remote: Permission to atlantic-blue/quay-krewe.git denied",
 	})
 
 	for _, want := range []string{"sort-the-listing", "Permission to", theRepository} {
@@ -223,7 +223,7 @@ func TestAJobThatStopsHoldingUnpushedWorkSaysWhereItIs(t *testing.T) {
 	kept, plane := newRows(), newSystem()
 	publisher := &aPublisher{found: publish.Work{
 		State: publish.Held, Branch: "sort-the-listing", Host: theHostPath,
-		Why: "remote: Permission to atlantic-blue/krewe.git denied",
+		Why: "remote: Permission to atlantic-blue/quay-krewe.git denied",
 	}}
 	controller := job.NewController(kept, plane, nil, nil, nil).Publishing(publisher)
 	one := kept.add(inARepository("make the listing sort by the clock it shows"))

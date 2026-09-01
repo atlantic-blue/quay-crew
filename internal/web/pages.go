@@ -5,15 +5,18 @@ import (
 	"net/http"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/display"
-	"github.com/atlantic-blue/krewe/internal/session"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
+	"github.com/atlantic-blue/quay-krewe/internal/session"
 )
 
 // shell is what every page carries: what the tab says, and where the operator is.
 type shell struct {
 	Title string
 	Where string
+	// Refresh is how many seconds until the browser draws the page again, and zero for a page that
+	// does not. A conversation and a listing are read once; the briefing goes stale while it is open.
+	Refresh int
 }
 
 // sessionRow is one conversation in the listing.

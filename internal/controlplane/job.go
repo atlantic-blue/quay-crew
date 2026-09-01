@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/auth"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/role"
-	"github.com/atlantic-blue/krewe/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/auth"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/role"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -33,7 +33,8 @@ func (s *Server) CreateJob(ctx context.Context, req *quaycrewv1.CreateJobRequest
 		After: req.GetAfter(), BudgetTokens: req.GetBudgetTokens(), Labels: req.GetLabels(),
 		Requires: req.GetRequires(), Repository: req.GetRepository(), Product: req.GetProduct(),
 		Claim: req.GetClaim(), Escalation: req.GetEscalation(),
-		ID: req.GetId(), Parent: req.GetParent(),
+		Ungated: req.GetUngated(),
+		ID:      req.GetId(), Parent: req.GetParent(),
 	}
 	if req.GetDeadline() != nil {
 		at := req.GetDeadline().AsTime()
@@ -155,6 +156,7 @@ func (s *Server) PrepareJob(ctx context.Context, under string, declaration job.D
 		After: tidy.After, Deadline: tidy.Deadline, BudgetTokens: tidy.BudgetTokens,
 		Labels: tidy.Labels, Requires: tidy.Requires, Repository: tidy.Repository,
 		Product: tidy.Product, Request: tidy.Request, Claim: tidy.Claim, Escalation: tidy.Escalation,
+		Ungated: tidy.Ungated,
 		Version: 1, Phase: job.PhasePending,
 	}
 	// Where the work lands, when the declaration did not say. It is the project's, because a project
@@ -343,11 +345,30 @@ func (s *Server) ListJobs(ctx context.Context, req *quaycrewv1.ListJobsRequest) 
 		return nil, status.Errorf(codes.InvalidArgument,
 			"%q is not a phase; use one of %s", phase, strings.Join(job.Phases(), ", "))
 	}
-	listed, err := s.store.ListJobs(ctx, job.Filter{
+	// Held to the same four words the session was offered. A filter that took any word would answer
+	// nothing for a typo, and a listing that says nothing reads exactly like a system with no such
+	// jobs in it.
+	if outcome := req.GetOutcome(); outcome != "" && !job.KnownOutcome(outcome) {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"%q is not an outcome; use one of %s", outcome, strings.Join(job.Outcomes(), ", "))
+	}
+	if req.GetLimit() < 0 {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"a listing cannot return %d jobs; leave the limit out for every row, or give a count above zero",
+			req.GetLimit())
+	}
+	filter := job.Filter{
 		Workspace: req.GetWorkspace(), Project: req.GetProject(),
 		Parent: req.GetParent(), Root: req.GetRootsOnly(), Phase: req.GetPhase(),
+		Outcome:  req.GetOutcome(),
 		LabelKey: req.GetLabelKey(), LabelValue: req.GetLabelValue(),
-	})
+		Limit: int(req.GetLimit()),
+	}
+	if since := req.GetFinishedSince(); since != nil {
+		at := since.AsTime()
+		filter.FinishedSince = &at
+	}
+	listed, err := s.store.ListJobs(ctx, filter)
 	if err != nil {
 		return nil, storeError(err, "job")
 	}
@@ -419,15 +440,29 @@ func asJob(from *job.Job) *quaycrewv1.Job {
 		After: from.After, BudgetTokens: from.BudgetTokens, Labels: from.Labels,
 		Requires: from.Requires, Repository: from.Repository, PullRequest: from.PullRequest, Claim: from.Claim,
 		Product: from.Product, Request: from.Request, Steers: int32(from.Steers),
+		Ungated: from.Ungated, Reviewed: from.Reviewed, Tested: from.Tested,
+		Plan: from.Plan, PlanApproved: from.PlanApproved,
 		Parent: from.Parent, Depth: int32(from.Depth), Version: int32(from.Version),
 		Phase: from.Phase, Session: from.Session, Attempts: int32(from.Attempts),
-		Answer: from.Answer, Reason: from.Reason, Question: from.Question, Resuming: from.Resuming,
+		Answer: from.Answer, Outcome: from.Outcome,
+		Reason: from.Reason, Question: from.Question, Resuming: from.Resuming,
 		Escalation: from.Escalation, LoopedStep: int32(from.LoopedStep), EscalatedTo: from.EscalatedTo,
 		Attempted:   asJobAttempts(from.Attempted),
 		Steps:       asJobSteps(from.Steps),
+		Handoffs:    asJobHandoffs(from.Handoffs),
 		SpentTokens: from.SpentTokens, ObservedVersion: int32(from.ObservedVersion),
 		TraceId: from.TraceID, ParentSpanId: from.ParentSpanID,
 		CreatedAt: timestamppb.New(from.CreatedAt), UpdatedAt: timestamppb.New(from.UpdatedAt),
+	}
+	// What the forge last said about the pull request, as words rather than as a shape a caller has to
+	// interpret. The moment is left unset where nothing has read it, so a caller can tell a reading of
+	// unknown from no reading at all.
+	reading := from.PullRequestState.Or()
+	on.PullRequestStatus, on.PullRequestChecks = reading.Status, reading.Checks
+	on.PullRequestCheck, on.PullRequestReview = reading.FailedCheck, reading.Review
+	on.PullRequestFailed = reading.Failed
+	if !reading.ReadAt.IsZero() {
+		on.PullRequestReadAt = timestamppb.New(reading.ReadAt)
 	}
 	if from.Deadline != nil {
 		on.Deadline = timestamppb.New(*from.Deadline)
@@ -469,6 +504,21 @@ func asJobSteps(from []job.Step) []*quaycrewv1.JobStep {
 		})
 	}
 	return steps
+}
+
+// asJobHandoffs puts what each session left behind on the wire.
+func asJobHandoffs(from []job.Handoff) []*quaycrewv1.JobHandoff {
+	if len(from) == 0 {
+		return nil
+	}
+	handoffs := make([]*quaycrewv1.JobHandoff, 0, len(from))
+	for _, one := range from {
+		handoffs = append(handoffs, &quaycrewv1.JobHandoff{
+			Seq: int32(one.Seq), Left: one.Left, Tried: one.Tried, Session: one.Session,
+			WrittenAt: timestamppb.New(one.WrittenAt),
+		})
+	}
+	return handoffs
 }
 
 // RunJobController makes reality match the job the system holds, until ctx is done. It blocks, so
@@ -609,3 +659,16 @@ func (s *Server) modeReachesTheRepository(declared *job.Job) error {
 	}
 	return nil
 }
+
+// RunPullRequests reads back the pull requests the crew opened, on its own timer, until ctx is done.
+// It blocks, so the caller runs it in a goroutine and owns its lifetime, the way the headroom sampler
+// is run.
+//
+// Nothing calls a forge while a page draws. A page reads the row this writes, which is the rule
+// GetHeadroom and GetHealth already hold: reading a service takes as long as that service takes, and
+// a view that waited on one would go blank whenever it was slow.
+func (s *Server) RunPullRequests(ctx context.Context) { s.pullRequests.Run(ctx) }
+
+// ReadPullRequests reads every unsettled pull request once, now. The timer above calls this too; a
+// caller that cannot wait for a tick calls it directly, which is what a test and a scenario do.
+func (s *Server) ReadPullRequests(ctx context.Context) { s.pullRequests.Tick(ctx) }

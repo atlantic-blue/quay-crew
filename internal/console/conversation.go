@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/panel"
+	"github.com/atlantic-blue/quay-krewe/internal/panel"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

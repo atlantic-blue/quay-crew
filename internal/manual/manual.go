@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/features"
+	"github.com/atlantic-blue/quay-krewe/features"
 )
 
 // Commands is the command list, which is also what `krewe` prints with no arguments. It lives here so
@@ -101,12 +101,14 @@ commands:
                                           whole window even when --limit prints fewer rows. It says
                                           how many it left out
   job list [<address>|system]             the jobs there are, newest first. With no address it
-    [--phase <phase>] [--label k=v]       reads where you are standing and says so, and system reads
-    [--parent <job>] [--roots]            every project. Narrow it further with --phase, --label,
-                                          --parent or --roots
-  job show <job>                          one job whole: what it is, where it got to,
-                                          why it stopped, what came back, and where its session
-                                          spent its context
+    [--phase <phase>] [--outcome <word>]  reads where you are standing and says so, and system reads
+    [--label k=v] [--parent <job>]        every project. Narrow it further with --phase, --outcome,
+    [--roots]                             --label, --parent or --roots. An outcome is one of proved,
+                                          unproved, blocked or decide: the word the session ended on,
+                                          which the phase cannot tell you
+  job show <job>                          one job whole: what it is, where it got to, the word it
+                                          ended on, why it stopped, what came back, and where its
+                                          session spent its context
   job stop <job> [<reason>]               halt a job that has not ended, keeping the reason
   job ask "<question>"                    put a question to a person about the job you are running,
                                           when a decision no measurement settles is in your way.
@@ -114,11 +116,20 @@ commands:
                                           answers, so end your task and say you are waiting. The
                                           answer arrives as your next task
   job answer <job> "<answer>"             tell a job waiting on you what you decided. It starts
-                                          again with the answer, in the session that asked
+                                          again with the answer, in the session that asked. Where
+                                          the job is waiting for its plan to be approved, "yes"
+                                          starts the work and anything else is what you wanted
+                                          instead, which the session writes the next plan from
   job step "<what you finished>"          record one step of the job you are running, as you finish
                                           it. If the job dies part way, what is on that record is
                                           where it carries on from, and what is not on it is done a
                                           second time
+  job handoff "<what is left>"            hand the rest of the job you are running to a fresh
+    ["<what you tried>"]                  session, which is what the system asks you for when your
+                                          context window reaches this workspace's ceiling. The next
+                                          session is given those words, and what you recorded as
+                                          finished, and nothing else you can see: it starts in an
+                                          empty working directory, so push your branch and name it
   job resume <job>                        carry on with a job that failed, from the first step it
                                           did not finish. It keeps its session, so its working
                                           directory, its branch and its pull request are where it
@@ -152,11 +163,16 @@ commands:
     [--lease <duration>]                  a settled session keeps its container before the system
     [--reclaim <duration>]                takes it back and then files it away. Max depth starts at
     [--archive <duration>]                zero, so no session declares a job until you raise it. The
-                                          reclaim and archive times start unset, and unset means the
+    [--context-ceiling <per cent>]        reclaim and archive times start unset, and unset means the
                                           system does nothing. The lease is the system's hold on a job
                                           and not the credential a session runs under: a credential
                                           lasts as long as its job, and this setting does not reach
-                                          it. A session may read none of this and set none of it
+                                          it. The context ceiling is how full a session's context
+                                          window may get before the system gives it no new task and
+                                          asks it to hand the rest of its job over. It starts at 70
+                                          per cent, which comes from a standard rather than from any
+                                          measurement of this system, and 100 turns the gate off. A
+                                          session may read none of this and set none of it
   task [<address>] <text>                 start or continue a session, and wait here for the
                                           answer. For a short question, where the reply is the
                                           point
@@ -211,7 +227,12 @@ commands:
   context clear [<address>]               empty what a level says
   attach <session>                         open a session's conversation, with its history
   web [<address>]                         read the system in a browser on this machine. Read only,
-                                           and it serves 127.0.0.1:8080 unless told another port
+                                           and it serves 127.0.0.1:8080 unless told another port.
+                                           The front door is the briefing: what needs you, what is
+                                           blocked, what the system produced, and what is running
+                                           last. It says how many jobs run, what the system spent,
+                                           what the machine has left and how the system is, and it
+                                           draws itself again. The session listing is at /sessions
   room                                     how much memory this sandbox actually has, and what to
                                            do about a gate that does not fit in it. A sandbox with
                                            no limit advertises the whole machine, and the kernel
@@ -249,7 +270,7 @@ commands:
   role import <directory>                 take a role into the system from its directory. A role is a
                                           named way of working: a brief, the model it runs on, and
                                           the material it may receive
-                                          this build ships sixteen in roles/ at the root of the
+                                          this build ships seventeen in roles/ at the root of the
                                           repository, and a fresh system is seeded with none of them
   role list [<workspace>]                 what roles the system holds, or what one workspace holds
   role show [<workspace>] <name>          read one role back whole: what it is, what it may do, who
@@ -291,9 +312,9 @@ func Text() string {
 // preamble is the part that cannot be assembled from anywhere: what the words mean, and where
 // things are kept. Deliberately short, because everything below it is generated and stays true on its
 // own, while every sentence here is one somebody has to remember to change.
-const preamble = `# Quay System
+const preamble = `# Quay Krewe
 
-You are running inside a Quay System session. Quay System is a self hosted hub for agent sessions: the
+You are running inside a Quay Krewe session. Quay Krewe is a self hosted hub for agent sessions: the
 operator commands a system of them from any channel, and each one runs in its own sandbox container.
 The ` + "`krewe`" + ` command drives it. If it is on your path, you can use it.
 

@@ -24,8 +24,8 @@ Feature: A job claims the piece of work it is doing
     And a project named "house-bills"
 
   Scenario: A second job claiming work another job holds is refused
-    Given a job claiming "atlantic-blue/krewe#540"
-    When the caller declares a second job claiming "atlantic-blue/krewe#540"
+    Given a job claiming "atlantic-blue/quay-krewe#540"
+    When the caller declares a second job claiming "atlantic-blue/quay-krewe#540"
     Then the system refuses it and names the job holding the work
     And the refusal says how old the claim is
     And the system holds one job on that piece of work
@@ -33,26 +33,26 @@ Feature: A job claims the piece of work it is doing
   # Two people naming the same piece of work from memory write it two ways. A claim that misses over
   # a capital letter is a claim that did nothing at all.
   Scenario: The same piece of work written another way is the same claim
-    Given a job claiming "atlantic-blue/krewe#540"
-    When the caller declares a second job claiming "  Atlantic-Blue/Krewe#540 "
+    Given a job claiming "atlantic-blue/quay-krewe#540"
+    When the caller declares a second job claiming "  Atlantic-Blue/Quay-Krewe#540 "
     Then the system refuses it and names the job holding the work
 
   Scenario: A job claiming different work is declared
-    Given a job claiming "atlantic-blue/krewe#540"
-    When the caller declares a second job claiming "atlantic-blue/krewe#541"
+    Given a job claiming "atlantic-blue/quay-krewe#540"
+    When the caller declares a second job claiming "atlantic-blue/quay-krewe#541"
     Then the job is declared
     And the system holds one job on that piece of work
 
   # The expiry. Without it one dead container holds a piece of work for as long as the system runs.
   Scenario: Work nothing has moved for longer than a claim lives is claimed again
-    Given a job that claimed "atlantic-blue/krewe#540" and then stopped moving
-    When the caller declares a second job claiming "atlantic-blue/krewe#540"
+    Given a job that claimed "atlantic-blue/quay-krewe#540" and then stopped moving
+    When the caller declares a second job claiming "atlantic-blue/quay-krewe#540"
     Then the job is declared
 
   Scenario: Work a stopped job claimed is claimed again
-    Given a job claiming "atlantic-blue/krewe#540"
+    Given a job claiming "atlantic-blue/quay-krewe#540"
     When the caller stops the first job saying "the issue was closed"
-    And the caller declares a second job claiming "atlantic-blue/krewe#540"
+    And the caller declares a second job claiming "atlantic-blue/quay-krewe#540"
     Then the job is declared
 
   # Every job written before this existed claims nothing, and most jobs after it will too.
@@ -70,9 +70,9 @@ Feature: A job claims the piece of work it is doing
   # intent nobody reads.
   Scenario: The listing says what is claimed and by which job
     Given the system listens on an address the tool can dial
-    And a job claiming "atlantic-blue/krewe#540"
+    And a job claiming "atlantic-blue/quay-krewe#540"
     When the caller lists the jobs through the tool
-    Then standard output says "atlantic-blue/krewe#540"
+    Then standard output says "atlantic-blue/quay-krewe#540"
     And standard output names the job holding the work
     And the command succeeds
 
@@ -80,9 +80,9 @@ Feature: A job claims the piece of work it is doing
   # exist inside the test process. A refusal that exits zero reads as a command that worked.
   Scenario: The tool refuses the second declaration, names the holder, and fails
     Given the system listens on an address the tool can dial
-    And a job claiming "atlantic-blue/krewe#540"
-    When the caller declares a job claiming "atlantic-blue/krewe#540" through the tool
-    Then standard error says "atlantic-blue/krewe#540"
+    And a job claiming "atlantic-blue/quay-krewe#540"
+    When the caller declares a job claiming "atlantic-blue/quay-krewe#540" through the tool
+    Then standard error says "atlantic-blue/quay-krewe#540"
     And standard error names the job holding the work
     And standard output is empty
     And the command fails

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/auth"
+	"github.com/atlantic-blue/quay-krewe/internal/auth"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health/grpc_health_v1"

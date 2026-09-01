@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
 )
 
 // The briefing, drawn from a real control plane rather than from jobs written by hand. What a table
@@ -86,6 +86,9 @@ func TestAJobThatLandedAPullRequestShowsItAndSaysNothingAboutItsChecks(t *testin
 	declare(t, client, &quaycrewv1.CreateJobRequest{
 		Project: projectOf(t, client), Title: "make the listing sort by the clock it shows",
 		Brief: "sort it", Repository: theRepository, Mode: model.PermissionModeOnTheNetwork(),
+		// With the settle gate off, so this test ends where the rule it is about ends. A gated job is
+		// held back until a reviewer and a tester have passed it, which is a behaviour of its own.
+		Ungated: true,
 	})
 	landed := tickUntil(t, client, system, job.PhaseDone)
 

@@ -14,7 +14,7 @@ The examples use a workspace called `acme` and a project called `billing`. Repla
 ```mermaid
 flowchart LR
   subgraph host["the machine"]
-    store[("~/.quay/data")]
+    store[("~/.krewe/data")]
     secrets[["secret store"]]
   end
   subgraph box["one session's sandbox"]
@@ -42,10 +42,10 @@ the right carry the workspace's secrets.
 ## 1. Make the workspace
 
 ```sh
-quay workspace create acme
+krewe workspace create acme
 ```
 
-Creating moves you into it. `quay use` says where you are, and `quay use acme` moves you back.
+Creating moves you into it. `krewe use` says where you are, and `krewe use acme` moves you back.
 
 ## 2. Give it the model token
 
@@ -53,7 +53,7 @@ Each workspace holds its own subscription token. Without one, a task fails.
 
 ```sh
 claude setup-token
-quay secret set acme CLAUDE_CODE_OAUTH_TOKEN
+krewe secret set acme CLAUDE_CODE_OAUTH_TOKEN
 ```
 
 Paste the token into the second command. Standard input is used, so the value does not reach your
@@ -65,15 +65,15 @@ A secret is stored once. How it reaches a sandbox is a second, separate choice. 
 Kubernetes both answer it this way.
 
 ```sh
-gh auth token | quay secret set acme GH_TOKEN        # an environment variable
-quay secret mount acme gitconfig < ~/.gitconfig      # a file
-quay secret list acme                                # which are set, which are mounted
+gh auth token | krewe secret set acme GH_TOKEN        # an environment variable
+krewe secret mount acme gitconfig < ~/.gitconfig      # a file
+krewe secret list acme                                # which are set, which are mounted
 ```
 
-`quay secret set` is the default. The value becomes an environment variable in every session in the
+`krewe secret set` is the default. The value becomes an environment variable in every session in the
 workspace.
 
-`quay secret mount` writes the value to a file at `/run/secrets/<name>`. Choose it in two cases.
+`krewe secret mount` writes the value to a file at `/run/secrets/<name>`. Choose it in two cases.
 The first is a credential a tool opens by path: a git configuration, a private key, a cloud
 credentials file. The second is a value that must not be readable through `docker inspect`, which
 reads an environment variable for the life of the container. A mounted secret is not also in the
@@ -83,11 +83,11 @@ The secrets directory is memory backed, mode 0700, and owned by the sandbox user
 written under `umask 077`, so it is never on disk readable, not even for the moment between the
 write and a change of mode.
 
-`quay secret set` removes leading and trailing whitespace, because the tools that print a token end
-with a newline, and a token that carries one authenticates nothing. `quay secret mount` removes
+`krewe secret set` removes leading and trailing whitespace, because the tools that print a token end
+with a newline, and a token that carries one authenticates nothing. `krewe secret mount` removes
 nothing. The bytes stored are the bytes of your file.
 
-`quay secret list` never prints a value.
+`krewe secret list` never prints a value.
 
 ### A secret every workspace needs
 
@@ -95,17 +95,17 @@ Say `system` where a workspace goes. The secret is then held by the system, and 
 it, including the ones you make tomorrow.
 
 ```sh
-claude setup-token | quay secret set system CLAUDE_CODE_OAUTH_TOKEN
-gh auth token | quay secret set system GH_TOKEN
-quay secret mount system gitconfig < ~/.gitconfig
-quay secret list system
+claude setup-token | krewe secret set system CLAUDE_CODE_OAUTH_TOKEN
+gh auth token | krewe secret set system GH_TOKEN
+krewe secret mount system gitconfig < ~/.gitconfig
+krewe secret list system
 ```
 
 A workspace wins on a name. Set `GH_TOKEN` on the system and on one workspace, and that workspace
-reads its own while every other workspace reads the system's. `quay secret list` says which level
+reads its own while every other workspace reads the system's. `krewe secret list` says which level
 holds each one, so a workspace you set nothing on says where its secrets came from.
 
-`system` is the same word `quay skill attach`, `quay hook attach` and `quay context set` already take.
+`system` is the same word `krewe skill attach`, `krewe hook attach` and `krewe context set` already take.
 No workspace may be called `system`, because a workspace with that name would take what every
 workspace reads.
 
@@ -114,14 +114,14 @@ workspace reads.
 The path form needs a terminal:
 
 ```sh
-quay secret mount acme gitconfig ~/.gitconfig
+krewe secret mount acme gitconfig ~/.gitconfig
 ```
 
 A script, a hook and an agent all run without one. The command then reads standard input as the
 value, and refuses three arguments. Redirect the file instead, which works in both places:
 
 ```sh
-quay secret mount acme gitconfig < ~/.gitconfig
+krewe secret mount acme gitconfig < ~/.gitconfig
 ```
 
 ## 4. Who a session commits as
@@ -131,7 +131,7 @@ The sandbox image ships `/home/agent/.gitconfig`. It holds one line, an include 
 process in the sandbox, not only the one a task starts.
 
 ```sh
-quay secret mount acme gitconfig < ~/.gitconfig
+krewe secret mount acme gitconfig < ~/.gitconfig
 ```
 
 Signing is decided for the whole workspace, and a session is told not to change it. A workspace that
@@ -144,9 +144,9 @@ Mount the gpg key you already sign with, and a session signs under your own iden
 
 ```sh
 gpg --armor --export-secret-keys <key id> > /tmp/signing-key.asc
-quay secret mount acme GPG_SIGNING_KEY < /tmp/signing-key.asc
+krewe secret mount acme GPG_SIGNING_KEY < /tmp/signing-key.asc
 rm /tmp/signing-key.asc
-quay secret mount acme GPG_SIGNING_KEY_PASSPHRASE < ~/.quay/passphrase
+krewe secret mount acme GPG_SIGNING_KEY_PASSPHRASE < ~/.krewe/passphrase
 ```
 
 Mount the passphrase whenever the key has one, which is most of them. gpg in a sandbox runs in
@@ -156,14 +156,14 @@ instead of hanging a task nobody is watching.
 An ssh key is the other option, and it signs under a second identity:
 
 ```sh
-quay secret mount acme GIT_SSH_SIGNING_KEY < ~/.ssh/id_ed25519
+krewe secret mount acme GIT_SSH_SIGNING_KEY < ~/.ssh/id_ed25519
 ```
 
 Put its public half on the account you push to, beside the key your own machine signs with, because
 a commit signed in a sandbox is then signed by a different key. The file must also end with a
 newline. Measured on this machine: `ssh-keygen -Y sign` with the same key one byte shorter exits 255
 and reports `Couldn't load public key <path>: No such file or directory`, which does not point at
-the cause. `quay secret mount` stores bytes exactly, so a key redirected from a file is fine, and a
+the cause. `krewe secret mount` stores bytes exactly, so a key redirected from a file is fine, and a
 key passed through a shell substitution is not.
 
 Every signing secret is mounted, never set. Setting one is refused, and the refusal names the mount
@@ -188,12 +188,12 @@ of the skills the session holds. Every session in the workspace reads it.
 session reads it.
 
 ```sh
-quay context set system < rules.md            # everything the system does
-quay context set acme < context.md          # every session in the workspace
-quay context set acme/billing < brief.md    # one project
-quay context                                # every level, how big it is, and its first words
-quay context edit acme/billing              # open it in $EDITOR
-quay context clear acme/billing
+krewe context set system < rules.md            # everything the system does
+krewe context set acme < context.md          # every session in the workspace
+krewe context set acme/billing < brief.md    # one project
+krewe context                                # every level, how big it is, and its first words
+krewe context edit acme/billing              # open it in $EDITOR
+krewe context clear acme/billing
 ```
 
 Both files are read and write. A session can add to its own context, and the system reads that back
@@ -204,7 +204,7 @@ rather than overwriting it.
 Every session in a workspace mounts one shared directory at `/home/agent/shared`. It is read and
 write, and what one session writes there is there for the next one and for every session beside it.
 
-On the host it is `~/.quay/data/workspaces/<workspace id>/volume`. `quay workspace list` prints the
+On the host it is `~/.krewe/data/workspaces/<workspace id>/volume`. `krewe workspace list` prints the
 id. Put reference material there: a data file, an export, a document set a session should read.
 Then name the path in the workspace's context, because nothing tells a session the directory exists.
 
@@ -232,16 +232,16 @@ volume keeps a directory per session that ever worked in a repository. That half
 A skill is a capability written down as text, which a session follows.
 
 ```sh
-quay skill import ./skills/git      # take one into the system
-quay skill list                     # what the system holds
-quay skill list acme                # what one workspace holds
-quay skill attach acme aws          # give it to one workspace
-quay skill attach system git          # give it to every workspace, including later ones
-quay skill detach acme aws
+krewe skill import ./skills/git      # take one into the system
+krewe skill list                     # what the system holds
+krewe skill list acme                # what one workspace holds
+krewe skill attach acme aws          # give it to one workspace
+krewe skill attach system git          # give it to every workspace, including later ones
+krewe skill detach acme aws
 ```
 
 A skill is mounted read only at `/home/agent/skills/<name>`. A skill declares the secrets it needs,
-and `quay skill list` prints each one beside the command that sets it. A skill whose secret the
+and `krewe skill list` prints each one beside the command that sets it. A skill whose secret the
 workspace has not set is left out of the session, and the listing says why.
 
 [`docs/SKILLS.md`](SKILLS.md) is the long version.
@@ -251,11 +251,11 @@ workspace has not set is left out of the session, and the listing says why.
 A hook is a constraint a session runs under, checked when the session acts.
 
 ```sh
-quay hook import ./hooks/prompt-analyser
-quay hook list acme
-quay hook attach acme prompt-analyser
-quay hook attach system prompt-analyser
-quay hook detach acme prompt-analyser
+krewe hook import ./hooks/prompt-analyser
+krewe hook list acme
+krewe hook attach acme prompt-analyser
+krewe hook attach system prompt-analyser
+krewe hook detach acme prompt-analyser
 ```
 
 Hooks are mounted read only at `/home/agent/hooks`, with the settings file that binds each one to
@@ -264,11 +264,11 @@ its event. [`docs/HOOKS.md`](HOOKS.md) is the long version.
 ## 10. A project, and the first task
 
 ```sh
-quay project create acme/billing
-quay use acme/billing
-quay task "say pong"
-quay sessions
-quay attach <session>
+krewe project create acme/billing
+krewe use acme/billing
+krewe task "say pong"
+krewe sessions
+krewe attach <session>
 ```
 
 ## What needs a new sandbox
@@ -283,12 +283,12 @@ running session immediately.
 ## Where it all is on the machine
 
 ```
-~/.quay/env                                                        which model and image to run
-~/.quay/data/workspaces/<workspace>/claude                         the conversation store, and the outer CLAUDE.md
-~/.quay/data/workspaces/<workspace>/volume                         the shared volume
-~/.quay/data/workspaces/<workspace>/skills                         the workspace's own skills
-~/.quay/data/workspaces/<workspace>/hooks                          the hooks it runs under
-~/.quay/data/workspaces/<workspace>/projects/<project>/sessions/<session>/workspace
+~/.krewe/env                                                        which model and image to run
+~/.krewe/data/workspaces/<workspace>/claude                         the conversation store, and the outer CLAUDE.md
+~/.krewe/data/workspaces/<workspace>/volume                         the shared volume
+~/.krewe/data/workspaces/<workspace>/skills                         the workspace's own skills
+~/.krewe/data/workspaces/<workspace>/hooks                          the hooks it runs under
+~/.krewe/data/workspaces/<workspace>/projects/<project>/sessions/<session>/workspace
 ```
 
 `QC_DATA_HOST` moves the data directory somewhere with more room. See

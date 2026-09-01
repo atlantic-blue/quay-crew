@@ -7,8 +7,8 @@ import (
 	"io/fs"
 	"os"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/room"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/room"
 )
 
 // runRoom says how much memory there is, and it answers two different questions depending on where

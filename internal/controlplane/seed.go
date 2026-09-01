@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/atlantic-blue/krewe/internal/skill"
-	"github.com/atlantic-blue/krewe/internal/store"
+	"github.com/atlantic-blue/quay-krewe/internal/skill"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // SeedToSystem is which of the shipped skills a fresh system is given, rather than merely offered.

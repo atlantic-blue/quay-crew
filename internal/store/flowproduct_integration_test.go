@@ -9,13 +9,13 @@ import (
 	"sync"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/auth"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/flow"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/auth"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/flow"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 )
 
 // A run stopping at the first thing a person can open, over the real database and through the
@@ -63,7 +63,10 @@ func (a *addressingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.R
 	if a.asked == 1 {
 		reply = theTranscriptAddress
 	}
-	return model.Response{Reply: reply, ModelSessionID: fmt.Sprintf("conversation-%d", a.asked)}, nil
+	return model.Response{
+		Reply:          statingTheOutcome(reply, req.Text),
+		ModelSessionID: fmt.Sprintf("conversation-%d", a.asked),
+	}, nil
 }
 
 // The answer of no, over the database. It is first because it is the answer the whole gate exists

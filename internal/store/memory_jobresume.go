@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // The steps a job finished, and the two answers to a job that failed: continue it, or refuse it.
@@ -103,13 +103,17 @@ func (m *Memory) RefuseJob(_ context.Context, id, reason string, event *job.Even
 	return m.jobWithSteps(*found), nil
 }
 
-// jobWithSteps is one job as a reader gets it, its finished steps included. The caller holds the
-// lock.
+// jobWithSteps is one job as a reader gets it, its finished steps, its handoffs and its attempts
+// included. The caller holds the lock.
 func (m *Memory) jobWithSteps(from job.Job) *job.Job {
 	kept := cloneJob(from)
 	kept.Steps = append([]job.Step(nil), m.jobSteps[from.ID]...)
 	if len(kept.Steps) == 0 {
 		kept.Steps = nil
+	}
+	kept.Handoffs = append([]job.Handoff(nil), m.jobHandoffs[from.ID]...)
+	if len(kept.Handoffs) == 0 {
+		kept.Handoffs = nil
 	}
 	kept.Attempted = append([]job.Attempt(nil), m.jobAttempts[from.ID]...)
 	if len(kept.Attempted) == 0 {

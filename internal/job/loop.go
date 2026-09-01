@@ -465,10 +465,13 @@ func RoleNow(one *Job) string {
 // minted, the way the first one is, so a controller that comes back to the job after another died
 // finds the same conversation without being told which it was.
 func ConversationFor(one *Job) string {
+	// Handing over moves the name on too, and for the same reason: the conversation a job has been in
+	// is the one a fresh session must not land in. See SessionAfter in ceiling.go.
+	name := SessionAfter(one.ID, len(one.Handoffs))
 	if route, err := ReadRoute(one.EscalatedTo); err == nil && route.Word == RouteRole {
-		return SessionFor(one.ID) + "-" + route.To
+		return name + "-" + route.To
 	}
-	return SessionFor(one.ID)
+	return name
 }
 
 // TheAttempt is what one attempt at a step produced, as the record keeps it, with how like the

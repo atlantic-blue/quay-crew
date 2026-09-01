@@ -6,7 +6,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 	"gopkg.in/yaml.v3"
 )
 

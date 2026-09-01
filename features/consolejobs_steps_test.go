@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/display"
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cucumber/godog"
 )
@@ -17,7 +17,7 @@ import (
 
 // sessionCell is where a job's session sits in its row. Named so a step reads as the cell it is about
 // rather than as a number in a slice.
-const sessionCell = 4
+const sessionCell = 5
 
 func initializeConsoleJobsSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the operator opens the console on jobs$`, func(ctx context.Context) error {
@@ -113,7 +113,11 @@ func initializeConsoleJobsSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		view := consoleFrom(ctx).model.View()
-		if !strings.Contains(view, one.GetTitle()) {
+		// The opening of the title rather than the whole of it, the way the step above reads a brief:
+		// the column holds what it can and cuts the rest, and what this step is about is whether the
+		// operator is still on the listing at all.
+		opening := strings.Join(strings.Fields(one.GetTitle())[:3], " ")
+		if !strings.Contains(view, opening) {
 			return fmt.Errorf("the screen no longer carries the job %q:\n%s", one.GetTitle(), view)
 		}
 		if strings.Contains(view, one.GetBrief()) {

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // The sentence is one line wherever it is read: in a listing, on `krewe job show` and in front of a
@@ -125,9 +125,12 @@ func TestAJobWithNoSentenceIsAskedItsBriefWithNothingAboveIt(t *testing.T) {
 // The sentence and the line about the pull request are both the system's, and a job carrying both
 // gets both.
 func TestAJobCarryingASentenceAndARepositoryGetsBoth(t *testing.T) {
+	// Its plan is approved, because a job that states a sentence writes its plan before it is asked
+	// for any work: the task that carries the brief and the repository is the one after the approval.
 	asked := job.Asked(&job.Job{
 		Brief: "sort the listing", Product: "paste a link and get the text back",
 		Repository: "atlantic-blue/quay-crew",
+		Plan:       "Step 1: sort it", PlanApproved: true,
 	})
 	for _, phrase := range []string{"paste a link and get the text back", "sort the listing", "Do not merge"} {
 		if !strings.Contains(asked, phrase) {

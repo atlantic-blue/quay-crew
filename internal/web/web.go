@@ -16,7 +16,7 @@ import (
 	"net/http"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"google.golang.org/grpc"
 )
 
@@ -42,6 +42,10 @@ type Reader interface {
 	GetSession(context.Context, *quaycrewv1.GetSessionRequest, ...grpc.CallOption) (*quaycrewv1.GetSessionResponse, error)
 	ListTasks(context.Context, *quaycrewv1.ListTasksRequest, ...grpc.CallOption) (*quaycrewv1.ListTasksResponse, error)
 	ListJobs(context.Context, *quaycrewv1.ListJobsRequest, ...grpc.CallOption) (*quaycrewv1.ListJobsResponse, error)
+	ListFlowRuns(context.Context, *quaycrewv1.ListFlowRunsRequest, ...grpc.CallOption) (*quaycrewv1.ListFlowRunsResponse, error)
+	GetHeadroom(context.Context, *quaycrewv1.GetHeadroomRequest, ...grpc.CallOption) (*quaycrewv1.GetHeadroomResponse, error)
+	GetHealth(context.Context, *quaycrewv1.GetHealthRequest, ...grpc.CallOption) (*quaycrewv1.GetHealthResponse, error)
+	GetUsage(context.Context, *quaycrewv1.GetUsageRequest, ...grpc.CallOption) (*quaycrewv1.GetUsageResponse, error)
 }
 
 // Serve runs the view until ctx is done, writing the address it came up on to out.

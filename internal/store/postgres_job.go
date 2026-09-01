@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -15,9 +15,12 @@ import (
 // listing cannot drift into scanning different things.
 const jobColumns = `id, workspace, project, title, brief, role, role_version, mode, expect_file,
 	expect_contains, after_jobs, deadline, budget_tokens, labels, requires, coalesce(parent, ''), depth, version,
-	phase, session, attempts, answer, reason, question, told, resuming, spent_tokens, observed_version,
+	phase, session, attempts, answer, outcome, reason, question, told, resuming, spent_tokens, observed_version,
 	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product, steers, claim,
-	escalation, looped_step, escalated_to, request,
+	escalation, looped_step, escalated_to, plan, plan_approved, ungated, reviewed, tested,
+	pull_request_status, pull_request_checks, pull_request_check, pull_request_review,
+	pull_request_read_at, pull_request_failed,
+	request,
 	created_at, updated_at, started_at, finished_at`
 
 // CreateJob writes a job and the record of its declaration in one transaction.
@@ -103,21 +106,29 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 	if _, err := tx.Exec(ctx, `
 		insert into jobs (id, workspace, project, title, brief, role, role_version, mode, expect_file,
 			expect_contains, after_jobs, deadline, budget_tokens, labels, requires, parent, depth, version, phase,
-			session, attempts, answer, reason, question, told, spent_tokens, observed_version, started_at,
+			session, attempts, answer, outcome, reason, question, told, spent_tokens, observed_version, started_at,
 			finished_at, lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product,
-			resuming, claim, escalation, request, created_at, updated_at)
+			resuming, claim, escalation, ungated, reviewed, tested, pull_request_status,
+			pull_request_checks, pull_request_check, pull_request_review, pull_request_read_at,
+			pull_request_failed, request, created_at, updated_at)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
 			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38,
-			$39, $40, coalesce($41::timestamptz, now()), coalesce($42::timestamptz, now()))`,
+			$39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50,
+			coalesce($51::timestamptz, now()), coalesce($52::timestamptz, now()))`,
 		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
 		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
 		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
 		afterOrEmpty(declared.Requires), nullIfEmpty(declared.Parent), declared.Depth, declared.Version, declared.Phase,
-		declared.Session, declared.Attempts, declared.Answer, declared.Reason, declared.Question,
+		declared.Session, declared.Attempts, declared.Answer, declared.Outcome, declared.Reason, declared.Question,
 		declared.Told, declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt,
 		declared.LeaseOwner, declared.LeaseUntil, declared.TraceID, declared.ParentSpanID,
 		declared.Repository, declared.PullRequest, declared.Product, declared.Resuming,
-		declared.Claim, declared.Escalation, declared.Request,
+		declared.Claim, declared.Escalation,
+		declared.Ungated, declared.Reviewed, declared.Tested,
+		declared.PullRequestState.Status, declared.PullRequestState.Checks,
+		declared.PullRequestState.FailedCheck, declared.PullRequestState.Review,
+		stampOrNil(declared.PullRequestState.ReadAt), declared.PullRequestState.Failed,
+		declared.Request,
 		stampOrNow(declared.CreatedAt), stampOrNow(declared.UpdatedAt)); err != nil {
 		return fmt.Errorf("create job: %w", err)
 	}
@@ -155,6 +166,9 @@ func (p *Postgres) GetJob(ctx context.Context, id string) (*job.Job, error) {
 	if found.Steps, err = p.jobSteps(ctx, id); err != nil {
 		return nil, err
 	}
+	if found.Handoffs, err = p.jobHandoffs(ctx, id); err != nil {
+		return nil, err
+	}
 	if found.Attempted, err = p.jobAttempts(ctx, id); err != nil {
 		return nil, err
 	}
@@ -187,6 +201,9 @@ func (p *Postgres) ListJobs(ctx context.Context, filter job.Filter) ([]*job.Job,
 	if filter.Phase != "" {
 		add(` and phase = $%d`, filter.Phase)
 	}
+	if filter.Outcome != "" {
+		add(` and outcome = $%d`, filter.Outcome)
+	}
 	if filter.LabelKey != "" {
 		// The function rather than the ? operator, because a question mark in a statement sent with
 		// numbered parameters is read as a placeholder by more than one thing on the way.
@@ -196,7 +213,19 @@ func (p *Postgres) ListJobs(ctx context.Context, filter job.Filter) ([]*job.Job,
 			add(` and labels @> $%d`, labelJSON(filter.LabelKey, filter.LabelValue))
 		}
 	}
-	query += ` order by created_at desc, id desc`
+	// The window carries the order with it. A caller asking what finished lately is asking about the
+	// moment a job ended, and finished_at is not in step with created_at: a job declared this morning
+	// can finish after one declared last week. The index is on finished_at desc, so this read is the
+	// one the index was added for.
+	if filter.FinishedSince != nil {
+		add(` and finished_at >= $%d`, *filter.FinishedSince)
+		query += ` order by finished_at desc, id desc`
+	} else {
+		query += ` order by created_at desc, id desc`
+	}
+	if filter.Limit > 0 {
+		add(` limit $%d`, filter.Limit)
+	}
 
 	rows, err := p.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -286,6 +315,33 @@ func (p *Postgres) AnswerJob(ctx context.Context, id, answer string, event *job.
 		job.PhasePending, answer, job.PhaseAsking)
 }
 
+// ProposeJobPlan writes the plan the crew wrote and puts the question about it to a person, in one
+// movement.
+//
+// One statement, so a reader never finds a job asking with no plan on it, and never a plan on a
+// running row that nobody was asked to approve. Conditional on the running phase for the reason
+// asking is: a job nothing is running has nobody to write a plan.
+func (p *Postgres) ProposeJobPlan(ctx context.Context, id, plan, question string,
+	event *job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "propose job plan", job.ErrNotRunning, []*job.Event{event}, `
+		update jobs set phase = $2, plan = $3, question = $4, told = '', resuming = '', lease_owner = '',
+			lease_until = null, updated_at = now()
+		where id = $1 and phase = $5`,
+		job.PhaseAsking, plan, question, job.PhaseRunning)
+}
+
+// ApproveJobPlan records that a person approved the plan and puts the job back to pending, so a
+// controller starts the work against it.
+//
+// Conditional on the asking phase and on the plan not being approved yet, in the same statement, so
+// two people approving at once leave one approval and one task.
+func (p *Postgres) ApproveJobPlan(ctx context.Context, id string, event *job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "approve job plan", job.ErrNotAsking, []*job.Event{event}, `
+		update jobs set phase = $2, told = '', plan_approved = true, started_at = null, updated_at = now()
+		where id = $1 and phase = $3 and plan_approved = false`,
+		job.PhasePending, job.PhaseAsking)
+}
+
 // ListJobEvents returns one job's own history, in the order it was written.
 
 // By the sequence rather than by the moment. Two records written in one transaction are stamped in
@@ -344,16 +400,26 @@ type rowScanner interface {
 func scanJob(row rowScanner) (*job.Job, error) {
 	var found job.Job
 	var labels []byte
+	// Null means the forge was never read for this job, and the zero moment is what says so.
+	var readAt *time.Time
 	if err := row.Scan(&found.ID, &found.Workspace, &found.Project, &found.Title, &found.Brief,
 		&found.Role, &found.RoleVersion, &found.Mode, &found.ExpectFile, &found.ExpectContains,
 		&found.After, &found.Deadline, &found.BudgetTokens, &labels, &found.Requires, &found.Parent, &found.Depth,
-		&found.Version, &found.Phase, &found.Session, &found.Attempts, &found.Answer, &found.Reason,
+		&found.Version, &found.Phase, &found.Session, &found.Attempts, &found.Answer, &found.Outcome, &found.Reason,
 		&found.Question, &found.Told, &found.Resuming, &found.SpentTokens, &found.ObservedVersion,
 		&found.LeaseOwner, &found.LeaseUntil, &found.TraceID, &found.ParentSpanID,
 		&found.Repository, &found.PullRequest, &found.Product, &found.Steers, &found.Claim,
-		&found.Escalation, &found.LoopedStep, &found.EscalatedTo, &found.Request,
+		&found.Escalation, &found.LoopedStep, &found.EscalatedTo, &found.Plan, &found.PlanApproved,
+		&found.Ungated, &found.Reviewed, &found.Tested,
+		&found.PullRequestState.Status, &found.PullRequestState.Checks,
+		&found.PullRequestState.FailedCheck, &found.PullRequestState.Review,
+		&readAt, &found.PullRequestState.Failed,
+		&found.Request,
 		&found.CreatedAt, &found.UpdatedAt, &found.StartedAt, &found.FinishedAt); err != nil {
 		return nil, err
+	}
+	if readAt != nil {
+		found.PullRequestState.ReadAt = *readAt
 	}
 	if len(labels) > 0 {
 		if err := json.Unmarshal(labels, &found.Labels); err != nil {
@@ -434,6 +500,31 @@ func (p *Postgres) ExpiredJob(ctx context.Context, limit int) ([]*job.Job, error
 		order by created_at, id`, limit, job.PhaseRunning)
 }
 
+// AnythingMoving says whether any job is running or asking: whether this system is doing anything
+// at all.
+//
+// A probe rather than a count. The controller asks it on every tick and what it needs is a yes or a
+// no, so this stops at the first row and costs one lookup on jobs_phase_idx however many finished
+// jobs the table holds.
+func (p *Postgres) AnythingMoving(ctx context.Context) (bool, error) {
+	var moving bool
+	if err := p.pool.QueryRow(ctx,
+		`select exists (select 1 from jobs where phase = any($1))`,
+		[]string{job.PhaseRunning, job.PhaseAsking}).Scan(&moving); err != nil {
+		return false, fmt.Errorf("read whether anything is moving: %w", err)
+	}
+	return moving, nil
+}
+
+// TurnedAwayJob is the job the machine had no room for: pending, carrying a reason, oldest declared
+// first. Only the system writes a reason on a pending job, and it writes one only when it holds the
+// job back, so the reason is the whole condition.
+func (p *Postgres) TurnedAwayJob(ctx context.Context, limit int) ([]*job.Job, error) {
+	return p.jobMatching(ctx, `
+		where phase = $1 and reason <> ''
+		order by created_at, id`, limit, job.PhasePending)
+}
+
 // jobMatching runs one of the controller's queries, capped.
 func (p *Postgres) jobMatching(ctx context.Context, where string, limit int, args ...any) ([]*job.Job, error) {
 	query := `select ` + jobColumns + ` from jobs ` + where
@@ -458,7 +549,49 @@ func (p *Postgres) jobMatching(ctx context.Context, where string, limit int, arg
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("read job: %w", err)
 	}
+	if err := p.withHandoffs(ctx, found); err != nil {
+		return nil, err
+	}
 	return found, nil
+}
+
+// withHandoffs puts what each session left behind onto the jobs a controller is about to act on.
+//
+// One query for the batch rather than one per job. The controller needs them before it claims
+// anything, because the conversation a job runs in is derived from them: each handover moves the name
+// on, and a controller reading a job without them would send the rest of that job straight back into
+// the conversation that was full.
+func (p *Postgres) withHandoffs(ctx context.Context, found []*job.Job) error {
+	if len(found) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(found))
+	for _, one := range found {
+		ids = append(ids, one.ID)
+	}
+	rows, err := p.pool.Query(ctx, `
+		select job, seq, remaining, tried, session, written_at
+		from job_handoffs where job = any($1) order by job, seq`, ids)
+	if err != nil {
+		return fmt.Errorf("read job handoffs: %w", err)
+	}
+	defer rows.Close()
+
+	byJob := map[string][]job.Handoff{}
+	for rows.Next() {
+		var one job.Handoff
+		if err := rows.Scan(&one.Job, &one.Seq, &one.Left, &one.Tried, &one.Session, &one.WrittenAt); err != nil {
+			return fmt.Errorf("scan job handoff: %w", err)
+		}
+		byJob[one.Job] = append(byJob[one.Job], one)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read job handoffs: %w", err)
+	}
+	for _, one := range found {
+		one.Handoffs = byJob[one.ID]
+	}
+	return nil
 }
 
 // StartJob claims one job and records the record of the claim in the same transaction.
@@ -615,16 +748,19 @@ func (p *Postgres) LandJob(ctx context.Context, id string, landed job.Landing, e
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	tag, err := tx.Exec(ctx, `
-		update jobs set phase = $2, answer = $3, reason = $4, spent_tokens = $5,
+		update jobs set phase = $2, answer = $3, reason = $4, spent_tokens = $5, outcome = $8,
 			-- What a landing read off the answer, unless it read none and the row already carries one. A
 			-- step that named the pull request wrote it before the answer landed, and a job that failed
 			-- carries no answer at all, so an unconditional write here would erase the address.
 			pull_request = case when $7 <> '' then $7 else pull_request end,
+			-- What read this work before it settled, so a settled job says whether anything independent
+			-- agreed with its answer rather than leaving a reader to open two conversations.
+			reviewed = $9, tested = $10,
 			observed_version = version, lease_owner = '', lease_until = null,
 			finished_at = now(), updated_at = now()
 		where id = $1 and phase = $6`,
 		id, landed.Phase, landed.Answer, landed.Reason, landed.SpentTokens, job.PhaseRunning,
-		landed.PullRequest)
+		landed.PullRequest, landed.Outcome, landed.Reviewed, landed.Tested)
 	if err != nil {
 		return nil, fmt.Errorf("land job: %w", err)
 	}

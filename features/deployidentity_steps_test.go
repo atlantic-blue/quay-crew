@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/skill"
+	"github.com/atlantic-blue/quay-krewe/internal/skill"
 	"github.com/cucumber/godog"
 )
 
