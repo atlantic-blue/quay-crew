@@ -330,6 +330,13 @@ func (m Model) act(key string) (Model, tea.Cmd) {
 			key, strings.ToLower(action.Label), action.Key), true
 		return m, nil
 	}
+	// A key that acts on the view's scope is answered before the cursor is read, because the case it
+	// exists for is a listing with nothing in it to put a cursor on.
+	for _, action := range m.active.Actions {
+		if action.OnScope && action.Bound(key) {
+			return m.performOnScope(action)
+		}
+	}
 	row, hasRow := m.selectedRowValue()
 	if !hasRow {
 		return m, nil
@@ -661,4 +668,16 @@ func typedCmd(action Action, row Row, typed string) tea.Cmd {
 		}
 		return actionDoneMsg{}
 	}
+}
+
+// performOnScope runs a key that acts on what the view is scoped to. The scope travels as a row so
+// every kind of action reads it the same way, and a view opened with no scope at all says so rather
+// than acting on nothing.
+func (m Model) performOnScope(action Action) (Model, tea.Cmd) {
+	if m.parent == "" {
+		m.err, m.held = fmt.Errorf("%s has nothing to act on: this view was opened on its own rather than "+
+			"from the row above it", strings.ToLower(action.Label)), true
+		return m, nil
+	}
+	return m.perform(action, Row{ID: m.parent})
 }
