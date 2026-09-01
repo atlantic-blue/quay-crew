@@ -110,8 +110,10 @@ func gatedBy(t *testing.T, runner model.Runner, ungated bool) (*controlplane.Ser
 	_, project := newProject(t, server)
 	declared, err := server.CreateJob(context.Background(), &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "sort the listing",
-		Brief:      "make the listing sort by the clock it shows",
-		Repository: "atlantic-blue/quay-crew", Ungated: ungated,
+		Brief: "make the listing sort by the clock it shows",
+		// In the mode that reaches the network: a job that names a repository is refused in a mode
+		// that cannot clone, push or open a pull request.
+		Repository: "atlantic-blue/quay-crew", Mode: "dangerous", Ungated: ungated,
 	})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)

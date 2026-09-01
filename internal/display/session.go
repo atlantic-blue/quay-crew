@@ -7,6 +7,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/contextspend"
 	"github.com/atlantic-blue/krewe/internal/session"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -21,7 +22,8 @@ import (
 // Under "id" it read as bookkeeping, and the operator reached for the name cell instead, which held
 // the other identifier.
 func SessionColumns() []string {
-	return []string{"session", "workspace", "project", "name", "status", "mode", "ctx", "in", "out", "cache", "age"}
+	return []string{"session", "workspace", "project", "name", "status", "mode", "ctx", "spent on",
+		"in", "out", "cache", "age"}
 }
 
 // SessionCells is one session as a listing shows it, matching SessionColumns.
@@ -34,6 +36,7 @@ func SessionCells(one *quaycrewv1.Session, workspaceName, projectName string) []
 		StatusLabel(one),
 		PermissionLabel(one.GetPermissionMode()),
 		ContextLabel(one),
+		Spend(one).Cell(),
 		Tokens(one.GetUsage().GetInput()),
 		Tokens(one.GetUsage().GetOutput()),
 		Tokens(one.GetUsage().GetCacheRead()),
@@ -61,6 +64,22 @@ func ContextLabel(session *quaycrewv1.Session) string {
 		return Tokens(window.GetUsed())
 	}
 	return strconv.FormatInt(Share(window.GetUsed(), window.GetSize()), 10) + "%"
+}
+
+// Spend is where a session's context went, in the form the accounting works in.
+//
+// The listing next to it says how full the window is, and a share on its own moves nothing. This is
+// the column that says what to look at: whether the session filled up on the code it had to read, on
+// tool output it read once, or on its own repeated attempts.
+//
+// The zero value for a conversation nobody has spoken in, which prints as an empty cell the way the
+// token columns beside it do.
+func Spend(session *quaycrewv1.Session) contextspend.Spend {
+	where := session.GetContextSpend()
+	return contextspend.Spend{
+		Reads: where.GetReads(), Tools: where.GetTools(),
+		Turns: where.GetTurns(), Told: where.GetTold(),
+	}
 }
 
 // Share is what part of the window is used, as a whole number out of a hundred.

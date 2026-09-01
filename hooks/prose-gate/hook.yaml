@@ -1,0 +1,18 @@
+name: prose-gate
+version: 1
+summary: Holds prose written for a person to Simplified Technical English, for the part of it a program can measure.
+events:
+  # Prose being written to a file. The matcher is the write, and the hook decides from the file name
+  # whether what is being written is prose at all: a Go file is not, and a gate that measured
+  # sentence length in source would refuse every file in this repository.
+  - on: PreToolUse
+    matcher: Write|Edit|MultiEdit
+    entry: bin/hook
+    timeoutSeconds: 5
+  # Prose carried as an argument: a pull request body, an issue body, a commit message, and the same
+  # text handed over as a file. A rule that a document has to meet and a pull request does not is a
+  # rule with a way around it.
+  - on: PreToolUse
+    matcher: Bash
+    entry: bin/hook
+    timeoutSeconds: 5

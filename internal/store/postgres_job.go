@@ -16,8 +16,8 @@ import (
 const jobColumns = `id, workspace, project, title, brief, role, role_version, mode, expect_file,
 	expect_contains, after_jobs, deadline, budget_tokens, labels, requires, coalesce(parent, ''), depth, version,
 	phase, session, attempts, answer, reason, question, told, resuming, spent_tokens, observed_version,
-	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product, steers,
-	ungated, reviewed, tested,
+	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product, steers, claim,
+	escalation, looped_step, escalated_to, plan, plan_approved, ungated, reviewed, tested,
 	created_at, updated_at, started_at, finished_at`
 
 // CreateJob writes a job and the record of its declaration in one transaction.
@@ -32,6 +32,9 @@ func (p *Postgres) CreateJob(ctx context.Context, declared *job.Job, event *job.
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if err := takeTheClaim(ctx, tx, declared); err != nil {
+		return err
+	}
 	if err := insertJob(ctx, tx, declared); err != nil {
 		return err
 	}
@@ -42,6 +45,48 @@ func (p *Postgres) CreateJob(ctx context.Context, declared *job.Job, event *job.
 		return fmt.Errorf("create job: %w", err)
 	}
 	return nil
+}
+
+// takeTheClaim refuses a declaration that claims a piece of work another job is still holding.
+//
+// Inside the transaction that writes the row, and behind a lock taken on the claim itself, because
+// two declarations arriving together would otherwise both read no holder and both write one: neither
+// transaction can see the other's row until it commits. The lock is held to the end of the
+// transaction, so the second one reads what the first wrote.
+//
+// The lock is on the claim rather than on the table, so declarations of different work never wait for
+// each other. Two different claims that hash to the same number wait for one another and both then
+// succeed, which costs a moment and is not a wrong answer.
+//
+// There is no unique index doing this instead, because holding runs out: a job that settles releases
+// its claim, and so does one that nothing has moved for longer than a claim lives. An index cannot
+// say either.
+func takeTheClaim(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
+	if declared.Claim == "" {
+		return nil
+	}
+	// The two joined by a colon, which a workspace identifier cannot contain, so one workspace's claim
+	// never hashes to another's by accident of where the two words were cut.
+	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1 || ':' || $2))`,
+		declared.Workspace, declared.Claim); err != nil {
+		return fmt.Errorf("create job: %w", err)
+	}
+	// The oldest holder, so the answer is the same one every time.
+	row := tx.QueryRow(ctx, `
+		select id, title, created_at from jobs
+		where workspace = $1 and claim = $2 and phase = any($3::text[])
+			and updated_at > now() - make_interval(secs => $4::double precision)
+		order by created_at asc, id asc limit 1`,
+		declared.Workspace, declared.Claim, job.LivePhases(), job.ClaimLife.Seconds())
+	held := &job.Held{Claim: declared.Claim}
+	switch err := row.Scan(&held.Holder, &held.Title, &held.TakenAt); {
+	case errors.Is(err, pgx.ErrNoRows):
+		return nil
+	case err != nil:
+		return fmt.Errorf("create job: %w", err)
+	default:
+		return held
+	}
 }
 
 // insertJob writes one job inside a transaction somebody else owns, which is what lets a
@@ -60,10 +105,10 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 			expect_contains, after_jobs, deadline, budget_tokens, labels, requires, parent, depth, version, phase,
 			session, attempts, answer, reason, question, told, spent_tokens, observed_version, started_at,
 			finished_at, lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product,
-			resuming, ungated, reviewed, tested)
+			resuming, claim, escalation, ungated, reviewed, tested, created_at, updated_at)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37,
-			$38, $39, $40)`,
+			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38,
+			$39, $40, $41, $42, coalesce($43::timestamptz, now()), coalesce($44::timestamptz, now()))`,
 		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
 		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
 		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
@@ -72,10 +117,26 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 		declared.Told, declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt,
 		declared.LeaseOwner, declared.LeaseUntil, declared.TraceID, declared.ParentSpanID,
 		declared.Repository, declared.PullRequest, declared.Product, declared.Resuming,
-		declared.Ungated, declared.Reviewed, declared.Tested); err != nil {
+		declared.Claim, declared.Escalation,
+		declared.Ungated, declared.Reviewed, declared.Tested,
+		stampOrNow(declared.CreatedAt), stampOrNow(declared.UpdatedAt)); err != nil {
 		return fmt.Errorf("create job: %w", err)
 	}
 	return nil
+}
+
+// stampOrNow is a moment the caller stamped on a row, and nothing where it stamped none, which the
+// statement reads as the database's clock.
+//
+// The in memory store already keeps a moment it is handed and stamps only what arrives empty, so
+// this is the same store keeping what it is given. Nothing in the system stamps a job it declares,
+// and what it buys is a test that can write a job whose last movement was three hours ago: a claim
+// running out is otherwise unprovable without waiting for it.
+func stampOrNow(at time.Time) *time.Time {
+	if at.IsZero() {
+		return nil
+	}
+	return &at
 }
 
 // GetJob reads one job back, whole: its answer and the steps its session finished.
@@ -93,6 +154,9 @@ func (p *Postgres) GetJob(ctx context.Context, id string) (*job.Job, error) {
 		return nil, fmt.Errorf("get job: %w", err)
 	}
 	if found.Steps, err = p.jobSteps(ctx, id); err != nil {
+		return nil, err
+	}
+	if found.Attempted, err = p.jobAttempts(ctx, id); err != nil {
 		return nil, err
 	}
 	return found, nil
@@ -133,7 +197,19 @@ func (p *Postgres) ListJobs(ctx context.Context, filter job.Filter) ([]*job.Job,
 			add(` and labels @> $%d`, labelJSON(filter.LabelKey, filter.LabelValue))
 		}
 	}
-	query += ` order by created_at desc, id desc`
+	// The window carries the order with it. A caller asking what finished lately is asking about the
+	// moment a job ended, and finished_at is not in step with created_at: a job declared this morning
+	// can finish after one declared last week. The index is on finished_at desc, so this read is the
+	// one the index was added for.
+	if filter.FinishedSince != nil {
+		add(` and finished_at >= $%d`, *filter.FinishedSince)
+		query += ` order by finished_at desc, id desc`
+	} else {
+		query += ` order by created_at desc, id desc`
+	}
+	if filter.Limit > 0 {
+		add(` limit $%d`, filter.Limit)
+	}
 
 	rows, err := p.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -223,6 +299,33 @@ func (p *Postgres) AnswerJob(ctx context.Context, id, answer string, event *job.
 		job.PhasePending, answer, job.PhaseAsking)
 }
 
+// ProposeJobPlan writes the plan the crew wrote and puts the question about it to a person, in one
+// movement.
+//
+// One statement, so a reader never finds a job asking with no plan on it, and never a plan on a
+// running row that nobody was asked to approve. Conditional on the running phase for the reason
+// asking is: a job nothing is running has nobody to write a plan.
+func (p *Postgres) ProposeJobPlan(ctx context.Context, id, plan, question string,
+	event *job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "propose job plan", job.ErrNotRunning, []*job.Event{event}, `
+		update jobs set phase = $2, plan = $3, question = $4, told = '', resuming = '', lease_owner = '',
+			lease_until = null, updated_at = now()
+		where id = $1 and phase = $5`,
+		job.PhaseAsking, plan, question, job.PhaseRunning)
+}
+
+// ApproveJobPlan records that a person approved the plan and puts the job back to pending, so a
+// controller starts the work against it.
+//
+// Conditional on the asking phase and on the plan not being approved yet, in the same statement, so
+// two people approving at once leave one approval and one task.
+func (p *Postgres) ApproveJobPlan(ctx context.Context, id string, event *job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "approve job plan", job.ErrNotAsking, []*job.Event{event}, `
+		update jobs set phase = $2, told = '', plan_approved = true, started_at = null, updated_at = now()
+		where id = $1 and phase = $3 and plan_approved = false`,
+		job.PhasePending, job.PhaseAsking)
+}
+
 // ListJobEvents returns one job's own history, in the order it was written.
 
 // By the sequence rather than by the moment. Two records written in one transaction are stamped in
@@ -287,7 +390,8 @@ func scanJob(row rowScanner) (*job.Job, error) {
 		&found.Version, &found.Phase, &found.Session, &found.Attempts, &found.Answer, &found.Reason,
 		&found.Question, &found.Told, &found.Resuming, &found.SpentTokens, &found.ObservedVersion,
 		&found.LeaseOwner, &found.LeaseUntil, &found.TraceID, &found.ParentSpanID,
-		&found.Repository, &found.PullRequest, &found.Product, &found.Steers,
+		&found.Repository, &found.PullRequest, &found.Product, &found.Steers, &found.Claim,
+		&found.Escalation, &found.LoopedStep, &found.EscalatedTo, &found.Plan, &found.PlanApproved,
 		&found.Ungated, &found.Reviewed, &found.Tested,
 		&found.CreatedAt, &found.UpdatedAt, &found.StartedAt, &found.FinishedAt); err != nil {
 		return nil, err
@@ -369,6 +473,31 @@ func (p *Postgres) ExpiredJob(ctx context.Context, limit int) ([]*job.Job, error
 	return p.jobMatching(ctx, `
 		where phase = $1 and (lease_until is null or lease_until <= now())
 		order by created_at, id`, limit, job.PhaseRunning)
+}
+
+// AnythingMoving says whether any job is running or asking: whether this system is doing anything
+// at all.
+//
+// A probe rather than a count. The controller asks it on every tick and what it needs is a yes or a
+// no, so this stops at the first row and costs one lookup on jobs_phase_idx however many finished
+// jobs the table holds.
+func (p *Postgres) AnythingMoving(ctx context.Context) (bool, error) {
+	var moving bool
+	if err := p.pool.QueryRow(ctx,
+		`select exists (select 1 from jobs where phase = any($1))`,
+		[]string{job.PhaseRunning, job.PhaseAsking}).Scan(&moving); err != nil {
+		return false, fmt.Errorf("read whether anything is moving: %w", err)
+	}
+	return moving, nil
+}
+
+// TurnedAwayJob is the job the machine had no room for: pending, carrying a reason, oldest declared
+// first. Only the system writes a reason on a pending job, and it writes one only when it holds the
+// job back, so the reason is the whole condition.
+func (p *Postgres) TurnedAwayJob(ctx context.Context, limit int) ([]*job.Job, error) {
+	return p.jobMatching(ctx, `
+		where phase = $1 and reason <> ''
+		order by created_at, id`, limit, job.PhasePending)
 }
 
 // jobMatching runs one of the controller's queries, capped.
@@ -573,6 +702,11 @@ func (p *Postgres) LandJob(ctx context.Context, id string, landed job.Landing, e
 			return nil, err
 		}
 		return nil, job.ErrNotRunning
+	}
+	// What the attempt said, in the same transaction as what came of it. A landing with no attempt
+	// behind it would leave the record unable to say whether this job was going anywhere.
+	if err := insertJobAttempt(ctx, tx, id, landed.Attempt); err != nil {
+		return nil, err
 	}
 	if err := appendJobEvent(ctx, tx, event); err != nil {
 		return nil, err

@@ -1,0 +1,8 @@
+name: plan-critic
+version: 1
+summary: reads a plan before the build and reports where it disagrees with itself and with the sentence
+model: opus
+receives:
+  - job
+  - context
+  - skills

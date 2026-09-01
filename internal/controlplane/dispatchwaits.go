@@ -33,7 +33,7 @@ const (
 // ahead of this one, the container, and the setup inside it. One budget rather than one each, so the
 // longest a dispatch can take to fail is this and never the sum of them.
 //
-// Measured rather than chosen. `docker run --rm quaycrew-sandbox-claude:local echo ok` answered in
+// Measured rather than chosen. `docker run --rm krewe-sandbox-claude:local echo ok` answered in
 // about two seconds on the machine that wedged, and in continuous integration the whole first
 // dispatch, container start and task included, lands inside six and a half (run 33092308502,
 // 16:19:02.893 to 16:19:09.277). This is ten times the slower of the two, which gives a loaded

@@ -37,7 +37,7 @@ func sandboxImageUnderTest(t *testing.T) string {
 	t.Helper()
 	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
 	if image == "" {
-		image = "quaycrew-sandbox-claude:local"
+		image = "krewe-sandbox-claude:local"
 	}
 	if err := exec.Command("docker", "image", "inspect", image).Run(); err != nil {
 		t.Skipf("sandbox image %s not found; build it with `make sandbox-image`", image)

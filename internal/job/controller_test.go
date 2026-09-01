@@ -11,6 +11,7 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/krewe/internal/capacity"
 	"github.com/atlantic-blue/krewe/internal/job"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -46,6 +47,9 @@ type system struct {
 	// seen is the context the last dispatch arrived under, so a test can say which trace the task
 	// ran in rather than assume the controller passed one on.
 	seen context.Context
+	// machine is the room this system places containers on, when a test cares that a sandbox holds a
+	// slot until it goes. Nil is a system whose sandboxes cost nothing, which is what most tests want.
+	machine *aFullMachine
 }
 
 func newSystem() *system { return &system{tasks: map[string][]*quaycrewv1.Task{}} }
@@ -60,11 +64,24 @@ func (c *system) ReclaimSession(_ context.Context, req *quaycrewv1.ReclaimSessio
 		c.mu.Unlock()
 		return nil, refused
 	}
+	store, machine := c.store, c.machine
+	c.mu.Unlock()
+	// The real control plane refuses a session whose container has already gone, and a double that
+	// accepted it would report a reclaim that took nothing back. That is the shape of false green this
+	// whole change is about: the query that starves reclaim starves it with rows exactly like these.
+	if store != nil && store.sessionStatus(req.GetId()) == job.StatusReclaimed {
+		return nil, fmt.Errorf("session %s is already reclaimed", req.GetId())
+	}
+	c.mu.Lock()
 	c.reclaims = append(c.reclaims, req.GetId())
-	store := c.store
 	c.mu.Unlock()
 	if store != nil {
 		store.reclaimSession(req.GetId())
+	}
+	// The container goes, so the room it held goes back. In the real system this is
+	// Ledger.ReleaseSession, called from closeSandbox and from nowhere else.
+	if machine != nil {
+		machine.releaseSession(req.GetId())
 	}
 	return &quaycrewv1.ReclaimSessionResponse{}, nil
 }
@@ -105,6 +122,20 @@ func (c *system) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	}
 	c.dispatched = append(c.dispatched, req)
 	session := "session-" + req.GetHandle()
+	// The sandbox is built under the key the controller reserved, and it holds that room from here
+	// until the container goes. That is the whole of the second fault: a session outlives its job.
+	if c.machine != nil {
+		c.machine.place(session, capacity.KeyFor(req.GetProject(), req.GetHandle()))
+	}
+	// And the session row, the way the control plane writes one before the task starts. Without it a
+	// controller reading which sessions still hold a container would see none of the ones it made.
+	if c.store != nil {
+		c.store.addSession(&quaycrewv1.Session{
+			Id: session, Workspace: "workspace-1", Project: req.GetProject(),
+			Handle: req.GetHandle(), Status: "running",
+			UpdatedAt: timestamppb.New(time.Now().UTC()),
+		})
+	}
 	c.sessions = append(c.sessions, &quaycrewv1.Session{Id: session, Handle: req.GetHandle(), Project: req.GetProject()})
 	// A task is written when it starts, so the history carries an open row before any answer.
 	c.tasks[session] = append(c.tasks[session], &quaycrewv1.Task{
@@ -128,6 +159,11 @@ func (c *system) lands(reply string) {
 		for _, task := range tasks {
 			if task.Status == "running" {
 				task.Status, task.Reply = "idle", reply
+				// The session goes idle with its task, and keeps its container. That is the shape of the
+				// fault: the room a sandbox holds ends with the container and never with the job.
+				if c.store != nil {
+					c.store.sessionIdle(task.Session)
+				}
 			}
 		}
 	}
@@ -179,6 +215,17 @@ func (c *system) sent() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return len(c.dispatched)
+}
+
+// lastText is what the last task the system was asked to run actually said, which is the only place
+// a test can see what the session was told rather than what the row says it should have been.
+func (c *system) lastText() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.dispatched) == 0 {
+		return ""
+	}
+	return c.dispatched[len(c.dispatched)-1].GetText()
 }
 
 // rows is a store double: the smallest set of rows a controller reads and writes.
@@ -259,9 +306,31 @@ func (r *rows) reclaimedAgo(id string, ago time.Duration) {
 	r.sessions[id].ReclaimedAt = timestamppb.New(time.Now().UTC().Add(-ago))
 }
 
-// SettledSessions is the sessions nothing is holding open, oldest touched first. It is the same rule
-// the real stores are held to: live, not running, and named by no job in a non terminal phase.
-func (r *rows) SettledSessions(_ context.Context, limit int) ([]*quaycrewv1.Session, error) {
+// IdleSandboxes is the sessions that still hold a container and nothing is holding open, oldest
+// touched first. It is the same rule the real stores are held to: live, not running, not already
+// reclaimed, and named by no job in a non terminal phase.
+//
+// Ordered and then capped, in that order, because that is what the real stores do. A double that
+// capped first would take whichever rows it happened to hold and then sort those, which is a looser
+// rule than the thing it stands for, and the fault this query was split for hides in exactly that
+// gap: rows nothing can move filling a batch ahead of the one row that can.
+func (r *rows) IdleSandboxes(_ context.Context, limit int) ([]*quaycrewv1.Session, error) {
+	return r.settled(limit,
+		map[string]bool{"idle": true, "failed": true},
+		func(one *quaycrewv1.Session) time.Time { return one.GetUpdatedAt().AsTime() }), nil
+}
+
+// ReclaimedSessions is the sessions whose container has already gone, longest reclaimed first.
+func (r *rows) ReclaimedSessions(_ context.Context, limit int) ([]*quaycrewv1.Session, error) {
+	return r.settled(limit,
+		map[string]bool{job.StatusReclaimed: true},
+		func(one *quaycrewv1.Session) time.Time { return one.GetReclaimedAt().AsTime() }), nil
+}
+
+// settled is the one query both of those are, ordered by whichever stamp the caller measures against
+// and capped afterwards.
+func (r *rows) settled(limit int, wanted map[string]bool,
+	oldest func(*quaycrewv1.Session) time.Time) []*quaycrewv1.Session {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	open := map[string]bool{}
@@ -270,23 +339,40 @@ func (r *rows) SettledSessions(_ context.Context, limit int) ([]*quaycrewv1.Sess
 			open[one.Session] = true
 		}
 	}
-	settled := map[string]bool{"idle": true, "failed": true, job.StatusReclaimed: true}
 
 	out := []*quaycrewv1.Session{}
 	for _, id := range r.sessionOrder {
 		session := r.sessions[id]
-		if session.GetArchivedAt() != nil || !settled[session.GetStatus()] || open[id] {
+		if session.GetArchivedAt() != nil || !wanted[session.GetStatus()] || open[id] {
 			continue
 		}
 		out = append(out, proto.Clone(session).(*quaycrewv1.Session))
-		if limit > 0 && len(out) == limit {
-			break
+	}
+	sort.SliceStable(out, func(i, j int) bool { return oldest(out[i]).Before(oldest(out[j])) })
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out
+}
+
+// AnythingMoving says whether any job is running or asking.
+func (r *rows) AnythingMoving(_ context.Context) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, one := range r.held {
+		if one.Phase == job.PhaseRunning || one.Phase == job.PhaseAsking {
+			return true, nil
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		return out[i].GetUpdatedAt().AsTime().Before(out[j].GetUpdatedAt().AsTime())
-	})
-	return out, nil
+	return false, nil
+}
+
+// TurnedAwayJob is the job the machine had no room for: pending, carrying a reason, oldest declared
+// first.
+func (r *rows) TurnedAwayJob(_ context.Context, limit int) ([]*job.Job, error) {
+	return r.matching(limit, func(one *job.Job) bool {
+		return one.Phase == job.PhasePending && one.Reason != ""
+	}), nil
 }
 
 func (r *rows) add(one *job.Job) *job.Job {
@@ -296,6 +382,31 @@ func (r *rows) add(one *job.Job) *job.Job {
 	r.held[one.ID] = &kept
 	r.order = append(r.order, one.ID)
 	return &kept
+}
+
+// approvePlan is a person saying yes to the plan, the way the control plane writes it: the flag goes
+// on, what it was told is cleared because an approval is no instruction to anybody, and the row goes
+// back to pending for a controller to start the work.
+func (r *rows) approvePlan(id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return
+	}
+	one.PlanApproved, one.Told, one.Phase = true, "", job.PhasePending
+	one.StartedAt = nil
+}
+
+// recordStep is the session saying it finished something, the way krewe job step writes it.
+func (r *rows) recordStep(id, summary string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return
+	}
+	one.Steps = append(one.Steps, job.Step{Job: id, Seq: len(one.Steps) + 1, Summary: summary})
 }
 
 // claim puts a lease on a row by hand, which is what a controller that then died left behind.
@@ -530,9 +641,93 @@ func (r *rows) LandJob(_ context.Context, id string, landed job.Landing, event *
 	one.SpentTokens, one.ObservedVersion = landed.SpentTokens, one.Version
 	one.LeaseOwner, one.LeaseUntil = "", nil
 	one.FinishedAt, one.UpdatedAt = &now, now
+	// What the attempt said, in the same movement as what came of it, the way both stores write it.
+	r.recordAttempt(one, landed.Attempt)
 	r.record(id, []*job.Event{event})
 	kept := *one
 	return &kept, nil
+}
+
+// ProposeJobPlan writes the plan and the question about it in one movement, the way both stores do:
+// only from running, and the hold goes with it because nothing comes back until a person answers.
+func (r *rows) ProposeJobPlan(_ context.Context, id, plan, question string,
+	event *job.Event) (*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such job")
+	}
+	if one.Phase != job.PhaseRunning {
+		return nil, job.ErrNotRunning
+	}
+	one.Phase, one.Plan, one.Question, one.Told = job.PhaseAsking, plan, question, ""
+	one.LeaseOwner, one.LeaseUntil = "", nil
+	one.UpdatedAt = time.Now().UTC()
+	r.record(id, []*job.Event{event})
+	kept := *one
+	return &kept, nil
+}
+
+// GetJob reads one job whole, which here is the row itself: the steps and the attempts live on it.
+func (r *rows) GetJob(_ context.Context, id string) (*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such job")
+	}
+	kept := *one
+	return &kept, nil
+}
+
+// LoopJob writes that a job went in circles and takes the route it declared, the way both stores do:
+// only from running, only for the controller holding the lease.
+func (r *rows) LoopJob(_ context.Context, id string, looped job.Loop, event *job.Event) (*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such job")
+	}
+	if one.Phase != job.PhaseRunning {
+		return nil, job.ErrNotRunning
+	}
+	if looped.Owner != "" && one.LeaseOwner != looped.Owner {
+		return nil, job.ErrHeld
+	}
+	now := time.Now().UTC()
+	one.LoopedStep, one.Phase, one.UpdatedAt = looped.Step, looped.Phase, now
+	if looped.To != "" {
+		one.EscalatedTo = looped.To
+	}
+	one.Question, one.Reason = looped.Question, looped.Reason
+	one.Told, one.Resuming = "", ""
+	if looped.Handed {
+		one.Session = ""
+	}
+	switch looped.Phase {
+	case job.PhaseStopped:
+		one.FinishedAt, one.ObservedVersion = &now, one.Version
+	case job.PhasePending:
+		one.StartedAt = nil
+	}
+	one.LeaseOwner, one.LeaseUntil = "", nil
+	r.recordAttempt(one, looped.Attempt)
+	r.record(id, []*job.Event{event})
+	kept := *one
+	return &kept, nil
+}
+
+// recordAttempt puts what an attempt said on the row, and does nothing where that task is already
+// there. The caller holds the lock.
+func (r *rows) recordAttempt(one *job.Job, attempt *job.Attempt) {
+	if attempt == nil || attempt.Task == "" || job.RecordedAttempt(one.Attempted, attempt.Task) {
+		return
+	}
+	kept := *attempt
+	kept.Job, kept.Seq = one.ID, len(one.Attempted)+1
+	one.Attempted = append(one.Attempted, kept)
 }
 
 // record appends what happened, the way a store writes the events in the same transaction.
@@ -1073,3 +1268,33 @@ func spent(tokens int64) job.Spend {
 type spendFunc func(ctx context.Context, session string) int64
 
 func (f spendFunc) SessionTokens(ctx context.Context, session string) int64 { return f(ctx, session) }
+
+// setPhase moves a job, for the tests about what the loop reads rather than about how it got there.
+func (r *rows) setPhase(id, phase string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.held[id].Phase = phase
+}
+
+// every is the jobs this store holds, in the order they were added.
+func (r *rows) every() []*job.Job {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]*job.Job, 0, len(r.order))
+	for _, id := range r.order {
+		kept := *r.held[id]
+		out = append(out, &kept)
+	}
+	return out
+}
+
+// sessionIdle is what the control plane writes when a task lands: the session is waiting for work
+// again and its container is still there.
+func (r *rows) sessionIdle(id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if session, held := r.sessions[id]; held {
+		session.Status = "idle"
+		session.UpdatedAt = timestamppb.New(time.Now().UTC())
+	}
+}

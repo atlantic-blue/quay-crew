@@ -138,6 +138,38 @@ message Session {
   // is what the operator calls this conversation once they have seen it. A dispatch that has to be
   // made again would put the job title back over a label the operator set in the meantime.
   string title = 21;
+  // context_spend is where this session's context went, by category. Absent where the system cannot
+  // say, which is a conversation nobody has spoken in.
+  ContextSpend context_spend = 22;
+}
+
+// ContextSpend is where a session's context went, in characters, by category.
+//
+// context_window says how full the window is, and a share on its own moves nothing: a session at
+// eighty per cent filled up on the code it had to read, on tool output it read once, or on its own
+// repeated attempts. This says which.
+//
+// Characters and not tokens. The transcript holds text, every model counts tokens its own way, and a
+// token count worked out here would be a made up number sitting beside the real one in
+// context_window. A reader that wants tokens has both numbers and the ratio measured in
+// docs/CONTEXT-SPEND.md.
+//
+// The four add up to the whole of what the accounting saw, so nothing is dropped between the parts
+// and the total. What no transcript holds, the system prompt and the definitions of every tool the
+// session carries, is in neither: the measurement in docs/CONTEXT-SPEND.md says how large that part
+// is.
+message ContextSpend {
+  // reads is the contents of files, however the session opened them: with a reading tool, or with a
+  // reading command in the shell.
+  int64 reads = 1;
+  // tools is what every other tool returned: a search, a page fetched, the answer of a sub agent, and
+  // every shell command that was not printing a file.
+  int64 tools = 2;
+  // turns is the session's own words: what it wrote, what it thought, and the calls it made.
+  int64 turns = 3;
+  // told is what reached the session from outside a tool: the task it was given, and the answers to
+  // its questions.
+  int64 told = 4;
 }
 
 // SessionPresence is what is inside a session's sandbox right now, read from the sandbox itself
@@ -616,6 +648,36 @@ message SetContextRequest {
 }
 message SetContextResponse {
   ContextDir dir = 1;
+}
+
+// SessionWorkEntry is one thing in a session's work: a file or a directory, with the size of a file.
+message SessionWorkEntry {
+  string name = 1;
+  bool directory = 2;
+  int64 size = 3;
+}
+
+// ReadSessionWorkRequest reads what a session made, out of the directory the system keeps for it.
+//
+// It never enters the container. The work is a bind mount the system already holds, so this answers
+// for a session whose sandbox has gone as readily as for one that is running, which is the whole
+// point: work a job finished must reach somebody without a person carrying it out of a container.
+message ReadSessionWorkRequest {
+  string session = 1;
+  // path is what to read, relative to the session's work. Empty reads the work itself, which is how
+  // a caller finds out what is in there before naming a file.
+  string path = 2;
+}
+message ReadSessionWorkResponse {
+  // host is the directory on the machine running the sandboxes, which is the path an operator opens.
+  string host = 1;
+  // path is what was read, relative to the work, and empty for the work itself.
+  string path = 2;
+  bool directory = 3;
+  // content is the bytes of a file, and empty for a directory.
+  bytes content = 4;
+  // entries is what a directory holds, sorted by name, and empty for a file.
+  repeated SessionWorkEntry entries = 5;
 }
 
 // SecretRef names a secret a workspace has set. It carries no value and there is no call that returns
@@ -1288,10 +1350,14 @@ message Job {
   // on the job the steer landed on and on every job above it. On the job at the top it is the score
   // of the whole tree.
   int32 steers = 37;
+  // claim is the piece of work this job is doing: an issue, a branch, or a name two people would
+  // both use for the same thing. A second job claiming it is refused while this one still holds it,
+  // so two sessions cannot build the same slice. Empty claims nothing.
+  string claim = 40;
   // ungated is a job declared with the settle gate off: it settles on its own answer, and nothing
   // independent has to agree first. It is stated in the negative so that a declaration saying nothing
   // is gated, which is the direction a boundary has to default in.
-  bool ungated = 40;
+  bool ungated = 47;
 
   // What the system assigned, and the caller may not.
   // parent is which job asked for this one, read from the credential the caller presented
@@ -1326,8 +1392,8 @@ message Job {
   // do the work: a reviewer that read the change against what the job was asked for, and a tester
   // that ran the repository's own gates and read their output. A settled job carrying neither was
   // either declared with the gate off or never reached one.
-  bool reviewed = 41;
-  bool tested = 42;
+  bool reviewed = 48;
+  bool tested = 49;
   int64 spent_tokens = 24;
   // steps are what the session doing this job said it finished, in the order it finished them. A job
   // that failed is continued from them rather than started again. A listing leaves them out, the way
@@ -1337,6 +1403,25 @@ message Job {
   // It is what the job failed with, moved off the reason by the resume, so a job going again does not
   // sit pending reading as one the machine is holding back.
   string resuming = 39;
+  // plan is what the crew said it would do, one numbered step per line, and plan_approved says
+  // whether a person approved it. A job that states the sentence writes its plan before it does any
+  // work, and the numbers are how the work is accounted for: the session records each step it
+  // finishes with its number, and a step nothing accounts for stops the job.
+  string plan = 45;
+  bool plan_approved = 46;
+  // escalation is what this job does when it goes in circles, as it was declared: "ask", or
+  // "role:<name>". Empty is asking.
+  string escalation = 41;
+  // attempted is what each attempt at a step said, with how like the earlier attempts at that step it
+  // was. attempts, above, is how many times a session was started for this job; this is what those
+  // attempts produced, and it is the only thing a loop can be read off. A listing leaves it out, the
+  // way it leaves out the answer.
+  repeated JobAttempt attempted = 42;
+  // looped_step is the step this job went in circles on, and zero for a job that never has.
+  // escalated_to is the route the system took when it did, in the shape it was declared. A job
+  // escalates once: the second loop stops it rather than escalating it again.
+  int32 looped_step = 43;
+  string escalated_to = 44;
   // observed_version is the version of the declaration the status describes. A controller that has
   // not caught up leaves this behind the version above.
   int32 observed_version = 25;
@@ -1355,6 +1440,32 @@ message Job {
   google.protobuf.Timestamp updated_at = 27;
   google.protobuf.Timestamp started_at = 28;
   google.protobuf.Timestamp finished_at = 29;
+}
+
+// JobAttempt is what one attempt at one step of a job produced, and how like the attempts before it
+// at that step it was.
+//
+// Three attempts the system cannot tell apart are a loop, and the job escalates rather than spending
+// the rest of its budget on a fourth. The rows are also the corpus that replaces the threshold, which
+// is why every attempt carries its similarity whether or not it looped.
+message JobAttempt {
+  // task is the task this attempt was, which is what keeps one attempt from being counted twice.
+  string task = 1;
+  // seq is where this attempt sits in the order they were made, counting from one, and step is which
+  // step it was at, counting from one.
+  int32 seq = 2;
+  int32 step = 3;
+  // session is the conversation it was made in. It stays here when a job handed to another role
+  // leaves that conversation behind.
+  string session = 4;
+  // said is what the attempt had to show for itself: the answer where it answered, and the failure
+  // where it did not. It is capped where it is written, and the similarity is measured on what is
+  // kept, so a reader holding this can work the number out again.
+  string said = 5;
+  // similarity is how like the closest earlier attempt at this step it was, between 0 and 1. Zero on
+  // the first attempt at a step, which has nothing to be like.
+  double similarity = 6;
+  google.protobuf.Timestamp occurred_at = 7;
 }
 
 // JobStep is one thing the session doing a job said it finished.
@@ -1397,10 +1508,18 @@ message CreateJobRequest {
   // back. A job declared under another inherits its parent's, and stating a second one where the
   // parent already carries one is refused rather than ignored.
   string product = 16;
+  // claim is the piece of work this job takes: an issue, a branch, or a named piece of work. The
+  // declaration is refused where another job holds the same one, and the refusal names that job.
+  string claim = 17;
+  // escalation is what this job does when it goes in circles: "ask" to put the question to the
+  // operator, or "role:<name>" to hand it to another role in a conversation of its own. Empty is
+  // asking. It is declared rather than decided in the moment, because the moment a job is going
+  // nowhere is the worst moment to be working out what to do about it.
+  string escalation = 18;
   // ungated declares this job with the settle gate off, so it settles on its own answer. A job that
   // names a repository is otherwise passed by a reviewer and a tester, in sessions that did not do
   // the work, before it settles. Stated in the negative, so a caller that says nothing gets the gate.
-  bool ungated = 17;
+  bool ungated = 19;
   // id and parent are here to be refused rather than ignored. The system assigns the identifier, and
   // the parent is read from the credential the caller presented: a caller that could set its own
   // parent could set its own depth, and the depth limit would bound nothing.
@@ -1440,6 +1559,14 @@ message ListJobsRequest {
   // labelled at all.
   string label_key = 6;
   string label_value = 7;
+  // finished_since keeps jobs whose finished_at is at or after it, and a job that has not finished
+  // is left out. Setting it also turns the order into most recently finished first, because a
+  // caller asking what finished lately is asking about the moment it ended and not the moment it
+  // was declared.
+  google.protobuf.Timestamp finished_since = 8;
+  // limit caps how many rows come back. Zero is every row, which is what a caller that sets nothing
+  // gets today. A negative number is refused rather than read as zero.
+  int32 limit = 9;
 }
 message ListJobsResponse {
   // Each job without its answer. Read one with GetJob to get the answer whole.
@@ -1689,6 +1816,8 @@ service ControlPlaneService {
   rpc SetSessionLabel(SetSessionLabelRequest) returns (SetSessionLabelResponse);
   rpc ListContexts(ListContextsRequest) returns (ListContextsResponse);
   rpc SetContext(SetContextRequest) returns (SetContextResponse);
+  // Reads a file, or a listing, out of the work a session left behind, without attaching to it.
+  rpc ReadSessionWork(ReadSessionWorkRequest) returns (ReadSessionWorkResponse);
 
   rpc ImportSkill(ImportSkillRequest) returns (ImportSkillResponse);
   rpc ListSkills(ListSkillsRequest) returns (ListSkillsResponse);

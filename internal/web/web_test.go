@@ -69,11 +69,52 @@ func TestItServesThisMachineAndRefusesEverywhereElse(t *testing.T) {
 	}
 }
 
+// theThreeThingsAWiderDoorNeeds is what the decision of 31 August 2026 requires before anything binds
+// past this machine. The system holds none of them.
+//
+// The list is here as well as in docs/ARCHITECTURE.md on purpose. A wall whose reason lives only in a
+// code comment drifts away from the document that decided it, and the scenario in features/web.feature
+// fails when the two stop naming the same three.
+var theThreeThingsAWiderDoorNeeds = []string{
+	"a credential for each device",
+	"a way to withdraw one device",
+	"a rule about encryption on the path",
+}
+
+// TestTheRefusalSaysWhichOfTheThreeIsMissing holds the refusal to naming what a wider front door would
+// need. An operator who binds the wrong address gets a decision he can read and argue with, rather
+// than a wall that says no. A refusal that only says no sends him to the source to find out why.
+func TestTheRefusalSaysWhichOfTheThreeIsMissing(t *testing.T) {
+	err := loopbackOnly("0.0.0.0:8080")
+	if err == nil {
+		t.Fatal("0.0.0.0:8080 was allowed, and every machine on the network can reach it")
+	}
+	refusal := strings.ToLower(err.Error())
+
+	for _, needed := range theThreeThingsAWiderDoorNeeds {
+		if !strings.Contains(refusal, needed) {
+			t.Errorf("the refusal does not name %q, so the operator cannot tell what is missing:\n%s", needed, err)
+		}
+	}
+	// The road that was taken, and where the decision is written, so the reader has somewhere to go.
+	for _, want := range []string{"chat channel", "docs/architecture.md"} {
+		if !strings.Contains(refusal, want) {
+			t.Errorf("the refusal does not name %q:\n%s", want, err)
+		}
+	}
+	// What he typed and what to type instead. A refusal that names neither is a puzzle.
+	for _, want := range []string{"0.0.0.0:8080", DefaultAddress} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal does not name %q:\n%s", want, err)
+		}
+	}
+}
+
 func TestTheListingShowsEveryLiveConversation(t *testing.T) {
 	client := aSystem(t)
 	dispatch(t, client, projectOf(t, client), "", "when is the electricity bill due")
 
-	body, status := get(t, client, "/")
+	body, status := get(t, client, "/sessions")
 
 	if status != http.StatusOK {
 		t.Fatalf("the listing answered %d", status)
@@ -110,7 +151,7 @@ func TestAConversationReadsBackInTheOrderItHappened(t *testing.T) {
 func TestASystemWithNoConversationsSaysSo(t *testing.T) {
 	client := aSystem(t)
 
-	body, status := get(t, client, "/")
+	body, status := get(t, client, "/sessions")
 
 	if status != http.StatusOK {
 		t.Fatalf("the listing answered %d", status)
@@ -166,19 +207,45 @@ func get(t *testing.T, reader Reader, path string) (string, int) {
 
 func aSystem(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
-	return systemWith(t, &model.FakeRunner{Reply: "ok"})
+	client, _ := systemDoingJobs(t, &model.FakeRunner{Reply: "ok"})
+	return client
 }
 
-// systemWith is a whole control plane in memory, reached over a real connection, so these tests drive
-// the thing the operator drives rather than a double of it.
 func systemWith(t *testing.T, runner model.Runner) quaycrewv1.ControlPlaneServiceClient {
+	t.Helper()
+	client, _ := systemDoingJobs(t, runner)
+	return client
+}
+
+// systemDoingJobs is a whole control plane in memory, reached over a real connection, so these tests
+// drive the thing the operator drives rather than a double of it.
+//
+// The system itself comes back beside the client because nothing here runs the job controller: a test
+// about a job that landed moves it on by ticking, which is what the controller does on its own timer
+// in a running system.
+func systemDoingJobs(t *testing.T, runner model.Runner) (quaycrewv1.ControlPlaneServiceClient, *controlplane.Server) {
+	t.Helper()
+	client, system, _ := systemKeeping(t, store.NewMemory(), runner)
+	return client, system
+}
+
+// systemOver is the same system over a store the caller keeps a handle on, which is how a case that
+// needs a job in a phase nothing here reaches writes one.
+func systemOver(t *testing.T, held store.Store, runner model.Runner) quaycrewv1.ControlPlaneServiceClient {
+	t.Helper()
+	client, _, _ := systemKeeping(t, held, runner)
+	return client
+}
+
+func systemKeeping(t *testing.T, held store.Store, runner model.Runner) (quaycrewv1.ControlPlaneServiceClient, *controlplane.Server, store.Store) {
 	t.Helper()
 	lis := bufconn.Listen(1 << 20)
 	server := grpc.NewServer()
-	quaycrewv1.RegisterControlPlaneServiceServer(server, controlplane.NewServer(controlplane.Config{
-		Store: store.NewMemory(), Runner: runner,
+	system := controlplane.NewServer(controlplane.Config{
+		Store: held, Runner: runner,
 		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
-	}))
+	})
+	quaycrewv1.RegisterControlPlaneServiceServer(server, system)
 	go func() { _ = server.Serve(lis) }()
 	t.Cleanup(server.Stop)
 
@@ -194,7 +261,7 @@ func systemWith(t *testing.T, runner model.Runner) quaycrewv1.ControlPlaneServic
 
 	client := quaycrewv1.NewControlPlaneServiceClient(conn)
 	mustCreate(t, client)
-	return client
+	return client, system, held
 }
 
 func mustCreate(t *testing.T, client quaycrewv1.ControlPlaneServiceClient) {
@@ -322,7 +389,7 @@ func TestTheListingPutsTheSessionLastWorkedInAtTheTop(t *testing.T) {
 	// Back to the one started first, which makes it the session somebody was last working in.
 	dispatch(t, client, project, early.GetHandle(), "carry on")
 
-	body, status := get(t, client, "/")
+	body, status := get(t, client, "/sessions")
 	if status != http.StatusOK {
 		t.Fatalf("the listing answered %d", status)
 	}

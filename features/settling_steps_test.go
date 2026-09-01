@@ -24,7 +24,9 @@ func initializeSettlingSteps(sc *godog.ScenarioContext) {
 		func(ctx context.Context, title, repository string) error {
 			return declareJob(ctx, &quaycrewv1.CreateJobRequest{
 				Title: title, Brief: "make the listing sort by the clock it shows",
-				Repository: repository, Ungated: true,
+				// In the mode that reaches the network, the way every job working in a repository is
+				// declared: the clone, the push and the pull request all need it.
+				Repository: repository, Mode: "dangerous", Ungated: true,
 			})
 		})
 
@@ -236,25 +238,6 @@ func initializeSettlingSteps(sc *godog.ScenarioContext) {
 			return says("standard output", toolFrom(ctx).stdout,
 				fmt.Sprintf("passed by the %s and the %s", job.GateReviewer, job.GateTester))
 		})
-}
-
-// theReasonSays is a stopped job whose reason carries every phrase.
-func theReasonSays(phrases ...string) func(ctx context.Context) error {
-	return func(ctx context.Context) error {
-		one, err := readJob(ctx, 0)
-		if err != nil {
-			return err
-		}
-		if one.GetPhase() != job.PhaseStopped {
-			return fmt.Errorf("the job is %q saying %q, want stopped", one.GetPhase(), one.GetReason())
-		}
-		for _, want := range phrases {
-			if !strings.Contains(one.GetReason(), want) {
-				return fmt.Errorf("the reason is %q, want it to say %q", one.GetReason(), want)
-			}
-		}
-		return nil
-	}
 }
 
 // theCrewRuns ticks the controller and lets each detached task land, until something is true.

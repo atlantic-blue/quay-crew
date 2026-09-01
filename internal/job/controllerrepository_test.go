@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/krewe/internal/model"
 )
 
 // A job that names a repository ends in a pull request against it, and the system reads the address off
@@ -217,5 +218,56 @@ func TestAnUnmetClaimStopsAJobInARepositoryBeforeItIsAskedForAPullRequest(t *tes
 	}
 	if plane.sent() != 1 {
 		t.Fatalf("the system was asked to run %d tasks, want 1", plane.sent())
+	}
+}
+
+// The second ask is one whole task, so it is not spent on a session that cannot answer it. A job
+// running in a mode that asks a person before it runs a network command could never have pushed, so
+// asking it to push ends exactly where the first task ended.
+//
+// Such a job is refused at the declaration now, so what this covers is the row declared before that
+// rule existed: the loop reads the mode on the row rather than trusting that nothing got past.
+func TestAJobInAModeThatCannotPushIsNotAskedAgainForThePullRequest(t *testing.T) {
+	controller, kept, plane := aController(t)
+	declared := inARepository("make the listing sort by the clock it shows")
+	declared.Mode = model.PermissionAcceptEdits
+	one := kept.add(declared)
+	ctx := context.Background()
+
+	controller.Tick(ctx)
+	plane.lands("I made the change and the tests pass")
+	controller.Tick(ctx)
+
+	if plane.sent() != 1 {
+		t.Fatalf("the system was asked to run %d tasks, want 1: the ask cannot be answered in this mode",
+			plane.sent())
+	}
+	got := kept.get(one.ID)
+	if got.Phase != job.PhaseStopped {
+		t.Fatalf("the job is %q saying %q, want stopped", got.Phase, got.Reason)
+	}
+	// The mode is the reason, said as the reason. A job stopped for a push that was never going to
+	// happen must not read like one where somebody forgot to push.
+	for _, phrase := range []string{"atlantic-blue/quay-crew", "mode edits", "--mode dangerous"} {
+		if !strings.Contains(got.Reason, phrase) {
+			t.Errorf("the reason is %q, want it to say %q", got.Reason, phrase)
+		}
+	}
+}
+
+// And the job that can push is still asked, so the guard is about the mode and not about the ask.
+func TestAJobInTheModeThatCanPushIsStillAskedAgain(t *testing.T) {
+	controller, kept, plane := aController(t)
+	declared := inARepository("make the listing sort by the clock it shows")
+	declared.Mode = model.PermissionBypass
+	kept.add(declared)
+	ctx := context.Background()
+
+	controller.Tick(ctx)
+	plane.lands("I made the change and the tests pass")
+	controller.Tick(ctx)
+
+	if plane.sent() != 2 {
+		t.Fatalf("the system was asked to run %d tasks, want 2: the work and the ask", plane.sent())
 	}
 }

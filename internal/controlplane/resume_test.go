@@ -317,7 +317,7 @@ func aJobInARepositoryThatFailed(t *testing.T) heldOpen {
 	_, project := newProject(t, server)
 	declared, err := server.CreateJob(context.Background(), &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "sort the listing", Brief: "make the listing sort by the clock it shows",
-		Repository: "atlantic-blue/quay-crew",
+		Repository: "atlantic-blue/quay-crew", Mode: "dangerous",
 		// The settle gate is off, so these tests end where the rule they are about ends. A job that
 		// names a repository is otherwise held back until a reviewer and a tester have passed it, which
 		// is a behaviour of its own with its own tests.
