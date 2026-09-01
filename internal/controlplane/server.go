@@ -2212,14 +2212,22 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 	// transcript that exists and starts one under the same name when it does not.
 	// The live sandboxes are a map in this process, so a restart empties it while the row still says
 	// idle. State is on the host, so a fresh container over the same mounts is the same conversation.
-	if _, err := s.sandboxFor(ctx, session); err != nil {
+	box, err := s.sandboxFor(ctx, session)
+	if err != nil {
 		return nil, sandboxError(err, "start sandbox")
+	}
+	// The name the daemon holds rather than the name this build would write. A sandbox that started
+	// before the rename answers to the retired one, and an attach that named the new one would open a
+	// terminal against a container that is not there while the conversation ran on in the one that is.
+	container := sandbox.ContainerName(session.GetId())
+	if named, says := box.(sandbox.Named); says {
+		container = named.Name()
 	}
 	// Inside tmux, so detaching leaves the model running. -A attaches to the session already there
 	// rather than starting a second beside it, and the permission mode is the session's own, or a
 	// session armed to skip permissions asks anyway the moment it is opened.
 	return &quaycrewv1.AttachSessionResponse{
-		Sandbox: sandbox.ContainerName(session.GetId()),
+		Sandbox: container,
 		Argv: []string{"tmux", "new-session", "-A", "-s", sandbox.AttachedSessionName,
 			sandbox.OpenConversation, session.GetModelSessionId(), permissionModeOf(session, s.birthMode)},
 	}, nil

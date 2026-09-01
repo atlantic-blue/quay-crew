@@ -596,7 +596,7 @@ func TestShellActionExecsIntoTheSessionContainer(t *testing.T) {
 	}
 	// The prompt names the session, so a shell says which sandbox it is in rather than looking like
 	// every other one. See TestShellingInOpensTheSandboxUnderTheCursorAndSaysWhichOneItIs.
-	want := []string{"docker", "exec", "-it", "-e", "PS1=s1 $ ", "quaycrew-s1", "sh"}
+	want := []string{"docker", "exec", "-it", "-e", "PS1=s1 $ ", "krewe-s1", "sh"}
 	if strings.Join(command.Args, " ") != strings.Join(want, " ") {
 		t.Fatalf("command = %v, want %v", command.Args, want)
 	}
@@ -2895,7 +2895,7 @@ func TestShellingInOpensTheSandboxUnderTheCursorAndSaysWhichOneItIs(t *testing.T
 	if firstArgs == secondArgs {
 		t.Fatalf("both sessions open the same shell:\n%s", firstArgs)
 	}
-	if !strings.Contains(firstArgs, "quaycrew-c9964dc287c1c7048c82ecd3") {
+	if !strings.Contains(firstArgs, "krewe-c9964dc287c1c7048c82ecd3") {
 		t.Fatalf("the shell does not open the selected session's container:\n%s", firstArgs)
 	}
 
