@@ -130,6 +130,9 @@ var removedCommands = map[string]string{
 		"once with krewe skill import skills/git, attach it with krewe skill attach <workspace> git, " +
 		"and ask the session to clone what it works on. To say which repository a project's work " +
 		"lands in: krewe project repository <owner>/<name>",
+	"header": "the header is gone. Which build this is and the way to help are on the console.s own\n" +
+		"footer row now, on the right of the line that says where you are standing. What the machine has\n" +
+		"left is a command\n\n  krewe room",
 	"panel": "`krewe` on its own opens the system, and p shows or hides the conversation beside it",
 	"work": "declared intent is called a job now, because that is what Kubernetes calls the same " +
 		"thing: run to completion, watched by a controller, with a disposable container underneath" +
@@ -225,8 +228,6 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runRoom(ctx, client, out)
 	// Internal: the panes krewe opens run these, and the model runtime in a sandbox runs the last of
 	// them. Not in the usage, because they are not commands anybody types.
-	case "header":
-		return runHeader(ctx, client, args[1:], out, addr)
 	case "statusline":
 		return runStatusLine(args[1:], os.Stdin, out)
 	case "console":

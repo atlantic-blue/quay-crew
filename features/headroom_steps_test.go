@@ -216,73 +216,62 @@ func initializeHeadroomSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the header carries the figure and the word$`, func(ctx context.Context) error {
+	sc.Step(`^the answer carries the figure and the word$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		line, state := console.RoomFrom(ctx, w.client)
 		if line == "" {
-			return fmt.Errorf("the header carries nothing about the machine")
+			return fmt.Errorf("the system says nothing about the machine")
 		}
 		if state == "" {
-			return fmt.Errorf("the header carries a figure and no word about it")
+			return fmt.Errorf("the system gives a figure and no word about it")
 		}
-		view, err := consoleHeader(w, line, state)
+		said, err := roomAnswer(w)
 		if err != nil {
 			return err
 		}
-		for _, want := range []string{"Memory", strings.Fields(line)[0]} {
-			if !strings.Contains(view, want) {
-				return fmt.Errorf("the header does not carry %q:\n%s", want, view)
+		for _, want := range []string{strings.Fields(line)[0], state} {
+			if !strings.Contains(said, want) {
+				return fmt.Errorf("the answer does not carry %q:\n%s", want, said)
 			}
 		}
 		return nil
 	})
 
-	sc.Step(`^the header says the machine is "([^"]*)"$`, func(ctx context.Context, state string) error {
+	sc.Step(`^the answer says the machine is "([^"]*)"$`, func(ctx context.Context, state string) error {
 		w := worldFrom(ctx)
-		line, got := console.RoomFrom(ctx, w.client)
+		_, got := console.RoomFrom(ctx, w.client)
 		if got != state {
-			return fmt.Errorf("the header says the machine is %q, want %q", got, state)
+			return fmt.Errorf("the system says the machine is %q, want %q", got, state)
 		}
-		view, err := consoleHeader(w, line, got)
+		said, err := roomAnswer(w)
 		if err != nil {
 			return err
 		}
-		// Full is drawn so it is readable without reading the number, which is why it is a word and
-		// why that word is not written the way the others are.
-		want := state
-		if state == headroom.StateFull {
-			want = strings.ToUpper(state)
-		}
-		if !strings.Contains(view, want) {
-			return fmt.Errorf("the header does not say %q:\n%s", want, view)
+		if !strings.Contains(said, state) {
+			return fmt.Errorf("the answer does not say %q:\n%s", state, said)
 		}
 		return nil
 	})
 
 	sc.Step(`^the system read the machine once$`, func(ctx context.Context) error {
 		if read := headroomFrom(ctx).machine.read; read != 1 {
-			return fmt.Errorf("the system read the machine %d times, and a header redraws every second", read)
+			return fmt.Errorf("the system read the machine %d times, and the answer is asked for repeatedly", read)
 		}
 		return nil
 	})
 }
 
-// consoleHeader draws the real header from what the system answered, so a scenario reads what the
-// operator reads rather than a description of it.
-func consoleHeader(w *world, line, state string) (string, error) {
-	registry, err := console.NewDefaultRegistry(w.client)
+// roomAnswer is what `krewe room` says about the machine, which is where the figure and the word are
+// read now that the console carries neither. A scenario reads what the operator reads rather than a
+// description of it.
+func roomAnswer(w *world) (string, error) {
+	answer, err := w.client.GetHeadroom(context.Background(), &quaycrewv1.GetHeadroomRequest{})
 	if err != nil {
 		return "", err
 	}
-	info := console.Info{
-		Version: "test", Address: "bufconn", Workspace: w.workspaceName, Project: w.projectName,
-		Room: line, RoomState: state,
-	}
-	lines, err := console.HeaderOnly(registry, console.Default, info, 170, 24)
-	if err != nil {
-		return "", err
-	}
-	return strings.Join(lines, "\n"), nil
+	return strings.Join([]string{
+		answer.GetUsed(), "of", answer.GetLimit(), answer.GetState(),
+	}, " "), nil
 }
 
 // holdSandbox gives the machine a container for a real session of this system, working or idle, so the

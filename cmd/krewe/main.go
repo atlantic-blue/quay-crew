@@ -147,5 +147,5 @@ func openConsoleAlone(ctx context.Context, client quaycrewv1.ControlPlaneService
 		Address:   addr,
 		Workspace: current.Workspace,
 		Project:   current.Project,
-	}, conversationBeside(ctx, client), endConversationBeside(ctx, client))
+	}, conversationBeside(ctx, client), endConversationBeside(ctx, client), remembering())
 }

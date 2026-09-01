@@ -19,12 +19,6 @@ const WindowName = "panel"
 
 // Layout is what the panel is made of: the command in each region, and what to call the whole thing.
 type Layout struct {
-	// Header spans the full width above the other two. It is a pane of its own because a tmux pane is
-	// a rectangle, so a header reaching across both halves cannot belong to either of them.
-	Header []string
-	// HeaderRows is how tall that pane is: exactly the header's lines. A share of the window instead
-	// would leave a gap under it on a tall terminal and cut its last lines off on a short one.
-	HeaderRows int
 	// Left is the console.
 	Left []string
 	// Right is the conversation driving it.
@@ -80,33 +74,16 @@ func (l Layout) Commands(term Terminal) ([][]string, error) {
 	}
 	built = append(built, [][]string{
 		// Detached, so the layout is finished before anybody looks at it. Attaching first would show
-		// one pane growing into three.
-		//
-		// The header is made first and the rest split off underneath it: the full width cut has to
-		// happen before the side by side one, or there is no full width row left for a header.
-		append(l.newSession(session), l.Header...),
-		append([]string{"tmux", "split-window", "-v", "-t", target + ".0"}, l.Left...),
-		append([]string{"tmux", "split-window", "-h", "-l", "50%", "-t", target + ".1"}, l.Right...),
-		{"tmux", "resize-pane", "-t", target + ".0", "-y", strconv.Itoa(l.HeaderRows)},
-		// tmux scales every pane when a client of a different size attaches or the window resizes, so
-		// the header is put back to its rows rather than growing with the terminal.
-		{"tmux", "set-hook", "-t", session, "client-resized",
-			"resize-pane -t " + target + ".0 -y " + strconv.Itoa(l.HeaderRows)},
-		{"tmux", "set-hook", "-t", session, "client-attached",
-			"resize-pane -t " + target + ".0 -y " + strconv.Itoa(l.HeaderRows)},
-		// The header has nothing to type into, so the pane keys bounce off it and become a toggle
-		// between the two halves. Scoped to this window, so other tmux sessions are unchanged, and it
-		// does not recurse: the bounce selects pane 1 and the condition is false the second time.
-		{"tmux", "set-hook", "-w", "-t", target, "after-select-pane",
-			"if -F '#{==:#{pane_index},0}' 'select-pane -t " + target + ".1'"},
+		// one pane growing into two.
+		append(l.newSession(session), l.Left...),
+		append([]string{"tmux", "split-window", "-h", "-l", "50%", "-t", target + ".0"}, l.Right...),
 		// Which pane has the keyboard, said in the colour the console already uses for the row the
-		// cursor is on. Three panes and a one row header make an unlit border hard to read, and the
-		// operator should never have to type something to find out where they are.
+		// cursor is on, so the operator never has to type something to find out where they are.
 		{"tmux", "set-option", "-w", "-t", target, "pane-active-border-style", "fg=colour6,bold"},
 		{"tmux", "set-option", "-w", "-t", target, "pane-border-style", "fg=colour240"},
-		// The console has the keyboard when the panel opens, because that is what the operator came
-		// to use. The conversation is one pane away, and the header is not typed into at all.
-		{"tmux", "select-pane", "-t", target + ".1"},
+		// The console has the keyboard when the panel opens, because that is what the operator came to
+		// use. The conversation is one pane away.
+		{"tmux", "select-pane", "-t", target + ".0"},
 		// What built it, so opening it again after an upgrade can tell that these panes are running
 		// the old binary.
 		{"tmux", "set-option", "-t", session, VersionOption, l.Version},
@@ -157,12 +134,6 @@ func (l Layout) HasSession() []string {
 }
 
 func (l Layout) check() error {
-	if len(l.Header) == 0 {
-		return fmt.Errorf("panel: nothing to put in the header")
-	}
-	if l.HeaderRows < 1 {
-		return fmt.Errorf("panel: a header of %d rows would not be visible", l.HeaderRows)
-	}
 	if len(l.Left) == 0 {
 		return fmt.Errorf("panel: nothing to put in the left half")
 	}

@@ -28,8 +28,8 @@ var errNothingBeside = errors.New("nothing to put beside the console yet")
 //
 // Named a session opens that one. Named nothing it opens the newest conversation where you are
 // standing, which is the one you were last talking to.
-// runPanel is what `krewe` does: it opens the system. The header across the top, the console under it on
-// the left, and a conversation on the right.
+// runPanel is what `krewe` does: it opens the system. The console on the left, and a conversation on
+// the right, each the full height of the window.
 //
 // There is no separate command for it: a second command to open the thing the first command is for
 // reads as a second product.
@@ -46,19 +46,12 @@ func runPanel(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 		self = "krewe"
 	}
 	width, height := terminalSize()
-	rows, err := headerRows(ctx, client, addr, width, height)
-	if err != nil {
-		return err
-	}
 	layout := panel.Layout{
-		Version:    version,
-		Header:     []string{self, "header"},
-		HeaderRows: rows,
-		Width:      width,
-		Height:     height,
-		// The header is drawn in the pane above, across both halves, so this one draws none.
-		Left:  []string{self, "console"},
-		Right: []string{self, "attach", sessionID},
+		Version: version,
+		Width:   width,
+		Height:  height,
+		Left:    []string{self, "console"},
+		Right:   []string{self, "attach", sessionID},
 	}
 
 	fmt.Fprintf(out, "opening on %s\n", display.ShortID(sessionID))
@@ -177,22 +170,8 @@ func conversationBeside(ctx context.Context, client quaycrewv1.ControlPlaneServi
 	}
 }
 
-// headerRows is how tall the header pane has to be, measured from the header itself rather than
-// guessed. A guess one line short cuts the last line off, and one line long leaves a gap.
-func headerRows(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, addr string, width, height int) (int, error) {
-	registry, err := console.NewDefaultRegistry(client)
-	if err != nil {
-		return 0, err
-	}
-	rows := console.HeaderHeight(registry, console.Default, headerInfo(ctx, client, addr), width, height)
-	if rows < 1 {
-		return 0, fmt.Errorf("the header would have no rows to draw in")
-	}
-	return rows, nil
-}
-
-// runBareConsole is the panel's lower left: the console with no header of its own, saying which view
-// it moves to so the header in the pane above names that view's keys.
+// runBareConsole is the panel.s left half. It is the same console `krewe console` opens on its own:
+// the header pane that used to make the two different is gone, and its data is on the footer row.
 func runBareConsole(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, addr string) error {
 	if len(args) != 0 {
 		return fmt.Errorf("usage: krewe console, and krewe runs it for you")
@@ -201,12 +180,12 @@ func runBareConsole(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 	if err != nil {
 		current = workspace.Path{}
 	}
-	return console.RunBare(ctx, client, console.Info{
+	return console.Run(ctx, client, console.Info{
 		Version:   version,
 		Address:   addr,
 		Workspace: current.Workspace,
 		Project:   current.Project,
-	}, conversationBeside(ctx, client), endConversationBeside(ctx, client), publishView)
+	}, conversationBeside(ctx, client), endConversationBeside(ctx, client), remembering())
 }
 
 // builtBy is the build that made the panel that is already open, and empty when it did not say, which

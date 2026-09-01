@@ -56,6 +56,10 @@ type Row struct {
 	// Detail is the whole of what a row is about, when the cells can only hold a summary of it. A
 	// level's context is the case: the listing shows its first line and an editor needs all of it.
 	Detail string
+	// Address is what a person would type for this row, when that is not what they read. A workspace
+	// and a project are addressed by the name in the listing, and a job by the shortened identifier
+	// beside its title, so a job is the one row where the two differ. Empty falls back to the name.
+	Address string
 }
 
 // Name is what to call the row where a human reads it.
@@ -64,6 +68,14 @@ func (r Row) Name() string {
 		return r.Label
 	}
 	return r.ID
+}
+
+// Typed is what a person would type to reach this row, which is what the position line is built from.
+func (r Row) Typed() string {
+	if r.Address != "" {
+		return r.Address
+	}
+	return r.Name()
 }
 
 // Lister returns the current rows for a resource. Parent is empty for an unscoped view, or the

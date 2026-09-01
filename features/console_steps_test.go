@@ -42,7 +42,39 @@ func consoleFrom(ctx context.Context) *consoleWorld {
 	return c
 }
 
-// open builds the console's registry against the live control plane and lists one resource.
+// lastLine is the bottom row of a rendered console, which is where the footer is. Asserting on the
+// whole view would pass on a version string that turned up in a listing.
+func lastLine(view string) string {
+	lines := strings.Split(strings.TrimRight(view, "\n"), "\n")
+	return lines[len(lines)-1]
+}
+
+// leftOf is the half of the footer that says where the operator is: everything before the build, with
+// any mark left by a cut taken off, so a row that was truncated still compares against the whole one.
+func leftOf(row string) string {
+	if cut := strings.Index(row, "Version:"); cut >= 0 {
+		row = row[:cut]
+	}
+	return strings.TrimRight(strings.TrimSuffix(strings.TrimRight(row, " "), "…"), " ")
+}
+
+// plain drops the escape sequences, so an assertion about what a row says is not defeated by how it
+// is coloured.
+func plain(line string) string {
+	var out strings.Builder
+	for at := 0; at < len(line); at++ {
+		if line[at] == 0x1b {
+			for at < len(line) && line[at] != 'm' {
+				at++
+			}
+			continue
+		}
+		out.WriteByte(line[at])
+	}
+	return out.String()
+}
+
+// open builds the console.s registry against the live control plane and lists one resource.
 func (c *consoleWorld) open(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, name string) error {
 	registry, err := console.NewDefaultRegistry(client)
 	if err != nil {
@@ -140,25 +172,6 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return c.press(tea.WindowSizeMsg{Width: columns, Height: 41})
 	})
 
-	sc.Step(`^the wordmark (is on screen|is not drawn)$`, func(ctx context.Context, expected string) error {
-		view := consoleFrom(ctx).model.View()
-		var found int
-		for _, row := range theWordmark {
-			if strings.Contains(view, row) {
-				found++
-			}
-		}
-		drawn := found == len(theWordmark)
-		if drawn && expected == "is not drawn" {
-			return fmt.Errorf("the wordmark is drawn where there is no room for it:\n%s", view)
-		}
-		if !drawn && expected == "is on screen" {
-			return fmt.Errorf("the wordmark is gone, and %d of its %d rows are on screen:\n%s",
-				found, len(theWordmark), view)
-		}
-		return nil
-	})
-
 	// On the sessions listing, because the claim is that the panel carries this view's own keys, and
 	// the workspaces view the console opens on binds none.
 	sc.Step(`^the operator looks at the console and asks for help$`, func(ctx context.Context) error {
@@ -174,40 +187,104 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
 	})
 
-	sc.Step(`^the header shows the wordmark$`, func(ctx context.Context) error {
+	sc.Step(`^the operator drills into a workspace$`, func(ctx context.Context) error {
+		c := consoleFrom(ctx)
+		if err := c.openModel(worldFrom(ctx)); err != nil {
+			return err
+		}
+		if err := c.press(tea.WindowSizeMsg{Width: 170, Height: 41}); err != nil {
+			return err
+		}
+		// The console opens on the workspaces, so one enter is one level down.
+		return c.press(tea.KeyMsg{Type: tea.KeyEnter})
+	})
+
+	// The footer is the last line of the screen, so it is read as the last line rather than searched
+	// for anywhere in the view. A version string that turned up in a row would satisfy a Contains over
+	// the whole thing and say nothing about the footer.
+	sc.Step(`^the footer (says where the operator is standing|says how to go back|says which build this is|says how to reach everything else|names the product)$`,
+		func(ctx context.Context, claim string) error {
+			c := consoleFrom(ctx)
+			row := lastLine(c.model.View())
+			want := map[string]string{
+				"says where the operator is standing": c.model.Position(),
+				"says how to go back":                 "esc to go back",
+				"says which build this is":            "Version:",
+				"says how to reach everything else":   "Help",
+				"names the product":                   "Krewe",
+			}[claim]
+			if want == "" {
+				return fmt.Errorf("the console says nothing for %q", claim)
+			}
+			if !strings.Contains(row, want) {
+				return fmt.Errorf("the footer does not carry %q:\n%s", want, row)
+			}
+			return nil
+		})
+
+	// The left of the row is drawn first and whole, so a narrow window cuts it from the end like any
+	// other line. What must never happen is the right half taking the front of the row: the assertion
+	// is that the narrow row still begins the way the wide one does.
+	sc.Step(`^the footer still says where the operator is standing$`, func(ctx context.Context) error {
+		c := consoleFrom(ctx)
+		wide, _ := c.model.Update(tea.WindowSizeMsg{Width: 200, Height: 41})
+		full := leftOf(plain(lastLine(wide.View())))
+		narrow := leftOf(plain(lastLine(c.model.View())))
+		if narrow == "" {
+			return fmt.Errorf("the footer says nothing about where the operator is")
+		}
+		if !strings.HasPrefix(full, narrow) {
+			return fmt.Errorf("the footer begins %q, and at full width it begins %q", narrow, full)
+		}
+		return nil
+	})
+
+	sc.Step(`^the footer carries (the build, help and the product|the build|nothing on the right)$`,
+		func(ctx context.Context, expected string) error {
+			row := lastLine(consoleFrom(ctx).model.View())
+			has := func(text string) bool { return strings.Contains(row, text) }
+			switch expected {
+			case "the build, help and the product":
+				if !has("Version:") || !has("Help") || !has("Krewe") {
+					return fmt.Errorf("the footer dropped something it had room for:\n%s", row)
+				}
+			case "the build":
+				if !has("Version:") {
+					return fmt.Errorf("the footer dropped the build before the rest:\n%s", row)
+				}
+				if has("Krewe") || has("Help") {
+					return fmt.Errorf("the footer kept more than the build:\n%s", row)
+				}
+			case "nothing on the right":
+				for _, gone := range []string{"Version:", "Help", "Krewe"} {
+					if has(gone) {
+						return fmt.Errorf("the footer still carries %q at this width:\n%s", gone, row)
+					}
+				}
+			}
+			return nil
+		})
+
+	sc.Step(`^no wordmark is drawn anywhere on the screen$`, func(ctx context.Context) error {
 		view := consoleFrom(ctx).model.View()
-		// Every row of the block letters, so this passes only on the whole mark and never on the name
-		// written out in text. Written here rather than read out of the console package: a step that
-		// read the variable it is checking would pass whatever that variable was changed to, including
-		// an empty one.
 		for _, row := range theWordmark {
-			if !strings.Contains(view, row) {
-				return fmt.Errorf("the wordmark is not on the screen:\n%s", view)
+			if strings.Contains(view, row) {
+				return fmt.Errorf("a row of the wordmark is still drawn:\n%s", view)
 			}
 		}
 		return nil
 	})
 
-	sc.Step(`^the header says which build this is$`, func(ctx context.Context) error {
-		if !strings.Contains(consoleFrom(ctx).model.View(), "Version") {
-			return fmt.Errorf("the header does not say which build this is")
+	// The whole point of taking the header out: three rows across the top became one row underneath.
+	sc.Step(`^the console draws one row under the list$`, func(ctx context.Context) error {
+		lines := strings.Split(consoleFrom(ctx).model.View(), "\n")
+		if len(lines) < 3 {
+			return fmt.Errorf("the console drew %d lines", len(lines))
 		}
-		return nil
-	})
-
-	sc.Step(`^the header says how to reach everything else$`, func(ctx context.Context) error {
-		if !strings.Contains(consoleFrom(ctx).model.View(), "Help") {
-			return fmt.Errorf("the header does not say how to reach everything else")
-		}
-		return nil
-	})
-
-	sc.Step(`^the header does not carry what the help panel carries$`, func(ctx context.Context) error {
-		view := consoleFrom(ctx).model.View()
-		for _, moved := range []string{"Sandbox engine", "Store engine"} {
-			if strings.Contains(view, moved) {
-				return fmt.Errorf("the header still carries %q:\n%s", moved, view)
-			}
+		// The panel's bottom edge, then the hairline, then the footer. Anything under the footer is a
+		// second row the list is paying for.
+		if !strings.Contains(lines[len(lines)-1], "Version:") {
+			return fmt.Errorf("the last line is not the footer:\n%s", lines[len(lines)-1])
 		}
 		return nil
 	})

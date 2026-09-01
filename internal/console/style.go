@@ -42,15 +42,11 @@ var (
 	headerBar = lipgloss.NewStyle().Foreground(ansiBlack).Background(ansiGreen)
 	// selectedRow is the cursor line: black on cyan, full width.
 	selectedRow = lipgloss.NewStyle().Foreground(ansiBlack).Background(ansiCyan)
-	// statusKey labels a value in the status block: "Address:", "Model:".
-	statusKey = lipgloss.NewStyle().Foreground(ansiCyan)
 	// hotKey is a key in the hints, wrapped in angle brackets so it reads as a key rather than a
 	// word: <a>, <ctrl-d>.
 	hotKey = lipgloss.NewStyle().Foreground(ansiCyan).Bold(true)
 	// hotKeyLabel is what that key does.
 	hotKeyLabel = lipgloss.NewStyle().Faint(true)
-	// mark is the wordmark in the top right.
-	mark = lipgloss.NewStyle().Foreground(ansiGreen)
 	// chip is the view you are in, at the bottom left, black on green the way the column header is.
 	chip = lipgloss.NewStyle().Foreground(ansiBlack).Background(ansiGreen)
 	// crumb is the breadcrumb line above the table.
@@ -65,6 +61,10 @@ var (
 	ready = lipgloss.NewStyle().Foreground(ansiGreen)
 	// frame is the panel's border, dim so it separates without competing with the rows inside it.
 	frame = lipgloss.NewStyle().Faint(true)
+	// tool is the right of the footer: the build, the way to help, and the product. The terminal.s own
+	// green rather than a shade of it, so it reads on a light background and a dark one, and it is the
+	// only colour on the row.
+	tool = lipgloss.NewStyle().Foreground(ansiGreen)
 	// prompt is the command bar and the filter bar.
 	prompt = lipgloss.NewStyle().Foreground(ansiCyan).Bold(true)
 )
