@@ -1,8 +1,8 @@
-# Orchestration in quay
+# Orchestration in Quay Krewe
 
 ## 1. Purpose
 
-Today a person outside quay decides what to dispatch, watches it, reads the answer and decides the
+Today a person outside the system decides what to dispatch, watches it, reads the answer and decides the
 next thing. The intent lives in that conversation. When the process dies, the intent dies with it.
 That happened twice on 27 August 2026.
 
@@ -31,7 +31,7 @@ version. This document keeps every one of those and adds one record beneath them
 Where this document disagrees with either, it says so by name. There is one such place, in section
 8b, and it concerns where a dispatch node's blocking happens.
 
-## 2. What quay has today, and what it does not
+## 2. What krewe has today, and what it does not
 
 Named by file and by command, because a design that describes a built thing as missing wastes the
 reader's time.
@@ -54,7 +54,7 @@ written, because it is what was true when the design was made. Section 5's "what
 carries the correction.
 
 Captured from inside an ordinary session on 27 August 2026, in the sandbox this document was written
-in. `which quay` answers `/usr/local/bin/quay`, so the tool is in the image. `quay sessions` then
+in. `which quay` answers `/usr/local/bin/quay`, so the tool is in the image. `krewe sessions` then
 answers:
 
 ```
@@ -68,7 +68,7 @@ That last sentence is the trap. A sandbox is born with its environment. A capabi
 birth does not reach the container that is already running.
 
 That capture is what the tool said that day and it says something else now: a task is told where the
-system is when it runs a job, and `quay sessions` is not a job verb, so a session running
+system is when it runs a job, and `krewe sessions` is not a job verb, so a session running
 one is refused it by name. The trap in the last sentence is unchanged and is the reason the network
 is joined at birth.
 
@@ -78,7 +78,7 @@ The store already holds the whole reply. `internal/store/migrations/0007_turns.u
 `reply text`, which Postgres does not bound. `ListTasks` on the control plane returns it whole, and
 `proto/quaycrew/v1/controlplane.proto:820` puts no limit on the field.
 
-One function truncates it. `oneLine` in `cmd/quay/tasks.go` cuts at 120 characters and appends three
+One function truncates it. `oneLine` in `cmd/krewe/task.go` cuts at 120 characters and appends three
 dots, so a listing stays readable. There is no command that prints one reply whole. That is the
 entire defect, and section 15 fixes it first.
 
@@ -86,7 +86,7 @@ entire defect, and section 15 fixes it first.
 
 `quay-crew#376` described exactly this symptom. Its fix merged as `e53befc` on 27 August 2026, hours
 before this document. A task is now written to the `tasks` table when it starts, on every path, and
-`cmd/quay/tasks.go` prints `still running` for a task whose row is still open. A system that shows the
+`cmd/krewe/task.go` prints `still running` for a task whose row is still open. A system that shows the
 old behaviour is running a build older than `e53befc`.
 
 This matters more than it reads. A controller that dies mid task can only recover because the task
@@ -102,7 +102,7 @@ row exists before the answer does. Section 4 depends on it.
   reads them back.
 - **The flow engine runs graphs.** `internal/flow`, over migration 0014. A pure reducer in
   `advance.go`, an engine in `engine.go`, a poller in `poller.go`. All five node types job.
-  `quay flow import|start|list|show|stop|answer|schedule|unschedule`.
+  `krewe flow import|start|list|show|stop|answer|schedule|unschedule`.
 - **Dispatch is idempotent per step.** The `flow_dispatches` table keys on run, node and attempt in
   the same transaction as the movement, so one task can never be paid for twice.
 - **A run cannot spend without bound.** `flow.DefaultTransitions` is 100 movements. A graph may
@@ -111,7 +111,7 @@ row exists before the answer does. Section 4 depends on it.
 - **A run can wait, and a restart does not lose it.** The due time is a column the poller reads.
 - **A run can ask, and only a person answers.** The poller passes over asking runs by status.
 - **A role is imported, pinned and attached.** `internal/role/role.go`, migration 0024,
-  `quay role import|list|attach|detach`. A role declares `name`, `version`, `summary`, `model` and
+  `krewe role import|list|attach|detach`. A role declares `name`, `version`, `summary`, `model` and
   `receives`. `receives` is one of `job`, `context` or `skills`.
 - **A caller is recognised by a token.** `internal/auth`. One system token, one driver token, and a
   deny policy over the driver's.
@@ -236,7 +236,7 @@ refused there is `stopped` with the reason on the row, and no container is ever 
 
 ```mermaid
 stateDiagram-v2
-    [*] --> pending: "quay job create --requires context"
+    [*] --> pending: "krewe job create --requires context"
     pending --> stopped: "the role does not receive context,<br/>at the write or at the dispatch"
     pending --> running: "the role receives it, or the job names no role"
     running --> done
@@ -299,7 +299,7 @@ by hand, and a job that was not given one produced work nobody could read.
 Naming one says how the job ends. The system adds a line to what the session is asked, saying to push
 the branch, open the pull request, name its address in the answer, and not to merge it. The job is
 not done until an answer names a pull request against that repository, and the address the system read
-lands on the row as `pull_request`, which is what `quay job show` prints beside the answer.
+lands on the row as `pull_request`, which is what `krewe job show` prints beside the answer.
 
 **A session that answered without one is asked again, once.** It is the only expectation the system
 asks again about rather than stopping on, and the difference is what is missing. An answer that does
@@ -310,6 +310,15 @@ job, with a reason saying it was asked twice.
 
 **No role gains anything by this.** The merge is the gate, because a push applies nothing and a merge
 runs the pipeline, so nothing here lets a session merge and the line the system adds says so.
+
+**And naming one says the job cannot settle on its own answer.** Before it settles, a reviewer reads
+the change and a tester runs the repository's own gates, in sessions that did not do the work. The
+whole of it is section 3.1 below.
+
+**`ungated`, boolean, optional, default false.** Declares this job with that gate off, so it settles
+on its own answer. Stated in the negative, so a caller that says nothing is gated: a boundary has to
+default on, and a column that defaults false is a job that is gated. The row keeps it, so a settled
+job always says which of the two it was.
 
 **A brief that asks the job to wait is refused.** A job runs once and answers. Nothing wakes it, so
 "push, watch the checks and merge on green" asks for something the runtime does not have, and the
@@ -388,6 +397,94 @@ builds the first thing a person can open, and a run of it stops there once and a
 thing does what the sentence says. Where a caller declares its jobs directly rather than through a
 graph, the sentence still reaches every session and nothing reads it back.
 
+### The plan, and the person who approves it
+
+The sentence reaches every session and nothing ever holds the brief against it. That is the gap this
+closes, and it sits before every other gate the system has: a job that states the sentence writes its
+plan, and a person approves the plan before any work starts.
+
+The failure is the one section 14b already describes, one step earlier. A person says one sentence.
+Something turns that sentence into a brief. The system executes the brief faithfully and fast, and
+nothing compares the two, because reading the brief costs nearly as much as reading the result: one
+of them ran to 1,109 words for a 1,505 word result. So a misreading of one sentence becomes two days
+of correct work in the wrong direction, and it looks like progress the whole way. 14b stops the run
+at the first thing a person can open, which costs one step. This stops it before the first step,
+which costs one task.
+
+**The sentence is the trigger, and it adds no field.** A job that states the sentence and hangs under
+nothing is planned. A job that states none is an errand, which section 3 above already says needs no
+sentence: there is nothing to write a plan from and nothing to hold the plan against, which is the
+argument 14b makes for refusing a usable node with no sentence. Right against what. A job declared
+under another is never planned either: it is one part of a plan a person already approved, and
+stopping at every job in a tree puts a person back in the loop for all of them, which is the cost the
+system exists to remove.
+
+**`plan`, text, written by the controller.** The steps the session wrote, one per line, in the shape
+`Step 1: read the design`. At most `job.PlanSteps`, which is seven, each held to the title's ceiling.
+So a whole plan is at most about 1,400 bytes against a brief of 16,384, which is the whole point:
+reading the plan has to cost less than reading the result, and a plan as long as the work buys
+nothing. The number seven is chosen rather than measured. What replaces it is the distribution of
+steps a job actually records, which `krewe job step` already writes down: after fifty jobs, the
+ninety fifth percentile of steps recorded per job.
+
+**`plan_approved`, boolean, written by the control plane.** Whether a person said yes. The two are
+separate columns rather than one state word, because a plan on a row nobody has approved is the plan
+a person is being asked about, and the same plan with the flag set is the thing the work is held to.
+
+**The first task asks for the plan and for no work.** It carries the sentence above the brief, the way
+every task for a planned job does, because a plan written from the brief alone carries whatever
+misreading the brief carries. The reply is read for the plan rather than believed, the way a pull
+request address and a base line are read. A reply carrying no plan the system can read is asked once
+more and stops the job the second time, which is the two strike shape the pull request ask already
+has: a job whose plan nobody could read is a job nobody approved.
+
+**Then the job asks, through the mechanism that already exists.** The plan and the question land in
+one movement, so a reader never finds a job asking with no plan on it. Nothing new puts a question to
+a person: the phase is `asking`, the answer is `krewe job answer`, and nothing but an answer moves it.
+
+**`yes` approves and anything else replaces the plan.** This is 14b's rule, one gate earlier. An
+answer that is not the approval is the correction: the job goes back to pending carrying it, and the
+session is given the plan it wrote and what the person said, and writes the plan again from that. So
+an answer of no costs one task and never ends the job, and the person who said no writes no plan.
+Writing the replacement is the system's job, because a person writing the plan by hand is the person
+doing the compression the system exists to do.
+
+**The work is then held to the plan, or the approval is worth nothing.** The approved plan travels
+with the work, and it replaces the ordinary line about recording steps rather than sitting beside it:
+the session records each step it finishes with its number, `krewe job step "2: read the design"`. When
+the job lands, the numbers the record carries are held against the numbers the plan carries, and a
+step of the plan that nothing accounts for stops the job with a reason naming it. What the session
+answered stays on the row, because work that walked off the plan is unapproved rather than lost.
+
+The measurement is arithmetic over a set of numbers. It costs no model call and anybody holding the
+record can work it out again, which is the property the loop detector's own measure was chosen for. A
+model judging whether a plan was followed, or a similarity score over prose, would both be guesses.
+Work the session recorded that the plan never named is not a fault: the plan is a floor rather than a
+ceiling.
+
+```mermaid
+flowchart TD
+    SAID["a person declares a job stating the sentence"] --> PLAN["first task: write the plan,<br/>do no work"]
+    PLAN --> READ{"can the system read<br/>a plan out of the reply?"}
+    READ -->|"no, first time"| PLAN
+    READ -->|"no, a second time"| NOPLAN(["stopped: nobody could approve<br/>a plan nobody could read"])
+    READ -->|"yes"| ASK{"asking: here is the sentence,<br/>here is the plan"}
+    ASK -->|"anything but yes"| AGAIN["the answer is the correction,<br/>and the session writes the plan again"]
+    AGAIN --> ASK
+    ASK -->|"yes"| WORK["the work, carrying the approved plan"]
+    WORK --> HELD{"does the record account for<br/>every step of the plan?"}
+    HELD -->|"yes"| DONE(["done"])
+    HELD -->|"no"| DRIFT(["stopped, naming the steps<br/>nothing accounted for"])
+```
+
+**What it does not do.** It reads no brief and judges no wording: nothing here compares the brief with
+the sentence, because that comparison needs a judgement no rule can make. What it does is put a short
+thing a person can read in front of them while stopping is still cheap. It reaches one job rather than
+a tree: a child is not planned and is not held to its parent's plan, so a tree still spends whatever
+the approved plan set it going on. And a plan a person approves without reading is a plan that
+approves itself, which no system can prevent and the ceiling is the only defence against.
+
+
 **`claim`, text, optional, default empty.** The piece of work this job is doing: an issue, a branch,
 or a name two people would both use for the same thing. Empty claims nothing. It is held to the
 title's ceiling, and it is stored lowercased with any run of space inside it taken down to one,
@@ -402,8 +499,8 @@ in the other's way in the filesystem, because `quay-crew#255` already gives each
 working copy. They were in each other's way over the work itself.
 
 It is not a lock on a file. It is a record of intent, which is what was missing: both sessions would
-have read it before starting. So the claim is on the row, `quay job list` carries a column of what is
-claimed, and `quay job show` says it.
+have read it before starting. So the claim is on the row, `krewe job list` carries a column of what is
+claimed, and `krewe job show` says it.
 
 **A claim ends three ways, and the third is the one to test.** The job settles, into any of the three
 terminal phases and not only `done`. Somebody stops it. Or nothing moves the job for longer than a
@@ -437,7 +534,7 @@ reaches a terminal phase, whatever that phase is. Where a caller wants to stop o
 declares the dependent job only after it reads the answer.
 
 **`deadline`, timestamptz, optional, default null.** After this moment the controller stops the job
-rather than starting it. A job already running is not killed, for the reason `quay flow stop` gives:
+rather than starting it. A job already running is not killed, for the reason `krewe flow stop` gives:
 the model is already working and abandoning it mid sentence gains nothing.
 
 **`budget_tokens`, bigint, optional, default 0.** What this job and everything under it may spend.
@@ -552,8 +649,70 @@ a narrow mode costs a job is the pull request, never the branch.
 
 `features/publishing.feature` is the shape of both halves.
 
+### How a job ends: the outcome, which is one word from a fixed set
+
+**This is the one place the set is written down.** The tool, the flow schema and the console all read
+the same four words out of `internal/job/outcome.go`, so nothing can offer a fifth.
+
+Jobs on the acceptance run of 30 August 2026 reported "done", "complete", "the pull request is open"
+and "I could not finish because the credential expired". All four settled the same way, because the
+system read the prose to decide the job was over. A job that could not do its work and a job that did
+it read identically to anything downstream, so the operator opened each one to tell them apart and
+nothing could be counted. Two readings of one sentence give two outcomes. See
+[#537](https://github.com/atlantic-blue/quay-crew/issues/537).
+
+So a session ends its task with one word on a line of its own, and the prose sits under it as the
+explanation rather than as the signal.
+
+**`outcome`, text, written by the controller.** One of four words, and empty on a job nothing has
+settled.
+
+- `proved`, the work is done and something the session ran proves it.
+- `unproved`, the work is done and nothing proves it. Its own word rather than a missing one: work
+  nobody checked and work that was checked must never read the same.
+- `blocked`, the work cannot be done, and the reason is under the line.
+- `decide`, a person has to decide before this goes any further.
+
+**The word is read off the answer, never reported.** The same mechanism the pull request address and
+the base line already use, for the same reason: the model reporting on its own job is what this exists
+to stop. The line carries the marker `Outcome:` and one of the four words and nothing else, so
+`Outcome: proved, once the deploy is checked` states no outcome and neither does "the tests proved
+it". Both are prose, and prose is what was being read before.
+
+**A session that states none has not finished the job.** It stops, with a reason saying what line was
+missing, and what the session said stays on the row. It is not asked again, which is the difference
+between this and a pull request: an address is work that was done and not published, so asking buys
+the work back, and an outcome is one line the session was told to write in the task it has just
+answered.
+
+**The outcome is not the phase, and neither replaces the other.** The phase is the system's account of
+the attempt: whether a session existed, whether a task landed, whether anybody halted it. The outcome
+is the work's own account. Both are on the row because a job that is `done` and `blocked` is a real
+job, and it is exactly the row a listing of phases cannot find.
+
+```mermaid
+flowchart LR
+    A["a session answers"] --> B{"does the answer state<br/>one of the four words?"}
+    B -->|"yes"| C["done, carrying the word"]
+    B -->|"no"| D["stopped, saying which line was missing"]
+    C --> E["a flow branches on it,<br/>a listing filters by it,<br/>a count is made of it"]
+```
+
+**What reads it.** `krewe job list --outcome blocked` narrows a listing, and a word that is not one of
+the four is refused with the four offered back. A flow's choice node branches on `result.outcome`,
+which arrives beside `result.reply` rather than inside it: the line comes out of the reply a graph
+reads, so a node comparing a reply is comparing what the session wrote. A choice waiting for a word
+the system does not hand out is refused at import. The console carries an `outcome` column beside the
+phase.
+
+**What this does not do.** Nothing independent has to agree with the word. A session that states
+`proved` is still the only witness, which is
+[#536](https://github.com/atlantic-blue/quay-crew/issues/536) and not this. Nothing moves the phase on
+the strength of the outcome either: a job that ends `blocked` is `done` with `blocked` on it, so a
+resume still applies to a job that failed and to nothing else.
+
 **`session`, text, empty until a session exists.** The session the job runs in. This is how a
-reader gets from the job to the conversation, and it is what `quay attach` takes.
+reader gets from the job to the conversation, and it is what `krewe attach` takes.
 
 **`attempts`, integer, default 0.** How many times a controller started a session for this job.
 
@@ -565,6 +724,12 @@ the difference between an answer that lives in a conversation and an answer a ca
 running and empty when done.
 
 **`question`, text, default empty.** What an asking job is waiting to be told.
+
+**`reviewed` and `tested`, booleans, default false.** What passed this work before it settled, each in
+a session that did not do it. Written in the same statement as the phase, so a reader of a settled job
+is never left opening two conversations to find out whether anything independent agreed with the
+answer. A settled job carrying neither was declared with the gate off or never reached one, and
+`krewe job show` says which.
 
 **`spent_tokens`, bigint, default 0.** What this job's own session has cost, read by the same
 reader the flow ceiling uses, `Server.SessionTokens` in `internal/controlplane/flows.go`.
@@ -618,6 +783,18 @@ purpose. The list, so a test can be written against it:
 - A job whose brief negates one of those phrases is declared, because "do not merge the pull request"
   is not an instruction to merge it.
 - A step of a flow is not held to that rule, because the graph around it holds the wait.
+- A job at the top that states the sentence is asked for its plan first, and its first task tells it
+  to do no work.
+- A job that states no sentence, and a job declared under another, are asked for no plan at all.
+- A plan of eight steps, a step over the title's ceiling, and a plan numbered with a gap or a repeat
+  are each refused, and the session is asked again.
+- A session that answers twice with no plan the system can read stops the job, and the reason says it
+  was asked twice.
+- An answer of `yes` approves the plan, and the work that follows carries it.
+- Any other answer replaces the plan: the job goes back to pending and the session is given the plan
+  it wrote and what the person said.
+- A job whose record accounts for every step of the approved plan finishes, and says nothing.
+- A job whose record misses a step of the approved plan stops, and the reason names that step.
 - A job that claims a piece of work another job is holding is refused, and the refusal names that
   job, its title, and how old the claim is.
 - The same piece of work written another way, with different capitals or extra space, is the same
@@ -634,7 +811,101 @@ purpose. The list, so a test can be written against it:
   numbers.
 - A job with 17 labels is refused.
 - A job with a label value of 64 characters is refused.
-- A caller that is not the controller cannot write `phase`, `answer`, `reason` or `session`.
+- A job whose answer states no outcome does not settle, and the reason says which line was missing.
+- A job whose answer states a word the system does not hand out states no outcome.
+- A listing asked for a word that is not an outcome is refused, with the four offered back.
+- A choice node waiting for a word that is not an outcome is refused at import.
+- A caller that is not the controller cannot write `phase`, `answer`, `outcome`, `reason` or `session`.
+- A job that names a repository does not reach `done` until a reviewer and a tester have passed it.
+- A gate that fails the work sends it back to the session that did the work, and the job stays open.
+- A gate that fails the same work twice stops the job, with what it said on the row.
+- A gate that answers without a verdict stops the job, and never passes it.
+- A gate whose own task failed stops the job.
+- A job declared with `ungated` settles on its own answer, and the row says it was declared that way.
+
+### 3.1 The gate before a job settles
+
+A job ends when the session running it says it is finished, and until this nothing independent had to
+agree first. Every failure of the acceptance run reached the operator through that door: the answer
+was the only evidence, and it was written by the session being judged.
+
+So a job that names a repository is passed by two sessions that did not do the work, before it
+settles.
+
+```mermaid
+flowchart TD
+    WORK["the session doing the work answers,<br/>naming its pull request"]
+    REVIEW["a reviewer reads the change against<br/>what the job was asked for"]
+    TEST["a tester runs the repository's own gates<br/>and reads the output"]
+    BACK["the work goes back to the session that did it,<br/>carrying the reason. The job stays open"]
+    DONE(["done, and the row says which gates passed it"])
+    STOP(["stopped, and the reason says what nothing agreed with"])
+    WORK --> REVIEW
+    REVIEW -->|"pass"| TEST
+    REVIEW -->|"fail, first time"| BACK
+    REVIEW -->|"fail again, or no verdict"| STOP
+    TEST -->|"pass"| DONE
+    TEST -->|"fail, first time"| BACK
+    TEST -->|"fail again, or no verdict"| STOP
+    BACK --> WORK
+```
+
+**The reviewer** is given the sentence the job serves, its title and its brief, and the address of the
+pull request. It is not given the answer, because the answer is the testimony this exists to check: a
+reviewer handed it first is a reviewer reading somebody else's conclusion. It is told to read the
+change against the repository as it is rather than against the diff alone, to report only what changes
+what a person or an operator gets, and to change no file.
+
+**The tester** runs the gates the repository runs, found in its Makefile, its package scripts or its
+continuous integration workflow, and it is told to read their output rather than their exit status. A
+suite that ran nothing exits zero, a pipeline reports the status of its last command, and a green
+check that executed nothing is indistinguishable from one that passed. So it fails the work where a
+gate is red, where a gate could not be run, and where a gate reported success having run nothing.
+
+**Each answers with one line, and the line is read off the answer** rather than reported by the
+model, exactly as the address of a pull request and the base line already are:
+
+    Verdict: fail the change adds a column and no migration, so a fresh store cannot read it
+
+An answer carrying no such line has judged nothing, so the job stops rather than settling: reading it
+as a pass is the false green the whole gate exists to prevent.
+
+**They run in conversations of their own**, `job-<id>-reviewer` and `job-<id>-tester`, named after the
+job the way the working session is, so a controller that comes back to the row finds them without
+being told. A second opinion formed by the session that formed the first is not a second opinion.
+
+**Neither holds a credential.** What a session may call on the system comes from the job it runs, and
+the dispatch that starts a gate names no job and no role, so the system mints it nothing. That is the
+boundary, and it is the credential rather than a sentence in the text.
+
+**A fail is the next task, not the end of the run.** It goes back to the session that did the work
+carrying the reason, because the branch and the worktree are still there and the fix is usually one
+edit. It asks for the address of the pull request again, for the reason the continued task does: that
+answer is the one that ends the job. It goes back once, and the count is read off the tasks of the
+working session rather than kept in a field, which is what makes the whole gate safe to run twice.
+
+**Nothing is remembered between ticks.** The reviewer's verdict is on the record of the reviewer's own
+session, so a controller that took the row over after another died reads the same records and reaches
+the same answer. The only thing that lands on the row is which gates passed, written in the same
+statement as the phase.
+
+**A gate the system could not start leaves the job running**, and a later tick asks again. A machine
+with no room is a moment rather than a verdict, which is the reasoning a job turned away for want of a
+sandbox already gets, and settling here would settle work nothing read.
+
+**It costs two more sandboxes per job**, one at a time, after the work is done. A job that names no
+repository produced no change, so nothing reads it and nothing is paid for.
+
+**It is refusable rather than optional.** A job declared `ungated` settles on its own answer, and the
+row records that it did, so a settled job always states whether anything independent passed it.
+
+What this does not do: it reads one pull request and it never merges. Nothing here holds a verdict
+against a policy, nothing counts how often a gate fails the same session, and the reviewer's method is
+its own subject, in [#533](https://github.com/atlantic-blue/quay-crew/issues/533) and
+[#534](https://github.com/atlantic-blue/quay-crew/issues/534). A flow that reviews a pull request on a
+schedule, with an operator reading the draft before anything is posted, is
+[#513](https://github.com/atlantic-blue/quay-crew/issues/513) and is a different mechanism: this one is
+inside the loop and posts nothing.
 
 ### The lifecycle
 
@@ -824,7 +1095,7 @@ is not a limit an operator sets per workspace, which is where the `workspace_lim
 puts it. Nothing counts how often a lease expires, which is the metric slice 6 adds and the only
 signal that a controller died.
 
-### Where the Kubernetes idea fits quay, and where it does not
+### Where the Kubernetes idea fits this system, and where it does not
 
 **It fits.** The reducer in `internal/flow/advance.go` is already a pure function from state and
 event to next state and commands, with the world touched only beside it. That is the controller
@@ -832,7 +1103,7 @@ shape, written before anybody called it one. A controller over jobs is the same 
 different resource.
 
 **It does not fit in one place, and the mismatch is real.** In Kubernetes the control plane runs
-nothing. Quay's control plane holds the Docker socket, builds sandboxes and calls the model. It is a
+nothing. The control plane here holds the Docker socket, builds sandboxes and calls the model. It is a
 control plane and a node agent in one process, and `docs/ARCHITECTURE.md` says so plainly: mounting
 the host socket is equivalent to giving it root on the host.
 
@@ -871,18 +1142,115 @@ flowchart TD
     WAKE --> START
 ```
 
+### The fifth comparison: is this system doing anything at all
+
+The four queries above make reality match what was declared. This one asks whether they are working,
+and it is the only comparison in the loop that is about the loop rather than about a row.
+
+**Nothing running with something held is a state that is always wrong.** It is not a slow system and
+it is not a busy machine, because a busy machine has jobs running on it. It says the room is held by
+sandboxes doing nothing, and that nothing will change on its own, because the thing that would give
+the room back is the thing that has stopped.
+
+On 31 August 2026 twenty five jobs were declared at once against a workspace allowing eight running.
+Fifteen finished. Then nothing ran at all. Five jobs sat held, each saying that a sandbox asks for
+100 per cent of a processor and that 0 per cent of 1200 per cent is unallocated. Twelve sandboxes
+were idle, every one of them for an hour or more, and between them they held the whole processor
+allocation. The workspace reclaim time was thirty minutes and not one container came back. An
+operator drained thirty three sessions by hand to free a resource the reclaim was already meant to
+free. See issue 575.
+
+```mermaid
+flowchart TD
+    TICK(["tick, after the four above"]) --> MOVING{"is any job<br/>running or asking?"}
+    MOVING -->|"yes"| WELL["nothing to do:<br/>a full machine with work<br/>on it is a healthy machine"]
+    MOVING -->|"no"| WAITING{"is any job held<br/>for want of room?"}
+    WAITING -->|"no"| IDLE["nothing to do:<br/>an idle system"]
+    WAITING -->|"yes"| BOXES["read the sandboxes<br/>nothing is holding open,<br/>idle longest first"]
+    BOXES --> ATTACHED{"is somebody in it,<br/>or cannot the system tell?"}
+    ATTACHED -->|"yes"| NEXT["try the next one"]
+    NEXT --> ATTACHED
+    ATTACHED -->|"no"| TAKE["reclaim it: the container goes,<br/>its whole reservation goes back,<br/>everything else stays"]
+    TAKE --> SAY["job.unstuck on the job<br/>the room was freed for"]
+    SAY --> AGAIN["the next tick starts it"]
+    NEXT -->|"none left"| STUCK["say it: nothing running,<br/>work waiting, nothing to take"]
+```
+
+**Three faults were found and all three were real.**
+
+*Reclaim ran and found nothing to take.* `putAway` is on every tick and never conditional, so the
+loop was reaching it. But reclaim never looks at the machine: its only inputs are the workspace
+reclaim time, the session `updated_at` and whether somebody is attached. And the batch starved.
+The controller read twenty settled sessions per tick, ordered by how long ago each was touched. A
+reclaimed session stays settled, and with no archive time set nothing ever moves it, so once twenty
+reclaimed rows sat at the front the batch was all of them and the reclaim never reached a container
+again. That is why the two rules are two queries now, each in its own order.
+
+*The processor is released, and only when the container goes.* Both axes are one reservation and
+neither moves without the other. `Ledger.ReleaseSession` is the only path that gives a placed
+sandbox's room back, and only `closeSandbox` and the reaper call it. So an idle sandbox holds a
+whole processor while using almost none of one. That is correct scheduler arithmetic and it is what
+kubernetes does. The mismatch is that a pod ends and a session does not, so the fix is not to change
+the arithmetic but to take the container back.
+
+*Nothing noticed.* No query anywhere paired running against held. The health probe is the closest
+thing and does not cover it: it asks whether the system can write, because a control plane once
+served every listing and dispatched nothing for an hour, which is issue 400. This incident is that
+failure again one layer up, with every write landing.
+
+**What it does.** One container per tick, and the one idle longest. One is enough to start the queue
+again, and taking twelve would throw away eleven warm containers to answer a question that one
+answers. The workspace reclaim clock is not read: that clock exists to save memory on a quiet system
+and is unset until three measurements are taken, while this question needs no measurement.
+
+**What it never does.** It never takes a container an operator is attached to, and a system that
+cannot tell reads that as attached. It never takes a session a live job names, because the query it
+reads leaves those out. It never stops a session that is doing work.
+
+**What a person reads.** A job the machine turns away while nothing at all is running carries the
+room arithmetic and then one more sentence saying the system is stopped rather than busy. `hold`
+already writes a reason only when the sentence changes, so it is written once and not every five
+seconds. Where the system frees room, `job.unstuck` goes on the job it freed the room for, naming
+the container it took and how long that container had been idle.
+
+**Why the pair, and not the pressure.** A full machine is healthy. Eight jobs running and seventeen
+waiting is exactly what admission is for, and reclaiming there takes a container from a session that
+is about to get its next task.
+
+**Why not refuse the declaration earlier.** Section 5.1 already decided that a job the machine cannot
+host stays pending for as long as it takes and is never admitted and then killed. Refusing at
+declaration would turn away work the machine can do in ten minutes, and it would not have moved the
+five jobs in the incident, which were declared while the machine still had room. At declaration
+nothing knows what the machine holds when the job's turn comes.
+
+**Why not evict.** Evicting is issue 478, and its trigger is different: the machine in danger,
+measured against what the runtime actually holds. This one fires when the machine is idle and the
+queue is stopped, which issue 478 would read as a healthy machine. Issue 477 holds a sandbox to what
+it asked for, which reduces how often either fires and replaces neither.
+
 ### What it watches
 
 Rows in `job`, in the store, by polling. Not the log. This is the same split the flow engine
 already made and for the same reason: publishing is lossy, so a controller whose next action
 depended on a record arriving would sit forever with nothing to say why.
 
-Three queries per tick, each on an index:
+Six queries per tick, each on an index:
 
 - jobs in `pending` whose `after` identifiers have all reached a terminal phase, oldest declared
   first;
 - jobs in `waiting` whose dependencies have now ended, which moves it back to `pending`;
-- jobs in `running` or `asking` whose `lease_until` has passed.
+- jobs in `running` or `asking` whose `lease_until` has passed;
+- the sessions that still hold a container and nothing is holding open, oldest touched first;
+- the sessions whose container has already gone, longest reclaimed first;
+- whether any job is running or asking at all, which is a probe rather than a count.
+
+The last one is the fifth comparison, and it costs one index lookup on a system with a million
+finished jobs. Only when it says nothing is moving does the loop read a seventh: the jobs the
+machine turned away. A working system never pays for that one.
+
+The two session queries are two rather than one because a reclaimed session never leaves the second
+set where no archive time is set. Reading both from one batch let those rows crowd out the sandboxes
+behind them, and the reclaim stopped reaching a container at all. See the fifth comparison above.
 
 A system with a thousand finished jobs and one pending does one row of work per tick. That
 is the property `DueFlowRuns` already has and it is worth keeping.
@@ -900,9 +1268,10 @@ morning.
 
 ### What it does
 
-One of: nothing, claim, dispatch, adopt an answer, stop, or wake dependents. Never more than one
-job per tick moves from `pending` to `running`, so the concurrency limit is enforced by
-construction rather than by counting after the fact.
+One of: nothing, claim, dispatch, adopt an answer, stop, wake dependents, put a session away, or
+take one container back because the queue has stopped. Never more than one job per tick moves from
+`pending` to `running`, so the concurrency limit is enforced by construction rather than by counting
+after the fact, and never more than one container is taken back for the same reason.
 
 ### What it writes
 
@@ -963,15 +1332,15 @@ is the same reason `docs/ARCHITECTURE.md` gives for a wait being a column rather
 ### What of this shipped on 27 August 2026
 
 The `verbs` list, the credential, the parent from that credential, the `workspace_limits` row and
-`quay limits`. The four hook calls joined the deny list at the same time.
+`krewe limits`. The four hook calls joined the deny list at the same time.
 
 ```mermaid
 sequenceDiagram
     participant OP as "the operator"
     participant CP as "the control plane"
     participant SES as "a session running a job"
-    OP->>CP: "quay limits acme --max-depth 2"
-    OP->>CP: "quay job create, role backlog-clearer"
+    OP->>CP: "krewe limits acme --max-depth 2"
+    OP->>CP: "krewe job create, role backlog-clearer"
     CP->>CP: "mint a credential for that job, holding the role's verbs"
     CP->>SES: "the task, with the credential in its environment"
     SES->>CP: "CreateJob, presenting that credential"
@@ -1180,7 +1549,7 @@ and 764.5 megabytes, and `max_running` said they were the same.
 So the system does what a scheduler does.
 
 **A sandbox declares a request.** Memory and processor, per workspace, in the units the room view
-prints: `quay limits <workspace> --request-memory 1536 --request-processor 100`. A workspace that
+prints: `krewe limits <workspace> --request-memory 1536 --request-processor 100`. A workspace that
 declares nothing takes the system's own measured request. The container carries the processor half of
 it as a share, so the runtime divides its processors in the proportions the system reserved.
 
@@ -1195,7 +1564,7 @@ from kubernetes, where the kubelet sits outside the pods it manages.
 
 **Admission is arithmetic.** What is already placed, plus this one, against capacity less the
 reserve. A job that does not fit stays pending, for as long as it takes, and carries a reason naming
-the resource that ran out. It is never admitted and then killed. `quay job list` shows it as `held`
+the resource that ran out. It is never admitted and then killed. `krewe job list` shows it as `held`
 rather than `pending`, because a full machine and a stalled system must not read the same.
 
 **The room is taken in the same movement as the decision.** A dispatch is detached, so a container
@@ -1208,6 +1577,14 @@ been built, and the next job counts it. Kubernetes calls this assuming the pod o
 on a container runtime has no arithmetic to do, and stopping dead there would be worse than the system
 that counted.
 
+**A reservation ends with the container and at no other moment.** `Ledger.ReleaseSession` is the
+only path that gives a placed sandbox's room back, and only `closeSandbox` and the reaper call it.
+Both axes go together: there is no path that returns memory and keeps the processor. That is the
+kubernetes shape and it holds while a pod's life is its work's life. A session is not a pod: it
+outlives its job, so an idle sandbox holds a whole processor while using almost none of one, and on
+31 August 2026 twelve of them held a whole machine while five jobs waited. The answer is not in the
+arithmetic. It is the fifth comparison in section 4, which takes the container back.
+
 **What this does not do.** Nothing holds a sandbox to what it asked for, which is issue 477, and
 nothing stops anything once a machine is in trouble anyway, which is issue 478.
 
@@ -1216,7 +1593,7 @@ nothing stops anything once a machine is in trouble anyway, which is issue 478.
 **A system workspace is the wrong boundary, and this is a decision rather than an omission.**
 
 The system already has a level above the workspace and it is called `system`. `name.System` is the word.
-`quay skill attach system`, `quay hook attach system`, `quay secret set system` and `quay context set system`
+`krewe skill attach system`, `krewe hook attach system`, `krewe secret set system` and `krewe context set system`
 all take it, and no workspace may be called it, because a workspace with that name would take what
 every workspace reads.
 
@@ -1256,12 +1633,12 @@ An orchestrator cannot work without this, and it is the smallest piece of the de
 
 The reply already survives whole. Postgres `text` is unbounded, `ListTasks` returns the field whole,
 and the protobuf message puts no limit on it. One function truncates, `oneLine` in
-`cmd/quay/tasks.go`, at 120 characters, so a history listing stays readable. That is correct for a
+`cmd/krewe/task.go`, at 120 characters, so a history listing stays readable. That is correct for a
 listing and wrong for everything else, and there is no other way to get the value out.
 
 ### The fix, in three parts
 
-**One, a command that prints one answer whole.** `quay answer <session>` writes the reply of that
+**One, a command that prints one answer whole.** `krewe answer <session>` writes the reply of that
 session's most recent landed task to standard output, with nothing else on it: no timestamp, no
 prefix, no truncation. `--all` writes every task's prompt and reply in order. A caller pipes it. This
 needs no new table, no new call and no controller. It closes the second blocker on its own.
@@ -1273,8 +1650,8 @@ removed.
 
 **Three, the calls.** `CreateJob`, `GetJob`, `ListJobs`, `AskJob`, `AnswerJob`, `StopJob` on
 `ControlPlaneService`. `GetJob` returns the whole record including the answer. `ListJobs` filters by
-workspace, project, parent, phase and label, and returns records without their answers, because a
-listing of a hundred answers is a listing nobody can read. A caller that wants an answer asks for one
+workspace, project, parent, phase, outcome and label, and returns records without their answers,
+because a listing of a hundred answers is a listing nobody can read. A caller that wants an answer asks for one
 job.
 
 ### Why the answer belongs on the job and not only on the task
@@ -1285,13 +1662,13 @@ Three reasons, and the third is the one that matters.
 - A session is archived when its job ends, so a reader coming later should not have to know that
   the history outlives the container.
 - **A caller reads a field rather than parsing prose.** The whole difference between orchestration
-  inside quay and orchestration outside it is whether the next decision reads a value or reads a
+  inside the system and orchestration outside it is whether the next decision reads a value or reads a
   transcript. A transcript is what a person outside the system has been doing.
 
 ### What a machine reads, and what a person reads
 
 They are the same records with two renderings, which is the split the console and the command line
-tool already make. A person opens `quay job show <id>` and sees the phase, the reason, the question
+tool already make. A person opens `krewe job show <id>` and sees the phase, the reason, the question
 and where to read the conversation. A caller reads `GetJob` and switches on `phase`.
 
 ## 8. Three worked scenarios
@@ -1364,9 +1741,9 @@ node.
 ### 8a. One session
 
 **The answer: a single job should not go through the orchestrator, and
-`quay task --dispatch` stays the right command.**
+`krewe task --dispatch` stays the right command.**
 
-The reason is cost against gain. `quay task --dispatch` is one call, one row in `tasks`, and the
+The reason is cost against gain. `krewe task --dispatch` is one call, one row in `tasks`, and the
 reply comes back on the same connection. A job is one row in `job`, at least three rows in
 `job_events`, a controller tick before anything starts, the same task row, and a second read to get
 the answer. Every one of those buys durability, and durability is worth nothing while a person is
@@ -1374,10 +1751,10 @@ sitting there watching the reply arrive.
 
 **A correction, forced by reading the code on 27 August 2026.** Letting go is a flag rather than the
 default. Merged pull request 378 made a second command let go, and the one word that replaced the
-three carries it as `--dispatch`. `sendTask` in `cmd/quay/task.go` sets `Detach` on the request, the
+three carries it as `--dispatch`. `sendTask` in `cmd/krewe/task.go` sets `Detach` on the request, the
 control plane runs the task in a goroutine, and the command prints "started. the system has it, and
-nothing here is waiting for it." `quay task` with no flag waits and prints the reply. So a person
-watching a reply arrive types `quay task`, and the paragraph above holds for that. `quay task
+nothing here is waiting for it." `krewe task` with no flag waits and prints the reply. So a person
+watching a reply arrive types `krewe task`, and the paragraph above holds for that. `krewe task
 --dispatch` is closer to declaring a job than it was: it starts a task and reads nothing back, which
 is exactly why the read path in section 7 matters more than the first draft of this document assumed.
 
@@ -1389,11 +1766,11 @@ from, a task that must run at a deadline, or a task another job waits for.
 
 **The records, the commands and what the operator sees, today.** All of this is built.
 
-The operator runs `quay task --dispatch me/house-bills "read the package file"`. The control plane
+The operator runs `krewe task --dispatch me/house-bills "read the package file"`. The control plane
 finds or creates the session, writes the task row as `running`, builds or reuses the sandbox, runs
 the model, and writes the reply into the row it opened. The reply comes back down the connection.
 
-Status at each step, read from `quay sessions` and `quay task list <session>`:
+Status at each step, read from `krewe sessions` and `krewe task list <session>`:
 
 - before: the session does not exist, or reads `idle`.
 - during: the session reads `running`, and the task listing shows the prompt with `still running`
@@ -1434,10 +1811,10 @@ Nothing measures how long the task took. `quay-crew#333` is that gap.
 
 **What a person opens.**
 
-- *Where is this now.* `quay sessions` for the status, `quay task list <session>` for the prompt and
+- *Where is this now.* `krewe sessions` for the status, `krewe task list <session>` for the prompt and
   whether it is still running. Both exist. The console's `sessions` and `tasks` views show the same
   thing.
-- *Why did it stop.* `quay task list <session>` prints `failed:` and the reason. Exists.
+- *Why did it stop.* `krewe task list <session>` prints `failed:` and the reason. Exists.
 - *What did it cost.* Grafana, Prometheus data source, `sum by (workspace) (quaycrew_cost_usd_total)`.
   Exists, with no dashboard on it. The console's `stats` view shows what the system and a session have
   cost.
@@ -1480,7 +1857,7 @@ Three things change and one does not.
 **What this buys, and it is not tidiness.**
 
 - **A step's answer becomes readable.** Today a step's reply lands in the run's state under
-  `result.reply`, and `quay flow show` truncates it. With a job, the answer is a field.
+  `result.reply`, and `krewe flow show` truncates it. With a job, the answer is a field.
 - **A step can run as a role in its own session.** That is what `quay-crew#354` slices 2 and 5 want,
   and it needs a per step session rather than the run's one session.
 - **The engine stops holding goroutines.** One goroutine per outstanding dispatch becomes zero, and a
@@ -1495,7 +1872,7 @@ takes minutes, a tick is noise. On a graph of twenty pure choice nodes it is not
 `settle` already runs a chain of pure nodes inside one movement.
 
 **The scenario.** A graph of four nodes: `fix` dispatches, `ok` chooses on the result, `ask` puts a
-question, `push` dispatches. The operator runs `quay flow start me/house-bills fix-red`.
+question, `push` dispatches. The operator runs `krewe flow start me/house-bills fix-red`.
 
 The records, in order:
 
@@ -1508,7 +1885,7 @@ The records, in order:
 4. The job reaches `done` with its answer. The controller wakes the run.
 5. The run moves to `ok`, which is pure, and then to `ask`, in one movement. Status `asking`, the
    question on the row.
-6. The operator answers with `quay flow answer <run> yes`.
+6. The operator answers with `krewe flow answer <run> yes`.
 7. The run moves to `push`, which declares a second job, and then to `done`.
 
 **A step that fails.** Two shapes, and the system already tells them apart.
@@ -1527,7 +1904,7 @@ that is where the evidence is.
 
 **A step that waits for an operator answer.** The `ask` node. The run's status is `asking`, nothing
 but an answer moves it, and the poller's own query passes over asking runs on their status. So an
-automation nobody answered can never take silence for a yes. Delivered through `quay flow answer`
+automation nobody answered can never take silence for a yes. Delivered through `krewe flow answer`
 today rather than through a chat channel, which is deliberate: it exercises the gate end to end with
 no bot token.
 
@@ -1596,14 +1973,14 @@ cost ceiling alert as code, and it is open.
 
 **What a person opens.**
 
-- *Where is this now.* `quay flow show <run>` prints the node, the status, the reason, the question
-  and the state. It exists. `quay job show <id>` for the step, which does not exist yet. A `flows`
+- *Where is this now.* `krewe flow show <run>` prints the node, the status, the reason, the question
+  and the state. It exists. `krewe job show <id>` for the step, which does not exist yet. A `flows`
   view and an `events` view in the console: neither exists, and `internal/console/resources.go`
   registers ten views without them.
-- *Why did it stop.* `quay flow show <run>` prints the reason on its own line before the state,
+- *Why did it stop.* `krewe flow show <run>` prints the reason on its own line before the state,
   deliberately, because a run that halted and a run that went quiet look identical without it.
   Exists.
-- *What did it cost.* `quay flow show` prints the run's spend. Grafana for the trend. Both exist.
+- *What did it cost.* `krewe flow show` prints the run's spend. Grafana for the trend. Both exist.
 
 **What limit applies.** The graph's `limits.transitions`, defaulting to 100. The graph's
 `limits.tokens` where declared, and no ceiling where not. The workspace's `max_running`, new. The
@@ -1654,7 +2031,7 @@ stateDiagram-v2
   and they reach `<workspace>.job`, which the export already carries.
 - **Every job a run declares carries labels**: `flow.run`, `flow.graph`, and for a step
   `flow.node` and `flow.attempt`. So a person reads a whole run out of the job tree with
-  `quay job list --label flow.run=<run>`, which is what `quay flow show` now prints.
+  `krewe job list --label flow.run=<run>`, which is what `krewe flow show` now prints.
 
 **What it changed for a graph author, and it is not small.** A run no longer has one session. Each
 step is a job and a job owns the session that does it, so a step no longer sees
@@ -1670,7 +2047,7 @@ session in a workspace whose `max_depth` is 1 can start a flow and cannot start 
 flow's own step, and a flow an operator started needs no limit raised.
 
 **What is still not built.** Stopping the job that carries a run does not stop the run;
-`quay flow stop` does. Nothing enforces the tree budget, for a run or for anything else. A step
+`krewe flow stop` does. Nothing enforces the tree budget, for a run or for anything else. A step
 carries no deadline of its own. The controller still leaves a job that waits for something in `after`
 alone, because nothing honours ordering yet.
 
@@ -1686,7 +2063,7 @@ its conversation.
 The operator declares one root:
 
 ```
-quay job create me/quay-crew \
+krewe job create me/quay-crew \
   --role backlog-clearer \
   --title "clear the open pull request backlog" \
   --budget-tokens <a number the operator sets> \
@@ -1703,9 +2080,9 @@ The session lists the pull requests with `gh`, which is the github skill already
 then makes nine calls, and the ordering is the important part:
 
 ```
-quay job create --title "pull request 341" --brief "..." --expect-contains "..."
-quay job create --title "pull request 344" --brief "..." --after <the identifier of the first>
-quay job create --title "pull request 350" --brief "..." --after <the identifier of the second>
+krewe job create --title "pull request 341" --brief "..." --expect-contains "..."
+krewe job create --title "pull request 344" --brief "..." --after <the identifier of the first>
+krewe job create --title "pull request 350" --brief "..." --after <the identifier of the second>
 ... seven more, each after the one before it
 ```
 
@@ -1724,7 +2101,7 @@ not a process holding a list.** Kill the orchestrator now and the nine still run
 a new task into the same session:
 
 ```
-The job you asked for has finished. Read each answer with quay job show <id>.
+The job you asked for has finished. Read each answer with krewe job show <id>.
 <the nine identifiers, with their phases>
 Decide what is left and say so.
 ```
@@ -1739,12 +2116,12 @@ So the intent lives in the rows and the reasoning lives in the conversation, and
 process. That is the answer to the failure this document opens with.
 
 **A pull request that needs a human decision.** The child's session cannot merge and should not. Its
-brief tells it to ask. It calls `quay job ask <id> "pull request 344 changes the sandbox image. Merge?"`,
+brief tells it to ask. It calls `krewe job ask <id> "pull request 344 changes the sandbox image. Merge?"`,
 which moves its own job to `asking` and writes the question on the row. Its session then ends and
 its container goes away, because the question is on the record rather than held open in a
 conversation.
 
-The operator answers with `quay job answer <id> yes`. The controller starts a new attempt in the
+The operator answers with `krewe job answer <id> yes`. The controller starts a new attempt in the
 same session with the answer in the brief. Nothing else moves: the chain behind it stays `waiting`,
 because `after` waits for a terminal phase and `asking` is not one. **The orchestrator is not woken
 and is not involved.** A person answered a question about one pull request, and the orchestrator
@@ -1753,7 +2130,7 @@ learns about it in the summary at the end.
 **How depth is bounded.** The root is depth 0 and the nine are depth 1. If a child decides a pull
 request needs a test written by a `test-writer` role, that child is depth 2. The workspace's
 `max_depth` refuses depth 3, and the refusal reaches the model as the error from its own
-`quay job create`, naming the limit. The model then does the work itself or says it cannot.
+`krewe job create`, naming the limit. The model then does the work itself or says it cannot.
 
 The value of `max_depth` is the operator's and it is provisional. There is no measurement. The one
 that would set it is the greatest depth over completed root trees after the first month.
@@ -1771,13 +2148,13 @@ nothing else to check.
 **What an operator sees while it runs.**
 
 ```
-quay job list me/quay-crew
+krewe job list me/quay-crew
 ```
 
 Eleven rows: the root at `waiting`, one child `running`, one `asking`, six `pending`, one `done`, one
 `stopped`. The listing prints the job identifier, the depth, the phase, the title and the age.
-`quay job show <id>` on the asking one prints the question and how to answer it, the way
-`quay flow show` already does for a run.
+`krewe job show <id>` on the asking one prints the question and how to answer it, the way
+`krewe flow show` already does for a run.
 
 **The events, in order.** The contract kinds are what another service may depend on.
 
@@ -1800,7 +2177,7 @@ Two events are internal and nothing outside should read them: `job.claimed` and 
 
 **The trace, and how the context crosses the session boundary.**
 
-One trace covers the whole run, from the operator's `quay job create` to the last child finishing.
+One trace covers the whole run, from the operator's `krewe job create` to the last child finishing.
 
 - Root span: `job`, on the root job. Opened when the row is written, closed when the root
   reaches `done`. It lasts as long as the backlog takes.
@@ -1853,12 +2230,12 @@ budget will actually cover.
 
 **What a person opens.**
 
-- *Where is this now.* `quay job list me/quay-crew`, which does not exist yet. Today the nearest is
-  `quay sessions`, which shows eleven sessions with no relation between them, which is exactly the
+- *Where is this now.* `krewe job list me/quay-crew`, which does not exist yet. Today the nearest is
+  `krewe sessions`, which shows eleven sessions with no relation between them, which is exactly the
   problem.
-- *Why did it stop.* `quay job show <id>` prints the reason. For the tree, `quay job list --parent
+- *Why did it stop.* `krewe job show <id>` prints the reason. For the tree, `krewe job list --parent
   <root>` shows which child holds the failure. Neither exists yet.
-- *What did it cost.* `quay job show <root>` prints the tree's spend against its budget. Grafana for
+- *What did it cost.* `krewe job show <root>` prints the tree's spend against its budget. Grafana for
   the trend. The first does not exist; the second does, with no dashboard on it.
 
 **What limit applies.** `max_depth` on the workspace, refusing depth 3. `max_running` on the
@@ -1949,14 +2326,14 @@ sequenceDiagram
     participant ORCH as "orchestrator session"
     participant KID as "child session"
 
-    OP->>CP: quay job create, root, role backlog-clearer
+    OP->>CP: krewe job create, root, role backlog-clearer
     CP->>CP: write the job row, phase pending, mint trace id
     Note over CP: event job.declared
     CTL->>CP: claim the root, dispatch into a new session
     Note over CTL: events job.claimed, job.started
     CP->>ORCH: run the task, with a job credential
     ORCH->>CP: gh: list the open pull requests
-    ORCH->>CP: quay job create, nine times, each after the one before
+    ORCH->>CP: krewe job create, nine times, each after the one before
     Note over CP: nine events job.declared, each depth 1
     ORCH-->>CP: the task lands
     CP->>CP: root goes to waiting, session kept
@@ -1965,9 +2342,9 @@ sequenceDiagram
     KID-->>CP: the answer lands
     CTL->>CP: child one done, wake child two
     Note over CTL: this repeats for children two to nine
-    KID->>CP: quay job ask, on the pull request needing a decision
+    KID->>CP: krewe job ask, on the pull request needing a decision
     CP->>CP: that child goes to asking, its session ends
-    OP->>CP: quay job answer, yes
+    OP->>CP: krewe job answer, yes
     CTL->>CP: new attempt in the same session
     CTL->>CP: every child reached a terminal phase
     CTL->>ORCH: dispatch the summary task into the same session
@@ -1997,15 +2374,15 @@ will not be knowable until two real automations exist. This adds exactly one, on
 already indexes, because scenario 8c cannot be written without it.
 
 **Nothing cancels job already inside a sandbox.** Stopping a job stops the system taking
-another step. It does not kill a model mid sentence. That is the rule `quay flow stop` already
+another step. It does not kill a model mid sentence. That is the rule `krewe flow stop` already
 follows, and it is inherited rather than decided again here.
 
 **No fairness.** `max_running` is first come first served by declared time. A tree of ninety children
 starves everything else in that workspace until it drains. A workspace is the only fairness boundary,
 which means one project can starve another inside the same workspace.
 
-**A chat channel does not deliver a question.** `quay job answer` is a command, the way
-`quay flow answer` is. A chat delivery follows `quay-crew#10`, which is blocked on a bot token rather
+**A chat channel does not deliver a question.** `krewe job answer` is a command, the way
+`krewe flow answer` is. A chat delivery follows `quay-crew#10`, which is blocked on a bot token rather
 than on code.
 
 **Nothing consumes `<workspace>.job`.** The export accumulates records nothing reads, which is the
@@ -2020,6 +2397,40 @@ deployment change and not a logic change, and it needs slices 1 and 5 first.
 
 **Nothing inside the container adopts the trace context.** Named in 8c. The system writes one span per
 attempt and the inside of the attempt is opaque.
+
+### What reads the plan before it runs, and what carries a run back into it
+
+The omission above is that the system generates no judgement. Two gaps sit either side of that
+sentence, and closing them does not close it. In each one the machine stops where judgement is
+absent, and a person supplies it.
+
+**Nothing checks the drawing before it runs, with more than one reader.**
+[#520](https://github.com/atlantic-blue/quay-crew/issues/520) states the sentence,
+[#576](https://github.com/atlantic-blue/quay-crew/issues/576) writes the plan and holds it for
+approval, [#577](https://github.com/atlantic-blue/quay-crew/issues/577) reads the words the brief
+dropped, [#580](https://github.com/atlantic-blue/quay-crew/issues/580) lists the claims the plan
+rests on, and [#532](https://github.com/atlantic-blue/quay-crew/issues/532) adds one role that reads
+the plan. All of them read the drawing once, with one reader, and none of them orders the work by
+what a wrong claim costs.
+
+**Nothing carries what a run learned back into the drawing.** A session found that the video
+platform refuses a request for captions from the function's own address. The fact stayed in that
+session's transcript. The plan still said fetch them there, and the issues still described the
+product as designed.
+
+Three issues cover the two gaps, in the order they should be built.
+
+1. [#587](https://github.com/atlantic-blue/quay-crew/issues/587) marks the claim that decides whether
+   to build at all, settles it with a spike job before the build starts, and repairs `after`, which
+   is declared and validated today and never released.
+2. [#586](https://github.com/atlantic-blue/quay-crew/issues/586) has several roles read the same
+   brief through different lenses, and puts only the questions none of them settled to a person.
+3. [#588](https://github.com/atlantic-blue/quay-crew/issues/588) carries a fact a run discovered back
+   onto the claim it disproves, stops the plan that rests on it, and reports it on the issues that
+   describe the product.
+
+None of the three writes a plan, ranks a claim, or decides that a question matters. Each one records
+a value, and stops.
 
 ## 11. The session lifecycle
 
@@ -2056,8 +2467,8 @@ holds its container in August, if the system has not restarted.
 
 ### What drain does, and how it differs from archiving
 
-`quay drain` puts every live session down before something else takes the containers away. Read
-`cmd/quay/drain.go` and `internal/controlplane/server.go:1975`.
+`krewe drain` puts every live session down before something else takes the containers away. Read
+`cmd/krewe/drain.go` and `internal/controlplane/server.go:1975`.
 
 - It lists every session that is not stopped, and stops each one and closes its sandbox.
 - It refuses while any task is running. The refusal names the sessions that are working.
@@ -2199,7 +2610,7 @@ The figures, measured against a real daemon by
 - **PLACEHOLDER_LISTING** for a listing of twenty sessions, each with a container.
 - **PLACEHOLDER_QUESTION** for one question to one container.
 
-Because of the price, a caller asks for it: `ListSessionsRequest.presence`. The console, `quay
+Because of the price, a caller asks for it: `ListSessionsRequest.presence`. The console, `krewe
 sessions` and the web page set it, and the machinery that resolves an address, finds a session by
 name or lists sessions to delete a project does not. A caller that does not ask reads the row's own
 word, exactly as it did before.
@@ -2237,7 +2648,13 @@ The rule, in three lines:
 - A session named only by terminal job, and reclaimed for longer than the workspace's archive time,
   is wanted archived. The controller archives it, which is `ArchiveSession` with no operator.
 
-Each rule is a fourth query per tick, on the same index the other three use. The controller keeps
+The last two rules are two queries and not one, and that is what went wrong. A reclaimed session
+stays settled, and where no archive time is set nothing ever moves it, so one batch ordered by how
+long ago each row was touched fills with rows nothing can act on and never reaches a container. On
+31 August 2026 twelve idle sandboxes held a whole machine behind twenty of those rows. See issue 575
+and the fifth comparison in section 4.
+
+Each rule is a query per tick, on the same index the other three use. The controller keeps
 nothing in memory, which is the property section 4 depends on.
 
 ```mermaid
@@ -2259,7 +2676,7 @@ an operator was attached. `AttachSession` returns a `tmux` command that the oper
 container, and the system recorded nothing about it afterwards, so a controller that reclaimed on idle
 time alone would close a container an operator is typing into.
 
-Two signals would work, and the first is built. The system asks the container whether the `quay` tmux
+Two signals would work, and the first is built. The system asks the container whether the `krewe` tmux
 session inside it has a client, through one exec: `DockerProvider.Attached`, and the controller reads
 it before every reclaim. The other, stamping the row on attach and refreshing the stamp while the
 pane is open, was rejected: a stamp needs somebody to keep it fresh, how often is a number, and no
@@ -2307,12 +2724,12 @@ throws away containers that were about to be used.
 then time a second task against the warm container. The difference is the resume.
 
 ```
-docker rm -f quaycrew-<session id>
-time quay task <session id> "reply with ok"
-time quay task <session id> "reply with ok"
+docker rm -f krewe-<session id>
+time krewe task <session id> "reply with ok"
+time krewe task <session id> "reply with ok"
 ```
 
-`quay task` waits for the answer and prints it, so both numbers include one model call. The
+`krewe task` waits for the answer and prints it, so both numbers include one model call. The
 subtraction removes it.
 
 **Three, what a reclaim buys.** The memory an idle container holds.
@@ -2345,11 +2762,11 @@ A session an operator stopped is left out, because filing away what somebody hal
 decision with bookkeeping.
 
 **The two times.** `reclaim_seconds` and `archive_seconds` on `workspace_limits`, read and written
-with `quay limits <workspace> --reclaim <duration> --archive <duration>`. Both default to zero, and
-`quay limits` prints "unset" beside what unset does. The reclaim time is measured from the session's
+with `krewe limits <workspace> --reclaim <duration> --archive <duration>`. Both default to zero, and
+`krewe limits` prints "unset" beside what unset does. The reclaim time is measured from the session's
 last write, and the archive time from `reclaimed_at`.
 
-**The attached signal.** `Provider.Attached` asks the container whether the `quay` tmux session
+**The attached signal.** `Provider.Attached` asks the container whether the `krewe` tmux session
 inside it has a client, through one exec. That is the first of the two options above, chosen because
 it needs no new state and nothing to keep fresh: stamping the row on attach would need the console to
 refresh the stamp while the pane is open, and how often is a number nobody has measured. The
@@ -2361,7 +2778,7 @@ The exec is asked last, after the clock, so a system whose reclaim time is unset
 why the unmeasured cost of the signal is not a reason to hold the mechanism back: with the number
 absent, the cost is zero.
 
-**Stopping one session**, from `quay-crew#395`. `quay stop <session> [<reason>]` halts the task a
+**Stopping one session**, from `quay-crew#395`. `krewe stop <session> [<reason>]` halts the task a
 session is running and keeps the session: the conversation, the container and the history all stay,
 and the next dispatch continues it. The task record reads `stopped` with the operator's own reason
 rather than `failed`, and a job running in that session is stopped with the same reason
@@ -2373,7 +2790,7 @@ stateDiagram-v2
     [*] --> idle: "the first dispatch creates the session"
     idle --> running: "a task starts"
     running --> idle: "the task lands"
-    running --> idle: "quay stop, and the task reads stopped"
+    running --> idle: "krewe stop, and the task reads stopped"
     running --> failed: "the task did not land"
     failed --> running: "the next task starts"
     idle --> reclaimed: "settled past the reclaim time, and nobody is attached"
@@ -2408,29 +2825,29 @@ exists, and why the right half cannot be an ordinary session.
 
 Two corrections first, because the design brief for this section described it differently.
 
-**There is no `quay panel` command.** `cmd/quay/quay.go:159` refuses the word and says that `quay` on
+**There is no `krewe panel` command.** `cmd/krewe/quay.go:159` refuses the word and says that `krewe` on
 its own opens the system, and that `p` shows or hides the conversation beside the console. The layout
 itself lives in `internal/panel/panel.go`.
 
 **The right half already opens the driver, not an ordinary worker session.**
-`cmd/quay/panel.go:116` calls `OpenDriver` for the project the operator is standing in. The comment
+`cmd/krewe/panel.go:116` calls `OpenDriver` for the project the operator is standing in. The comment
 beside it says why. Opening the system should not drop the operator into somebody else's job. Naming a
 session on the command line opens that one instead.
 
 What `internal/panel/panel.go` builds, from `Layout.Commands` at line 62:
 
-- A header pane across the full width, running `quay header`, resized to exactly its own line count.
-- The console below it on the left, running `quay console`.
-- A conversation on the right, at fifty per cent width, running `quay attach <session>`.
+- A header pane across the full width, running `krewe header`, resized to exactly its own line count.
+- The console below it on the left, running `krewe console`.
+- A conversation on the right, at fifty per cent width, running `krewe attach <session>`.
 - A hook on client resize and on client attach, which puts the header back to its rows.
 - The keyboard starts in the conversation pane.
 
 ```mermaid
 flowchart TD
-    subgraph WINDOW["one tmux window, session quay-panel"]
-        HEADER["pane 0: quay header, full width, fixed rows"]
-        LEFT["pane 1: quay console"]
-        RIGHT["pane 2: quay attach, the driver"]
+    subgraph WINDOW["one tmux window, session krewe-panel"]
+        HEADER["pane 0: krewe header, full width, fixed rows"]
+        LEFT["pane 1: krewe console"]
+        RIGHT["pane 2: krewe attach, the driver"]
     end
     HEADER --- LEFT
     LEFT --- RIGHT
@@ -2538,7 +2955,7 @@ So the left half shows the job tree.
 - Drilling into a job shows its children, which is the same drill the console already does.
 - The session is a column on the job row, not a level of its own.
 - The transcript moves one level deeper. An operator selects a job and opens the
-  conversation that ran it, which is `quay attach` on the session named by the row.
+  conversation that ran it, which is `krewe attach` on the session named by the row.
 
 ```mermaid
 flowchart LR
@@ -2556,6 +2973,12 @@ flowchart LR
 The right half does not change shape. It stays one conversation, and it stays the driver's. What
 changes is that the driver now declares jobs rather than dispatching tasks, so the left half shows
 what the right half asked for.
+
+**The browser takes the same shape, and it took it first.** `quay-crew#547` built the briefing at the
+front door of `krewe web`, and its job rows are this tree: roots at the top, children under them, the
+session as a cell rather than a level. A page cannot drill, so it draws the depth instead, and a block
+keeps only the branches holding a row that answers it. The console's own version of this is
+`quay-crew#474`, and the two must not grow into different shapes.
 
 ## 13. Surviving an upgrade
 
@@ -2602,7 +3025,7 @@ What does not survive:
 `docker exec` started by the control plane. When the control plane dies, the client that reads the
 stream dies. Whether the process inside the container also stops is a property of the daemon and it
 was not tested for this document. The measurement is one run: start a long task, kill the control
-plane container, then run `docker exec quaycrew-<session id> ps -ef` and look for the model process.
+plane container, then run `docker exec krewe-<session id> ps -ef` and look for the model process.
 Until that run exists, the design assumes the answer is lost either way. That is the safe assumption,
 because the system cannot read a stream it no longer holds.
 
@@ -2649,14 +3072,14 @@ it. That is a change to where the model runs, and this design does not make it.
 
 ### A version drift warning
 
-**Shipped on 27 August 2026.** The system reports its own build, `quay version` prints all three, and
+**Shipped on 27 August 2026.** The system reports its own build, `krewe version` prints all three, and
 any command says on standard error when the tool and the system are different builds. What follows
 describes what was true before that, and it is kept because it says why the shape is this one.
 
 **Today the client cannot learn the system's version at all.** This was checked against the code.
 
-- `quay version` prints the tool's own stamped build and nothing else
-  (`cmd/quay/quay.go:134`, `cmd/quay/main.go:23`).
+- `krewe version` prints the tool's own stamped build and nothing else
+  (`cmd/krewe/quay.go:134`, `cmd/krewe/main.go:23`).
 - `GetInfoResponse` carries seven fields and none of them is a version
   (`proto/quaycrew/v1/controlplane.proto:773`). It reports the model, the sandbox kind, the store,
   the state, the events log, the secrets backend and the sandbox image build.
@@ -2676,7 +3099,7 @@ The fix is small and it is one field.
 - Stamp the control plane binary with its build at compile time, the way `make install` already
   stamps the tool.
 - Add `version` to `GetInfoResponse`, beside `sandbox_build`.
-- `quay version` prints three lines: this tool, the system, and the sandbox image. Where any two
+- `krewe version` prints three lines: this tool, the system, and the sandbox image. Where any two
   differ, it says so in one sentence and names `make upgrade`.
 - The header pane shows the same difference, because that is the surface an operator is already
   looking at.
@@ -2756,7 +3179,7 @@ would disagree.
   would then be counted by neither.
 - **Budget.** A tree budget only holds when every descendant draws from its parent. A run outside the
   tree spends without drawing from anything.
-- **Stopping.** `quay job stop` on a parent must stop what is under it. With one tree, stopping the
+- **Stopping.** `krewe job stop` on a parent must stop what is under it. With one tree, stopping the
   run's job stops the run. With two, stopping a job leaves a run going and nobody notices
   until the bill arrives.
 - **Reading.** The console shows one tree, as section 12 describes. A second hierarchy would need a
@@ -2844,7 +3267,7 @@ five seconds forever would still leave a row saying pending, which reads exactly
 nobody has got to yet.
 
 **A triggered run is carried by a job like any other**, and its own job carries the label
-`flow.trigger`, so `quay job list --label flow.trigger=<id>` says why a run nobody started exists.
+`flow.trigger`, so `krewe job list --label flow.trigger=<id>` says why a run nobody started exists.
 Where the trigger names the job that caused it, the run's own job hangs under that job, which is
 what makes the depth limit bound a flow that triggers itself.
 
@@ -2854,7 +3277,7 @@ reading the event log to write a trigger row is slice 3 of the issue. Nothing in
 either: a job reaching a terminal phase does not write a trigger row yet, because which
 flows a finished job should trigger is a matching rule this slice does not decide. There is
 no command that lists triggers or shows why one failed, so a failed row is read from the log line or
-from the database. `quay flow` is unchanged.
+from the database. `krewe flow` is unchanged.
 
 ### Trigger rows and job events: one mechanism, two tables
 
@@ -3006,17 +3429,17 @@ This list replaces the seven slices this document first carried. Three are new: 
 `quay-crew#397`, slice 7 comes from section 11, and slice 9 comes from `quay-crew#399`. The old
 numbers map across as 1, 3, 4, 5, 6, 8 and 10.
 
-**1. Print one answer whole.** `quay answer <session>` writes the most recent landed task's reply to
+**1. Print one answer whole.** `krewe answer <session>` writes the most recent landed task's reply to
 standard output with nothing else on it. `--all` writes the history. No new table, no new call, no
 controller.
 
 *Removes blocker two, entirely, on its own.* It is one command and about thirty lines, and after it a
-caller outside quay can already read an answer as data. Ship it first for that reason. `quay task`
+caller outside the system can already read an answer as data. Ship it first for that reason. `krewe task`
 already prints the reply of a task it waited for. This closes the other half, which is reading back
-an answer the caller did not wait for. That is now the default for `quay task --dispatch`.
+an answer the caller did not wait for. That is now the default for `krewe task --dispatch`.
 
 **2. The system says which build it is.** A `version` field on `GetInfoResponse`, stamped into the
-control plane binary at build time. `quay version` prints the tool, the system and the sandbox image,
+control plane binary at build time. `krewe version` prints the tool, the system and the sandbox image,
 and says when any two differ.
 
 *Removes no blocker, and removes the largest recorded waste.* `quay-crew#397` counts hours spent
@@ -3024,7 +3447,7 @@ reproducing defects that were already fixed. It is a field and a sentence, and i
 everything else in this list.
 
 **3. The job record, the read path and a controller that runs a root.** The `job` table, the
-`job_events` table, `CreateJob`, `GetJob`, `ListJobs`, `StopJob`, `quay job create|list|show|stop`,
+`job_events` table, `CreateJob`, `GetJob`, `ListJobs`, `StopJob`, `krewe job create|list|show|stop`,
 and a controller loop that runs jobs with no parent, no role and no `after`. Every validation rule in
 section 3 and its refusal.
 
@@ -3042,7 +3465,7 @@ other death, where the control plane goes and the job is retried rather than rec
 **5. Capability: the credential, the verbs and the workspace limits.** The `verbs` list on a role, the
 per job token carried on the task rather than at sandbox birth, `parent` from the credential, the
 `workspace_limits` row with `max_depth` defaulting to zero, `max_running`, `budget_tokens` and the
-lease length. `quay limits` to read and set them. The four hook calls join the deny list here, for
+lease length. `krewe limits` to read and set them. The four hook calls join the deny list here, for
 the reason section 12 gives.
 
 *Removes blocker one.* A session can now declare jobs, bounded by depth, by budget and by

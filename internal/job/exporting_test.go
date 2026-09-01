@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/telemetry"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/telemetry"
 )
 
 // theLog is what the system offered to the event log, in the order it offered it. It records rather

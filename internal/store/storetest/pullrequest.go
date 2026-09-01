@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/forge"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/store"
+	"github.com/atlantic-blue/quay-krewe/internal/forge"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // runPullRequestConformance holds both stores to what the crew keeps about a pull request it opened.

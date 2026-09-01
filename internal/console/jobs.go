@@ -4,18 +4,18 @@ import (
 	"context"
 	"fmt"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/display"
-	"github.com/atlantic-blue/krewe/internal/job"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // Jobs lists what the system has been asked to do, which is the work itself rather than the layer
 // underneath it. The console was built when a session was the unit of work, and a job is what an
 // operator declares now: five were running on this repository the day this view did not exist.
 //
-// One line carries the whole story of a piece of automation: which job, where it got to, whose role
-// is doing it, what it is about, the conversation it runs in, how many times it has been tried and
-// how old it is. The answer and the brief are not here, because a listing of a hundred answers is a
+// One line carries the whole story of a piece of automation: which job, where it got to, the word it
+// ended on, whose role is doing it, what it is about, the conversation it runs in, how many times it
+// has been tried and how old it is. The answer and the brief are not here, because a listing of a hundred answers is a
 // listing nobody can read; enter goes to what the job actually did instead.
 func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
@@ -29,6 +29,10 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			// listing heads its first column session.
 			{Title: "job", Width: 10, Colour: dim},
 			{Title: "phase", Width: 9, Colour: colourOfPhase},
+			// What the job ended on, beside where it got to. The two say different things: the phase
+			// is the system's account of the attempt, and this is the work's own. Five jobs reading
+			// "done" with one of them unable to do its work is the row this column exists for.
+			{Title: "outcome", Width: 9, Colour: colourOfOutcome},
 			// Gives way third: a system where every job names a role has a column of one word, and by
 			// then the title is worth more than it is.
 			{Title: "role", Width: 16, Give: 3, Colour: colourOfName},
@@ -100,6 +104,10 @@ func sessionOfJob(row Row) (string, error) {
 	return row.Parent, nil
 }
 
+// outcomeColumn is where the word a job ended on sits in its row, which the tests read so a column
+// added in front of it moves one number rather than several.
+const outcomeColumn = 2
+
 // phaseColumn is where a job's phase sits in its row, which the refusal above reads so it says where
 // the job got to rather than only that it got nowhere.
 const phaseColumn = 1
@@ -133,6 +141,7 @@ func jobRow(one *quaycrewv1.Job) Row {
 		Cells: []string{
 			display.ShortID(one.GetId()),
 			one.GetPhase(),
+			outcomeCell(one.GetOutcome()),
 			one.GetRole(),
 			oneLine(one.GetTitle()),
 			session,
@@ -165,6 +174,34 @@ func stateOfPhase(phase string) State {
 	// makes no claim rather than one.
 	default:
 		return StateUnknown
+	}
+}
+
+// nothingStated is what the outcome cell says on a job that has not ended on a word. An empty cell
+// reads as a column that failed to fill, and this is a job still working or one that stopped.
+const nothingStated = "-"
+
+func outcomeCell(outcome string) string {
+	if outcome == "" {
+		return nothingStated
+	}
+	return outcome
+}
+
+// colourOfOutcome reads the word the same way the job package writes it, so a word neither of them
+// knows stays uncoloured rather than being dressed as work that was proved.
+func colourOfOutcome(cell string) string {
+	switch cell {
+	case job.OutcomeProved:
+		return ansiGreenCode
+	case job.OutcomeBlocked:
+		return ansiRedCode
+	case job.OutcomeDecide:
+		return ansiYellowCode
+	// Unproved is left alone. It is work that was done, so red would say it failed, and green would
+	// say something checked it. The word is what carries the difference.
+	default:
+		return ""
 	}
 }
 

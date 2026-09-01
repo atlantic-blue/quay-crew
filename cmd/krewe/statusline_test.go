@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/hook"
+	"github.com/atlantic-blue/quay-krewe/internal/hook"
 )
 
 // shipped reads the command the system asks the runtime to run for its status line, out of the settings

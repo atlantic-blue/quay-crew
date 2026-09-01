@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/auth"
-	"github.com/atlantic-blue/krewe/internal/role"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/auth"
+	"github.com/atlantic-blue/quay-krewe/internal/role"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -85,8 +85,13 @@ func DeniedToJob(fullMethod string, request any, grant auth.Grant) error {
 	// finished on the job it is itself running, and the credential is already bound to that job. A role
 	// that could withhold it would leave a job that can only ever be started again from nothing, which
 	// is the second attempt paying for the first.
+	// Handing over is the third of the same shape. A session at its workspace's context ceiling is
+	// given no new task, and writing down what it leaves behind is the only way out of that: a role
+	// that could withhold it would leave the session with nothing to do but carry on badly, which is
+	// the failure the ceiling exists to end.
 	if fullMethod == quaycrewv1.ControlPlaneService_AskJob_FullMethodName ||
-		fullMethod == quaycrewv1.ControlPlaneService_RecordJobStep_FullMethodName {
+		fullMethod == quaycrewv1.ControlPlaneService_RecordJobStep_FullMethodName ||
+		fullMethod == quaycrewv1.ControlPlaneService_RecordJobHandoff_FullMethodName {
 		return nil
 	}
 	verb, known := jobVerbs[fullMethod]

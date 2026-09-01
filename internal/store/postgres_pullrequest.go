@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/forge"
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/forge"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // unsettled is the pull requests still worth reading: one is on the row, and the last reading did not

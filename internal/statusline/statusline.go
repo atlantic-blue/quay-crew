@@ -11,7 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/atlantic-blue/krewe/internal/display"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
 )
 
 // Warn is the share of the context window at which the line stops being information and starts being

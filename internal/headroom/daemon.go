@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/room"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/room"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 )
 
 // A Source takes one sample of the machine. It is an interface so the control plane can be built
@@ -227,18 +227,11 @@ func parseStats(out []byte) (Figure, Share, []Sandbox) {
 // sessionOf is the session a container belongs to, and false for a container that is not a sandbox.
 // The system's own services are containers too, and they hold memory, but nobody stops one of them to
 // make room.
-func sessionOf(container string) (string, bool) {
-	rest, found := strings.CutPrefix(container, sandbox.ContainerPrefix)
-	if !found || len(rest) != sandbox.SessionIDLength {
-		return "", false
-	}
-	for _, letter := range rest {
-		if (letter < '0' || letter > '9') && (letter < 'a' || letter > 'f') {
-			return "", false
-		}
-	}
-	return rest, true
-}
+//
+// The sandbox package answers this, under either of the names a sandbox can carry, so a container
+// started before the rename is still charged to the session that holds it rather than read as
+// somebody else's.
+func sessionOf(container string) (string, bool) { return sandbox.SessionOf(container) }
 
 // parseSize reads the left of "1.201GiB / 7.653GiB", which is what the daemon prints for the memory
 // one container holds. It states a unit rather than bytes, so this is the only place in the system

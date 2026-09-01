@@ -4,8 +4,8 @@ import (
 	"context"
 	"sort"
 
-	"github.com/atlantic-blue/krewe/internal/forge"
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/forge"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // UnsettledPullRequests is the jobs whose pull request is worth reading again: one is on the row, and

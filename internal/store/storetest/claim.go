@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/store"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // runJobClaimConformance holds both stores to what a claim means.
@@ -147,20 +147,20 @@ func runJobClaimConformance(t *testing.T, newDataset func(t *testing.T) Opener) 
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		workspace, project := aProject(t, s)
-		id := claimingJob(t, s, workspace, project, "atlantic-blue/krewe#540", "build the claim")
+		id := claimingJob(t, s, workspace, project, "atlantic-blue/quay-krewe#540", "build the claim")
 
 		found, err := s.GetJob(ctx, id)
 		if err != nil {
 			t.Fatalf("GetJob: %v", err)
 		}
-		if found.Claim != "atlantic-blue/krewe#540" {
+		if found.Claim != "atlantic-blue/quay-krewe#540" {
 			t.Fatalf("the job claims %q", found.Claim)
 		}
 		listed, err := s.ListJobs(ctx, job.Filter{Project: project})
 		if err != nil {
 			t.Fatalf("ListJobs: %v", err)
 		}
-		if len(listed) != 1 || listed[0].Claim != "atlantic-blue/krewe#540" {
+		if len(listed) != 1 || listed[0].Claim != "atlantic-blue/quay-krewe#540" {
 			t.Fatalf("a listing says nothing about what is claimed, so nobody reads it before starting")
 		}
 	})

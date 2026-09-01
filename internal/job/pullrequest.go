@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/forge"
+	"github.com/atlantic-blue/quay-krewe/internal/forge"
 )
 
 // A job opened a pull request, ended done, and the crew stopped there. It kept the address and never

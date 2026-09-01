@@ -11,14 +11,14 @@ import (
 	"sync"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/publish"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/secrets"
-	"github.com/atlantic-blue/krewe/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/publish"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/secrets"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // Work a job finished, driven through the control plane against real git and a real remote.
@@ -156,7 +156,7 @@ func aJobInARepository(t *testing.T) *aJobThatWillNotName {
 	_, project := newProject(t, server)
 	declared, err := server.CreateJob(context.Background(), &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "sort the listing", Brief: "make the listing sort by the clock it shows",
-		Repository: "atlantic-blue/krewe", Mode: model.PermissionBypass,
+		Repository: "atlantic-blue/quay-krewe", Mode: model.PermissionBypass,
 	})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)

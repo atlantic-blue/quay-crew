@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/secrets"
-	"github.com/atlantic-blue/krewe/internal/skill"
-	"github.com/atlantic-blue/krewe/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/secrets"
+	"github.com/atlantic-blue/quay-krewe/internal/skill"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // aSystemToJobIn is a system with one workspace and one project, with the operator standing in it.
@@ -360,7 +360,10 @@ func TestJobShowSaysWhereTheWorkWent(t *testing.T) {
 		"--title", "sort the listing",
 		"--brief", "make the listing sort by the clock it shows",
 		"--repository", "atlantic-blue/quay-crew",
-		"--mode", "dangerous")
+		"--mode", "dangerous",
+		// With the gate off, so this test ends where the rule it is about ends. A gated job waits on a
+		// reviewer and a tester, which is a behaviour of its own.
+		"--no-gate")
 	// The whole identifier, because a listing prints the short one and only the tool expands it.
 	listed, err := client.ListJobs(context.Background(), &quaycrewv1.ListJobsRequest{})
 	if err != nil || len(listed.GetJobs()) != 1 {

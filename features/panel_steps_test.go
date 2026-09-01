@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/panel"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/panel"
 	"github.com/cucumber/godog"
 )
 

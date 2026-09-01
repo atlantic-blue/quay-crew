@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/hook"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/hook"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 )
 
 // The shipped analyser, run inside the real sandbox image, the way the runtime runs it.

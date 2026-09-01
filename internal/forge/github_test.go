@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/forge"
+	"github.com/atlantic-blue/quay-krewe/internal/forge"
 )
 
 // The reader, held against the shapes GitHub actually answers with.

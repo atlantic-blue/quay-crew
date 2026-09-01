@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/workspace"
+	"github.com/atlantic-blue/quay-krewe/internal/workspace"
 )
 
 // contextFile is where the current address is kept, under the configuration directory. One line,
@@ -17,7 +17,7 @@ const contextFile = "context"
 // configHome is where the tool's own files live, which is the system's directory. It used to follow
 // XDG_CONFIG_HOME into a second place of its own, so a system was two directories and a checkout.
 func configHome() (string, error) {
-	return quayHome()
+	return kreweHome()
 }
 
 // currentPath reads the address the operator is working in. A missing file is not an error: it means

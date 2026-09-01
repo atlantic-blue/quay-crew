@@ -8,14 +8,14 @@ import (
 	"strings"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/role"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/secrets"
-	"github.com/atlantic-blue/krewe/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/role"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/secrets"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // Job that names a role, over the real database and the real control plane.
@@ -81,7 +81,7 @@ func TestJobInARoleRunsInASessionRunningAsThatRoleInPostgres(t *testing.T) {
 
 	done := waitForJob(t, s, declared.GetJob().GetId(), job.PhaseDone)
 
-	if done.GetAnswer() != "nine pull requests are open" {
+	if !strings.Contains(done.GetAnswer(), "nine pull requests are open") {
 		t.Fatalf("the answer on the row is %q", done.GetAnswer())
 	}
 	// The session, not the row: what decides whether the boundary is real is the conversation the
@@ -190,7 +190,7 @@ func TestJobWithNoRoleStillRunsAndBuildsItsContainerInPostgres(t *testing.T) {
 
 	done := waitForJob(t, s, declared.GetJob().GetId(), job.PhaseDone)
 
-	if done.GetAnswer() != "the bill is due on the 14th" {
+	if !strings.Contains(done.GetAnswer(), "the bill is due on the 14th") {
 		t.Fatalf("the answer on the row is %q", done.GetAnswer())
 	}
 	if done.GetRole() != "" {

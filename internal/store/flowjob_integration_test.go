@@ -10,13 +10,13 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/auth"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/flow"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/auth"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/flow"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 )
 
 // A flow run over a real database.
@@ -99,7 +99,7 @@ func (e *echoingRunner) Run(_ context.Context, _ sandbox.Sandbox, req model.Requ
 	defer e.mu.Unlock()
 	e.asked++
 	return model.Response{
-		Reply:          "you said: " + req.Text,
+		Reply:          statingTheOutcome("you said: "+req.Text, req.Text),
 		ModelSessionID: fmt.Sprintf("conversation-%d", e.asked),
 	}, nil
 }
@@ -280,7 +280,10 @@ func (m *modeRecordingRunner) Run(_ context.Context, _ sandbox.Sandbox, req mode
 		m.modes = map[string]string{}
 	}
 	m.modes[req.Text] = req.PermissionMode
-	return model.Response{Reply: "done", ModelSessionID: "conversation-" + req.Text}, nil
+	return model.Response{
+		Reply:          statingTheOutcome("done", req.Text),
+		ModelSessionID: "conversation-" + req.Text,
+	}, nil
 }
 
 // modeOf is the mode the task carrying this prompt ran in. Matched on what the graph wrote rather

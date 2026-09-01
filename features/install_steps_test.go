@@ -21,7 +21,7 @@ import (
 // job in continuous integration, which boots the stack and dispatches a task for real.
 
 type installWorld struct {
-	// home is QUAY_HOME, bin is BINDIR, and stubs holds the docker double and the log of its calls.
+	// home is KREWE_HOME, bin is BINDIR, and stubs holds the docker double and the log of its calls.
 	home  string
 	bin   string
 	stubs string
@@ -71,7 +71,7 @@ func (i *installWorld) run(typed string, args ...string) error {
 	}
 
 	command := exec.Command("make", append([]string{"-C", "..", "--no-print-directory",
-		"QUAY_HOME=" + i.home, "BINDIR=" + i.bin}, args...)...)
+		"KREWE_HOME=" + i.home, "BINDIR=" + i.bin}, args...)...)
 	command.Env = append(os.Environ(), "PATH="+i.stubs+string(os.PathListSeparator)+os.Getenv("PATH"))
 	command.Stdin = strings.NewReader(typed)
 

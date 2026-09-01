@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // runSessionLifecycleConformance holds both stores to what reclaiming a session means, and to the
@@ -136,7 +136,7 @@ func runSessionLifecycleConformance(t *testing.T, newDataset func(t *testing.T) 
 		}
 	})
 
-	t.Run("the settled sessions are the live ones nothing is running in", func(t *testing.T) {
+	t.Run("the idle sandboxes are the live ones nothing is running in", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
@@ -159,9 +159,9 @@ func runSessionLifecycleConformance(t *testing.T, newDataset func(t *testing.T) 
 			t.Fatalf("ArchiveSession: %v", err)
 		}
 
-		settled, err := s.SettledSessions(ctx, 0)
+		settled, err := s.IdleSandboxes(ctx, 0)
 		if err != nil {
-			t.Fatalf("SettledSessions: %v", err)
+			t.Fatalf("IdleSandboxes: %v", err)
 		}
 		if got := idsOf(settled); !holds(got, waiting.GetId()) || !holds(got, broken.GetId()) {
 			t.Fatalf("the settled sessions are %v, and both the waiting one and the one whose last "+
@@ -180,8 +180,11 @@ func runSessionLifecycleConformance(t *testing.T, newDataset func(t *testing.T) 
 			}
 		}
 	})
-
-	t.Run("a reclaimed session is still settled, so it can be filed away later", func(t *testing.T) {
+	// The split, and the fault it closes. A reclaimed session has no container left to take and stays
+	// in the archive queue for ever where no archive time is set. Reading both from one query, ordered
+	// by how long ago each was touched, let those rows fill the batch and starve the reclaim: twelve
+	// sandboxes held a whole machine while five jobs waited for room. See issue 575.
+	t.Run("a reclaimed session leaves the sandboxes and joins the archive queue", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
@@ -190,17 +193,76 @@ func runSessionLifecycleConformance(t *testing.T, newDataset func(t *testing.T) 
 			t.Fatalf("ReclaimSession: %v", err)
 		}
 
-		settled, err := s.SettledSessions(ctx, 0)
+		sandboxes, err := s.IdleSandboxes(ctx, 0)
 		if err != nil {
-			t.Fatalf("SettledSessions: %v", err)
+			t.Fatalf("IdleSandboxes: %v", err)
 		}
-		if !holds(idsOf(settled), session.GetId()) {
-			t.Fatalf("the settled sessions are %v, and a reclaimed one has to stay in them or "+
-				"nothing would ever archive it", idsOf(settled))
+		if holds(idsOf(sandboxes), session.GetId()) {
+			t.Fatalf("the idle sandboxes carry a reclaimed session, whose container has already gone: %v",
+				idsOf(sandboxes))
+		}
+		reclaimed, err := s.ReclaimedSessions(ctx, 0)
+		if err != nil {
+			t.Fatalf("ReclaimedSessions: %v", err)
+		}
+		if !holds(idsOf(reclaimed), session.GetId()) {
+			t.Fatalf("the reclaimed sessions are %v, and one has to stay in them or nothing would "+
+				"ever archive it", idsOf(reclaimed))
 		}
 	})
 
-	t.Run("job still open holds its session out of the settled ones", func(t *testing.T) {
+	// The starvation itself, held to by both stores. The batch is small here for the same reason it is
+	// twenty in the controller: what matters is that a full batch of rows nothing can move does not
+	// hide the one row that can.
+	t.Run("reclaimed sessions never crowd a sandbox out of the batch", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+		for _, handle := range []string{"gone-1", "gone-2", "gone-3"} {
+			old, _, _ := s.FindOrCreateSession(ctx, project.GetId(), handle, store.Birth{})
+			if err := s.ReclaimSession(ctx, old.GetId()); err != nil {
+				t.Fatalf("ReclaimSession: %v", err)
+			}
+			time.Sleep(2 * time.Millisecond)
+		}
+		sandbox, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "still-here", store.Birth{})
+
+		sandboxes, err := s.IdleSandboxes(ctx, 3)
+		if err != nil {
+			t.Fatalf("IdleSandboxes: %v", err)
+		}
+		if !holds(idsOf(sandboxes), sandbox.GetId()) {
+			t.Fatalf("a batch of 3 read %v, and the only session holding a container is not in it: "+
+				"three rows whose container has already gone took the whole batch", handlesOf(sandboxes))
+		}
+	})
+
+	t.Run("the archive queue comes back longest reclaimed first, and capped", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+		for _, handle := range []string{"first", "second", "third"} {
+			session, _, _ := s.FindOrCreateSession(ctx, project.GetId(), handle, store.Birth{})
+			if err := s.ReclaimSession(ctx, session.GetId()); err != nil {
+				t.Fatalf("ReclaimSession: %v", err)
+			}
+			time.Sleep(2 * time.Millisecond)
+		}
+
+		reclaimed, err := s.ReclaimedSessions(ctx, 2)
+		if err != nil {
+			t.Fatalf("ReclaimedSessions: %v", err)
+		}
+		if len(reclaimed) != 2 {
+			t.Fatalf("asking for 2 reclaimed sessions returned %d", len(reclaimed))
+		}
+		if reclaimed[0].GetHandle() != "first" || reclaimed[1].GetHandle() != "second" {
+			t.Fatalf("the reclaimed sessions read %v, want the two reclaimed longest ago, oldest first",
+				handlesOf(reclaimed))
+		}
+	})
+
+	t.Run("job still open holds its session out of the idle sandboxes", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		workspace, project := aProject(t, s)
@@ -226,9 +288,9 @@ func runSessionLifecycleConformance(t *testing.T, newDataset func(t *testing.T) 
 			t.Fatalf("LandJob: %v", err)
 		}
 
-		settled, err := s.SettledSessions(ctx, 0)
+		settled, err := s.IdleSandboxes(ctx, 0)
 		if err != nil {
-			t.Fatalf("SettledSessions: %v", err)
+			t.Fatalf("IdleSandboxes: %v", err)
 		}
 		if holds(idsOf(settled), busy.GetId()) {
 			t.Fatalf("the settled sessions carry one a job is still running in: %v", idsOf(settled))
@@ -252,9 +314,9 @@ func runSessionLifecycleConformance(t *testing.T, newDataset func(t *testing.T) 
 			time.Sleep(2 * time.Millisecond)
 		}
 
-		settled, err := s.SettledSessions(ctx, 2)
+		settled, err := s.IdleSandboxes(ctx, 2)
 		if err != nil {
-			t.Fatalf("SettledSessions: %v", err)
+			t.Fatalf("IdleSandboxes: %v", err)
 		}
 		if len(settled) != 2 {
 			t.Fatalf("asking for 2 settled sessions returned %d", len(settled))

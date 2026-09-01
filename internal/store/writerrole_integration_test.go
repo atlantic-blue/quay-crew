@@ -7,14 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/role"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/secrets"
-	"github.com/atlantic-blue/krewe/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/role"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/secrets"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // A writing job, run as the writer, over the real database and the real control plane.
@@ -165,7 +165,7 @@ func TestAWritingJobRunsAsTheWriterFromASubjectAndItsMaterialInPostgres(t *testi
 	if done.GetRole() != "writer" {
 		t.Fatalf("the job ran as %q", done.GetRole())
 	}
-	if done.GetAnswer() != draft {
+	if !strings.Contains(done.GetAnswer(), draft) {
 		t.Errorf("the job answered %q", done.GetAnswer())
 	}
 

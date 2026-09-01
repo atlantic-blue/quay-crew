@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -86,7 +86,7 @@ func TestARepositoryThatIsNotAnOwnerAndANameIsRefused(t *testing.T) {
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("an address that is not an owner and a name was refused with %v, want invalid argument", err)
 	}
-	if !strings.Contains(err.Error(), "atlantic-blue/quay-crew") {
+	if !strings.Contains(err.Error(), "atlantic-blue/quay-krewe") {
 		t.Errorf("the refusal says %q, want it to say what to type instead", err)
 	}
 }

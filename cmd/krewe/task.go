@@ -6,9 +6,9 @@ import (
 	"io"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/display"
-	"github.com/atlantic-blue/krewe/internal/workspace"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
+	"github.com/atlantic-blue/quay-krewe/internal/workspace"
 )
 
 // flagDispatch is the one flag the word takes: send the task and let go of it.

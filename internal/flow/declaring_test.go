@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/flow"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/store"
+	"github.com/atlantic-blue/quay-krewe/internal/flow"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // The graph these drive: two steps with a choice between them, which is the shape every flow has.

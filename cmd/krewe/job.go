@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/display"
-	"github.com/atlantic-blue/krewe/internal/forge"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/workspace"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
+	"github.com/atlantic-blue/quay-krewe/internal/forge"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/workspace"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -23,7 +23,7 @@ import (
 // happen; nothing here dispatches anything.
 func runJob(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: krewe job <create|list|show|stop|ask|answer|step|resume|refuse>")
+		return fmt.Errorf("usage: krewe job <create|list|show|stop|ask|answer|step|handoff|resume|refuse>")
 	}
 	switch args[0] {
 	case "create":
@@ -40,13 +40,15 @@ func runJob(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, ar
 		return runJobAnswer(ctx, client, args[1:], out)
 	case "step":
 		return runJobStep(ctx, client, args[1:], out)
+	case "handoff":
+		return runJobHandoff(ctx, client, args[1:], out)
 	case "resume":
 		return runJobResume(ctx, client, args[1:], out)
 	case "refuse":
 		return runJobRefuse(ctx, client, args[1:], out)
 	default:
 		return fmt.Errorf("there is no job %s command: "+
-			"krewe job <create|list|show|stop|ask|answer|step|resume|refuse>", args[0])
+			"krewe job <create|list|show|stop|ask|answer|step|handoff|resume|refuse>", args[0])
 	}
 }
 
@@ -68,8 +70,10 @@ const (
 	flagProduct        = "--product"
 	flagClaim          = "--claim"
 	flagEscalate       = "--escalate"
+	flagNoGate         = "--no-gate"
 	flagParent         = "--parent"
 	flagPhase          = "--phase"
+	flagOutcome        = "--outcome"
 	flagRoots          = "--roots"
 )
 
@@ -111,6 +115,7 @@ func runJobCreate(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		Product:        values.first(flagProduct),
 		Claim:          values.first(flagClaim),
 		Escalation:     values.first(flagEscalate),
+		Ungated:        values.has(flagNoGate),
 	}
 	if labels, err := readLabels(values[flagLabel]); err != nil {
 		return err
@@ -234,7 +239,8 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		return err
 	}
 	if len(rest) > 1 {
-		return fmt.Errorf("usage: krewe job list [<workspace>/<project>] [%s <phase>] [%s <key>=<value>]", flagPhase, flagLabel)
+		return fmt.Errorf("usage: krewe job list [<workspace>/<project>] [%s <phase>] [%s <outcome>] "+
+			"[%s <key>=<value>]", flagPhase, flagOutcome, flagLabel)
 	}
 	typed := ""
 	if len(rest) == 1 {
@@ -245,6 +251,7 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	where := systemWide("jobs")
 	request := &quaycrewv1.ListJobsRequest{
 		Parent: values.first(flagParent), RootsOnly: values.has(flagRoots), Phase: values.first(flagPhase),
+		Outcome: values.first(flagOutcome),
 	}
 	if !readsTheSystem(typed) {
 		located, err := locate(ctx, client, typed)
@@ -291,13 +298,14 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 			holding = one.GetReason()
 		}
 		if where.where == "" {
-			fmt.Fprintf(out, "%-10s %-24s %-2d %-8s %s%s\n", display.ShortID(one.GetId()),
-				addresses[one.GetProject()], one.GetDepth(), phaseOf(one), claimColumn(one, claiming),
-				truncateLine(one.GetTitle()))
+			fmt.Fprintf(out, "%-10s %-24s %-2d %-8s %-9s %s%s\n", display.ShortID(one.GetId()),
+				addresses[one.GetProject()], one.GetDepth(), phaseOf(one), outcomeOf(one),
+				claimColumn(one, claiming), truncateLine(one.GetTitle()))
 			continue
 		}
-		fmt.Fprintf(out, "%-10s %-2d %-8s %s%s\n",
-			display.ShortID(one.GetId()), one.GetDepth(), phaseOf(one), claimColumn(one, claiming),
+		fmt.Fprintf(out, "%-10s %-2d %-8s %-9s %s%s\n",
+			display.ShortID(one.GetId()), one.GetDepth(), phaseOf(one), outcomeOf(one),
+			claimColumn(one, claiming),
 			truncateLine(one.GetTitle()))
 	}
 	// Said once, under the listing, because an operator reading a column of "held" needs to know it
@@ -343,6 +351,18 @@ func phaseOf(one *quaycrewv1.Job) string {
 		return "held"
 	}
 	return one.GetPhase()
+}
+
+// outcomeOf is the word a job ended on, and a dash where nothing has stated one.
+//
+// A dash rather than a blank, because an empty cell in the middle of a row reads as a column that
+// failed to fill rather than as a job that has not ended. A job that ended without stating one reads
+// the same as one still running here, and the reason on `krewe job show` is what says which.
+func outcomeOf(one *quaycrewv1.Job) string {
+	if one.GetOutcome() == "" {
+		return "-"
+	}
+	return one.GetOutcome()
 }
 
 // heldForRoom says whether this job is pending because the system would not start it. Only the system
@@ -401,6 +421,11 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	// steer reads as an error rather than as a measurement.
 	fmt.Fprintf(out, "%s, read them with krewe steers %s\n",
 		job.Steers(int(one.GetSteers())), display.ShortID(one.GetId()))
+	// The word the job ended on, above the prose, because that is what it is: the signal, with the
+	// explanation under it. A reader that had to decide from the answer is the reading this ends.
+	if one.GetOutcome() != "" {
+		fmt.Fprintf(out, "outcome: %s, %s\n", one.GetOutcome(), job.OutcomeMeans(one.GetOutcome()))
+	}
 	// Why it stopped, before anything else, because a job that halted and a job that went quiet read
 	// the same without it.
 	if one.GetReason() != "" {
@@ -416,12 +441,33 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	// and carries no reason at all: without this line it reads as a job that has always been this
 	// role's, and the three attempts that came before it are invisible.
 	sayItLooped(out, one)
+	// The plan, and whether a person approved it. It is above what the session finished, because the
+	// steps below are read against it: a reader holding both can see for themselves which step of the
+	// plan the work accounted for.
+	if plan := one.GetPlan(); plan != "" {
+		if one.GetPlanApproved() {
+			fmt.Fprintln(out, "plan, approved:")
+		} else {
+			fmt.Fprintln(out, "plan, not approved yet:")
+		}
+		for _, line := range strings.Split(plan, "\n") {
+			fmt.Fprintf(out, "  %s\n", line)
+		}
+	}
 	// What its session finished. It is the record a second attempt carries on from, so it is here
 	// rather than only inside a task nobody can read.
 	if steps := one.GetSteps(); len(steps) > 0 {
 		fmt.Fprintln(out, "finished:")
 		for _, step := range steps {
 			fmt.Fprintf(out, "  %d. %s\n", step.GetSeq(), step.GetSummary())
+		}
+	}
+	// What each session left behind when it stopped taking work at the context ceiling. The newest is
+	// what the session doing it now was handed, so a reader can tell what it was told to carry on from.
+	for _, handed := range one.GetHandoffs() {
+		fmt.Fprintf(out, "handed over %d, left: %s\n", handed.GetSeq(), handed.GetLeft())
+		if handed.GetTried() != "" {
+			fmt.Fprintf(out, "  tried already: %s\n", handed.GetTried())
 		}
 	}
 	// How to answer a failure, said where somebody is already looking at one. Both ways, because
@@ -455,6 +501,10 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	}
 	if one.GetRepository() != "" {
 		fmt.Fprintf(out, "in %s\n", one.GetRepository())
+		// What read this work, or that nothing did. A settled job that says only "done" is what the gate
+		// exists to end: the answer was the only evidence, and it was written by the session being
+		// judged.
+		fmt.Fprintf(out, "%s\n", gateOf(one).PassedBy())
 	}
 	if one.GetBudgetTokens() > 0 {
 		fmt.Fprintf(out, "budget %d tokens\n", one.GetBudgetTokens())
@@ -634,6 +684,31 @@ func runJobStep(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	return nil
 }
 
+// runJobHandoff writes down the state a fresh session starts this job from.
+//
+// It names no job, the way krewe job step names none: the system reads which job is handing over from
+// the credential this session holds. A caller that could name any job could write on any job's record.
+func runJobHandoff(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) < 1 || len(args) > 2 {
+		return fmt.Errorf("usage: krewe job handoff \"<what is left>\" [\"<what you tried that did not work>\"]")
+	}
+	tried := ""
+	if len(args) == 2 {
+		tried = args[1]
+	}
+	resp, err := client.RecordJobHandoff(ctx, &quaycrewv1.RecordJobHandoffRequest{
+		Left: args[0], Tried: tried,
+	})
+	if err != nil {
+		return err
+	}
+	handed := resp.GetJob()
+	fmt.Fprintf(out, "handed over %s\n", display.ShortID(handed.GetId()))
+	fmt.Fprintln(out, "the rest of this job goes to a fresh session, which is given those words, what you "+
+		"recorded as finished, and nothing else you can see.")
+	return nil
+}
+
 // runJobResume continues a job that failed, from the first step it did not finish.
 //
 // It says what the job failed with before it says anything else, and it says how to refuse it. A
@@ -731,6 +806,15 @@ func findJob(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, t
 	}
 }
 
+// gateOf is a job as the gate reads it, off the wire. The sentence lives in the package that decides
+// it, so the tool and the system cannot say two different things about the same row.
+func gateOf(one *quaycrewv1.Job) job.Gate {
+	return job.Gate{
+		Repository: one.GetRepository(), Ungated: one.GetUngated(),
+		Reviewed: one.GetReviewed(), Tested: one.GetTested(), Phase: one.GetPhase(),
+	}
+}
+
 // given is what an invocation gave for each flag, in the order it gave them, so a flag that may be
 // repeated keeps its order and one that may not is read with first.
 type given map[string][]string
@@ -747,8 +831,9 @@ func (g given) has(name string) bool { return len(g[name]) > 0 }
 // valuelessFlags are the flags that are a word on their own. Each says which of two things a
 // command does rather than carrying a value, so the word after one belongs to the command.
 var valuelessFlags = map[string]bool{
-	flagRoots: true,
-	flagClear: true,
+	flagRoots:  true,
+	flagClear:  true,
+	flagNoGate: true,
 }
 
 // readFlags separates the values from the words.// readFlags separates the values from the words. This tool takes no flags anywhere else, so the
@@ -813,8 +898,9 @@ func jobFlagsTaken() map[string]bool {
 	taken := map[string]bool{}
 	for _, name := range []string{
 		flagTitle, flagBrief, flagRole, flagMode, flagExpectFile, flagExpectContains, flagRepository,
-		flagProduct, flagClaim, flagEscalate,
-		flagAfter, flagDeadline, flagBudgetTokens, flagLabel, flagRequires, flagPhase, flagRoots,
+		flagProduct, flagClaim, flagEscalate, flagNoGate,
+		flagAfter, flagDeadline, flagBudgetTokens, flagLabel, flagRequires, flagPhase, flagOutcome,
+		flagRoots,
 		// Taken so it can be refused with the sentence that says where a parent comes from,
 		// rather than with the tool's general refusal of flags.
 		flagParent,

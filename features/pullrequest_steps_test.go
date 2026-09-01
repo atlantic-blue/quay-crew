@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/forge"
-	"github.com/atlantic-blue/krewe/internal/job"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/forge"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 	"github.com/cucumber/godog"
 )
 
@@ -40,28 +40,26 @@ func initializePullRequestSteps(sc *godog.ScenarioContext) {
 	// address, and landed by the controller reading that address off the answer.
 	sc.Step(`^a job that opened the pull request "([^"]*)"$`, func(ctx context.Context, address string) error {
 		w := worldFrom(ctx)
+		w.runner.willSay("done, opened " + address)
 		if err := declareJob(ctx, &quaycrewv1.CreateJobRequest{
 			Title: "sort the listing", Brief: "make the listing sort by the clock it shows",
 			Repository: "atlantic-blue/quay-crew", Mode: "dangerous",
+			// With the settle gate off, so the job lands on its own answer. A gated job waits for a
+			// reviewer and a tester, which is features/settling.feature and not what this is about.
+			Ungated: true,
 		}); err != nil {
 			return err
 		}
 		if w.lastErr != nil {
 			return w.lastErr
 		}
-		w.runner.willSay("done, opened " + address)
-		w.server.TickJob(ctx)
-		if err := w.settled(ctx); err != nil {
+		if err := tickUntilTheJobIs(ctx, job.PhaseDone); err != nil {
 			return err
 		}
-		w.server.TickJob(ctx)
 
 		one, err := readJob(ctx, 0)
 		if err != nil {
 			return err
-		}
-		if one.GetPhase() != job.PhaseDone {
-			return fmt.Errorf("the job is %q saying %q, want done", one.GetPhase(), one.GetReason())
 		}
 		if one.GetPullRequest() != address {
 			return fmt.Errorf("the job names the pull request %q, want %q", one.GetPullRequest(), address)

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"strings"
 	"testing"
 )
@@ -173,5 +175,55 @@ func TestATimeThatIsNotALengthIsRefused(t *testing.T) {
 		if _, err := runKrewe(t, client, "limits", "me", flag, "soon"); err == nil {
 			t.Fatalf("%s soon was accepted", flag)
 		}
+	}
+}
+
+// The context ceiling reads as a measurement and is not one, so the line says where it came from.
+// A reader who takes it for a measurement will not go and take one.
+func TestLimitsSaysWhereTheContextCeilingCameFrom(t *testing.T) {
+	client := aSystemToJobIn(t)
+
+	said := mustRun(t, client, "limits")
+
+	for _, want := range []string{
+		"ctx ceiling    70%",
+		"from a standard rather than from any measurement",
+	} {
+		if !strings.Contains(said, want) {
+			t.Errorf("krewe limits does not say %q: %q", want, said)
+		}
+	}
+}
+
+// A workspace sets its own, and the line then says what happens at it rather than where the number
+// came from, because at that point the number came from the operator.
+func TestLimitsSetsTheContextCeilingAndSaysWhatHappensAtIt(t *testing.T) {
+	client := aSystemToJobIn(t)
+
+	said := mustRun(t, client, "limits", "me", "--context-ceiling", "55")
+
+	for _, want := range []string{"ctx ceiling    55%", "hands the rest of its job to a fresh one"} {
+		if !strings.Contains(said, want) {
+			t.Errorf("krewe limits does not say %q: %q", want, said)
+		}
+	}
+	read := mustRun(t, client, "limits", "me")
+	if !strings.Contains(read, "ctx ceiling    55%") {
+		t.Fatalf("the context ceiling did not survive being set: %q", read)
+	}
+}
+
+// A share the system could not act on is refused while the operator is looking, and the refusal says
+// what to type instead: zero here takes the system's own rather than turning the gate off.
+func TestLimitsRefusesAContextCeilingThatIsNotAShare(t *testing.T) {
+	client := aSystemToJobIn(t)
+
+	var out bytes.Buffer
+	err := run(context.Background(), client, []string{"limits", "me", "--context-ceiling", "140"}, &out, "")
+	if err == nil {
+		t.Fatal("a context ceiling of 140 per cent of a window was accepted")
+	}
+	if !strings.Contains(err.Error(), "between 1 and 100") {
+		t.Fatalf("the refusal says %q, want it to say what to type instead", err)
 	}
 }

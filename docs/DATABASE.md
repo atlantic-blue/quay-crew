@@ -1,6 +1,6 @@
 # The database
 
-Quay System keeps its workspaces, projects, sessions, context and channels in Postgres, a service in
+Quay Krewe keeps its workspaces, projects, sessions, context and channels in Postgres, a service in
 the same compose stack as everything else. This document is how to run it, how to look inside it, and what
 each thing in there means.
 
@@ -15,7 +15,7 @@ what would happen otherwise.
 When a session runs a task, the model keeps the conversation on its own disk and hands back a handle
 to it. That handle is stored as `model_session_id` on the session row, and it is the only pointer to
 that conversation anywhere in the system. Lose the row and the conversation still exists, sitting in
-`~/.quay/data`, unreachable forever. Nothing can reconstruct the handle.
+`~/.krewe/data`, unreachable forever. Nothing can reconstruct the handle.
 
 So the database is not a cache and it is not an optimisation. It is the thing that makes a session
 something you can come back to tomorrow.
@@ -145,7 +145,7 @@ Both stores then write the order. Postgres orders by `coalesce(archived_at, upda
 the in memory store sorts by `sortByLastMoved` in `internal/store/store.go`. The conformance suite in
 `internal/store/storetest` holds the two to the same answer.
 
-The order is decided here and nowhere else. The console, `quay sessions` and the web page all render
+The order is decided here and nowhere else. The console, `krewe sessions` and the web page all render
 this listing in the order they are given it, and none of them sorts it again: a second order would be
 a second thing to keep in step with this one.
 
@@ -160,8 +160,8 @@ is now unset.
 two columns together. `scope` is `system`, `workspace` or `project`, and `owner` is the workspace or
 project it belongs to, empty for the system. It has no foreign key for that reason. The `CLAUDE.md`
 inside a sandbox is a rendering of this row, written when the sandbox is made and read back when
-something inside has changed it, so the store is the truth and the file is a copy. `quay context`
-shows it and `quay context edit` changes it.
+something inside has changed it, so the store is the truth and the file is a copy. `krewe context`
+shows it and `krewe context edit` changes it.
 
 **`channels`** is where an attached chat channel would be recorded: `id`, `workspace`, `kind`. It is
 empty today, and it stays empty until the first chat channel lands. See `docs/EVENTS.md`.
@@ -183,7 +183,7 @@ requires of that role, the mode, what the answer must carry, what it waits for, 
 and its labels), what the system assigned
 (the parent, the depth and the version), and what a controller writes (the phase, the session, the
 answer, the reason, the question, what a person told it and what it spent). The intent is a row
-rather than a list held in a process, so it outlives the caller. `quay job list` and `quay job show` read it, and `quay history` reads a window of it as digests: the
+rather than a list held in a process, so it outlives the caller. `krewe job list` and `krewe job show` read it, and `krewe history` reads a window of it as digests: the
 facts a reader needs to say what happened, without the brief and the answer that make a job too large
 to read a hundred of.
 
@@ -287,7 +287,7 @@ erDiagram
 
 Every session in the order the system lists them, named by where it sits rather than by its
 identifier. The order is the one described above, so this reads the way the console and
-`quay sessions` read:
+`krewe sessions` read:
 
 ```sql
 select w.name || '/' || p.name as address,
@@ -309,7 +309,7 @@ select substr(id, 1, 8) as session, status, created_at
 from sessions where model_session_id = '';
 ```
 
-The handle itself, which is also the directory name to look for under `~/.quay/data`:
+The handle itself, which is also the directory name to look for under `~/.krewe/data`:
 
 ```sql
 select substr(id, 1, 8) as session, model_session_id
@@ -328,7 +328,7 @@ left join sessions s on s.project = p.id
 group by 1 order by 1;
 ```
 
-A session's history, which is the same thing `quay task list` prints:
+A session's history, which is the same thing `krewe task list` prints:
 
 ```sql
 select occurred_at, status, left(prompt, 60) as asked, left(reply, 60) as answered
@@ -349,7 +349,7 @@ The control plane treats these tables as its own state. An `update` or a `delete
 prompt will disagree with what the console is showing, and deleting a session row orphans a
 conversation on disk permanently, because the row was the only pointer to it.
 
-Change things through `quay` or the console, which stop the sandbox and close things down in the
+Change things through `krewe` or the console, which stop the sandbox and close things down in the
 right order. Use psql to look.
 
 ## Migrations
@@ -396,10 +396,10 @@ docker compose -p quaycrew -f deploy/docker-compose.yml down -v
 ```
 
 That throws away every workspace, project and session. The conversations themselves stay on disk
-under `~/.quay/data`, and without the rows there is nothing left that knows how to reach them.
+under `~/.krewe/data`, and without the rows there is nothing left that knows how to reach them.
 
 ---
 
 The command outputs and shapes above were taken from a running stack (`make up` with Postgres
-healthy, one workspace and its sessions created through `quay`). Reproducing them needs the stack up;
+healthy, one workspace and its sessions created through `krewe`). Reproducing them needs the stack up;
 `make ps` should show `quaycrew-postgres-1` healthy before any of it will answer.

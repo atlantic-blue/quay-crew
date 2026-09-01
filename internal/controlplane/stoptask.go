@@ -5,9 +5,9 @@ import (
 	"strings"
 	"sync"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/display"
-	"github.com/atlantic-blue/krewe/internal/model"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

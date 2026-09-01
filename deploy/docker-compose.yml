@@ -121,7 +121,7 @@ services:
       # given them on startup; a system that already holds any is left exactly as the operator left it.
       QC_SEED_SKILLS_DIR: /skills
       QC_SKILLS_DIR: /var/lib/quaycrew/skills
-      QC_SKILLS_HOST: ${QC_DATA_HOST:-${HOME}/.quay/data}/skills
+      QC_SKILLS_HOST: ${QC_DATA_HOST:-${HOME}/.krewe/data}/skills
       QC_GIT_AUTHOR_NAME: ${QC_GIT_AUTHOR_NAME:-}
       QC_GIT_AUTHOR_EMAIL: ${QC_GIT_AUTHOR_EMAIL:-}
       # The sandbox image above carries no model. Set QC_MODEL=claude-code once an image with the
@@ -153,7 +153,7 @@ services:
       # creates folders in. QC_DATA_HOST is the same directory as the host daemon sees it, which is
       # what a sandbox, a sibling container on that daemon, can actually mount.
       QC_DATA_DIR: /var/lib/quaycrew
-      QC_DATA_HOST: ${QC_DATA_HOST:-${HOME}/.quay/data}
+      QC_DATA_HOST: ${QC_DATA_HOST:-${HOME}/.krewe/data}
       # The audit export. History is written to Postgres in the same breath as each task either way;
       # this also puts every task on <workspace>.tasks for a second consumer. Set it to empty in your
       # own configuration to turn the export off, which loses nothing.
@@ -175,7 +175,7 @@ services:
       # The control plane starts sandbox containers through the host daemon. This is root equivalent
       # access to the host, granted deliberately: see docs/ARCHITECTURE.md.
       - /var/run/docker.sock:/var/run/docker.sock
-      - ${QC_DATA_HOST:-${HOME}/.quay/data}:/var/lib/quaycrew
+      - ${QC_DATA_HOST:-${HOME}/.krewe/data}:/var/lib/quaycrew
     ports:
       # Loopback only: the port is the whole system, and the token guards a caller, not the network.
       # Publish it wider only behind transport you own.

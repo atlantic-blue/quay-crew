@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/forge"
+	"github.com/atlantic-blue/quay-krewe/internal/forge"
 )
 
 // The query that finds what is still worth reading writes its two words out rather than passing them

@@ -5,9 +5,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/publish"
-	"github.com/atlantic-blue/krewe/internal/repository"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/publish"
+	"github.com/atlantic-blue/quay-krewe/internal/repository"
 )
 
 // A job that names a repository ends in a pull request against it.
@@ -38,11 +38,11 @@ func usableRepository(address string) error {
 	}
 	if repository.TooLong(address) {
 		return fmt.Errorf("the repository is %d bytes and the ceiling is %d: a repository is an owner and a "+
-			"name, so write it as atlantic-blue/quay-crew", len(address), RepositoryLimit)
+			"name, so write it as atlantic-blue/quay-krewe", len(address), RepositoryLimit)
 	}
 	if !repository.Shaped(address) {
 		return fmt.Errorf("job works in the repository %q, which is not an owner and a name: write it as "+
-			"atlantic-blue/quay-crew, or paste the address of the repository", address)
+			"atlantic-blue/quay-krewe, or paste the address of the repository", address)
 	}
 	return nil
 }
@@ -98,33 +98,65 @@ func EndsInAPullRequest(repository string) string {
 // The session asked a question, waited in its container, and is being started again to be given the
 // answer: sending it the brief a second time would ask it to do the whole job over.
 func Asked(one *Job) string {
+	said := []string{}
+	switch {
 	// A job being continued goes first. It is the newest thing an operator decided about this job, and
 	// what it was told belongs to an attempt that is over: a resume is cleared the moment the job asks
 	// a question, so only one of the two is ever the instruction in hand.
-	if one.Resuming != "" {
-		return Continued(one)
+	case one.Resuming != "":
+		said = append(said, Continued(one))
+	// A job that owes a person a plan writes the plan and nothing else. It comes before what it was
+	// told, because what a planned job was told is the correction to a plan rather than the answer to
+	// a question: a session given CarryOn here would be told to carry on with work it has not started.
+	// It comes before a handoff for the same reason: a job with no approved plan has no work to carry
+	// on with, so the session taking it over is owed the plan rather than the record.
+	//
+	// It is the one road that carries no line about an outcome. The answer to it is a plan, the
+	// controller reads the plan and puts it to a person, and no job is ever settled on it, so a
+	// session asked for a word that ends the job would be asked for something this task cannot end.
+	case WaitingForItsPlan(one):
+		if one.Told != "" {
+			return WriteThePlanAgain(one)
+		}
+		return WriteThePlan(one)
+	// A handoff waiting to be taken up comes next. The conversation this task is going to has never
+	// seen the job, so what it gets is the brief and the record together, which is where it differs
+	// from a job being continued in the conversation that did the work. See ceiling.go.
+	case HandingOver(one):
+		said = append(said, HandedOn(one))
+	case one.Told != "":
+		said = append(said, CarryOn(one))
+	default:
+		// A job handed to another role after it went in circles. The session reading this is not the one
+		// that went round in them, and nothing it tried is in this conversation, so what those attempts
+		// said is written out rather than referred to.
+		if route, err := ReadRoute(one.EscalatedTo); err == nil && route.Names(RoleNow(one)) {
+			said = append(said, HandedOver(one, AtStep(one.Attempted, one.LoopedStep)))
+			break
+		}
+		if one.Product != "" {
+			said = append(said, ServesAPerson(one.Product))
+		}
+		said = append(said, one.Brief)
+		if one.Repository != "" {
+			said = append(said, EndsInAPullRequest(one.Repository))
+		}
+		// Last, because it is the system's line about how the job is done rather than part of what it is.
+		// It is here rather than in a brief because a brief that forgets it produces a job that can only
+		// ever be started again from nothing.
+		//
+		// Where a person approved a plan, the plan carries this line with the numbers on it. Two lines
+		// about recording steps, saying it two ways, is how a session ends up doing neither.
+		if one.PlanApproved {
+			said = append(said, FollowThePlan(one.Plan))
+		} else {
+			said = append(said, RecordEachStep())
+		}
 	}
-	if one.Told != "" {
-		return CarryOn(one)
-	}
-	// A job handed to another role after it went in circles. The session reading this is not the one
-	// that went round in them, and nothing it tried is in this conversation, so what those attempts
-	// said is written out rather than referred to.
-	if route, err := ReadRoute(one.EscalatedTo); err == nil && route.Names(RoleNow(one)) {
-		return HandedOver(one, AtStep(one.Attempted, one.LoopedStep))
-	}
-	said := []string{}
-	if one.Product != "" {
-		said = append(said, ServesAPerson(one.Product))
-	}
-	said = append(said, one.Brief)
-	if one.Repository != "" {
-		said = append(said, EndsInAPullRequest(one.Repository))
-	}
-	// Last, because it is the system's line about how the job is done rather than part of what it is.
-	// It is here rather than in a brief because a brief that forgets it produces a job that can only
-	// ever be started again from nothing.
-	said = append(said, RecordEachStep())
+	// Last on every road that can end the job, because it is the line the answer ends on and because
+	// every one of these tasks can be the one that ends it. A task sent without it would be a session
+	// held to a rule it was never given.
+	said = append(said, EndsWithAnOutcome())
 	return strings.Join(said, "\n\n")
 }
 
@@ -134,7 +166,8 @@ func Asked(one *Job) string {
 func AskedForThePullRequest(repository string) string {
 	return fmt.Sprintf("This job works in %s and its answer named no pull request against it, so the work is "+
 		"nowhere anybody can read it. Push your branch, open the pull request, and answer with its "+
-		"address. Do not merge it. If you cannot push, say what stopped you.", repository)
+		"address. Do not merge it. If you cannot push, say what stopped you. This answer ends the job, "+
+		"so state its outcome in it as well. %s", repository, EndsWithAnOutcome())
 }
 
 // NoPullRequest is why a job that names a repository stopped without one, and where its work is.

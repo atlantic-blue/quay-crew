@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/forge"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/store"
+	"github.com/atlantic-blue/quay-krewe/internal/forge"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // The crew keeps a pull request address and reads it back. What is specified here is what the row

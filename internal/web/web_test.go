@@ -11,13 +11,13 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/display"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/secrets"
-	"github.com/atlantic-blue/krewe/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/secrets"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
@@ -109,11 +109,12 @@ func TestTheRefusalSaysWhichOfTheThreeIsMissing(t *testing.T) {
 		}
 	}
 }
+
 func TestTheListingShowsEveryLiveConversation(t *testing.T) {
 	client := aSystem(t)
 	dispatch(t, client, projectOf(t, client), "", "when is the electricity bill due")
 
-	body, status := get(t, client, "/")
+	body, status := get(t, client, "/sessions")
 
 	if status != http.StatusOK {
 		t.Fatalf("the listing answered %d", status)
@@ -150,7 +151,7 @@ func TestAConversationReadsBackInTheOrderItHappened(t *testing.T) {
 func TestASystemWithNoConversationsSaysSo(t *testing.T) {
 	client := aSystem(t)
 
-	body, status := get(t, client, "/")
+	body, status := get(t, client, "/sessions")
 
 	if status != http.StatusOK {
 		t.Fatalf("the listing answered %d", status)
@@ -206,19 +207,45 @@ func get(t *testing.T, reader Reader, path string) (string, int) {
 
 func aSystem(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
 	t.Helper()
-	return systemWith(t, &model.FakeRunner{Reply: "ok"})
+	client, _ := systemDoingJobs(t, &model.FakeRunner{Reply: "ok"})
+	return client
 }
 
-// systemWith is a whole control plane in memory, reached over a real connection, so these tests drive
-// the thing the operator drives rather than a double of it.
 func systemWith(t *testing.T, runner model.Runner) quaycrewv1.ControlPlaneServiceClient {
+	t.Helper()
+	client, _ := systemDoingJobs(t, runner)
+	return client
+}
+
+// systemDoingJobs is a whole control plane in memory, reached over a real connection, so these tests
+// drive the thing the operator drives rather than a double of it.
+//
+// The system itself comes back beside the client because nothing here runs the job controller: a test
+// about a job that landed moves it on by ticking, which is what the controller does on its own timer
+// in a running system.
+func systemDoingJobs(t *testing.T, runner model.Runner) (quaycrewv1.ControlPlaneServiceClient, *controlplane.Server) {
+	t.Helper()
+	client, system, _ := systemKeeping(t, store.NewMemory(), runner)
+	return client, system
+}
+
+// systemOver is the same system over a store the caller keeps a handle on, which is how a case that
+// needs a job in a phase nothing here reaches writes one.
+func systemOver(t *testing.T, held store.Store, runner model.Runner) quaycrewv1.ControlPlaneServiceClient {
+	t.Helper()
+	client, _, _ := systemKeeping(t, held, runner)
+	return client
+}
+
+func systemKeeping(t *testing.T, held store.Store, runner model.Runner) (quaycrewv1.ControlPlaneServiceClient, *controlplane.Server, store.Store) {
 	t.Helper()
 	lis := bufconn.Listen(1 << 20)
 	server := grpc.NewServer()
-	quaycrewv1.RegisterControlPlaneServiceServer(server, controlplane.NewServer(controlplane.Config{
-		Store: store.NewMemory(), Runner: runner,
+	system := controlplane.NewServer(controlplane.Config{
+		Store: held, Runner: runner,
 		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
-	}))
+	})
+	quaycrewv1.RegisterControlPlaneServiceServer(server, system)
 	go func() { _ = server.Serve(lis) }()
 	t.Cleanup(server.Stop)
 
@@ -234,7 +261,7 @@ func systemWith(t *testing.T, runner model.Runner) quaycrewv1.ControlPlaneServic
 
 	client := quaycrewv1.NewControlPlaneServiceClient(conn)
 	mustCreate(t, client)
-	return client
+	return client, system, held
 }
 
 func mustCreate(t *testing.T, client quaycrewv1.ControlPlaneServiceClient) {
@@ -362,7 +389,7 @@ func TestTheListingPutsTheSessionLastWorkedInAtTheTop(t *testing.T) {
 	// Back to the one started first, which makes it the session somebody was last working in.
 	dispatch(t, client, project, early.GetHandle(), "carry on")
 
-	body, status := get(t, client, "/")
+	body, status := get(t, client, "/sessions")
 	if status != http.StatusOK {
 		t.Fatalf("the listing answered %d", status)
 	}

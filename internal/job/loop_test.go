@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // The measure, the rule and the routes.

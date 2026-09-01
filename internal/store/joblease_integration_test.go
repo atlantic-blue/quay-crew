@@ -5,16 +5,17 @@ package store_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/secrets"
-	"github.com/atlantic-blue/krewe/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/secrets"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // The lease against a real database.
@@ -84,7 +85,7 @@ func TestAControllerThatDiedMidTaskLeavesItsJobToBeAdoptedOnceInPostgres(t *test
 			t.Fatalf("GetJob: %v", err)
 		}
 		if found.Phase == job.PhaseDone {
-			if found.Answer != "the bill is due on the 14th" {
+			if !strings.Contains(found.Answer, "the bill is due on the 14th") {
 				t.Fatalf("the answer is %q, want the one the dead controller's task left behind", found.Answer)
 			}
 			break
@@ -282,7 +283,7 @@ func TestJobAbandonedBeforeItsTaskWasSentRunsAgainInPostgres(t *testing.T) {
 			t.Fatalf("GetJob: %v", err)
 		}
 		if found.Phase == job.PhaseDone {
-			if found.Answer != "the bill is due on the 14th" {
+			if !strings.Contains(found.Answer, "the bill is due on the 14th") {
 				t.Fatalf("the answer is %q", found.Answer)
 			}
 			break

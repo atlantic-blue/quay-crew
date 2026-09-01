@@ -16,7 +16,7 @@ import (
 	"net/http"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"google.golang.org/grpc"
 )
 
@@ -41,6 +41,11 @@ type Reader interface {
 	ListSessions(context.Context, *quaycrewv1.ListSessionsRequest, ...grpc.CallOption) (*quaycrewv1.ListSessionsResponse, error)
 	GetSession(context.Context, *quaycrewv1.GetSessionRequest, ...grpc.CallOption) (*quaycrewv1.GetSessionResponse, error)
 	ListTasks(context.Context, *quaycrewv1.ListTasksRequest, ...grpc.CallOption) (*quaycrewv1.ListTasksResponse, error)
+	ListJobs(context.Context, *quaycrewv1.ListJobsRequest, ...grpc.CallOption) (*quaycrewv1.ListJobsResponse, error)
+	ListFlowRuns(context.Context, *quaycrewv1.ListFlowRunsRequest, ...grpc.CallOption) (*quaycrewv1.ListFlowRunsResponse, error)
+	GetHeadroom(context.Context, *quaycrewv1.GetHeadroomRequest, ...grpc.CallOption) (*quaycrewv1.GetHeadroomResponse, error)
+	GetHealth(context.Context, *quaycrewv1.GetHealthRequest, ...grpc.CallOption) (*quaycrewv1.GetHealthResponse, error)
+	GetUsage(context.Context, *quaycrewv1.GetUsageRequest, ...grpc.CallOption) (*quaycrewv1.GetUsageResponse, error)
 }
 
 // Serve runs the view until ctx is done, writing the address it came up on to out.
@@ -109,7 +114,10 @@ func Handler(reader Reader) (http.Handler, error) {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", http.FileServerFS(staticFiles))
-	mux.HandleFunc("GET /{$}", view.sessions)
+	// The briefing holds the front door, because the question an operator has when the tab opens is
+	// not "what is running". The session listing keeps its page and loses that door.
+	mux.HandleFunc("GET /{$}", view.briefing)
+	mux.HandleFunc("GET /sessions", view.sessions)
 	mux.HandleFunc("GET /session/{id}", view.session)
 	return mux, nil
 }
@@ -118,7 +126,7 @@ func Handler(reader Reader) (http.Handler, error) {
 // two of them in one set would collide.
 func parsePages() (map[string]*template.Template, error) {
 	pages := map[string]*template.Template{}
-	for _, name := range []string{"sessions.html", "session.html"} {
+	for _, name := range []string{"briefing.html", "sessions.html", "session.html"} {
 		parsed, err := template.ParseFS(templateFiles, "templates/layout.html", "templates/"+name)
 		if err != nil {
 			return nil, fmt.Errorf("parse %s: %w", name, err)

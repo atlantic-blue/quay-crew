@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/skill"
+	"github.com/atlantic-blue/quay-krewe/internal/skill"
 )
 
 // The shape the git brief describes, run against real git rather than read.

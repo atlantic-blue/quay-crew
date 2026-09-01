@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/manual"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/manual"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 	"github.com/cucumber/godog"
 )
 
@@ -85,6 +85,23 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 			if !strings.Contains(body, word) {
 				return fmt.Errorf("the context never says %q, so a session would be guessing", word)
 			}
+		}
+		return nil
+	})
+
+	// The product's name, written here rather than read out of the manual package: a step that read the
+	// text it is checking would pass whatever that text was changed to.
+	sc.Step(`^the project's context names the product$`, func(ctx context.Context) error {
+		projects := contextFrom(ctx).scoped("project")
+		if len(projects) != 1 {
+			return fmt.Errorf("%d project directories, want 1", len(projects))
+		}
+		body := projects[0].GetBody()
+		if !strings.Contains(body, "Quay Krewe") {
+			return fmt.Errorf("the manual never names the product, so a session cannot say what it is running in:\n%s", body)
+		}
+		if strings.Contains(body, "Quay System") {
+			return fmt.Errorf("the manual calls the product by the name it had before this one:\n%s", body)
 		}
 		return nil
 	})

@@ -18,9 +18,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/role"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/role"
 	"gopkg.in/yaml.v3"
 )
 
@@ -280,6 +280,9 @@ func Parse(source []byte) (Graph, error) {
 			if len(node.On) == 0 {
 				return Graph{}, fmt.Errorf("flow: choice node %s has no condition", name)
 			}
+			if err := usableOutcome(name, node.On); err != nil {
+				return Graph{}, err
+			}
 		case NodeWait:
 			if strings.TrimSpace(node.For) == "" {
 				return Graph{}, fmt.Errorf("flow: wait node %s has no `for`, so a run would sit on it forever; say how long, as 30s or 10m or 2h", name)
@@ -495,4 +498,25 @@ func usableExpectFile(node, path string) error {
 		}
 	}
 	return nil
+}
+
+// OutcomeKey is where the word a step ended on sits in a run's state, which is what a choice node
+// branches on. The prose the step wrote sits beside it under result.reply, and the two are separate
+// keys because two readings of one sentence give two answers.
+const OutcomeKey = "result.outcome"
+
+// usableOutcome refuses a choice that waits for an outcome the system never hands out.
+//
+// Held at import, while the author is looking, for the reason every other rule here is: a condition
+// that can never be true is a graph that silently takes the other edge, hours later, with nothing
+// pointing back at the file. The words are the job package's, so a graph and a session are offered
+// one set rather than two.
+func usableOutcome(name string, on map[string]string) error {
+	want, branches := on[OutcomeKey]
+	if !branches || job.KnownOutcome(want) {
+		return nil
+	}
+	return fmt.Errorf("flow: choice node %s waits for the outcome %q, and a job ends on one of %s; "+
+		"a condition nothing can meet takes the other edge every time", name, want,
+		strings.Join(job.Outcomes(), ", "))
 }

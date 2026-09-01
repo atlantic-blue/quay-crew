@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/flow"
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/flow"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // ImportFlowGraph stores a graph at a version. A version that exists is refused rather than
@@ -283,6 +283,9 @@ func (m *Memory) writeMovementJob(written flow.JobWrite) error {
 		carried.Phase, carried.Question, carried.UpdatedAt = on.Phase, on.Question, now
 		if on.Answer != "" {
 			carried.Answer = on.Answer
+		}
+		if on.Outcome != "" {
+			carried.Outcome = on.Outcome
 		}
 		if on.Reason != "" {
 			carried.Reason = on.Reason

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"unicode/utf8"
 
-	"github.com/atlantic-blue/krewe/internal/contextspend"
+	"github.com/atlantic-blue/quay-krewe/internal/contextspend"
 )
 
 // contentBlock is one piece of a message. A message is either a plain string, which is somebody

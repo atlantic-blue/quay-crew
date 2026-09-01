@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/display"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
 )
 
 // A listing of thirty sessions was one colour, so reading it meant reading every character of every

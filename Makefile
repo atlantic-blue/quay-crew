@@ -1,16 +1,20 @@
-# Quay System. `make up` (or `make start`) brings the whole stack up in Docker.
+# Quay Krewe. `make up` (or `make start`) brings the whole stack up in Docker.
 # Pass PROJECT=<name> for a fully isolated stack, for example: make up PROJECT=demo
 
 PROJECT ?=
 COMPOSE_PROJECT := quaycrew$(if $(PROJECT),-$(PROJECT),)
 GOBIN := $(shell go env GOPATH)/bin
 
-# QUAY_HOME is where a system keeps what belongs to it on this machine. It is deliberately outside this
+# KREWE_HOME is where a system keeps what belongs to it on this machine. It is deliberately outside this
 # checkout: a system that is installed rather than cloned has no checkout to put configuration in, and
 # configuration that lives in one cannot be given to anybody. Compose is told the path rather than
 # left to find a file next to its own compose file.
-QUAY_HOME ?= $(HOME)/.quay
-ENV_FILE ?= $(QUAY_HOME)/env
+#
+# QUAY_HOME is what it was called before the rename, and it is read for one release. It is in shell
+# profiles and in scripts, and a build that stopped reading it would point the stack at a fresh
+# directory while the tokens, the sealing key and every conversation stayed in the old one.
+KREWE_HOME ?= $(if $(QUAY_HOME),$(QUAY_HOME),$(HOME)/.krewe)
+ENV_FILE ?= $(KREWE_HOME)/env
 
 # QC_SESSION_NETWORK is the network a session's sandbox joins to reach the control plane, and the
 # control plane is the only thing on it. It is computed rather than configured, and named after this
@@ -39,11 +43,21 @@ VERSION := $(shell git rev-parse --short HEAD 2>/dev/null)$(shell git diff --qui
 # enough: the compose project is also called quaycrew, so its own services are quaycrew-postgres-1 and
 # friends, and a reap by prefix would take the whole stack with it. So this matches the exact shape of
 # a sandbox name, and the reap below additionally skips anything compose owns.
-SANDBOX_PATTERN := ^quaycrew-[0-9a-f]{24}$$
+#
+# Both names, because a sandbox that started before the rename carries the retired prefix. The sweep
+# is what clears the containers the system has forgotten, and a name it does not match is a name the
+# next start of that session cannot use.
+SANDBOX_PATTERN := ^(krewe|quaycrew)-[0-9a-f]{24}$$
 
 # The default sandbox image: a container with the Claude Code CLI, built locally with `make
 # sandbox-image`. Point QC_SANDBOX_IMAGE at this and set QC_MODEL=claude-code to run real tasks.
-SANDBOX_IMAGE := quaycrew-sandbox-claude:local
+SANDBOX_IMAGE := krewe-sandbox-claude:local
+
+# RETIRED_SANDBOX_IMAGE is what that image was called before the rename. An operator's own
+# configuration file pins the tag and an upgrade never rewrites it, so the build keeps answering to
+# the old name for one release and env-check says which key to change. Without both, the first task
+# after an upgrade fails on an image that is not there, which reads as a broken system.
+RETIRED_SANDBOX_IMAGE := quaycrew-sandbox-claude:local
 
 .PHONY: up start upgrade up-observability down drain logs ps proto build install tool test features lint fmt tidy sandbox-image image rebuild config env-check up-check hooks changelog promises help
 
@@ -62,7 +76,7 @@ print-%:
 # source itself and creates it as root. That would leave the system's own directory owned by root, and
 # the next `krewe use` unable to write the address you are working in into it.
 config:
-	@mkdir -p "$(QUAY_HOME)/data"
+	@mkdir -p "$(KREWE_HOME)/data"
 	@if [ ! -f "$(ENV_FILE)" ]; then \
 		mkdir -p "$(dir $(ENV_FILE))"; \
 		cp deploy/env.example "$(ENV_FILE)"; \
@@ -123,9 +137,14 @@ up-check: config
 # refuses because it would build a half finished checkout into the stack.
 rebuild: tool hooks sandbox-image
 
-## sandbox-image: build the Claude Code sandbox image (tag quaycrew-sandbox-claude:local)
+## sandbox-image: build the Claude Code sandbox image (tag krewe-sandbox-claude:local)
+#
+# Tagged twice, one image. The second tag is the name this image had before the rename, and it is
+# there for the operator whose configuration file still pins it. It goes in the release named in the
+# changelog.
 sandbox-image:
 	docker build --build-arg QC_VERSION=$(VERSION) -f deploy/sandbox/claude.Dockerfile -t $(SANDBOX_IMAGE) .
+	docker tag $(SANDBOX_IMAGE) $(RETIRED_SANDBOX_IMAGE)
 
 ## image: alias for sandbox-image
 image: sandbox-image
@@ -151,6 +170,11 @@ env-check:
 		echo "note: $(ENV_FILE) does not set:$$missing"; \
 		echo "      deploy/env.example gained these after your copy was made, so the stack comes up with"; \
 		echo "      them empty and whatever they task on is off. Compare the two and add what you want."; \
+	fi; \
+	if grep -qE "^QC_SANDBOX_IMAGE=[[:space:]]*$(RETIRED_SANDBOX_IMAGE)[[:space:]]*$$" "$(ENV_FILE)"; then \
+		echo "note: $(ENV_FILE) pins QC_SANDBOX_IMAGE=$(RETIRED_SANDBOX_IMAGE), which is the retired name"; \
+		echo "      for the image now built as $(SANDBOX_IMAGE). make sandbox-image still tags it under both,"; \
+		echo "      and the release that stops doing that is in the changelog. Set QC_SANDBOX_IMAGE=$(SANDBOX_IMAGE)."; \
 	fi
 
 ## upgrade: fetch the latest, rebuild the tool and the stack, and restart it
