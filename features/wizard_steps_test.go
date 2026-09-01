@@ -7,7 +7,6 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/console"
-	"github.com/atlantic-blue/quay-krewe/internal/display"
 	"github.com/atlantic-blue/quay-krewe/internal/model"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cucumber/godog"
@@ -115,7 +114,10 @@ func initializeWizardSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the console lists the session the wizard started$`, func(ctx context.Context) error {
+	// The wizard is finished the moment the system answers, and the refreshed list is what says so.
+	// The console opens on the workspaces, so what the operator sees on that list is the workspace the
+	// wizard made; the session under it is proved from the control plane.
+	sc.Step(`^the console lists what the wizard made$`, func(ctx context.Context) error {
 		w, c := worldFrom(ctx), consoleFrom(ctx)
 		// Asked of the control plane rather than of the world, because this task was dispatched by
 		// the console rather than by a step.
@@ -126,9 +128,16 @@ func initializeWizardSteps(sc *godog.ScenarioContext) {
 		if len(listed.GetSessions()) != 1 {
 			return fmt.Errorf("the system has %d sessions, want the one the wizard started", len(listed.GetSessions()))
 		}
+		workspaces, err := w.client.ListWorkspaces(ctx, &quaycrewv1.ListWorkspacesRequest{})
+		if err != nil {
+			return err
+		}
+		if len(workspaces.GetWorkspaces()) != 1 {
+			return fmt.Errorf("the system has %d workspaces, want the one the wizard made", len(workspaces.GetWorkspaces()))
+		}
 		view := c.model.View()
-		if !strings.Contains(view, display.ShortID(listed.GetSessions()[0].GetId())) {
-			return fmt.Errorf("the console does not list the session the wizard made:\n%s", view)
+		if !strings.Contains(view, workspaces.GetWorkspaces()[0].GetName()) {
+			return fmt.Errorf("the console does not list what the wizard made:\n%s", view)
 		}
 		return nil
 	})

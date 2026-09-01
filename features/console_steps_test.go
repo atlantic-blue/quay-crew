@@ -117,6 +117,12 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return consoleFrom(ctx).openModel(worldFrom(ctx))
 	})
 
+	// The sessions listing, driven as the real console. It is where the scenarios about how a row is
+	// drawn belong, because a workspace row has three cells and a session row has twelve.
+	sc.Step(`^the operator looks at the sessions listing$`, func(ctx context.Context) error {
+		return consoleFrom(ctx).openModelOn(worldFrom(ctx), "sessions")
+	})
+
 	sc.Step(`^the operator opens the console with a conversation beside it$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
 		if err := c.openModel(worldFrom(ctx)); err != nil {
@@ -153,9 +159,11 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// On the sessions listing, because the claim is that the panel carries this view's own keys, and
+	// the workspaces view the console opens on binds none.
 	sc.Step(`^the operator looks at the console and asks for help$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
-		if err := c.openModel(worldFrom(ctx)); err != nil {
+		if err := c.openModelOn(worldFrom(ctx), "sessions"); err != nil {
 			return err
 		}
 		// Tall enough for the whole panel, which is what a real terminal usually is. A shorter one
@@ -245,6 +253,12 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the operator opens the console on workspaces$`, func(ctx context.Context) error {
 		return consoleFrom(ctx).open(ctx, worldFrom(ctx).client, "workspaces")
+	})
+
+	// The console opens on the tree now, so a scenario about the flat listing of every session says so.
+	// That listing did not go anywhere: it is one word in the command bar.
+	sc.Step(`^the operator opens the console on sessions$`, func(ctx context.Context) error {
+		return consoleFrom(ctx).open(ctx, worldFrom(ctx).client, "sessions")
 	})
 
 	sc.Step(`^the operator drills into workspace "([^"]*)"$`, func(ctx context.Context, name string) error {
@@ -337,7 +351,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the operator opens the console and presses backspace on the session$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
-		if err := c.openModel(worldFrom(ctx)); err != nil {
+		if err := c.openModelOn(worldFrom(ctx), "sessions"); err != nil {
 			return err
 		}
 		return c.press(tea.KeyMsg{Type: tea.KeyBackspace})
@@ -363,7 +377,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the operator opens the console and archives the session$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
-		if err := c.openModel(worldFrom(ctx)); err != nil {
+		if err := c.openModelOn(worldFrom(ctx), "sessions"); err != nil {
 			return err
 		}
 		if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("A")}); err != nil {
@@ -373,7 +387,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		// The console asked; whichever view a later step reads is listed fresh from the control plane.
-		return c.open(ctx, worldFrom(ctx).client, console.Default)
+		return c.open(ctx, worldFrom(ctx).client, "sessions")
 	})
 
 	sc.Step(`^the archived view lists (\d+) sessions?$`, func(ctx context.Context, want int) error {

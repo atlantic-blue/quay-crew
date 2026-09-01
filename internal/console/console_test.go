@@ -488,7 +488,7 @@ func TestEnterDrillsIntoTheChildResourceScopedToTheRow(t *testing.T) {
 			{Id: "s2", Workspace: "other", Project: "p2", Status: "idle"},
 		},
 	}
-	model := newTestModel(t, Workspaces(client), Projects(client), Sessions(client))
+	model := newTestModel(t, Workspaces(client), Projects(client), Jobs(client), Sessions(client))
 	model, _ = update(t, model, rowsFor(model, row("acme", "acme", "Acme"), row("other", "other", "Other")))
 
 	model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
@@ -1322,9 +1322,6 @@ func TestTheConsoleCallsThemSessions(t *testing.T) {
 	if got := Sessions(client).Name; got != "sessions" {
 		t.Fatalf("the view is called %q, want sessions", got)
 	}
-	if Default != "sessions" {
-		t.Fatalf("the console opens on %q, want sessions", Default)
-	}
 
 	model := newTestModel(t, Sessions(client), Projects(client))
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "bills", "t1", "idle", "1m"}}))
@@ -1378,17 +1375,17 @@ func TestTheDroppedWordsResolveToNothing(t *testing.T) {
 	}
 }
 
-// TestDrillingIntoAProjectLandsOnItsSessions: the rename has to carry the drill target with it, or
-// enter on a project dead ends on a resource nobody registers.
-func TestDrillingIntoAProjectLandsOnItsSessions(t *testing.T) {
+// TestDrillingIntoAProjectLandsOnItsJobs: enter on a project opens the work declared in it, and the
+// destination has to be registered or the key dead ends.
+func TestDrillingIntoAProjectLandsOnItsJobs(t *testing.T) {
 	client := &fakeClient{}
 	registry, err := NewDefaultRegistry(client)
 	if err != nil {
 		t.Fatalf("NewDefaultRegistry: %v", err)
 	}
 	projects, _ := registry.Get("projects")
-	if projects.DrillTo != "sessions" {
-		t.Fatalf("projects drills into %q, want sessions", projects.DrillTo)
+	if projects.DrillTo != "jobs" {
+		t.Fatalf("projects drills into %q, want jobs", projects.DrillTo)
 	}
 	if _, found := registry.Get(projects.DrillTo); !found {
 		t.Fatalf("projects drills into %q, which nothing registers", projects.DrillTo)
@@ -1444,15 +1441,15 @@ func TestNothingOpensTheFeaturesView(t *testing.T) {
 	}
 }
 
-func TestPlainOutputListsSessionsWithoutEscapeCodes(t *testing.T) {
-	client := &fakeClient{sessions: []*quaycrewv1.Session{{Id: "s1", Workspace: "acme", Status: "idle"}}}
+func TestPlainOutputListsTheOpeningViewWithoutEscapeCodes(t *testing.T) {
+	client := &fakeClient{workspaces: []*quaycrewv1.Workspace{{Id: "w1", Name: "acme"}}}
 
 	var out strings.Builder
 	if err := Plain(context.Background(), client, &out); err != nil {
 		t.Fatalf("Plain: %v", err)
 	}
-	if !strings.Contains(out.String(), "s1") {
-		t.Fatalf("output %q does not list the session", out.String())
+	if !strings.Contains(out.String(), "acme") {
+		t.Fatalf("output %q does not list the workspace", out.String())
 	}
 	if strings.Contains(out.String(), "\x1b[") {
 		t.Fatalf("output %q carries escape codes, which defeats piping", out.String())
@@ -1464,7 +1461,7 @@ func TestPlainOutputSaysSoWhenThereIsNothing(t *testing.T) {
 	if err := Plain(context.Background(), &fakeClient{}, &out); err != nil {
 		t.Fatalf("Plain: %v", err)
 	}
-	if !strings.Contains(out.String(), "no sessions") {
+	if !strings.Contains(out.String(), "no workspaces") {
 		t.Fatalf("output %q, want it to say there are none", out.String())
 	}
 }
@@ -1796,7 +1793,7 @@ func TestTheSelectedRowIsHighlightedAcrossTheWholeRow(t *testing.T) {
 	}
 }
 
-// TestTheBreadcrumbNamesWhatWasDrilledThrough: "me > house-bills > sessions" says what escape goes
+// TestTheBreadcrumbNamesWhatWasDrilledThrough: "me > house-bills <jobs>" says what escape goes
 // back to, which a trail of resource names does not.
 func TestTheBreadcrumbNamesWhatWasDrilledThrough(t *testing.T) {
 	client := &fakeClient{
@@ -1812,7 +1809,7 @@ func TestTheBreadcrumbNamesWhatWasDrilledThrough(t *testing.T) {
 	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
 	view := model.View()
-	for _, want := range []string{"me", "house-bills", "sessions", "esc to go back"} {
+	for _, want := range []string{"me", "house-bills", "jobs", "esc to go back"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the breadcrumb does not name %q:\n%s", want, view)
 		}

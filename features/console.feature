@@ -16,10 +16,10 @@ Feature: The operator sees the system from the console
     And a workspace named "acme"
     And a project named "house-bills"
 
-  Scenario: The console lists the sessions the control plane has
+  Scenario: The flat listing of every session is still one word away
     When the operator dispatches "hello" to the project
     And the operator dispatches "a different subject" to a new session
-    And the operator opens the console
+    And the operator opens the console on sessions
     Then the console lists 2 sessions
 
   Scenario: The console lists a workspace it can drill into
@@ -33,13 +33,43 @@ Feature: The operator sees the system from the console
     And the operator drills into workspace "acme"
     Then the console lists 1 project
 
-  Scenario: Drilling into a project shows only that project's sessions
-    Given a second project named "gardening"
-    When the operator dispatches "hello" to the project
-    And the operator dispatches "hello" to the second project
-    And the operator opens the console
-    And the operator drills into project "house-bills"
-    Then the console lists 1 session
+  # The whole tree, driven one key at a time against the real control plane. The console opens on the
+  # workspaces, and each enter goes one level down: projects, then jobs, then the work running under
+  # the job.
+  Scenario: The console opens at the top and each key goes one level down
+    Given a job titled "read the electricity bill"
+    When the operator is at the console
+    Then the console is on the "workspaces" view
+    When the operator presses "enter" in the console
+    Then the console is on the "projects" view
+    When the operator presses "enter" in the console
+    Then the console is on the "jobs" view
+    And the console screen says "read the electricity"
+
+  # And back up. Escape from every level, including the one the console opens on, which has nowhere
+  # to go and must not take the console with it.
+  Scenario: Escape comes back up one level at a time
+    Given a job titled "read the electricity bill"
+    When the operator is at the console
+    And the operator presses "enter" in the console
+    And the operator presses "enter" in the console
+    Then the console is on the "jobs" view
+    When the operator presses "esc" in the console
+    Then the console is on the "projects" view
+    When the operator presses "esc" in the console
+    Then the console is on the "workspaces" view
+    When the operator presses "esc" in the console
+    Then the console is on the "workspaces" view
+
+  # Enter on a project used to open its sessions. It opens the jobs now, so the sessions of one
+  # project keep a key of their own rather than becoming a trip through the command bar.
+  Scenario: A project still reaches its own sessions in one key
+    Given a session started by dispatching "hello"
+    When the operator is at the console
+    And the operator presses "enter" in the console
+    Then the console is on the "projects" view
+    When the operator presses "s" in the console
+    Then the console is on the "sessions" view
 
   # The short forms are what an operator's fingers reach for, so each one lands on the same view.
   Scenario: A short word for the sessions view opens it
@@ -53,26 +83,26 @@ Feature: The operator sees the system from the console
     And typing "turns" in the console opens nothing
 
   Scenario: An empty system lists nothing rather than failing
-    When the operator opens the console
+    When the operator opens the console on sessions
     Then the console lists 0 sessions
 
   # An identifier is what actions use, a name is what the operator reads. These say the console shows
   # the second without losing the first.
   Scenario: The console names a session's workspace rather than showing its identifier
     When the operator dispatches "hello" to the project
-    And the operator opens the console
+    And the operator opens the console on sessions
     Then the console shows the session's workspace as "acme"
 
   Scenario: The console shortens identifiers so a row can be read
     When the operator dispatches "hello" to the project
-    And the operator opens the console
+    And the operator opens the console on sessions
     Then the console shows the session identifier shortened
 
   # Enter is the obvious key on a conversation, and on this view it used to do nothing at all, because
   # a session has nothing to drill into.
   Scenario: Enter on a session opens its conversation
     Given a session started by dispatching "hello"
-    When the operator opens the console
+    When the operator opens the console on sessions
     And the operator presses enter on the selected session
     Then the console opens that session's conversation
 
@@ -80,7 +110,7 @@ Feature: The operator sees the system from the console
   # which left a row in the listing nobody could open. The system names a conversation for it instead.
   Scenario: Enter on a session whose first task failed opens a conversation the system names
     Given a session whose first task failed
-    When the operator opens the console
+    When the operator opens the console on sessions
     And the operator presses enter on the selected session
     Then the console opens a conversation the system can name
 
@@ -125,7 +155,7 @@ Feature: The operator sees the system from the console
 
   Scenario: Acting on a row still uses the whole identifier
     Given a session started by dispatching "hello"
-    When the operator opens the console
+    When the operator opens the console on sessions
     And the operator stops the selected session from the console
     Then the session is reported as stopped
 
@@ -133,14 +163,14 @@ Feature: The operator sees the system from the console
   # which is the thing an operator does most, so it keeps the cheapest key.
   Scenario: The console shows a session's history
     Given a session started by dispatching "hello"
-    When the operator opens the console
+    When the operator opens the console on sessions
     And the operator asks for the selected session's history
     Then the console is showing tasks
     And the history lists 1 task saying "hello"
 
   Scenario: Asking for a history does not open the conversation
     Given a session started by dispatching "hello"
-    When the operator opens the console
+    When the operator opens the console on sessions
     Then enter on a session still opens its conversation rather than its history
 
   # The wizard makes one thing. It shipped able to make only a whole new system, because the workspace
@@ -269,7 +299,7 @@ Feature: The operator sees the system from the console
       | dangerous   |
       | hello       |
     Then the console is asking nothing
-    And the console lists the session the wizard started
+    And the console lists what the wizard made
 
   # The header is the wordmark, which build this is, and how to reach everything else. It carried the
   # system's description and this view's keys until there was no room left for the wordmark, which is
@@ -364,7 +394,7 @@ Feature: The operator sees the system from the console
   Scenario: A session's row is coloured cell by cell rather than all in its state
     When the operator dispatches "hello" to the project
     And the operator dispatches "a different subject" to a new session
-    And the operator looks at the console
+    And the operator looks at the sessions listing
     Then a session's row carries more than one colour
     And the row says how the session is doing in its status cell
 

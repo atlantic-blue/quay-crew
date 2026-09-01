@@ -3019,31 +3019,35 @@ stops being a special case in the code. It becomes an ordinary session with a wi
 
 ### What the left half should show once jobs exist
 
-Today the console drills workspaces into projects, and projects into sessions. `DrillTo` on each
-resource in `internal/console/resources.go` decides that. Ten views are registered, and neither jobs
-nor flows are among them.
+The console opened on a flat list of every session in the system. `Default` in
+`internal/console/console.go` said `sessions`, and `DrillTo` on each resource in
+`internal/console/resources.go` took a workspace to its projects and a project to its sessions.
 
 A flat session list is the wrong shape once one operator command produces eleven sessions. Section 8c
 says so plainly: eleven sessions with no relation between them is the problem.
 
-So the left half shows the job tree.
+So the left half is a tree of four levels, and it opens at the top.
 
-- The top level is jobs with no parent, one row each, with the phase, the title and the age.
-- Drilling into a job shows its children, which is the same drill the console already does.
-- The session is a column on the job row, not a level of its own.
-- The transcript moves one level deeper. An operator selects a job and opens the
-  conversation that ran it, which is `krewe attach` on the session named by the row.
+- Workspaces. Every workspace the system holds, which is what `krewe` opens on now.
+- Projects. Inside one workspace.
+- Jobs. Inside one project, newest first, with the phase and the word the job ended on. The session
+  is a column on the job row, not a level of its own.
+- The running work. Inside one job: the tasks its session ran and what each one produced. This is
+  the level a person watches something happen on, so opening the conversation and shelling into the
+  sandbox are both keys here.
+
+Enter goes one level down and escape comes one level back, from every level including the deepest.
+The sessions of one project are still one key away, on `s`, and every flat listing is still one word
+in the command bar.
 
 ```mermaid
 flowchart LR
-    subgraph NOW["today"]
-        W1["workspaces"] --> P1["projects"] --> S1["sessions"] --> T1["tasks"]
+    subgraph BEFORE["before"]
+        S0["sessions, every one in the system"] --> T0["tasks"]
     end
-    subgraph NEXT["once jobs exist"]
-        W2["workspaces"] --> P2["projects"] --> K2["jobs, by tree"]
-        K2 --> K3["child job"]
-        K2 --> S2["the session that ran it"]
-        S2 --> T2["the transcript"]
+    subgraph NOW["now"]
+        W2["workspaces"] --> P2["projects"] --> K2["jobs"] --> R2["the running work"]
+        P2 -.->|"s"| S2["that project's sessions"]
     end
 ```
 
