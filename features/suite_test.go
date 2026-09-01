@@ -1,4 +1,4 @@
-// Package features holds the executable specification of Quay System.
+// Package features holds the executable specification of Quay Krewe.
 //
 // The feature files next to this one state what the product does, in language a reader who is not
 // holding the code can follow. The steps below drive the control plane over its real gRPC interface,
@@ -28,20 +28,20 @@ import (
 	"sync/atomic"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/auth"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/flow"
-	"github.com/atlantic-blue/krewe/internal/headroom"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/messaging"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/secrets"
-	"github.com/atlantic-blue/krewe/internal/session"
-	"github.com/atlantic-blue/krewe/internal/skill"
-	"github.com/atlantic-blue/krewe/internal/store"
-	"github.com/atlantic-blue/krewe/internal/telemetry"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/auth"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/flow"
+	"github.com/atlantic-blue/quay-krewe/internal/headroom"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/messaging"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/secrets"
+	"github.com/atlantic-blue/quay-krewe/internal/session"
+	"github.com/atlantic-blue/quay-krewe/internal/skill"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
+	"github.com/atlantic-blue/quay-krewe/internal/telemetry"
 	"github.com/cucumber/godog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -85,8 +85,9 @@ type recordingRunner struct {
 	mu       sync.Mutex
 	requests []model.Request
 	// failNext makes the next task fail, which is how a scenario gets a session that exists but has
-	// no conversation behind it.
+	// no conversation behind it. failWith is what it fails with, and empty is the general refusal.
 	failNext bool
+	failWith string
 	// takes is how long a task pretends to take. Zero is instant, which is right for almost every
 	// scenario and wrong for any scenario about something happening while a task is under way:
 	// with an instant model a whole automation finishes before the next step runs, and a scenario
@@ -119,6 +120,13 @@ type recordingRunner struct {
 	// how a scenario about an answer that states no outcome is written: everything else gets the line a
 	// session that read its task would have written.
 	exact []bool
+	// answers is a phrase against what the double answers a task carrying it, tried before the queue
+	// above and first match winning.
+	//
+	// It exists because more than one conversation can be in flight at once: a job held back until a
+	// reviewer and a tester have read its work has three, and a queue by position would make a
+	// scenario about the gate into a scenario about the order the system happens to ask in.
+	answers [][2]string
 }
 
 // failTheNextTask makes the next task the model is asked to run fail. Under the lock, because a
@@ -127,6 +135,15 @@ func (r *recordingRunner) failTheNextTask() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.failNext = true
+}
+
+// failTheNextTaskWith is the same, in words the scenario chooses, so a scenario about attempts that
+// failed differently can say what each one failed with. A model that says the same thing every time
+// would make every failure a loop.
+func (r *recordingRunner) failTheNextTaskWith(said string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.failNext, r.failWith = true, said
 }
 
 // willSay adds one answer to the queue, so a scenario builds up what a model says over several tasks.
@@ -147,8 +164,22 @@ func (r *recordingRunner) willSayExactly(answer string) {
 	r.exact = append(r.exact, true)
 }
 
+// willAnswer says what the double answers a task carrying a phrase, whenever that task arrives.
+func (r *recordingRunner) willAnswer(whenAsked, answer string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.answers = append(r.answers, [2]string{whenAsked, answer})
+}
+
 // answerFor is what the double says to the nth task, one indexed. The caller holds the lock.
 func (r *recordingRunner) answerFor(asked int, text string) string {
+	// What was asked wins over how many have been asked, because a scenario naming a phrase is being
+	// specific and a queue by position is not.
+	for _, pair := range r.answers {
+		if strings.Contains(text, pair[0]) {
+			return pair[1]
+		}
+	}
 	if len(r.says) == 0 {
 		return statingTheOutcome("you said: "+text, text)
 	}
@@ -244,8 +275,12 @@ func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.failNext {
-		r.failNext = false
-		return model.Response{}, fmt.Errorf("the model refused this task")
+		said := r.failWith
+		r.failNext, r.failWith = false, ""
+		if said == "" {
+			said = "the model refused this task"
+		}
+		return model.Response{}, fmt.Errorf("%s", said)
 	}
 	return model.Response{
 		Reply: r.answerFor(asked, req.Text),
@@ -413,6 +448,8 @@ type world struct {
 	// change is the repository a scenario built to stand for the change a session is opening a pull
 	// request for, because the gate reads the change rather than being told about it.
 	change string
+	// proseGate is what the shipped prose gate answered the last time a scenario fired it.
+	proseGate gateAnswer
 }
 
 type worldKey struct{}
@@ -736,6 +773,8 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeConsoleJobsSteps(sc)
 	initializeKeysSteps(sc)
 	initializeWebSteps(sc)
+	initializeBriefingSteps(sc)
+	initializeBriefingHeaderSteps(sc)
 	initializeFlowSteps(sc)
 	initializeFlowSurfaceSteps(sc)
 	initializePullRequestReviewSteps(sc)
@@ -766,15 +805,21 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeJobControllerSteps(sc)
 	initializeJobRepositorySteps(sc)
 	initializeOutcomeSteps(sc)
+	initializePublishingSteps(sc)
 	initializeJobWaitingSteps(sc)
 	initializeFlowStepSteps(sc)
 	initializeJobRoleSteps(sc)
 	initializeTriggerSteps(sc)
 	initializeLifecycleSteps(sc)
+	initializeStalledSteps(sc)
 	initializeJobEventsSteps(sc)
 	initializeJobLeaseSteps(sc)
 	initializeAskingSteps(sc)
 	initializeResumingSteps(sc)
+	initializeContextCeilingSteps(sc)
+	initializeSettlingSteps(sc)
+	initializePlanSteps(sc)
+	initializeLoopingSteps(sc)
 	initializeCapabilitySteps(sc)
 	initializeProductSteps(sc)
 	initializeSteersSteps(sc)
@@ -796,11 +841,14 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeDeployIdentityGateSteps(sc)
 	initializeSigningSteps(sc)
 	initializeSecretFileSteps(sc)
+	initializeProseGateSteps(sc)
 	initializeSystemSecretSteps(sc)
 	initializeGitConfigSteps(sc)
 	initializeWizardModeSteps(sc)
 	initializeDetachSteps(sc)
 	initializeDispatchingSteps(sc)
+	initializeSandboxNameSteps(sc)
+	initializeSystemDirectorySteps(sc)
 	initializeWaitsSteps(sc)
 	initializeDegradedSteps(sc)
 	initializeHeadroomSteps(sc)
@@ -817,6 +865,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeShippedRoleVerbSteps(sc)
 	initializeRoleSkillSteps(sc)
 	initializeRoleSessionSteps(sc)
+	initializePlanCriticSteps(sc)
 	initializeStoppedReasonSteps(sc)
 	initializeHookVersionSteps(sc)
 	initializeImportedSkillSteps(sc)

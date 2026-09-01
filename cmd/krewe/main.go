@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"os"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/auth"
-	"github.com/atlantic-blue/krewe/internal/console"
-	"github.com/atlantic-blue/krewe/internal/workspace"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/auth"
+	"github.com/atlantic-blue/quay-krewe/internal/console"
+	"github.com/atlantic-blue/quay-krewe/internal/workspace"
 	"github.com/mattn/go-isatty"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -88,7 +88,7 @@ func unreachable(err error, told string, sandboxed bool) error {
 		"address it fell back to. A task is told where the system is when it runs a job, and what "+
 		"it may do there comes from that job's role. So either this task is running none, or the "+
 		"system has no address of its own: QC_SANDBOX_CONTROL_PLANE on the control plane, which is "+
-		"the system's configuration file, ~/.quay/env on a compose stack. (%w)", err)
+		"the system's configuration file, ~/.krewe/env on a compose stack. (%w)", err)
 }
 
 // dispatch routes an invocation: no arguments opens the console, anything else runs a subcommand.

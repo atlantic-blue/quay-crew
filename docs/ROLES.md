@@ -11,11 +11,11 @@ what has shipped of it.
 A role is imported, pinned to a version, and attached at a level:
 
 ```
-quay role import <directory>
-quay role list [<workspace>]
-quay role show [<workspace>] <name>
-quay role attach [<workspace>|system] <name>
-quay role detach [<workspace>|system] <name>
+krewe role import <directory>
+krewe role list [<workspace>]
+krewe role show [<workspace>] <name>
+krewe role attach [<workspace>|system] <name>
+krewe role detach [<workspace>|system] <name>
 ```
 
 And a step of a flow runs as one. A dispatch node names a role, and that step runs in a session of
@@ -41,7 +41,7 @@ And a job runs as one. A caller names a role when it declares job, and the contr
 that job in a session running as that role:
 
 ```
-quay job create me/quay-crew --role backlog-clearer \
+krewe job create me/quay-crew --role backlog-clearer \
   --title "clear the open pull request backlog" \
   --brief "Read the open pull requests. For each one, declare a job." \
   --requires context
@@ -164,7 +164,7 @@ it, which is the same reason those calls are already refused to the driver.
 **The grant is half of what a session holds.** The other half is the workspace's ceiling, and the two
 mean different things: the role says what a session may do, and the workspace says how much of it.
 The effective capability is the intersection, so a role granting `job.create` in a workspace whose
-`max_depth` is zero creates nothing. Read and set the ceiling with `quay limits`, and see section 5
+`max_depth` is zero creates nothing. Read and set the ceiling with `krewe limits`, and see section 5
 of `docs/ORCHESTRATION.md` for why capability is split across the two.
 
 ```mermaid
@@ -187,7 +187,7 @@ brief nobody follows.
 
 ## Reading one back
 
-`quay role show [<workspace>] <name>` prints what the role is and the brief in full: the version, the
+`krewe role show [<workspace>] <name>` prints what the role is and the brief in full: the version, the
 summary, the model, what it receives, the verbs it may call, and who holds it. A bare name reads what the
 current address can see, and a workspace level address reads the version that workspace pinned.
 
@@ -206,10 +206,10 @@ silence.
 A role is imported from a directory, and a directory is anywhere. That makes the first import easy
 and everything after it invisible. The acceptance run was driven by three roles that sat in a folder
 on one machine: no pull request touched them, nobody reviewed them, nothing versioned them, and every
-listing the system printed showed them looking exactly like the sixteen that ship in
+listing the system printed showed them looking exactly like the seventeen that ship in
 [`roles/`](../roles).
 
-So `quay role import` records where it read the files, and the system says it back in every place a
+So `krewe role import` records where it read the files, and the system says it back in every place a
 role is printed:
 
 ```
@@ -248,8 +248,8 @@ has. That is [quay-crew#443](https://github.com/atlantic-blue/quay-crew/issues/4
 A role attaches at the system or at one workspace, which is the outer two of the four levels context
 has. Skills stop in the same place, and nothing has wanted the inner two yet.
 
-`quay role attach system <name>` gives it to every workspace, including the ones made after today.
-`quay role attach <workspace> <name>` gives it to one. The two are separate statements: taking a role
+`krewe role attach system <name>` gives it to every workspace, including the ones made after today.
+`krewe role attach <workspace> <name>` gives it to one. The two are separate statements: taking a role
 off the system leaves a workspace's own attachment alone.
 
 ## Who may attach one
@@ -292,16 +292,16 @@ write what every session in the workspace is told.
 
 ## The roles this build ships
 
-Sixteen roles live in [`roles/`](../roles) at the root of this repository, one directory each.
-Twelve of them are a design phase: a way of working from a design to a shipped slice where each step
-runs as a session of its own, given only what its role declares. Three deliver one, and they are
-below under "The three that deliver a slice". The sixteenth writes prose for a person outside the
+Seventeen roles live in [`roles/`](../roles) at the root of this repository, one directory each.
+Thirteen of them are a design phase: a way of working from a design to a shipped slice where each
+step runs as a session of its own, given only what its role declares. Three deliver one, and they are
+below under "The three that deliver a slice". The seventeenth writes prose for a person outside the
 work, and it is below under "The one that writes for somebody who was not there".
 
 ```mermaid
 flowchart LR
     subgraph FRESH["a slice, built from a design"]
-        DESIGNER["designer"] --> ARCHITECT["architect"] --> TESTWRITER["test-writer"] --> IMPLEMENTER["implementer"] --> SECURITY["security"] --> VERIFIER["verifier"] --> DEBUGGER["debugger"]
+        DESIGNER["designer"] --> ARCHITECT["architect"] --> CRITIC["plan-critic"] --> TESTWRITER["test-writer"] --> IMPLEMENTER["implementer"] --> SECURITY["security"] --> VERIFIER["verifier"] --> DEBUGGER["debugger"]
     end
     subgraph EXISTING["a codebase that already exists"]
         MAPPER["codebase-mapper"] --> ASSESSOR["assessor"] --> WRAPPER["wrapper"]
@@ -323,11 +323,14 @@ flowchart LR
 The design phase, in order, and the model each one runs on:
 
 - `designer` on opus, then `architect` on opus, which writes the contracts and the dependency graph.
+- `plan-critic` on opus reads the design, the contracts and the build order before any code exists,
+  and reports where they disagree and what they do not answer.
 - `test-writer` on sonnet writes the tests from the contracts, then `implementer` on sonnet writes
   the code that makes them pass.
 - `security` on sonnet reviews the change and writes a failing test for each defect, `verifier` on
-  sonnet checks the slice against its contracts and asks whether verification could have failed
-  at all, and `debugger` on sonnet finds a cause and fixes it.
+  sonnet checks the slice against its contracts, asks whether verification could have failed at all
+  and tries to break what the change says about itself, and `debugger` on sonnet finds a cause and
+  fixes it.
 - For a codebase that already exists: `codebase-mapper` on sonnet documents it, `assessor` on sonnet
   reports its coverage, contracts and risks, and `wrapper` on sonnet locks an existing boundary with
   tests.
@@ -337,15 +340,40 @@ The design phase, in order, and the model each one runs on:
 The model is declared per role rather than defaulted, for the reason `model` exists at all: naming a
 team is worth the larger model and writing one file to a specification is not.
 
-Every one of the twelve receives `job`, `context` and `skills`. Only the assessor declares a `verbs`
-list, `job.create` and `job.read`, because its brief declares a security review and reads what came
-back. Nothing else in the twelve declares anything, and default deny is what makes the assessor's
-grant mean something.
+Every one of the thirteen receives `job`, `context` and `skills`. Only the assessor declares a
+`verbs` list, `job.create` and `job.read`, because its brief declares a security review and reads what
+came back. Nothing else in the thirteen declares anything, and default deny is what makes the
+assessor's grant mean something.
 
-`skills` goes to all sixteen because each brief works inside a repository, and a repository reaches a
+`skills` goes to all seventeen because each brief works inside a repository, and a repository reaches a
 session here through the git skill: nothing is cloned for a session. Withholding `skills` would take
 away the brief and the mounted directory and leave the workspace's secrets in the environment
 regardless, so it would break a role rather than fence one.
+
+### The role that reads the plan before anybody builds it
+
+`plan-critic` is the newest of the seventeen and it is the only one that runs before any code exists.
+It reads the design, the contracts and the build order, and it reads them against the one sentence
+the job carries. It reports where the three disagree, and where none of them answers the sentence.
+
+It exists because a run built a design document faithfully, every check was green, and the operator
+opened it two days later and could not use it. Nothing in the run had asked whether the document was
+the product. That is [quay-crew#520](https://github.com/atlantic-blue/quay-crew/issues/520).
+
+No role already there covers it. `architect` writes the contracts, so asking it to review them makes
+it the only reader of its own work, which is the shape this page refuses at the top. `assessor` reads
+a codebase that exists and here none does. `verifier` reads a finished slice against its contracts,
+which is the same question one step too late.
+
+The method is imported. Six of its seven classes of finding come from
+[github/spec-kit](https://github.com/github/spec-kit), which is MIT licensed, and the brief records
+that and the two files it was read from. The seventh is this crew's: the source checks a plan against
+itself and never asks whether the plan is the right product. What was read and what was left behind
+is in [`ROLE-IMPORTS.md`](ROLE-IMPORTS.md).
+
+It declares no `verbs`, so it may call nothing, and its brief says it changes no file. The first half
+is a boundary the system holds. The second is prose, for the reason the whole page gives: krewe has
+no word for a file.
 
 ### The three that deliver a slice
 
@@ -395,8 +423,8 @@ whole product and no child ever ran.
 
 ### The one that writes for somebody who was not there
 
-`writer` on opus is the sixteenth role, and the only one whose reader is outside the work. The other
-fifteen write for each other or for the repository: contracts, tests, code, infrastructure, security
+`writer` on opus is the seventeenth role, and the only one whose reader is outside the work. The other
+sixteen write for each other or for the repository: contracts, tests, code, infrastructure, security
 findings, a marketing plan. A blog post, an announcement, a page and a product description had no
 role at all, so each one ran as a plain session and the method was typed into its brief.
 
@@ -427,7 +455,7 @@ draft comes from what the job handed over, and the writer says which line each f
 social post, a pull request description and a product page are five lengths of one voice. The job
 names the surface, and the brief carries what each one takes.
 
-`skills` reaches it for the reason it reaches the other fifteen: a repository is where the published
+`skills` reaches it for the reason it reaches the other sixteen: a repository is where the published
 pieces are, and a repository reaches a session here through the git skill. It commits a draft, pushes
 the branch and opens a pull request. It does not publish, because sending something to a person is a
 person's decision.
@@ -438,16 +466,16 @@ refusals are the session's to keep. A hook that holds the measurable part of pro
 [quay-crew#508](https://github.com/atlantic-blue/quay-crew/issues/508) and it is not built, so the
 `ste` skill and this brief are prose a model reads rather than a gate a command runs into.
 
-### What a brief asks that quay does not enforce
+### What a brief asks that krewe does not enforce
 
-**Every one of these briefs describes a boundary about files, and quay has no word for a file.** A
+**Every one of these briefs describes a boundary about files, and krewe has no word for a file.** A
 role cannot be told which files it may not touch, may not read, or may not write. `receives` is three
 words, `job`, `context` and `skills`, and none of the three is about the contents of a repository.
 So `test-writer` saying it never sees implementation code, `implementer` saying it never edits a test
 file, `verifier` and `assessor` and `codebase-mapper` saying they are read only, `wrapper` saying it
 writes to `tests/locking/` and nowhere else, and `security` saying it writes the failing test rather
 than the fix, are each a promise the model keeps or does not. The system cannot hold a session to any
-of them, and every role's own file says so at the top under `## What quay does not enforce`.
+of them, and every role's own file says so at the top under `## What krewe does not enforce`.
 
 Two more limits fall out of the same gap. A role session cannot put a question to the operator, so
 the interactive parts of `designer` and `marketing` have nothing behind them here. And this system
@@ -460,24 +488,25 @@ A brief also names documents the system does not create: `CLAUDE.md`, `docs/DESI
 that reads one is the role after the role that writes it, so a phase run out of order finds nothing
 there, and each brief says which document it writes.
 
-### The two longest briefs sit near the ceiling
+### The three longest briefs sit near the ceiling
 
-A brief may be 16,384 bytes. Twelve of the sixteen fit under thirteen thousand. `architect` at 16,354
-and `assessor` at 16,243 are both within two hundred bytes of the ceiling, so a sentence added to
-either has to come out somewhere else, and both say so at the top. That is also why the phase ending
+A brief may be 16,384 bytes. Thirteen of the seventeen fit under thirteen thousand. `architect` at
+16,354, `assessor` at 16,243 and `verifier` at 15,837 have between two hundred and five hundred and
+fifty bytes left, so a sentence added to any of them has to come out somewhere else. The first two
+say so at the top of their own file. That is also why the phase ending
 about pushing and opening a pull request is written into the three delivery briefs rather than into
-all sixteen: those two have no room for it. Raising the ceiling is the change that would give them
+all seventeen: those two have no room for it. Raising the ceiling is the change that would give them
 room, and it is the operator's to make.
 
 ### What this does not do
 
 - **A role cannot be told which files it may not touch.** That is the whole of the paragraph above,
-  and it is the reason every one of the sixteen carries a line saying so.
+  and it is the reason every one of the seventeen carries a line saying so.
 - A fresh system is seeded with none of them. Skills and hooks are seeded and roles are not, so an
-  operator runs `quay role import roles/<name>` from a checkout, once per role.
+  operator runs `krewe role import roles/<name>` from a checkout, once per role.
 - Nothing chooses one. A flow graph names a role, or a caller names one when it declares a job, and
   the workspace has to hold it already.
-- Nothing runs the phase. The twelve describe an order and the system does not keep it: a role names
+- Nothing runs the phase. The thirteen describe an order and the system does not keep it: a role names
   the role that comes next in its own output, and it is the operator who writes that order into a
   flow graph or declares the next job.
 - Nothing hands one role's output to the next. Each writes a document into the repository, and the
@@ -488,9 +517,10 @@ imports every role in `roles/`, refuses a directory holding none, and asks each 
 delivery roles for a verb it holds and a verb it does not; in
 [`features/rolesessions.feature`](../features/rolesessions.feature), which proves a role receiving
 `skills` is handed the git skill and one that does not is handed none, and that a session running as
-the writer is told both of its refusals out of the role rather than out of the job's brief; and in
+the writer is told both of its refusals out of the role rather than out of the job's brief; in
 [`features/jobcontroller.feature`](../features/jobcontroller.feature), which runs a job as one of
-them.
+them; and in [`features/plancritic.feature`](../features/plancritic.feature), which reads back what
+a session running as the plan critic was told and proves it can declare nothing.
 
 ## What is not built
 
@@ -512,6 +542,7 @@ them.
 The scenarios that hold up what is built are in
 [`features/roles.feature`](../features/roles.feature),
 [`features/rolesessions.feature`](../features/rolesessions.feature),
+[`features/plancritic.feature`](../features/plancritic.feature),
 [`features/job.feature`](../features/job.feature) and
 [`features/jobcontroller.feature`](../features/jobcontroller.feature). If a behaviour is not there,
 it is not built.

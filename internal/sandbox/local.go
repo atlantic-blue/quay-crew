@@ -122,3 +122,15 @@ func (l localSandbox) Exec(ctx context.Context, spec Spec) (Process, error) {
 
 // Close is a no op for the host backend.
 func (localSandbox) Close(context.Context) error { return nil }
+
+// Existing is false, because a local sandbox is the host and there is no container holding this
+// session's work.
+//
+// It is not a gap in the stopgap. The system reaches into a session to run git in the directory its
+// work is in, and it names that directory the way a container sees it, which on the host means a
+// path belonging to somebody else or to nothing. Answering true here would run git somewhere the
+// work is not. A local system says so instead, and the reason it writes still carries the path,
+// which on the host is the path an operator opens.
+func (LocalProvider) Existing(context.Context, string) (Sandbox, bool, error) {
+	return nil, false, nil
+}

@@ -6,11 +6,10 @@ import (
 	"fmt"
 	"os/exec"
 	"path"
-	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/capacity"
+	"github.com/atlantic-blue/quay-krewe/internal/capacity"
 )
 
 // DockerProvider gives each session its own long lived container. The container starts once, the
@@ -81,12 +80,20 @@ func (d DockerProvider) Create(ctx context.Context, cfg Config) (Sandbox, error)
 		return nil, err
 	}
 
-	name := ContainerName(cfg.ID)
-	if adopted, err := d.adopt(ctx, name); err != nil {
-		return nil, err
-	} else if adopted != nil {
-		return adopted, nil
+	// Either name, because a sandbox that started before the rename carries the retired one. A
+	// creation that missed it would start a second container over the same state, beside a container
+	// still holding a conversation.
+	for _, existing := range ContainerNames(cfg.ID) {
+		adopted, err := d.adopt(ctx, existing)
+		if err != nil {
+			return nil, err
+		}
+		if adopted != nil {
+			return adopted, nil
+		}
 	}
+
+	name := ContainerName(cfg.ID)
 
 	args := d.runArgs(name, cfg, kept)
 
@@ -118,6 +125,11 @@ type dockerSandbox struct {
 	name string
 }
 
+// Name is what the daemon calls this container, which is not always what ContainerName would build:
+// a sandbox adopted from before the rename answers to the retired name. An operator's own docker
+// exec, and the attach the system hands them, need the name the daemon actually holds.
+func (s *dockerSandbox) Name() string { return s.name }
+
 var _ Sandbox = (*dockerSandbox)(nil)
 
 // Exec runs spec.Argv inside the session's container and streams its stdout.
@@ -148,35 +160,43 @@ func (s *dockerSandbox) Exec(ctx context.Context, spec Spec) (Process, error) {
 }
 
 // Remove tears down the container carrying this session's name, held or not. Absent is success.
+//
+// Both names, and neither absence is a failure. A session whose sandbox started before the rename is
+// stopped by an operator who has upgraded since, and a remove that only knew the new name would
+// report the session stopped while its container kept running and kept its memory.
 func (d DockerProvider) Remove(ctx context.Context, sessionID string) error {
-	out, err := exec.CommandContext(ctx, "docker", "rm", "-f", ContainerName(sessionID)).CombinedOutput()
-	if err != nil {
-		if strings.Contains(string(out), "No such container") {
-			return nil
+	for _, name := range ContainerNames(sessionID) {
+		out, err := exec.CommandContext(ctx, "docker", "rm", "-f", name).CombinedOutput()
+		if err == nil || strings.Contains(string(out), "No such container") {
+			continue
 		}
 		return fmt.Errorf("sandbox: remove container: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
 
-// sandboxName is exactly a sandbox container's name and nothing else's. The compose stack's own
-// services share the prefix (quaycrew-postgres-1 and friends), so anything looser than the exact
-// shape of ContainerName over a session id has, in the past, reaped the stack itself.
-var sandboxName = regexp.MustCompile("^" + ContainerPrefix + "[0-9a-f]{24}$")
-
 // Stranded lists the sessions whose containers the daemon still holds, running or not.
+//
+// SessionOf takes either name and holds both to the exact shape of a session identifier. The compose
+// stack's own services carry the retired prefix (quaycrew-postgres-1 and friends), so anything looser
+// than that shape has, in the past, reaped the stack itself.
 func (d DockerProvider) Stranded(ctx context.Context) ([]string, error) {
 	out, err := exec.CommandContext(ctx, "docker", "ps", "--all", "--format", "{{.Names}}").Output()
 	if err != nil {
 		return nil, fmt.Errorf("sandbox: list containers: %w", err)
 	}
+	return sessionsAmong(string(out)), nil
+}
+
+// sessionsAmong is the sessions the daemon's listing names, in the order it named them.
+func sessionsAmong(listing string) []string {
 	var ids []string
-	for _, name := range strings.Fields(string(out)) {
-		if sandboxName.MatchString(name) {
-			ids = append(ids, strings.TrimPrefix(name, ContainerPrefix))
+	for _, name := range strings.Fields(listing) {
+		if id, isSandbox := SessionOf(name); isSandbox {
+			ids = append(ids, id)
 		}
 	}
-	return ids, nil
+	return ids
 }
 
 // Attached asks the container whether the operator's conversation has anybody watching it.
@@ -197,18 +217,48 @@ func (d DockerProvider) Stranded(ctx context.Context) ([]string, error) {
 //   - the command could not be run at all, so the daemon is unreachable and the system cannot tell. The
 //     error is returned rather than swallowed, because a caller must not read it as nobody.
 func (d DockerProvider) Attached(ctx context.Context, sessionID string) (bool, error) {
-	cmd := exec.CommandContext(ctx, "docker", "exec", ContainerName(sessionID),
+	name, out, err := d.execInSession(ctx, sessionID,
 		"tmux", "list-clients", "-t", AttachedSessionName, "-F", "#{client_name}")
-	out, err := cmd.Output()
 	if err != nil {
 		var exited *exec.ExitError
 		if errors.As(err, &exited) {
 			return false, nil
 		}
-		return false, fmt.Errorf("sandbox: ask %s whether anybody is attached: %w",
-			ContainerName(sessionID), err)
+		return false, fmt.Errorf("sandbox: ask %s whether anybody is attached: %w", name, err)
 	}
-	return strings.TrimSpace(string(out)) != "", nil
+	return strings.TrimSpace(out) != "", nil
+}
+
+// execInSession runs a command inside this session's container, under whichever name the daemon
+// holds it, and answers with the name it reached. The name this build writes is asked first, and the
+// retired one only where the daemon says there is no container by that name, so a sandbox started
+// since the rename costs nothing and one started before it is still reached.
+//
+// A sandbox read through the wrong name answers exactly like an empty one, and an empty sandbox is
+// what invites a drain, a restart or a reclaim over the top of a conversation somebody is typing
+// into.
+func (d DockerProvider) execInSession(ctx context.Context, sessionID string, argv ...string) (string, string, error) {
+	var name string
+	var out []byte
+	var err error
+	for _, name = range ContainerNames(sessionID) {
+		out, err = exec.CommandContext(ctx, "docker", append([]string{"exec", name}, argv...)...).Output()
+		if err == nil || !noSuchContainer(err) {
+			break
+		}
+	}
+	return name, string(out), err
+}
+
+// noSuchContainer is the daemon saying it holds nothing by that name, which is the one failure worth
+// asking a second name about. Anything else is the command itself failing, and it fails the same way
+// under either name.
+func noSuchContainer(err error) bool {
+	var exited *exec.ExitError
+	if !errors.As(err, &exited) {
+		return false
+	}
+	return strings.Contains(string(exited.Stderr), "No such container")
 }
 
 // processTable dumps the command line of everything running in the sandbox, one process per line,
@@ -247,17 +297,15 @@ const processTable = `for p in /proc/[0-9]*/cmdline; do cat "$p" 2>/dev/null; ec
 //   - the command could not be run at all, so the daemon is unreachable and the system cannot tell. The
 //     error is returned rather than swallowed, because a caller must not read it as nothing.
 func (d DockerProvider) RuntimeRunning(ctx context.Context, sessionID string) (bool, error) {
-	cmd := exec.CommandContext(ctx, "docker", "exec", ContainerName(sessionID), "sh", "-c", processTable)
-	out, err := cmd.Output()
+	name, out, err := d.execInSession(ctx, sessionID, "sh", "-c", processTable)
 	if err != nil {
 		var exited *exec.ExitError
 		if errors.As(err, &exited) {
 			return false, nil
 		}
-		return false, fmt.Errorf("sandbox: ask %s what it is running: %w",
-			ContainerName(sessionID), err)
+		return false, fmt.Errorf("sandbox: ask %s what it is running: %w", name, err)
 	}
-	return runtimeAmong(string(out)), nil
+	return runtimeAmong(out), nil
 }
 
 // runtimeAmong says whether any of these command lines is the model runtime.
@@ -402,4 +450,20 @@ func ImageBuild(ctx context.Context, image string) string {
 		return ""
 	}
 	return build
+}
+
+// Existing is a sandbox over the container this session already has, and false where the daemon holds
+// none by that name. It never creates one: it is how the system reaches into a session that has
+// finished rather than starting one that has not.
+func (d DockerProvider) Existing(ctx context.Context, sessionID string) (Sandbox, bool, error) {
+	for _, name := range ContainerNames(sessionID) {
+		box, err := d.adopt(ctx, name)
+		if err != nil {
+			return nil, false, err
+		}
+		if box != nil {
+			return box, true, nil
+		}
+	}
+	return nil, false, nil
 }

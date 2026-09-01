@@ -7,8 +7,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/features"
-	"github.com/atlantic-blue/krewe/internal/console"
+	"github.com/atlantic-blue/quay-krewe/features"
+	"github.com/atlantic-blue/quay-krewe/internal/console"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cucumber/godog"
 )
@@ -125,7 +125,7 @@ func theRealTool(ctx context.Context) console.CommandRunner {
 		command.Env = append(os.Environ(),
 			"QC_GRPC_ADDR="+address,
 			"QC_TOKEN="+token,
-			"QUAY_HOME="+home,
+			"KREWE_HOME="+home,
 			"HOME="+home,
 		)
 		// Both streams, because a refusal comes back on the error one and that is what the operator

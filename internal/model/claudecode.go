@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 )
 
 // ClaudeCodeOAuthTokenEnv is the environment variable the Claude Code CLI reads a long lived

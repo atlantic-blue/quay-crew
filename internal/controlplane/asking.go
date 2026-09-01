@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/auth"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/auth"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -89,6 +89,25 @@ func (s *Server) AnswerJob(ctx context.Context, req *quaycrewv1.AnswerJobRequest
 	}
 
 	told := s.jobEvent(ctx, found, job.EventTold, answer)
+	// The one question the system itself put, rather than the session: whether the plan the crew wrote
+	// serves the sentence the job states. An answer of yes starts the work against that plan. Anything
+	// else is the correction, and it takes the ordinary road below: the job goes back to pending with
+	// what the person said, and the session writes the plan again from it. So an answer of no replaces
+	// the plan rather than ending the job, and the person who said no writes no plan.
+	if job.WaitingForItsPlan(found) && found.Plan != "" && job.ApprovesThePlan(answer) {
+		approved, err := s.store.ApproveJobPlan(ctx, found.ID, told)
+		if err != nil {
+			if errors.Is(err, job.ErrNotAsking) {
+				return nil, status.Errorf(codes.FailedPrecondition,
+					"job %s is %s, so there is no plan of its waiting to be approved: "+
+						"krewe job list --phase asking says which are waiting", found.ID, found.Phase)
+			}
+			return nil, storeError(err, "approve")
+		}
+		s.ExportJob(ctx, told)
+		return &quaycrewv1.AnswerJobResponse{Job: asJob(approved)}, nil
+	}
+
 	answered, err := s.store.AnswerJob(ctx, found.ID, answer, told)
 	if err != nil {
 		if errors.Is(err, job.ErrNotAsking) {

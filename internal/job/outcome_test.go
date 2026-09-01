@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
 )
 
 // The refusals first. A reader that always finds an outcome satisfies every test about finding one,

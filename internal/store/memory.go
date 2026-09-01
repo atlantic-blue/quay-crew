@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/deploy"
-	"github.com/atlantic-blue/krewe/internal/flow"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/deploy"
+	"github.com/atlantic-blue/quay-krewe/internal/flow"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -87,6 +87,13 @@ type Memory struct {
 	// jobs rather than on the row, which is the table the Postgres store keeps, so a listing here
 	// carries what a listing there carries.
 	jobSteps map[string][]job.Step
+	// jobHandoffs is what each job's sessions wrote down when they stopped taking work at the context
+	// ceiling, in the order they wrote them. Beside the jobs for the reason the steps are, so this
+	// store and the Postgres one carry the same thing on one job.
+	jobHandoffs map[string][]job.Handoff
+	// jobAttempts is what each attempt at each job said, in the order the attempts were made, beside
+	// the jobs for the same reason the steps are.
+	jobAttempts map[string][]job.Attempt
 	// jobSteers is every moment the operator had to say something a job should have known, keyed by
 	// the steer identifier.
 	jobSteers map[string]*job.Steer
@@ -389,12 +396,32 @@ func (m *Memory) ReclaimSession(_ context.Context, id string) error {
 	return nil
 }
 
-// SettledSessions is the sessions nothing is holding open, oldest touched first: live, not running,
-// and named by no job in a non terminal phase.
-func (m *Memory) SettledSessions(_ context.Context, limit int) ([]*quaycrewv1.Session, error) {
+// IdleSandboxes is the sessions that still hold a container and nothing is holding open, oldest
+// touched first: live, not running, not already reclaimed, and named by no job in a non terminal
+// phase.
+func (m *Memory) IdleSandboxes(_ context.Context, limit int) ([]*quaycrewv1.Session, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	return m.settled(holdingStatuses(), limit, func(one *quaycrewv1.Session) time.Time {
+		return one.GetUpdatedAt().AsTime()
+	}), nil
+}
 
+// ReclaimedSessions is the sessions whose container has already gone, longest reclaimed first. The
+// order is the reclaim stamp rather than updated_at, because that is what the archive time measures.
+func (m *Memory) ReclaimedSessions(_ context.Context, limit int) ([]*quaycrewv1.Session, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.settled([]string{StatusReclaimed}, limit, func(one *quaycrewv1.Session) time.Time {
+		return one.GetReclaimedAt().AsTime()
+	}), nil
+}
+
+// settled is the one query both of those are: live sessions in these statuses that no job in a non
+// terminal phase names, oldest first by whichever stamp the caller measures against. Called under
+// the read lock.
+func (m *Memory) settled(statuses []string, limit int,
+	oldest func(*quaycrewv1.Session) time.Time) []*quaycrewv1.Session {
 	// The sessions job is still holding open, gathered once rather than scanned per session.
 	held := map[string]bool{}
 	for _, one := range m.jobs {
@@ -402,20 +429,20 @@ func (m *Memory) SettledSessions(_ context.Context, limit int) ([]*quaycrewv1.Se
 			held[one.Session] = true
 		}
 	}
-	settled := map[string]bool{}
-	for _, status := range settledStatuses() {
-		settled[status] = true
+	wanted := map[string]bool{}
+	for _, status := range statuses {
+		wanted[status] = true
 	}
 
 	out := make([]*quaycrewv1.Session, 0, len(m.sessions))
 	for id, session := range m.sessions {
-		if session.GetArchivedAt() != nil || !settled[session.GetStatus()] || held[id] {
+		if session.GetArchivedAt() != nil || !wanted[session.GetStatus()] || held[id] {
 			continue
 		}
 		out = append(out, clone(session))
 	}
 	sort.Slice(out, func(i, j int) bool {
-		left, right := out[i].GetUpdatedAt().AsTime(), out[j].GetUpdatedAt().AsTime()
+		left, right := oldest(out[i]), oldest(out[j])
 		if left.Equal(right) {
 			return out[i].GetId() < out[j].GetId()
 		}
@@ -424,7 +451,7 @@ func (m *Memory) SettledSessions(_ context.Context, limit int) ([]*quaycrewv1.Se
 	if limit > 0 && len(out) > limit {
 		out = out[:limit]
 	}
-	return out, nil
+	return out
 }
 
 // SetSessionSkills records the skill set a session's live sandbox was born with; empty clears it.

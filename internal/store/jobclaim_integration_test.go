@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -35,7 +35,7 @@ func TestTwoJobsClaimingOneIssueLeaveOneRunningJobAndOneRefusalInPostgres(t *tes
 	declare := func() (*quaycrewv1.CreateJobResponse, error) {
 		return s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 			Project: project, Title: "nothing claims a piece of work", Brief: "build the claim",
-			Claim: "atlantic-blue/krewe#540",
+			Claim: "atlantic-blue/quay-krewe#540",
 		})
 	}
 	var wait sync.WaitGroup
@@ -85,7 +85,7 @@ func TestTwoJobsClaimingOneIssueLeaveOneRunningJobAndOneRefusalInPostgres(t *tes
 		t.Fatalf("the system holds %d jobs on one piece of work", len(listed.GetJobs()))
 	}
 	done := waitForJob(t, s, holder, job.PhaseDone)
-	if done.GetClaim() != "atlantic-blue/krewe#540" {
+	if done.GetClaim() != "atlantic-blue/quay-krewe#540" {
 		t.Fatalf("the job that ran claims %q", done.GetClaim())
 	}
 }
@@ -99,7 +99,7 @@ func TestWorkAFinishedJobClaimedIsClaimedAgainInPostgres(t *testing.T) {
 
 	first, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "nothing claims a piece of work", Brief: "build the claim",
-		Claim: "atlantic-blue/krewe#540",
+		Claim: "atlantic-blue/quay-krewe#540",
 	})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)
@@ -107,7 +107,7 @@ func TestWorkAFinishedJobClaimedIsClaimedAgainInPostgres(t *testing.T) {
 	// Refused while it runs.
 	if _, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "build it again", Brief: "build the claim",
-		Claim: "atlantic-blue/krewe#540",
+		Claim: "atlantic-blue/quay-krewe#540",
 	}); status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("a second job on work in flight was answered with %v", err)
 	}
@@ -116,12 +116,12 @@ func TestWorkAFinishedJobClaimedIsClaimedAgainInPostgres(t *testing.T) {
 
 	second, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "carry on from there", Brief: "build the rest",
-		Claim: "atlantic-blue/krewe#540",
+		Claim: "atlantic-blue/quay-krewe#540",
 	})
 	if err != nil {
 		t.Fatalf("work a finished job claimed is still held by it: %v", err)
 	}
-	if second.GetJob().GetClaim() != "atlantic-blue/krewe#540" {
+	if second.GetJob().GetClaim() != "atlantic-blue/quay-krewe#540" {
 		t.Fatalf("the second job claims %q", second.GetJob().GetClaim())
 	}
 }
@@ -136,7 +136,7 @@ func TestAClaimOnAJobNothingHasMovedRunsOutInPostgres(t *testing.T) {
 
 	stuck, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "nothing claims a piece of work", Brief: "build the claim",
-		Claim: "atlantic-blue/krewe#540",
+		Claim: "atlantic-blue/quay-krewe#540",
 	})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)
@@ -156,12 +156,12 @@ func TestAClaimOnAJobNothingHasMovedRunsOutInPostgres(t *testing.T) {
 
 	next, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "pick the work back up", Brief: "build the claim",
-		Claim: "atlantic-blue/krewe#540",
+		Claim: "atlantic-blue/quay-krewe#540",
 	})
 	if err != nil {
 		t.Fatalf("a claim on a job nothing has moved for %s still blocks the work: %v", job.ClaimLife, err)
 	}
-	if next.GetJob().GetClaim() != "atlantic-blue/krewe#540" {
+	if next.GetJob().GetClaim() != "atlantic-blue/quay-krewe#540" {
 		t.Fatalf("the job that picked the work up claims %q", next.GetJob().GetClaim())
 	}
 }

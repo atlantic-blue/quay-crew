@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // A job ends by stating one outcome, and the controller reads that word rather than the prose around
@@ -114,7 +114,7 @@ func TestEverySessionDoingAJobIsToldToStateAnOutcome(t *testing.T) {
 // ends the job. A session never told so would state its outcome in the answer nobody landed.
 func TestTheAskForAPullRequestAlsoAsksForTheOutcome(t *testing.T) {
 	controller, kept, plane := aController(t)
-	one := kept.add(inARepository("make the listing sort by the clock it shows"))
+	one := kept.add(withTheGateOff(inARepository("make the listing sort by the clock it shows")))
 	ctx := context.Background()
 
 	controller.Tick(ctx)

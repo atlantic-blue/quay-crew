@@ -15,7 +15,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/changelog"
+	"github.com/atlantic-blue/quay-krewe/internal/changelog"
 )
 
 func main() {

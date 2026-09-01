@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/display"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
 )
 
 // noDetail is what the line says instead of a reason when the system gave none. A part that is down

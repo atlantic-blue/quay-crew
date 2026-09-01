@@ -41,8 +41,8 @@ than breaking the pattern on purpose, so the pattern is broken on purpose.
 
 ```mermaid
 flowchart LR
-    YOU(["you"]) -->|"quay task"| TASK["a task:<br/>one message, one session,<br/>and the reply ends it"]
-    YOU -->|"quay job create"| JOB["a job:<br/>a record the system keeps<br/>a readable phase for"]
+    YOU(["you"]) -->|"krewe task"| TASK["a task:<br/>one message, one session,<br/>and the reply ends it"]
+    YOU -->|"krewe job create"| JOB["a job:<br/>a record the system keeps<br/>a readable phase for"]
     JOB --> CTL["a controller reads the row"]
     CTL -->|"sends the brief"| TASK
     TASK --> SESSION["a session, in its own container"]
@@ -77,14 +77,14 @@ key land on one partition, which is what keeps a session's records in the order 
 A task is one word on the command line, the way a job and a flow are each one word:
 
 ```
-quay task [<address>] <text>              send a task, and wait here for the answer
-quay task --dispatch [<address>] <text>   send it, and let go. The system runs it
-quay task list <session>                  what a session was sent, and what came back
+krewe task [<address>] <text>              send a task, and wait here for the answer
+krewe task --dispatch [<address>] <text>   send it, and let go. The system runs it
+krewe task list <session>                  what a session was sent, and what came back
 ```
 
 ```mermaid
 flowchart LR
-    WORD["quay task"] --> WAIT["no flag: wait here"]
+    WORD["krewe task"] --> WAIT["no flag: wait here"]
     WORD --> GO["--dispatch: let go"]
     WORD --> LIST["list: read back"]
     WAIT --> CALL["Dispatch, detach false"]
@@ -99,12 +99,12 @@ Waiting and letting go differ in one thing, whether anybody holds the connection
 is a flag rather than a second word. Reading back is a verb under the same word, because a history is
 a thing you do to a task.
 
-**The three words this replaced are gone, and each one refuses.** `quay ask` waited, `quay dispatch`
-let go, and `quay tasks` read the history back. Each now exits non zero and names what to type. None
+**The three words this replaced are gone, and each one refuses.** `krewe ask` waited, `krewe dispatch`
+let go, and `krewe tasks` read the history back. Each now exits non zero and names what to type. None
 of them is a quiet alias: a word that still works keeps two spellings alive for one thing, and a word
 absorbed into the next argument is worse than either, because the command succeeds.
 
-`quay task <session>` is refused too, with the same reasoning. It used to print a history, and under
+`krewe task <session>` is refused too, with the same reasoning. It used to print a history, and under
 one word it would send that session's own identifier to the model as a message.
 
 **What this does not do.** It is the command line only. The `dispatch` node type in a flow graph
@@ -117,7 +117,7 @@ because a view name wins there. `task list <session>` and anything longer is han
 
 ## The path
 
-1. You run `quay task "read the package file"`. The command line calls `Dispatch` on the control
+1. You run `krewe task "read the package file"`. The command line calls `Dispatch` on the control
    plane over gRPC.
 2. The control plane finds or creates the session row, names its conversation if it does not have one
    yet, marks the session `running`, and calls `beginTask` in `internal/controlplane/events.go`. The
@@ -137,19 +137,19 @@ because a view name wins there. `task list <session>` and anything longer is han
    event as protobuf and publishes it to the broker under the session identifier. The export is one
    record per task, at the end: a consumer handed the same task twice would have to work out which of
    the two to believe.
-7. Nothing reads the topic. `quay task list` and the console read the `tasks` table.
+7. Nothing reads the topic. `krewe task list` and the console read the `tasks` table.
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant YOU as "operator"
-    participant CLI as "quay"
+    participant CLI as "krewe"
     participant CP as "control plane"
     participant SBX as "sandbox"
     participant DB as "store (Postgres)"
     participant LOG as "broker (Redpanda)"
 
-    YOU->>CLI: quay task "read the package file"
+    YOU->>CLI: krewe task "read the package file"
     CLI->>CP: Dispatch (gRPC)
     CP->>DB: write the task as running
     Note over CP,DB: visible while the job happens
@@ -167,7 +167,7 @@ sequenceDiagram
 
 - **One row in `tasks`**, written when the task starts and closed when it lands: what was asked, what
   came back, the status, the failure if there was one, and when it started. A row that still reads
-  `running` is a task in flight. `quay task list <session>` and the console's history view read this.
+  `running` is a task in flight. `krewe task list <session>` and the console's history view read this.
 - **The session row moves**: its status, and the count the describer reads to decide whether to name
   the session again. Its conversation identifier was written here and is written before the task now;
   what happens at the end is a check that the runtime used the name it was given.
@@ -214,13 +214,13 @@ system can recognise, which is not the same as a guarantee.
 Read the store, which always works:
 
 ```
-quay task list <session>
+krewe task list <session>
 ```
 
 Read one answer as data, which is what a caller outside the system pipes into the next command:
 
 ```
-quay answer <session>
+krewe answer <session>
 ```
 
 Read the log, which needs `QC_KAFKA_SEEDS` set. The compose file defaults it to `redpanda:9092`, so
@@ -231,5 +231,5 @@ docker exec -it quaycrew-redpanda-1 rpk topic list
 docker exec -it quaycrew-redpanda-1 rpk topic consume <workspace>.tasks --num 1
 ```
 
-One task through `quay task --dispatch` creates the topic and puts one record on it.
+One task through `krewe task --dispatch` creates the topic and puts one record on it.
 `rpk group list` still prints nothing, because nothing reads.

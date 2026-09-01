@@ -169,7 +169,7 @@ func runBinaryInHome(ctx context.Context, binary, home, in string, args ...strin
 	command.Env = append(os.Environ(),
 		"QC_GRPC_ADDR="+t.address,
 		"QC_TOKEN="+worldFrom(ctx).token,
-		"QUAY_HOME="+home,
+		"KREWE_HOME="+home,
 		"HOME="+home,
 	)
 	var out, said bytes.Buffer

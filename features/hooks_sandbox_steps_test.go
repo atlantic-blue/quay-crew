@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/internal/hook"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/hook"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 	"github.com/cucumber/godog"
 )
 

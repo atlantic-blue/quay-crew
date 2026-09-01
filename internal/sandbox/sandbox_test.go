@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 )
 
 func TestLocalProviderExec(t *testing.T) {
@@ -113,7 +113,7 @@ func TestFakeProviderAdoptsASessionsSandbox(t *testing.T) {
 // stack may have no network to put a session on, and the system's own network, which carries the store
 // and the broker, is a widening the operator asks for.
 func TestASandboxJoinsNoNetworkByDefault(t *testing.T) {
-	plain := sandbox.DockerProvider{Image: "quaycrew-sandbox-claude:local"}
+	plain := sandbox.DockerProvider{Image: "krewe-sandbox-claude:local"}
 	if plain.Network != "" || plain.SessionNetwork != "" {
 		t.Fatalf("a sandbox joins %q and %q with nothing configured", plain.Network, plain.SessionNetwork)
 	}

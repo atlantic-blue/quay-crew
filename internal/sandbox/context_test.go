@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 )
 
 // answer is one record of a transcript, as the model's command line tool writes it.

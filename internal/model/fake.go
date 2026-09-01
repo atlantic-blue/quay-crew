@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 )
 
 // FakeRunner is a Runner for tests. It records the last request and returns a canned response.

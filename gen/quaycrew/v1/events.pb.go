@@ -324,6 +324,9 @@ type JobEvent struct {
 	//	job.asked      it put a question to a person
 	//	job.told       a person answered that question
 	//	job.stopped    a person stopped it, or a limit did, or its claim did not hold
+	//	job.looped     three attempts at one step were too alike to tell apart
+	//	job.held       the machine had no room for its sandbox, so it is waiting rather than running
+	//	job.unstuck    nothing was running while this job waited, so the crew took a container back
 	//
 	// Internal, which nothing outside should depend on:
 	//
@@ -496,8 +499,8 @@ const file_quaycrew_v1_events_proto_rawDesc = "" +
 	"\btrace_id\x18\t \x01(\tR\atraceId\x12;\n" +
 	"\voccurred_at\x18\n" +
 	" \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"occurredAtB\xa6\x01\n" +
-	"\x0fcom.quaycrew.v1B\vEventsProtoP\x01Z9github.com/atlantic-blue/krewe/gen/quaycrew/v1;quaycrewv1\xa2\x02\x03QXX\xaa\x02\vQuaycrew.V1\xca\x02\vQuaycrew\\V1\xe2\x02\x17Quaycrew\\V1\\GPBMetadata\xea\x02\fQuaycrew::V1b\x06proto3"
+	"occurredAtB\xab\x01\n" +
+	"\x0fcom.quaycrew.v1B\vEventsProtoP\x01Z>github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1;quaycrewv1\xa2\x02\x03QXX\xaa\x02\vQuaycrew.V1\xca\x02\vQuaycrew\\V1\xe2\x02\x17Quaycrew\\V1\\GPBMetadata\xea\x02\fQuaycrew::V1b\x06proto3"
 
 var (
 	file_quaycrew_v1_events_proto_rawDescOnce sync.Once

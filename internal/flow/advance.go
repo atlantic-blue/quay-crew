@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // Run statuses. Failed is a run the graph could not carry any further, which is different from a

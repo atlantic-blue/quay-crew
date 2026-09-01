@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/store"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // runJobConformance holds both stores to the job contract.
@@ -79,6 +79,12 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		// Nothing has answered yet, so nothing says where the work went.
 		if found.PullRequest != "" {
 			t.Fatalf("a job nobody has run says its pull request is %q", found.PullRequest)
+		}
+		// And nothing has read it, so nothing passed it. A store that answered true here would report
+		// every job as independently checked, which is the exact false green the gate exists to end.
+		if found.Ungated || found.Reviewed || found.Tested {
+			t.Fatalf("a job nobody has run says ungated=%v reviewed=%v tested=%v",
+				found.Ungated, found.Reviewed, found.Tested)
 		}
 		if found.Phase != job.PhasePending {
 			t.Fatalf("the job opens in phase %q, want pending", found.Phase)
@@ -314,6 +320,92 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		// Both are done, which is the point: the phase cannot tell them apart.
 		if listed, _ = s.ListJobs(ctx, job.Filter{Project: project, Phase: job.PhaseDone}); len(listed) != 2 {
 			t.Fatalf("the done jobs are %d rows, want both", len(listed))
+		}
+	})
+
+	// The window and the cap the briefing reads block three with. The order is the part that is easy
+	// to get wrong, so the jobs below are declared in the reverse of the order they finished in: a
+	// store that kept ordering by created_at answers this exactly backwards.
+	t.Run("a listing narrows to what finished lately, newest finished first, capped", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+
+		now := time.Now().UTC()
+		finished := func(title string, declared, ended time.Duration) string {
+			t.Helper()
+			at := now.Add(-ended)
+			one := &job.Job{
+				ID: store.NewID(), Workspace: workspace, Project: project, Title: title,
+				Brief: "one piece of work", Version: 1, Phase: job.PhaseDone,
+				CreatedAt: now.Add(-declared), UpdatedAt: now.Add(-declared), FinishedAt: &at,
+			}
+			if err := s.CreateJob(ctx, one, declaredEvent(one)); err != nil {
+				t.Fatalf("CreateJob %s: %v", title, err)
+			}
+			return one.ID
+		}
+		hourAgo := finished("finished an hour ago", 96*time.Hour, time.Hour)
+		yesterday := finished("finished yesterday", 72*time.Hour, 24*time.Hour)
+		lastWeek := finished("finished last week", 48*time.Hour, 168*time.Hour)
+		running := &job.Job{
+			ID: store.NewID(), Workspace: workspace, Project: project, Title: "still running",
+			Brief: "not finished at all", Version: 1, Phase: job.PhaseRunning,
+			CreatedAt: now.Add(-120 * time.Hour), UpdatedAt: now.Add(-120 * time.Hour),
+		}
+		if err := s.CreateJob(ctx, running, declaredEvent(running)); err != nil {
+			t.Fatalf("CreateJob: %v", err)
+		}
+
+		twoDays := now.Add(-48 * time.Hour)
+		listed, err := s.ListJobs(ctx, job.Filter{Project: project, FinishedSince: &twoDays})
+		if err != nil {
+			t.Fatalf("ListJobs: %v", err)
+		}
+		// What the window leaves out, first: a job with no moment it finished is not a late job, and
+		// a job that finished before the window is not in it.
+		for _, one := range listed {
+			if one.ID == running.ID {
+				t.Error("a job that has not finished is inside a window about jobs that finished")
+			}
+			if one.ID == lastWeek {
+				t.Error("a job that finished before the window is inside it")
+			}
+		}
+		if len(listed) != 2 {
+			t.Fatalf("the window holds %d jobs, want the two that finished inside it", len(listed))
+		}
+		if listed[0].ID != hourAgo || listed[1].ID != yesterday {
+			t.Fatalf("the window reads %q then %q, want the most recently finished first",
+				listed[0].Title, listed[1].Title)
+		}
+
+		capped, err := s.ListJobs(ctx, job.Filter{Project: project, FinishedSince: &twoDays, Limit: 1})
+		if err != nil {
+			t.Fatalf("ListJobs: %v", err)
+		}
+		if len(capped) != 1 || capped[0].ID != hourAgo {
+			t.Fatalf("a cap of one gave %d rows, want the most recently finished alone", len(capped))
+		}
+
+		// A cap on its own does not move the order. Everything the system holds, newest declared
+		// first, is what a listing has always answered, and the cap only says how far down to read.
+		byDeclaration, err := s.ListJobs(ctx, job.Filter{Project: project, Limit: 2})
+		if err != nil {
+			t.Fatalf("ListJobs: %v", err)
+		}
+		if len(byDeclaration) != 2 || byDeclaration[0].ID != lastWeek || byDeclaration[1].ID != yesterday {
+			t.Fatalf("a cap of two gave %d rows opening with %q, want the newest declared first",
+				len(byDeclaration), byDeclaration[0].Title)
+		}
+
+		// Neither set is what every caller sends today, and it still answers everything.
+		everything, err := s.ListJobs(ctx, job.Filter{Project: project})
+		if err != nil {
+			t.Fatalf("ListJobs: %v", err)
+		}
+		if len(everything) != 4 {
+			t.Fatalf("a listing that narrows by nothing holds %d jobs, want all 4", len(everything))
 		}
 	})
 
@@ -904,6 +996,187 @@ func runJobControllerConformance(t *testing.T, newDataset func(t *testing.T) Ope
 		}
 	})
 
+	// A settled job says whether anything independent agreed with its answer. It is written in the
+	// same statement as the phase, so a reader can never find a job that is done and no record of what
+	// read it, and a job the gate did not pass reads differently from one it did.
+	t.Run("what passed a job before it settled lands with the phase", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+
+		// The fail first: a job that landed with neither gate having passed it keeps saying so, however
+		// often it is read back.
+		unread := declaredJob(t, s, workspace, project, "sort the listing")
+		if _, err := s.StartJob(ctx, unread, aLease("controller-a"), []*job.Event{startedEvent(unread, workspace, project)}); err != nil {
+			t.Fatalf("StartJob: %v", err)
+		}
+		if _, err := s.LandJob(ctx, unread, job.Landing{
+			Phase: job.PhaseStopped, Reason: "the reviewer failed this work twice",
+		}, answeredEvent(unread, workspace, project)); err != nil {
+			t.Fatalf("LandJob: %v", err)
+		}
+		stopped, err := s.GetJob(ctx, unread)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		if stopped.Reviewed || stopped.Tested {
+			t.Fatalf("a job nothing passed reads back as reviewed=%v tested=%v",
+				stopped.Reviewed, stopped.Tested)
+		}
+
+		passed := declaredJob(t, s, workspace, project, "sort the listing again")
+		if _, err := s.StartJob(ctx, passed, aLease("controller-a"), []*job.Event{startedEvent(passed, workspace, project)}); err != nil {
+			t.Fatalf("StartJob: %v", err)
+		}
+		landed, err := s.LandJob(ctx, passed, job.Landing{
+			Phase: job.PhaseDone, Answer: "opened the pull request", Reviewed: true, Tested: true,
+		}, answeredEvent(passed, workspace, project))
+		if err != nil {
+			t.Fatalf("LandJob: %v", err)
+		}
+		if !landed.Reviewed || !landed.Tested {
+			t.Fatalf("the job landed as reviewed=%v tested=%v, want both", landed.Reviewed, landed.Tested)
+		}
+		reread, err := s.GetJob(ctx, passed)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		if !reread.Reviewed || !reread.Tested {
+			t.Fatalf("the job reads back as reviewed=%v tested=%v, want both", reread.Reviewed, reread.Tested)
+		}
+	})
+
+	// The gate is refusable, so the declaration carries the answer and the store keeps it. A store that
+	// lost this would gate a job the caller declared without one, or worse, gate none of them.
+	t.Run("a job declared with the gate off reads back with the gate off", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+
+		declared := &job.Job{
+			ID: store.NewID(), Workspace: workspace, Project: project,
+			Title: "sort the listing", Brief: "make the listing sort by the clock it shows",
+			Repository: "atlantic-blue/quay-crew", Ungated: true,
+			Version: 1, Phase: job.PhasePending,
+		}
+		if err := s.CreateJob(ctx, declared, declaredEvent(declared)); err != nil {
+			t.Fatalf("CreateJob: %v", err)
+		}
+		found, err := s.GetJob(ctx, declared.ID)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		if !found.Ungated {
+			t.Fatal("a job declared with the gate off reads back with the gate on")
+		}
+	})
+
+	// The fifth comparison, both halves. Nothing moving with something held is a state that is always
+	// wrong, and it is the state this system sat in for an hour with twelve idle sandboxes holding the
+	// machine. Both stores answer it, and both are held to the same rule here. See issue 575.
+	t.Run("nothing is moving on a system whose jobs are all pending or ended", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		declaredJob(t, s, workspace, project, "the one that has not started")
+
+		moving, err := s.AnythingMoving(ctx)
+		if err != nil {
+			t.Fatalf("AnythingMoving: %v", err)
+		}
+		if moving {
+			t.Fatal("this system reads as doing something with one pending job and nothing else")
+		}
+	})
+
+	t.Run("a running job is moving, and so is one waiting for a person", func(t *testing.T) {
+		for _, one := range []struct {
+			name  string
+			start func(t *testing.T, s store.Store, workspace, project, id string)
+		}{
+			{"running", func(t *testing.T, s store.Store, workspace, project, id string) {
+				if _, err := s.StartJob(context.Background(), id, aLease("controller-a"),
+					[]*job.Event{startedEvent(id, workspace, project)}); err != nil {
+					t.Fatalf("StartJob: %v", err)
+				}
+			}},
+			{"asking", func(t *testing.T, s store.Store, workspace, project, id string) {
+				ctx := context.Background()
+				if _, err := s.StartJob(ctx, id, aLease("controller-a"),
+					[]*job.Event{startedEvent(id, workspace, project)}); err != nil {
+					t.Fatalf("StartJob: %v", err)
+				}
+				if _, err := s.AskJob(ctx, id, "which account?",
+					askedEvent(id, workspace, project, "which account?")); err != nil {
+					t.Fatalf("AskJob: %v", err)
+				}
+			}},
+		} {
+			t.Run(one.name, func(t *testing.T) {
+				s := newDataset(t)(t)
+				workspace, project := aProject(t, s)
+				id := declaredJob(t, s, workspace, project, "read the electricity bill")
+				one.start(t, s, workspace, project, id)
+
+				moving, err := s.AnythingMoving(context.Background())
+				if err != nil {
+					t.Fatalf("AnythingMoving: %v", err)
+				}
+				if !moving {
+					t.Fatalf("a job in %s reads as nothing happening, and a job waiting for a person "+
+						"is waiting correctly rather than stalled", one.name)
+				}
+			})
+		}
+	})
+
+	t.Run("the jobs the machine turned away are the pending ones carrying a reason", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		waiting := declaredJob(t, s, workspace, project, "the one with no room")
+		declaredJob(t, s, workspace, project, "the one nobody has reached yet")
+
+		reason := "there is not enough processor for this job's sandbox"
+		if _, err := s.HoldJob(ctx, waiting, reason, heldEvent(waiting, workspace, project, reason)); err != nil {
+			t.Fatalf("HoldJob: %v", err)
+		}
+
+		turnedAway, err := s.TurnedAwayJob(ctx, 0)
+		if err != nil {
+			t.Fatalf("TurnedAwayJob: %v", err)
+		}
+		if len(turnedAway) != 1 || turnedAway[0].ID != waiting {
+			t.Fatalf("%d jobs read as turned away, want only the one carrying a reason", len(turnedAway))
+		}
+		if turnedAway[0].Reason != reason {
+			t.Fatalf("the turned away job says %q, want the reason it was held with", turnedAway[0].Reason)
+		}
+	})
+
+	t.Run("a job that started is no longer turned away", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := declaredJob(t, s, workspace, project, "read the electricity bill")
+		reason := "there is not enough processor for this job's sandbox"
+		if _, err := s.HoldJob(ctx, id, reason, heldEvent(id, workspace, project, reason)); err != nil {
+			t.Fatalf("HoldJob: %v", err)
+		}
+		if _, err := s.StartJob(ctx, id, aLease("controller-a"),
+			[]*job.Event{startedEvent(id, workspace, project)}); err != nil {
+			t.Fatalf("StartJob: %v", err)
+		}
+
+		turnedAway, err := s.TurnedAwayJob(ctx, 0)
+		if err != nil {
+			t.Fatalf("TurnedAwayJob: %v", err)
+		}
+		if len(turnedAway) != 0 {
+			t.Fatalf("%d jobs read as turned away, and the only one started", len(turnedAway))
+		}
+	})
+
 	t.Run("landing job that never started is refused", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
@@ -1392,6 +1665,40 @@ func runWorkspaceLimitsConformance(t *testing.T, newDataset func(t *testing.T) O
 		if limits.Reclaim() != 0 || limits.Archive() != 0 {
 			t.Fatalf("the times read as %s and %s, and unset has to read as zero so the controller "+
 				"does nothing", limits.Reclaim(), limits.Archive())
+		}
+		// The one number on this row that ships set rather than unset. The row says nothing and the
+		// reader supplies the system's own, which comes from a standard rather than from a measurement
+		// of this crew. A store that answered with a number of its own would put the decision in two
+		// places.
+		if limits.ContextCeilingPercent != 0 {
+			t.Fatalf("a workspace nobody configured carries a context ceiling of %d on the row, want none",
+				limits.ContextCeilingPercent)
+		}
+		if limits.ContextCeiling() != job.DefaultContextCeiling {
+			t.Fatalf("a workspace nobody configured reads a ceiling of %d, want the system's own %d",
+				limits.ContextCeiling(), job.DefaultContextCeiling)
+		}
+	})
+
+	t.Run("a context ceiling is written whole and read back", func(t *testing.T) {
+		open := newDataset(t)
+		s := open(t)
+		ctx := context.Background()
+		workspace, _ := aProject(t, s)
+
+		if _, err := s.SetWorkspaceLimits(ctx, job.Limits{
+			Workspace: workspace, ContextCeilingPercent: 55,
+		}); err != nil {
+			t.Fatalf("SetWorkspaceLimits: %v", err)
+		}
+
+		read, err := open(t).WorkspaceLimits(ctx, workspace)
+		if err != nil {
+			t.Fatalf("WorkspaceLimits: %v", err)
+		}
+		if read.ContextCeiling() != 55 {
+			t.Fatalf("the context ceiling reads back as %d, want the 55 that was written",
+				read.ContextCeiling())
 		}
 	})
 

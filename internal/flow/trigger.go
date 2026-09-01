@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
 // A trigger is something that happened, written down as a row so that a run starts from it.

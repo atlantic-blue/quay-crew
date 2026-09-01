@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/display"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/workspace"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/workspace"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -22,7 +22,7 @@ import (
 // happen; nothing here dispatches anything.
 func runJob(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: krewe job <create|list|show|stop|ask|answer|step|resume|refuse>")
+		return fmt.Errorf("usage: krewe job <create|list|show|stop|ask|answer|step|handoff|resume|refuse>")
 	}
 	switch args[0] {
 	case "create":
@@ -39,13 +39,15 @@ func runJob(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, ar
 		return runJobAnswer(ctx, client, args[1:], out)
 	case "step":
 		return runJobStep(ctx, client, args[1:], out)
+	case "handoff":
+		return runJobHandoff(ctx, client, args[1:], out)
 	case "resume":
 		return runJobResume(ctx, client, args[1:], out)
 	case "refuse":
 		return runJobRefuse(ctx, client, args[1:], out)
 	default:
 		return fmt.Errorf("there is no job %s command: "+
-			"krewe job <create|list|show|stop|ask|answer|step|resume|refuse>", args[0])
+			"krewe job <create|list|show|stop|ask|answer|step|handoff|resume|refuse>", args[0])
 	}
 }
 
@@ -66,6 +68,8 @@ const (
 	flagRepository     = "--repository"
 	flagProduct        = "--product"
 	flagClaim          = "--claim"
+	flagEscalate       = "--escalate"
+	flagNoGate         = "--no-gate"
 	flagParent         = "--parent"
 	flagPhase          = "--phase"
 	flagOutcome        = "--outcome"
@@ -109,6 +113,8 @@ func runJobCreate(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 		Repository:     values.first(flagRepository),
 		Product:        values.first(flagProduct),
 		Claim:          values.first(flagClaim),
+		Escalation:     values.first(flagEscalate),
+		Ungated:        values.has(flagNoGate),
 	}
 	if labels, err := readLabels(values[flagLabel]); err != nil {
 		return err
@@ -429,12 +435,38 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	if one.GetResuming() != "" {
 		fmt.Fprintf(out, "continuing past: %s\n", one.GetResuming())
 	}
+	// That it went in circles, which step it went in circles on, and what it escalated to. It is here
+	// rather than only in the reason because a job that was handed to another role is running again
+	// and carries no reason at all: without this line it reads as a job that has always been this
+	// role's, and the three attempts that came before it are invisible.
+	sayItLooped(out, one)
+	// The plan, and whether a person approved it. It is above what the session finished, because the
+	// steps below are read against it: a reader holding both can see for themselves which step of the
+	// plan the work accounted for.
+	if plan := one.GetPlan(); plan != "" {
+		if one.GetPlanApproved() {
+			fmt.Fprintln(out, "plan, approved:")
+		} else {
+			fmt.Fprintln(out, "plan, not approved yet:")
+		}
+		for _, line := range strings.Split(plan, "\n") {
+			fmt.Fprintf(out, "  %s\n", line)
+		}
+	}
 	// What its session finished. It is the record a second attempt carries on from, so it is here
 	// rather than only inside a task nobody can read.
 	if steps := one.GetSteps(); len(steps) > 0 {
 		fmt.Fprintln(out, "finished:")
 		for _, step := range steps {
 			fmt.Fprintf(out, "  %d. %s\n", step.GetSeq(), step.GetSummary())
+		}
+	}
+	// What each session left behind when it stopped taking work at the context ceiling. The newest is
+	// what the session doing it now was handed, so a reader can tell what it was told to carry on from.
+	for _, handed := range one.GetHandoffs() {
+		fmt.Fprintf(out, "handed over %d, left: %s\n", handed.GetSeq(), handed.GetLeft())
+		if handed.GetTried() != "" {
+			fmt.Fprintf(out, "  tried already: %s\n", handed.GetTried())
 		}
 	}
 	// How to answer a failure, said where somebody is already looking at one. Both ways, because
@@ -468,6 +500,10 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	}
 	if one.GetRepository() != "" {
 		fmt.Fprintf(out, "in %s\n", one.GetRepository())
+		// What read this work, or that nothing did. A settled job that says only "done" is what the gate
+		// exists to end: the answer was the only evidence, and it was written by the session being
+		// judged.
+		fmt.Fprintf(out, "%s\n", gateOf(one).PassedBy())
 	}
 	if one.GetBudgetTokens() > 0 {
 		fmt.Fprintf(out, "budget %d tokens\n", one.GetBudgetTokens())
@@ -493,6 +529,39 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		fmt.Fprintf(out, "\nread what it did with krewe task list %s\n", display.ShortID(one.GetSession()))
 	}
 	return nil
+}
+
+// sayItLooped says that a job went in circles, on which step, and what the system did about it.
+//
+// The attempts are printed under it, oldest first, each held to a line. What a person deciding what
+// to do next needs is what the session actually said, and a similarity on its own is a number nobody
+// can act on.
+func sayItLooped(out io.Writer, one *quaycrewv1.Job) {
+	if one.GetLoopedStep() == 0 {
+		return
+	}
+	fmt.Fprintf(out, "went in circles on step %d, %s\n", one.GetLoopedStep(), escalatedTo(one))
+	// The attempts, unless the job is waiting to be told something: the question underneath already
+	// carries them, and printing them twice is the reading nobody finishes.
+	if one.GetPhase() == job.PhaseAsking {
+		return
+	}
+	for _, attempt := range one.GetAttempted() {
+		if attempt.GetStep() != one.GetLoopedStep() {
+			continue
+		}
+		fmt.Fprintf(out, "  attempt %d (%s): %s\n", attempt.GetSeq(),
+			job.Alike(attempt.GetSimilarity()), oneLine(attempt.GetSaid()))
+	}
+}
+
+// escalatedTo is what the system did when the job went in circles, in a person's words.
+func escalatedTo(one *quaycrewv1.Job) string {
+	route, err := job.ReadRoute(one.GetEscalatedTo())
+	if one.GetEscalatedTo() == "" || err != nil {
+		return "and stopped"
+	}
+	return job.Escalating(route)
 }
 
 // showContextSpend prints where the session this job ran in spent its context.
@@ -613,6 +682,31 @@ func runJobStep(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	return nil
 }
 
+// runJobHandoff writes down the state a fresh session starts this job from.
+//
+// It names no job, the way krewe job step names none: the system reads which job is handing over from
+// the credential this session holds. A caller that could name any job could write on any job's record.
+func runJobHandoff(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) < 1 || len(args) > 2 {
+		return fmt.Errorf("usage: krewe job handoff \"<what is left>\" [\"<what you tried that did not work>\"]")
+	}
+	tried := ""
+	if len(args) == 2 {
+		tried = args[1]
+	}
+	resp, err := client.RecordJobHandoff(ctx, &quaycrewv1.RecordJobHandoffRequest{
+		Left: args[0], Tried: tried,
+	})
+	if err != nil {
+		return err
+	}
+	handed := resp.GetJob()
+	fmt.Fprintf(out, "handed over %s\n", display.ShortID(handed.GetId()))
+	fmt.Fprintln(out, "the rest of this job goes to a fresh session, which is given those words, what you "+
+		"recorded as finished, and nothing else you can see.")
+	return nil
+}
+
 // runJobResume continues a job that failed, from the first step it did not finish.
 //
 // It says what the job failed with before it says anything else, and it says how to refuse it. A
@@ -710,6 +804,15 @@ func findJob(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, t
 	}
 }
 
+// gateOf is a job as the gate reads it, off the wire. The sentence lives in the package that decides
+// it, so the tool and the system cannot say two different things about the same row.
+func gateOf(one *quaycrewv1.Job) job.Gate {
+	return job.Gate{
+		Repository: one.GetRepository(), Ungated: one.GetUngated(),
+		Reviewed: one.GetReviewed(), Tested: one.GetTested(), Phase: one.GetPhase(),
+	}
+}
+
 // given is what an invocation gave for each flag, in the order it gave them, so a flag that may be
 // repeated keeps its order and one that may not is read with first.
 type given map[string][]string
@@ -726,8 +829,9 @@ func (g given) has(name string) bool { return len(g[name]) > 0 }
 // valuelessFlags are the flags that are a word on their own. Each says which of two things a
 // command does rather than carrying a value, so the word after one belongs to the command.
 var valuelessFlags = map[string]bool{
-	flagRoots: true,
-	flagClear: true,
+	flagRoots:  true,
+	flagClear:  true,
+	flagNoGate: true,
 }
 
 // readFlags separates the values from the words.// readFlags separates the values from the words. This tool takes no flags anywhere else, so the
@@ -792,7 +896,7 @@ func jobFlagsTaken() map[string]bool {
 	taken := map[string]bool{}
 	for _, name := range []string{
 		flagTitle, flagBrief, flagRole, flagMode, flagExpectFile, flagExpectContains, flagRepository,
-		flagProduct, flagClaim,
+		flagProduct, flagClaim, flagEscalate, flagNoGate,
 		flagAfter, flagDeadline, flagBudgetTokens, flagLabel, flagRequires, flagPhase, flagOutcome,
 		flagRoots,
 		// Taken so it can be refused with the sentence that says where a parent comes from,

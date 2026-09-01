@@ -10,13 +10,15 @@ type instead, whatever follows it, because the word left off a list of remembere
 the word somebody types next. A rename that leaves nothing behind answers with "command not found",
 which reads as a broken install rather than as a rename.
 
-The Go module path moved with it, to `github.com/atlantic-blue/krewe`.
+The Go module path moved with it, and the piece that renames the repository moves it again, to
+`github.com/atlantic-blue/quay-krewe`.
 
-This is the first of six pieces of [#517](https://github.com/atlantic-blue/quay-crew/issues/517), and
-the other five have not landed. The compose project, the container names and the sandbox image are
-still `quaycrew`. The system's directory is still `~/.quay` and `QUAY_HOME` still names it. The
-documentation still says quay, and so does the console header. `QC_TOKEN`, `QC_GRPC_ADDR`,
-`QC_SESSION_ID` and `QC_TRACEPARENT` are read by sessions that are already running and are not being
-renamed here. Neither is the mark a memory file carries, `<!-- quay:session -->`, for the same reason:
-a session that is up wrote its file under the old mark, and a build that stopped recognising it would
-sweep every level of that file into one.
+This is the first piece of [#517](https://github.com/atlantic-blue/quay-crew/issues/517). The rest of
+the rename is planned in [docs/RENAME.md](docs/RENAME.md), and each piece says what it moved in its
+own entry here.
+
+Some names do not move at all, and the plan says why for each one. `QC_TOKEN`, `QC_GRPC_ADDR`,
+`QC_SESSION_ID` and `QC_TRACEPARENT` are read by sessions that are already running. Neither does the
+mark a memory file carries, `<!-- quay:session -->`, for the same reason: a session that is up wrote
+its file under that mark, and a build that stopped reading it would sweep every level of that file
+into one.

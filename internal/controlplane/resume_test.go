@@ -6,13 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/job"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/secrets"
-	"github.com/atlantic-blue/krewe/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/secrets"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -318,6 +318,10 @@ func aJobInARepositoryThatFailed(t *testing.T) heldOpen {
 	declared, err := server.CreateJob(context.Background(), &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "sort the listing", Brief: "make the listing sort by the clock it shows",
 		Repository: "atlantic-blue/quay-crew", Mode: "dangerous",
+		// The settle gate is off, so these tests end where the rule they are about ends. A job that
+		// names a repository is otherwise held back until a reviewer and a tester have passed it, which
+		// is a behaviour of its own with its own tests.
+		Ungated: true,
 	})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)

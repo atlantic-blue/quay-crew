@@ -1,6 +1,6 @@
-# Quay System architecture
+# Quay Krewe architecture
 
-Quay System is a self hosted, open source personal agent hub: a set of small independent services that
+Quay Krewe is a self hosted, open source personal agent hub: a set of small independent services that
 let you drive AI agent work from any channel, run it in sandboxes, and see and audit everything. This
 document describes the design, the stack, and the delivery plan.
 
@@ -84,7 +84,7 @@ Each is its own Go service in its own container.
   every session, tail a conversation, start or stop job.
 - **Flow engine.** Advances automation runs against a graph, over its own Postgres tables,
   dispatching tasks into each run's own session. It is where control flow across sessions is written
-  down. Built as of 9 August 2026: `internal/flow`, with `quay flow import|start|list|show` in
+  down. Built as of 9 August 2026: `internal/flow`, with `krewe flow import|start|list|show` in
   front of it. See Automation graphs below.
 
 ## Messaging and contracts
@@ -213,7 +213,7 @@ that say which session they belong to, and a dispatch that returns the session's
 `handle`. A session carries three identifiers, each with one job: `id` is the system's own row and
 names the sandbox container, `handle` is the name a channel dispatches to (dispatch to the same
 handle and the conversation continues), and `model_session_id` is the model's own word for the
-conversation it keeps, used to resume it. `quay threads` and `quay turns` are refused by name, and
+conversation it keeps, used to resume it. `krewe threads` and `krewe turns` are refused by name, and
 neither word opens anything in the console.
 
 **Decided 27 August 2026: a listing prints one identifier for a session, and it is the `id`.** It
@@ -248,8 +248,8 @@ A workspace and a project are named in lowercase with hyphens, because a name is
 `me/house-bills` says which project of which workspace, on a command line and in a directory path on
 disk. The control plane refuses a name that could not be part of one, and says what would work.
 
-The three levels are addressed as a path, and the operator stands in one of them at a time. `quay use
-me/house-bills` records that in `~/.quay/context`, the way kubectl keeps a current context, and
+The three levels are addressed as a path, and the operator stands in one of them at a time. `krewe use
+me/house-bills` records that in `~/.krewe/context`, the way kubectl keeps a current context, and
 every command after it acts there until an address typed on the command line says otherwise. A session
 is the third level, so standing in one continues that conversation rather than starting another.
 
@@ -268,7 +268,7 @@ several bodies of work and each ships somewhere of its own, and it is a record r
 credential: nothing in the system reaches that account with it. Three values, all of them or none,
 because half a target reads as an answer to "where does this go" and is not one. The identity has to
 belong to the account the project names, which catches the role pasted from another account before a
-pipeline finds it. `quay target <workspace>/<project>` reads and declares it.
+pipeline finds it. `krewe target <workspace>/<project>` reads and declares it.
 
 Deleting a workspace hides its projects, and deleting a project hides it from every read while its
 sessions keep their history. Nothing is hard deleted, because a session holds the only pointer to a
@@ -282,8 +282,8 @@ goes, so the system holds it as a row. It sits beside the deploy target above an
 question: the target says where the running thing ships, and this says where the work lands.
 
 ```
-quay project repository atlantic-blue/transcript
-quay project repository me/transcript atlantic-blue/transcript private
+krewe project repository atlantic-blue/transcript
+krewe project repository me/transcript atlantic-blue/transcript private
 ```
 
 A job declared in that project which names no repository of its own works in the project's, so the
@@ -332,7 +332,7 @@ means, the queries worth knowing, and how migrations are added.
 
 `features/` holds the behaviour specifications: feature files written in plain language, run by
 godog, driving the control plane over its real interface through an in memory connection. They are
-the readable answer to what Quay System does, and they fail when it stops doing it. `make features`
+the readable answer to what Quay Krewe does, and they fail when it stops doing it. `make features`
 runs them and prints them.
 
 Three rules keep the layer worth having.
@@ -412,7 +412,7 @@ never one per run, and the reducer itself still touches no Docker, no Postgres a
 
 Graphs are authored as files, loaded into the store, and versioned. Three worked examples live in
 [`flows/`](../flows) at the root of this repository, beside `roles/` and `skills/` for the same reason:
-they are authored artefacts an operator imports rather than code the build links in. `quay flow import
+they are authored artefacts an operator imports rather than code the build links in. `krewe flow import
 flows/transcript-release.yaml` imports one. Between them they use every node type above except
 `trigger`, and a unit test parses each one, because an example that dies at its first movement teaches
 the wrong shape to everybody who copies it. One of the three is the system reading its own work rather
@@ -522,7 +522,7 @@ a step in a mode too narrow for its job does not fail, it stops to ask a person 
 and the bill is whatever the model spent finding that out. The mode belongs to
 the graph for the same reason the schedule does: what an automation is allowed to do is versioned and
 reviewable beside what it does. There is nowhere else to put it either, because the run's session is
-made by the run's first dispatch, so `quay mode` has nothing to point at until it is too late. Before
+made by the run's first dispatch, so `krewe mode` has nothing to point at until it is too late. Before
 this, a graph whose first step is "clone this" could not take that step: cloning needs the network,
 and a task nobody is watching has nobody to approve it.
 
@@ -540,7 +540,7 @@ movement of a run, the record of that movement, and the claim on its dispatch ke
 transaction, so a run is reconstructable by construction and the same task can never be dispatched,
 and paid for, twice: the key is run, node and attempt. `dispatch`, `choice` and `done` work end to
 end; `StartFlow` answers with the run and drives it behind that answer, because a task takes as long
-as the model takes. `quay flow import|start|list|show` is the operator surface, and importing a
+as the model takes. `krewe flow import|start|list|show` is the operator surface, and importing a
 graph is refused to the driver for the same reason importing a skill is, while starting a run is
 not, because a run is dispatch and the driver already has that.
 
@@ -553,7 +553,7 @@ never read the same. The token ceiling is opt in because what is reasonable diff
 and a made up number would either stop real work or protect nothing; the transition cap is not,
 because a cycling graph with nobody watching is the failure that costs money.
 
-**A run can be stopped, and the reason is kept.** `quay flow stop <run> [<reason>]` halts a run in
+**A run can be stopped, and the reason is kept.** `krewe flow stop <run> [<reason>]` halts a run in
 flight. The stop is cooperative rather than a kill: a run waiting on a task finishes that task,
 because the model is already working and abandoning it mid sentence gains nothing, and what the run
 cannot do is take another step. That is enforced by the database rather than by the engine noticing:
@@ -578,12 +578,12 @@ their status, so an automation nobody answered can never take silence for a yes 
 was asking permission for. The answer lands in the run's state under one name, so an ordinary
 `choice` branches on it and the graph needs no expression language to read a person's decision.
 
-Delivered through the command line, `quay flow answer <run> <answer>`, rather than through a chat
+Delivered through the command line, `krewe flow answer <run> <answer>`, rather than through a chat
 channel. That is deliberate: it exercises the whole shape end to end without a bot token, and a
 chat channel later becomes a second delivery of the same thing rather than the first.
 
 **A graph can start itself.** A graph declares `on: { every: 24h }` and the operator says where with
-`quay flow schedule <workspace>/<project> <graph>`. The interval lives in the graph, versioned and
+`krewe flow schedule <workspace>/<project> <graph>`. The interval lives in the graph, versioned and
 reviewable alongside what the automation does; the placement is the operator's, because a run needs
 a project to dispatch into. The schedule is a row with a next time, read by the same poller the
 waits use, so it survives a restart for the same reason. Scheduling is not starting: the first run
@@ -683,13 +683,38 @@ How it works today, in `internal/auth`:
   sealed in the store because a sealed value can never be read back out through the API, by
   construction, and the operator's own tool has to present this one.
 - Every call carries `authorization: Bearer <token>`, or is refused before it reaches anything,
-  with the refusal naming what to present and where quay reads it from. A control plane with
+  with the refusal naming what to present and where krewe reads it from. A control plane with
   nowhere to keep a token refuses every caller rather than serving them all.
 - The listener binds to loopback unless the operator says otherwise, and the compose file publishes
   the port on the host's loopback only. The token is what recognises a caller, not what hides the
   conversation: publishing the port beyond the machine needs transport the operator owns in front
   of it.
-- `quay` reads QC_TOKEN first, then the token file under the system's data directory.
+- `krewe` reads QC_TOKEN first, then the token file under the system's data directory.
+
+**Decided 31 August 2026: the front door stays on this machine, and the work reaches another device
+through a chat channel.** The operator asked for the briefing on a phone. A browser on a phone needs
+a listener that another machine can reach, and that reverses the decision recorded in
+[#302](https://github.com/atlantic-blue/quay-crew/issues/302). It is not reversed. `krewe web`
+refuses every address that is not this machine, and `internal/web` holds that refusal.
+
+A wider front door needs three things first, and the system holds none of them.
+
+- A credential for each device, so one phone is not every phone.
+- A way to withdraw one device, and to leave the other devices alone.
+- A rule about encryption on the path, which also says what the rule is on a private network.
+
+A chat channel needs none of the three. It also does the thing a page cannot do: it speaks first,
+instead of waiting for a person to open it. That road is
+[#9](https://github.com/atlantic-blue/quay-crew/issues/9), a channel inbound, and
+[#10](https://github.com/atlantic-blue/quay-crew/issues/10), outbound delivery gated on the
+operator's intent.
+
+The refusal in `internal/web` names the same three things, so an operator who binds the wrong
+address reads which of them the system lacks. A scenario in `features/web.feature` holds the refusal
+and this paragraph to each other. A wall whose reason lives only in a code comment drifts away from
+the document that decided it, and drift is how this decision would be reversed without anybody
+choosing to. A later proposal for a wider door is measured against the three. It is a decision for a
+person, in an issue, and never a widening of the bind.
 
 A driver session is a client like any other and gets less, not more. It is handed its own token at
 sandbox birth, minted into `driver.token` beside the system's, so the control plane can tell its
@@ -799,14 +824,14 @@ doubles as the trace id, and token and cost counters land with the first model c
 
 ## Prior art
 
-Quay System learns from three points on the map.
+Quay Krewe learns from three points on the map.
 
 - **OpenClaw:** a self hosted gateway with a control plane, many channel adapters, and config, memory,
-  and skills as files on disk. Quay System keeps the self hosted, files on disk, control plane shape and
+  and skills as files on disk. Quay Krewe keeps the self hosted, files on disk, control plane shape and
   avoids an unvetted third party skill marketplace.
 - **Hermes Agent:** an agent loop that writes its own skills, a built in scheduler, and persistent
-  memory. Quay System borrows the learning loop and the scheduler but keeps changes reviewed rather than
+  memory. Quay Krewe borrows the learning loop and the scheduler but keeps changes reviewed rather than
   self applied.
 - **Remote control features** that task a phone into a live window onto a local session: the safest way
-  to steer one session, but not a programmable, multi channel, self hosted hub. Quay System is the
+  to steer one session, but not a programmable, multi channel, self hosted hub. Quay Krewe is the
   latter.

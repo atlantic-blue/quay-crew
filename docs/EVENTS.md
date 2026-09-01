@@ -1,6 +1,6 @@
 # The event log
 
-Quay System runs a Kafka compatible event log, served locally by Redpanda, which starts with the rest
+Quay Krewe runs a Kafka compatible event log, served locally by Redpanda, which starts with the rest
 of the stack. It is an audit export, not the road anything travels by: history lives in Postgres,
 written in the same breath as each task, and a system with no broker loses nothing but the export.
 
@@ -13,7 +13,7 @@ moment it is dispatched to the records it leaves in the store and on the log, is
 **Every task is written to the store synchronously.** The dispatch path writes the redacted task
 into the `tasks` table in the same breath as the task itself, on a context detached from the
 request's, so a client hanging up cannot lose the record and a broker being down cannot either.
-`quay task list <session>` and `l` on a session in the console read that table.
+`krewe task list <session>` and `l` on a session in the console read that table.
 
 **When an export is configured, the control plane also publishes each task to the log**, on
 `<workspace>.tasks`, keyed by session so one session's events stay in order on one partition. A
@@ -94,7 +94,7 @@ The kinds, and each is something that happened rather than a state the session i
 - `session.started`, work began in it, and the detail is what was asked
 - `session.completed`, the job landed, and the detail is what came back
 - `session.errored`, the job did not land, and the detail is why
-- `session.halted`, an operator stopped the task with `quay stop`, and the detail is their reason.
+- `session.halted`, an operator stopped the task with `krewe stop`, and the detail is their reason.
   The session survives, so this is not `session.stopped`: it keeps its container and its
   conversation, and the next dispatch continues it
 - `session.stopped`, it was put down and its container with it
@@ -132,6 +132,16 @@ The contract, which another service may depend on:
   reason.
 - `job.stopped`, when a person stopped it, or a limit did, or its claim did not hold.
 - `job.asked`, when it put a question to a person. The detail is the question.
+- `job.looped`, when three attempts at one step were too alike to tell apart. The detail says the
+  step, how alike they were, and what the job escalated to. It is written whether the job then asks
+  a person, is handed to another role, or stops, because the loop is the thing that happened and
+  where it went is what the job declared.
+- `job.held`, when the machine had no room for its sandbox. The job stays pending, so it is not a
+  movement, and it is written once per reason rather than once per tick.
+- `job.unstuck`, when nothing at all was running while this job waited for room, so the system took
+  back the container that had been idle longest and freed the room itself. The detail names how many
+  jobs were waiting, which container went, and how long that container had been idle. The job is
+  pending before it and pending after it: what changed is the machine.
 - `job.told`, when that person answered it. The detail is the answer. The pair is the record of every
   decision a run stopped for, so somebody reading it afterwards learns what was chosen without
   opening a container that is long gone.
@@ -197,7 +207,7 @@ A solid line is built. A dotted line is not.
 
 ## Why an event log at all
 
-The synchronous path does not need one. Today `quay` speaks gRPC to the control plane, the control
+The synchronous path does not need one. Today `krewe` speaks gRPC to the control plane, the control
 plane writes to Postgres and runs a task in a sandbox, and a reply comes back down the same
 connection. Adding a broker to that would be architecture for its own sake.
 
@@ -256,7 +266,7 @@ docker exec -it quaycrew-redpanda-1 rpk cluster health  is the broker itself wel
 docker exec -it quaycrew-redpanda-1 rpk cluster info    brokers and addresses
 ```
 
-One task through `quay task --dispatch` creates the topic and puts a record on it, so
+One task through `krewe task --dispatch` creates the topic and puts a record on it, so
 `rpk topic list` shows `<workspace>.tasks`. The topic is created by the publisher on first use
 rather than provisioned ahead of time, because a workspace's stream is named after a workspace
 nobody knew about yet. `rpk group list` still prints no groups, because nothing reads.
@@ -282,7 +292,7 @@ contain a dot, a slash or whitespace, so the separator stays unambiguous.
 
 ## Prove the broker works
 
-The plumbing is easy to verify without any Quay System code being involved. This creates a throwaway
+The plumbing is easy to verify without any Quay Krewe code being involved. This creates a throwaway
 topic, writes one message, reads it back and cleans up:
 
 ```

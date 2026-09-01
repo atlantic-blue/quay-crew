@@ -16,7 +16,7 @@ import (
 	"net/http"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"google.golang.org/grpc"
 )
 
@@ -41,6 +41,11 @@ type Reader interface {
 	ListSessions(context.Context, *quaycrewv1.ListSessionsRequest, ...grpc.CallOption) (*quaycrewv1.ListSessionsResponse, error)
 	GetSession(context.Context, *quaycrewv1.GetSessionRequest, ...grpc.CallOption) (*quaycrewv1.GetSessionResponse, error)
 	ListTasks(context.Context, *quaycrewv1.ListTasksRequest, ...grpc.CallOption) (*quaycrewv1.ListTasksResponse, error)
+	ListJobs(context.Context, *quaycrewv1.ListJobsRequest, ...grpc.CallOption) (*quaycrewv1.ListJobsResponse, error)
+	ListFlowRuns(context.Context, *quaycrewv1.ListFlowRunsRequest, ...grpc.CallOption) (*quaycrewv1.ListFlowRunsResponse, error)
+	GetHeadroom(context.Context, *quaycrewv1.GetHeadroomRequest, ...grpc.CallOption) (*quaycrewv1.GetHeadroomResponse, error)
+	GetHealth(context.Context, *quaycrewv1.GetHealthRequest, ...grpc.CallOption) (*quaycrewv1.GetHealthResponse, error)
+	GetUsage(context.Context, *quaycrewv1.GetUsageRequest, ...grpc.CallOption) (*quaycrewv1.GetUsageResponse, error)
 }
 
 // Serve runs the view until ctx is done, writing the address it came up on to out.
@@ -72,10 +77,13 @@ func Serve(ctx context.Context, reader Reader, addr string, out io.Writer) error
 // loopbackOnly refuses to bind anywhere but this machine.
 //
 // The control plane listens on a local only port guarded by one shared token, and this server holds
-// that token. Serving it to a routable address would hand the whole system to the network without the
-// three things that would need: a token for each device, a way to withdraw one, and a rule about
-// encryption. None of those exist, so this is a wall rather than a default. An address with no host
-// is refused too, because ":8080" binds every interface there is.
+// that token. Serving it to a routable address hands the whole system to whatever can reach the port.
+//
+// Decided 31 August 2026, and written in the authentication section of docs/ARCHITECTURE.md: the
+// front door stays on this machine, and the work reaches another device through a chat channel. A
+// wider front door needs three things the system does not hold, and the refusal below names all
+// three, so an operator who binds the wrong address reads which of them is missing. An address with
+// no host is refused too, because ":8080" binds every interface there is.
 func loopbackOnly(addr string) error {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -87,9 +95,12 @@ func loopbackOnly(addr string) error {
 	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
 		return nil
 	}
-	return fmt.Errorf("krewe web serves this machine only, and %q is not on it: use %s. "+
-		"Reaching the system from another device is a separate decision, and a chat channel is the "+
-		"road planned for it", addr, DefaultAddress)
+	return fmt.Errorf("krewe web serves this machine only, and %q is not on it: use %s.\n"+
+		"A wider front door needs three things this system does not hold: a credential for each "+
+		"device, a way to withdraw one device, and a rule about encryption on the path.\n"+
+		"The work reaches another device through a chat channel instead, which needs none of the "+
+		"three. That was decided on 31 August 2026 and it is written in docs/ARCHITECTURE.md, under "+
+		"authentication", addr, DefaultAddress)
 }
 
 // Handler builds the routes. It parses the templates once, so a template that does not compile is a
@@ -103,7 +114,10 @@ func Handler(reader Reader) (http.Handler, error) {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", http.FileServerFS(staticFiles))
-	mux.HandleFunc("GET /{$}", view.sessions)
+	// The briefing holds the front door, because the question an operator has when the tab opens is
+	// not "what is running". The session listing keeps its page and loses that door.
+	mux.HandleFunc("GET /{$}", view.briefing)
+	mux.HandleFunc("GET /sessions", view.sessions)
 	mux.HandleFunc("GET /session/{id}", view.session)
 	return mux, nil
 }
@@ -112,7 +126,7 @@ func Handler(reader Reader) (http.Handler, error) {
 // two of them in one set would collide.
 func parsePages() (map[string]*template.Template, error) {
 	pages := map[string]*template.Template{}
-	for _, name := range []string{"sessions.html", "session.html"} {
+	for _, name := range []string{"briefing.html", "sessions.html", "session.html"} {
 		parsed, err := template.ParseFS(templateFiles, "templates/layout.html", "templates/"+name)
 		if err != nil {
 			return nil, fmt.Errorf("parse %s: %w", name, err)

@@ -9,21 +9,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/atlantic-blue/krewe/internal/manual"
+	"github.com/atlantic-blue/quay-krewe/internal/manual"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
-	"github.com/atlantic-blue/krewe/features"
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/console"
-	"github.com/atlantic-blue/krewe/internal/contextsize"
-	"github.com/atlantic-blue/krewe/internal/display"
-	"github.com/atlantic-blue/krewe/internal/repository"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/workspace"
+	"github.com/atlantic-blue/quay-krewe/features"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/console"
+	"github.com/atlantic-blue/quay-krewe/internal/contextsize"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
+	"github.com/atlantic-blue/quay-krewe/internal/repository"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/workspace"
 )
 
 // usage is the command list, kept in internal/manual so the tool and the document a session is told
@@ -213,6 +213,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runProject(ctx, client, args[1:], out)
 	case "task":
 		return runTask(ctx, client, args[1:], out)
+	case "read":
+		return runRead(ctx, client, args[1:], out)
 	case "attach":
 		return runAttach(ctx, client, args[1:], out, os.Stdin)
 	case "web":

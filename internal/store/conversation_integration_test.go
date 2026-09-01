@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/secrets"
-	"github.com/atlantic-blue/krewe/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/secrets"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // Naming a conversation, over a real database, a real control plane and the real model adapter.
@@ -115,6 +115,9 @@ func (p *heldProvider) Remove(context.Context, string) error                 { r
 func (p *heldProvider) Stranded(context.Context) ([]string, error)           { return nil, nil }
 func (p *heldProvider) Attached(context.Context, string) (bool, error)       { return false, nil }
 func (p *heldProvider) RuntimeRunning(context.Context, string) (bool, error) { return false, nil }
+func (p *heldProvider) Existing(context.Context, string) (sandbox.Sandbox, bool, error) {
+	return p.box, true, nil
+}
 
 // conversationOn is the conversation a command line names, whichever of the two flags carries it.
 func conversationOn(argv []string) string {

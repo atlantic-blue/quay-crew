@@ -19,9 +19,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/atlantic-blue/krewe/internal/capacity"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/role"
+	"github.com/atlantic-blue/quay-krewe/internal/capacity"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/role"
 )
 
 // The phases a job moves through. They are the flow engine's words plus one, so a reader
@@ -95,6 +95,14 @@ type Job struct {
 	// that pull request. Empty claims nothing and is checked as nothing.
 	Repository string
 
+	// Ungated is a job declared with the settle gate off: it settles on its own answer, and nothing
+	// independent has to agree first. It is stated in the negative so a declaration that says nothing
+	// is gated, which is the direction a boundary has to default in.
+	//
+	// It is refusable rather than optional. A run that has no reviewer and no tester to spare says so
+	// here, once, where somebody is looking, rather than by a gate that quietly passes everything.
+	Ungated bool
+
 	// Product is the one sentence this job serves, in a person's words: what somebody does with what is
 	// built, and what they get back. It is stated on the root and every child carries it.
 	//
@@ -104,6 +112,15 @@ type Job struct {
 	// which is that you paste a link and get the text back. Nothing measured the one against the other
 	// because only one of them existed.
 	Product string
+
+	// Plan is what the crew said it would do, one numbered step per line, and PlanApproved says
+	// whether a person approved it. A job that states the sentence writes its plan before it does any
+	// work, and nothing is built until somebody says yes to these lines. See plan.go.
+	//
+	// Both are the controller's and the operator's to write, never a caller's: the crew writes the
+	// plan and the person approves it, which is the whole shape.
+	Plan         string
+	PlanApproved bool
 
 	// Steers is how many times the operator had to say something this job should have known, counted
 	// on the job the steer landed on and on every job above it. On the job at the top it is the score
@@ -140,12 +157,34 @@ type Job struct {
 	// point of the field: a listing that says a job is done and nothing about where the work went is
 	// the silence this was built to end.
 	PullRequest string
+	// Reviewed and Tested are what passed this work before it settled, each in a session that did not
+	// do the work. They are written when the job lands, so a settled job always states whether anything
+	// independent agreed with its answer. See gate.go.
+	Reviewed bool
+	Tested   bool
 	// SpentTokens is what this job's own session has cost.
 	SpentTokens int64
 	// Steps are what the session doing this job said it finished, in the order it finished them. They
 	// are what a continued job carries on from, and they are read with one job rather than with a
 	// listing: a listing of a hundred lists is a listing nobody can read.
 	Steps []Step
+	// Handoffs are what each session wrote down when it stopped taking work on this job at the context
+	// ceiling: what is left, and what it tried that did not work. The newest one goes in front of the
+	// session that carries the job on, and the count of them names that session. See ceiling.go.
+	Handoffs []Handoff
+	// Escalation is what this job does when it goes in circles, as the caller declared it: "ask" to put
+	// the question to the operator, or "role:<name>" to hand it to another role. Empty is asking, which
+	// is what a job whose author never thought about looping gets. See loop.go.
+	Escalation string
+	// Attempted is what each attempt at a step produced, with how like the earlier attempts at that
+	// step it was. Attempts, above, is how many times a session was started for this job; this is what
+	// those attempts said, which is the only thing a loop can be read off.
+	Attempted []Attempt
+	// LoopedStep is the step this job went in circles on, and zero for a job that never has.
+	// EscalatedTo is the route the system took when it did, in the shape it was declared. A job
+	// escalates once: the second loop stops it rather than escalating again.
+	LoopedStep  int
+	EscalatedTo string
 	// Resuming is the failure this attempt is continuing past, and empty for a job nobody continued.
 	// It is what the job failed with, moved off the reason by the resume, so a job that is going again
 	// does not sit pending reading as one the machine is holding back.
@@ -221,11 +260,26 @@ const (
 	// movement: the job is running before it and running after it, and what it adds is the record a
 	// second attempt carries on from.
 	EventStepped = "job.stepped"
+	// EventHandedOver is written when the session doing a job says what it leaves behind, at the
+	// context ceiling, and EventHandedOn when the system then gives the rest of the job to a fresh
+	// session. They are two moments rather than one: a session can write a handoff and the system
+	// still fail to move the job, and a reader who saw one line could not tell which happened.
+	EventHandedOver = "job.handed_over"
+	EventHandedOn   = "job.handed_on"
+	// EventLooped is written when a job goes in circles: the same step attempted three times in a way
+	// the system cannot tell apart. It is not a phase, because where the job goes next is what the job
+	// declared, so the record carries the loop and the row carries the escalation.
+	EventLooped = "job.looped"
 	// EventResumed is written when a person continues a job that failed, and EventRefused when they
 	// end one instead. They are the two answers to a failure, and which of the two was given is the
 	// part of the record somebody reads a week later.
 	EventResumed = "job.resumed"
 	EventRefused = "job.refused"
+	// EventUnstuck is written when the system finds it is running nothing while jobs wait for room,
+	// and takes a container back to start again. It is not a movement: the job is pending before it
+	// and pending after it, and the next tick starts it. It goes on the job the room was freed for,
+	// because that is the job that was being denied.
+	EventUnstuck = "job.unstuck"
 )
 
 // Contract says whether a kind is one another service may depend on.
@@ -258,6 +312,13 @@ type Filter struct {
 	// value, which is how a caller finds everything it labelled at all.
 	LabelKey   string
 	LabelValue string
+	// FinishedSince keeps jobs whose FinishedAt is at or after it, and drops a job that has not
+	// finished at all. Setting it also turns the order into most recently finished first: the whole
+	// question it answers is what ended lately, and the moment a job was declared says nothing about
+	// that.
+	FinishedSince *time.Time
+	// Limit caps how many rows come back, after the order is decided. Zero is every row.
+	Limit int
 }
 
 // Declaration is what a caller writes. Everything else on a job is the system's to assign.
@@ -281,8 +342,14 @@ type Declaration struct {
 	Repository     string
 	Product        string
 	Claim          string
-	ID             string
-	Parent         string
+	// Escalation is what this job does when it goes in circles: "ask", or "role:<name>". Empty is
+	// asking, and every word is refused at the write, where the person who typed it is looking.
+	Escalation string
+	// Ungated declares this job with the settle gate off. Stated in the negative, so a caller that says
+	// nothing gets the gate.
+	Ungated bool
+	ID      string
+	Parent  string
 }
 
 // Tidied is the declaration as it is stored: the space around the lines it will be read as comes off.
@@ -293,6 +360,7 @@ func (d Declaration) Tidied() Declaration {
 	d.Mode = strings.TrimSpace(d.Mode)
 	d.ExpectFile = strings.TrimSpace(d.ExpectFile)
 	d.Product = TidySentence(d.Product)
+	d.Escalation = strings.ToLower(strings.TrimSpace(d.Escalation))
 	d.Requires = TidyRequires(d.Requires)
 	d.Repository = TidyRepository(d.Repository)
 	d.Claim = TidyClaim(d.Claim)
@@ -344,6 +412,9 @@ func (d Declaration) Validate() error {
 		return err
 	}
 	if err := usableClaim(tidy.Claim); err != nil {
+		return err
+	}
+	if _, err := ReadRoute(tidy.Escalation); err != nil {
 		return err
 	}
 	if err := tidy.validateRequires(); err != nil {
@@ -529,6 +600,10 @@ type Limits struct {
 	// ArchiveSeconds is how long a reclaimed session here waits before the system files it away. Zero
 	// is unset, and it ships unset for the same reason.
 	ArchiveSeconds int
+	// ContextCeilingPercent is how full a session's context window may be here before the system gives
+	// it no new task. Zero takes the system's own, which is DefaultContextCeiling: this is the one
+	// number on this row that ships set, and ceiling.go says where it came from.
+	ContextCeilingPercent int
 	// RequestMemoryBytes and RequestProcessor are what one sandbox in this workspace asks the machine
 	// for. The system adds up what it has placed and admits a job only where its runtime still has that
 	// much unallocated, so a workspace whose jobs run heavier says so here rather than being counted

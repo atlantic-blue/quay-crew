@@ -3,7 +3,7 @@ package sandbox_test
 import (
 	"testing"
 
-	"github.com/atlantic-blue/krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 )
 
 // A ceiling is one number, so the four have to add up to one. Cache reads are counted: on a real

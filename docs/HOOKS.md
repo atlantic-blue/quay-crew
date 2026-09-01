@@ -7,7 +7,7 @@ The evidence is one working session on 13 August 2026. The system context held 1
 The session broke three of them. It did not break the one about committing without approval, because
 that one is not advice on the operator's machine: a hook refused the command and named how to ask.
 
-A quay sandbox had no such gate, so the rule that mattered most was the rule nothing checked. It has
+A krewe sandbox had no such gate, so the rule that mattered most was the rule nothing checked. It has
 one gate now, on the merge, and the rest of this document is the shape every other one takes.
 
 ## What a hook is, and is not
@@ -37,14 +37,14 @@ prompt, and a shorter prompt is followed more closely, so the advice that remain
 ## Where a hook lives
 
 The same three layers as a skill, for the same reasons, and this is deliberate rather than
-convenient. A hook was once built as `quay hook <name>`, compiled into the command line tool. That
+convenient. A hook was once built as `krewe hook <name>`, compiled into the command line tool. That
 made it impossible to write a hook for one workspace, impossible to change one without releasing the
 tool, and impossible to hand one to another system.
 
 ```mermaid
 flowchart LR
-    A["a repository of hooks<br/>files, reviewed, versioned"] -->|"quay hook import"| B["the system's store<br/>pinned to a version"]
-    B -->|"quay hook attach"| C["a workspace, or the whole system"]
+    A["a repository of hooks<br/>files, reviewed, versioned"] -->|"krewe hook import"| B["the system's store<br/>pinned to a version"]
+    B -->|"krewe hook attach"| C["a workspace, or the whole system"]
     C --> D["every session in it<br/>files mounted read only,<br/>a settings file rendered"]
     D --> E["the model runtime<br/>runs the hook on its event"]
 ```
@@ -169,8 +169,19 @@ Each one is a rule the system already carries and nothing else checks.
   infrastructure the deploy identity was never asked about, or over an action that came back denied.
   It is designed in
   [`hooks/deploy-identity-gate/README.md`](../hooks/deploy-identity-gate/README.md).
+- **prose-gate.** Reads prose written for a person and refuses what Simplified Technical English
+  refuses, for the part of it a program can measure: a sentence of more than 25 words, a paragraph of
+  more than 6 sentences, the perfect and the continuous tenses, and a dash used as punctuation. It
+  reads a markdown or a text file about to be written, and the prose a command carries as an
+  argument, which is a pull request body, an issue body or a commit message. The approved vocabulary
+  and the ban on idiom are not measurable and are not guessed at: they stay in a brief, and every
+  refusal says so. It is designed in
+  [`hooks/prose-gate/README.md`](../hooks/prose-gate/README.md).
 
-All three are seeded, so a fresh system is under them without anybody attaching anything.
+The first three are seeded, so a fresh system is under them without anybody attaching anything. The
+prose gate is offered rather than attached, because prose is what a role produces all day and the
+rules it holds are a style somebody chooses. `krewe hook attach <workspace> prose-gate` is how a
+workspace takes it.
 
 A seeded hook used to mean a hook that cannot refuse. The merge gate refuses and is seeded anyway,
 because it holds the boundary the whole shape of this system rests on: every role pushes and opens a
@@ -178,7 +189,7 @@ pull request, and no role merges, since a push applies nothing and a merge runs 
 spends money. A gate an operator has to remember to attach is off in every system nobody set up, which
 is where the boundary matters most. So the rule is not that a seeded hook never refuses. It is that a
 seeded hook refuses something no session is ever meant to do, exactly, and says what to do instead.
-`quay hook detach system merge-gate` is how somebody decides otherwise.
+`krewe hook detach system merge-gate` is how somebody decides otherwise.
 
 The deploy identity gate is seeded on that same rule. Opening a pull request that creates
 infrastructure without saying whether the identity applying it may create anything hands the failure

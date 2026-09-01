@@ -6,7 +6,7 @@ knew was two pull requests conflicting on files both of them had created, and th
 disagreed in small places, which is the part that cost the most: putting them back together by hand
 was more work than either one would have been alone.
 
-So a declaration may claim one: `krewe job create --claim atlantic-blue/krewe#540`. An issue, a
+So a declaration may claim one: `krewe job create --claim atlantic-blue/quay-krewe#540`. An issue, a
 branch, or a name two people would both use for the same thing. A second job claiming it is refused
 while the first still holds it, and the refusal names that job, what it is, and how old its claim is,
 so the answer to "who has this" is in the refusal rather than in a search. `krewe job list` carries a

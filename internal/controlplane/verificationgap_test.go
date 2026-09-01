@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	quaycrewv1 "github.com/atlantic-blue/krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/krewe/internal/controlplane"
-	"github.com/atlantic-blue/krewe/internal/model"
-	"github.com/atlantic-blue/krewe/internal/role"
-	"github.com/atlantic-blue/krewe/internal/sandbox"
-	"github.com/atlantic-blue/krewe/internal/secrets"
-	"github.com/atlantic-blue/krewe/internal/store"
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
+	"github.com/atlantic-blue/quay-krewe/internal/role"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
+	"github.com/atlantic-blue/quay-krewe/internal/secrets"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // The one question the verification gap method asks, and the shape that ships wrong most often.
@@ -160,7 +160,11 @@ func theOldVerifier(t *testing.T) []*quaycrewv1.RoleFile {
 		body := string(file.GetBody())
 		switch file.GetPath() {
 		case role.ManifestFile:
-			file.Body = []byte(strings.Replace(body, "version: 2", "version: 1", 1))
+			back := strings.Replace(body, fmt.Sprintf("version: %d", shippedVersionOf(t, "verifier")), "version: 1", 1)
+			if back == body {
+				t.Fatalf("the shipped verifier does not carry the version this test puts back:\n%s", body)
+			}
+			file.Body = []byte(back)
 		case role.BriefFile:
 			opens, closes := strings.Index(body, "<verification_gap>"), strings.Index(body, "</verification_gap>")
 			if opens < 0 || closes < 0 {
@@ -252,7 +256,7 @@ func TestAWorkspaceHoldingTheOldVerifierIsMovedOnByAttachingAgain(t *testing.T) 
 	if err != nil {
 		t.Fatalf("list what the workspace holds: %v", err)
 	}
-	if moved.GetRoles()[0].GetVersion() != 2 {
+	if moved.GetRoles()[0].GetVersion() != int32(shippedVersionOf(t, "verifier")) {
 		t.Fatalf("the workspace holds version %d after attaching again", moved.GetRoles()[0].GetVersion())
 	}
 	if !strings.Contains(it.briefGivenTo(t, "verifier", "verify it again"), theGapQuestion) {

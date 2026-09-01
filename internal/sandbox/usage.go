@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/atlantic-blue/krewe/internal/contextspend"
+	"github.com/atlantic-blue/quay-krewe/internal/contextspend"
 )
 
 // Usage is what a conversation has cost, in tokens.

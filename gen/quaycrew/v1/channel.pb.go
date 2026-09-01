@@ -215,8 +215,8 @@ const file_quaycrew_v1_channel_proto_rawDesc = "" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x16\n" +
 	"\x06handle\x18\x02 \x01(\tR\x06handle\x12\x12\n" +
 	"\x04text\x18\x03 \x01(\tR\x04text\x12%\n" +
-	"\x0ecorrelation_id\x18\x04 \x01(\tR\rcorrelationIdB\xa7\x01\n" +
-	"\x0fcom.quaycrew.v1B\fChannelProtoP\x01Z9github.com/atlantic-blue/krewe/gen/quaycrew/v1;quaycrewv1\xa2\x02\x03QXX\xaa\x02\vQuaycrew.V1\xca\x02\vQuaycrew\\V1\xe2\x02\x17Quaycrew\\V1\\GPBMetadata\xea\x02\fQuaycrew::V1b\x06proto3"
+	"\x0ecorrelation_id\x18\x04 \x01(\tR\rcorrelationIdB\xac\x01\n" +
+	"\x0fcom.quaycrew.v1B\fChannelProtoP\x01Z>github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1;quaycrewv1\xa2\x02\x03QXX\xaa\x02\vQuaycrew.V1\xca\x02\vQuaycrew\\V1\xe2\x02\x17Quaycrew\\V1\\GPBMetadata\xea\x02\fQuaycrew::V1b\x06proto3"
 
 var (
 	file_quaycrew_v1_channel_proto_rawDescOnce sync.Once
