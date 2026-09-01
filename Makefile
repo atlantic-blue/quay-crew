@@ -5,12 +5,16 @@ PROJECT ?=
 COMPOSE_PROJECT := quaycrew$(if $(PROJECT),-$(PROJECT),)
 GOBIN := $(shell go env GOPATH)/bin
 
-# QUAY_HOME is where a system keeps what belongs to it on this machine. It is deliberately outside this
+# KREWE_HOME is where a system keeps what belongs to it on this machine. It is deliberately outside this
 # checkout: a system that is installed rather than cloned has no checkout to put configuration in, and
 # configuration that lives in one cannot be given to anybody. Compose is told the path rather than
 # left to find a file next to its own compose file.
-QUAY_HOME ?= $(HOME)/.quay
-ENV_FILE ?= $(QUAY_HOME)/env
+#
+# QUAY_HOME is what it was called before the rename, and it is read for one release. It is in shell
+# profiles and in scripts, and a build that stopped reading it would point the stack at a fresh
+# directory while the tokens, the sealing key and every conversation stayed in the old one.
+KREWE_HOME ?= $(if $(QUAY_HOME),$(QUAY_HOME),$(HOME)/.krewe)
+ENV_FILE ?= $(KREWE_HOME)/env
 
 # QC_SESSION_NETWORK is the network a session's sandbox joins to reach the control plane, and the
 # control plane is the only thing on it. It is computed rather than configured, and named after this
@@ -72,7 +76,7 @@ print-%:
 # source itself and creates it as root. That would leave the system's own directory owned by root, and
 # the next `krewe use` unable to write the address you are working in into it.
 config:
-	@mkdir -p "$(QUAY_HOME)/data"
+	@mkdir -p "$(KREWE_HOME)/data"
 	@if [ ! -f "$(ENV_FILE)" ]; then \
 		mkdir -p "$(dir $(ENV_FILE))"; \
 		cp deploy/env.example "$(ENV_FILE)"; \

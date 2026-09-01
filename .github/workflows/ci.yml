@@ -132,7 +132,7 @@ jobs:
       # the tool writes as well as the data the stack mounts. Made here, by this user, before compose
       # can make it as root.
       - name: Make the system's directory
-        run: mkdir -p "$HOME/.quay/data"
+        run: mkdir -p "$HOME/.krewe/data"
 
       # The compose project name prefixes every named volume it makes, so the database lives in
       # <project>_postgres-data and a stack started under a different project name comes up on an
@@ -227,7 +227,7 @@ jobs:
       - name: Read the system's token
         run: |
           set -euo pipefail
-          token_file="$HOME/.quay/data/system.token"
+          token_file="$HOME/.krewe/data/system.token"
           for i in $(seq 1 15); do
             sudo test -s "$token_file" && break
             sleep 2

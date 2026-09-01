@@ -88,7 +88,7 @@ func unreachable(err error, told string, sandboxed bool) error {
 		"address it fell back to. A task is told where the system is when it runs a job, and what "+
 		"it may do there comes from that job's role. So either this task is running none, or the "+
 		"system has no address of its own: QC_SANDBOX_CONTROL_PLANE on the control plane, which is "+
-		"the system's configuration file, ~/.quay/env on a compose stack. (%w)", err)
+		"the system's configuration file, ~/.krewe/env on a compose stack. (%w)", err)
 }
 
 // dispatch routes an invocation: no arguments opens the console, anything else runs a subcommand.
