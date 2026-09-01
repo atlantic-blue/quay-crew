@@ -91,7 +91,7 @@ func TestTheConsoleListsTheJobsTheSystemActuallyHolds(t *testing.T) {
 	if running.Parent == "" {
 		t.Fatalf("the started job carries no session, so there is nothing to descend into: %q", running.Cells)
 	}
-	if running.Cells[4] == "not yet" {
+	if running.Cells[5] == "not yet" {
 		t.Fatal("the started job says it has no session yet, and the controller gave it one")
 	}
 	if running.Cells[1] != job.PhaseRunning && running.Cells[1] != job.PhaseDone {
@@ -102,8 +102,8 @@ func TestTheConsoleListsTheJobsTheSystemActuallyHolds(t *testing.T) {
 	if !ok {
 		t.Fatalf("the pending job is not in the listing: %v", rows)
 	}
-	if waitingRow.Cells[4] != "not yet" {
-		t.Fatalf("a job nothing has started says its session is %q", waitingRow.Cells[4])
+	if waitingRow.Cells[5] != "not yet" {
+		t.Fatalf("a job nothing has started says its session is %q", waitingRow.Cells[5])
 	}
 
 	// Scoped to one project, which is the same call the view makes when it is drilled into from one.
