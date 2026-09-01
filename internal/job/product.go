@@ -37,14 +37,28 @@ func ServesAPerson(sentence string) string {
 // Under a parent that carries no sentence, the child's stands. A tree that started without one can
 // still gain one, which is the path an answer of "no" takes.
 func Inherited(parent, child string) (string, error) {
-	switch {
-	case parent == "":
-		return child, nil
-	case child == "" || child == parent:
-		return parent, nil
-	default:
+	carried, ok := inherited(parent, child)
+	if !ok {
 		return "", fmt.Errorf("this job states a different sentence from the job it hangs under, which already "+
 			"says: %s. The sentence belongs to the job at the top and every job under it carries the same one, "+
 			"so declare this one without it, or change the sentence at the top", parent)
+	}
+	return carried, nil
+}
+
+// inherited is the rule the product sentence and the request both follow: a child that says nothing
+// carries its parent's, a child that says the same says the same, and a child that says something
+// else is not carried at all.
+//
+// It is one function because the two fields answer one question. A tree with two of either has
+// neither, and which noun the refusal names is the only thing that differs.
+func inherited(parent, child string) (string, bool) {
+	switch {
+	case parent == "":
+		return child, true
+	case child == "" || child == parent:
+		return parent, true
+	default:
+		return "", false
 	}
 }

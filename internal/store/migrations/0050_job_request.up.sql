@@ -1,0 +1,21 @@
+-- A job keeps the request that produced it, in the words it was asked in.
+--
+-- The failure it answers: a person says one sentence, something writes a brief from it, and the system
+-- runs the brief faithfully. Nothing ever reads the brief back against the sentence, because the
+-- sentence was never written down. So a misreading of one sentence becomes two days of correct work
+-- in the wrong direction, and every check is green the whole way.
+--
+-- It is not the product column. Product says what a person does with what is built and what they get
+-- back, which is an outcome; this is the ask. A request for an article about what had been built
+-- became a brief for a diary of throughput, and the product sentence "a reader opens the post" agreed
+-- with both of them.
+--
+-- No ceiling in the schema beyond the brief's, which the declaration holds it to: a limit that makes
+-- somebody shorten what was said is the compression this column exists to catch.
+--
+-- Nothing updates it after the write. What was said is not a setting, so there is no replace call and
+-- the coverage of the brief against it is worked out from the two columns rather than stored beside
+-- them, where a copy could disagree.
+--
+-- Empty string rather than null, the way every other text column on this table already is.
+alter table jobs add column if not exists request text not null default '';

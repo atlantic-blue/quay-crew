@@ -8751,6 +8751,11 @@ type Job struct {
 	// escalates once: the second loop stops it rather than escalating it again.
 	LoopedStep  int32  `protobuf:"varint,43,opt,name=looped_step,json=loopedStep,proto3" json:"looped_step,omitempty"`
 	EscalatedTo string `protobuf:"bytes,44,opt,name=escalated_to,json=escalatedTo,proto3" json:"escalated_to,omitempty"`
+	// request is what was asked for, in the words it was asked in. The brief was written from it, and
+	// the two are read against each other at the write. It is stated on the job at the top and every
+	// job under it carries the same one. It is not product: product is the outcome a person gets, and
+	// this is the ask.
+	Request string `protobuf:"bytes,58,opt,name=request,proto3" json:"request,omitempty"`
 	// observed_version is the version of the declaration the status describes. A controller that has
 	// not caught up leaves this behind the version above.
 	ObservedVersion int32 `protobuf:"varint,25,opt,name=observed_version,json=observedVersion,proto3" json:"observed_version,omitempty"`
@@ -9151,6 +9156,13 @@ func (x *Job) GetEscalatedTo() string {
 	return ""
 }
 
+func (x *Job) GetRequest() string {
+	if x != nil {
+		return x.Request
+	}
+	return ""
+}
+
 func (x *Job) GetObservedVersion() int32 {
 	if x != nil {
 		return x.ObservedVersion
@@ -9508,6 +9520,9 @@ type CreateJobRequest struct {
 	// names a repository is otherwise passed by a reviewer and a tester, in sessions that did not do
 	// the work, before it settles. Stated in the negative, so a caller that says nothing gets the gate.
 	Ungated bool `protobuf:"varint,19,opt,name=ungated,proto3" json:"ungated,omitempty"`
+	// request is what was asked for, in the words it was asked in. The system keeps it whole and never
+	// rewrites it, and the brief is read against it at the write.
+	Request string `protobuf:"bytes,20,opt,name=request,proto3" json:"request,omitempty"`
 	// id and parent are here to be refused rather than ignored. The system assigns the identifier, and
 	// the parent is read from the credential the caller presented: a caller that could set its own
 	// parent could set its own depth, and the depth limit would bound nothing.
@@ -9666,6 +9681,13 @@ func (x *CreateJobRequest) GetUngated() bool {
 	return false
 }
 
+func (x *CreateJobRequest) GetRequest() string {
+	if x != nil {
+		return x.Request
+	}
+	return ""
+}
+
 func (x *CreateJobRequest) GetId() string {
 	if x != nil {
 		return x.Id
@@ -9690,7 +9712,15 @@ type CreateJobResponse struct {
 	// It is an answer rather than a refusal. The system cannot know which skill a brief will reach for, so
 	// refusing here would stop a job that never touches a repository over a token it never wanted. What
 	// it can do is say, while the caller is looking, that the session starts without that capability.
-	LeftOut       []*Skill `protobuf:"bytes,2,rep,name=left_out,json=leftOut,proto3" json:"left_out,omitempty"`
+	LeftOut []*Skill `protobuf:"bytes,2,rep,name=left_out,json=leftOut,proto3" json:"left_out,omitempty"`
+	// drifted is one sentence naming the words the request used that the brief never says, and empty
+	// where the brief carries them.
+	//
+	// It is an answer rather than a refusal, for the reason left_out gives: the system cannot know that
+	// a brief is wrong, only that it dropped what was asked for. Empty is the point of the field. A
+	// check that speaks about every brief puts a person in front of every job, which is the cost this
+	// system exists to remove.
+	Drifted       string `protobuf:"bytes,3,opt,name=drifted,proto3" json:"drifted,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9737,6 +9767,13 @@ func (x *CreateJobResponse) GetLeftOut() []*Skill {
 		return x.LeftOut
 	}
 	return nil
+}
+
+func (x *CreateJobResponse) GetDrifted() string {
+	if x != nil {
+		return x.Drifted
+	}
+	return ""
 }
 
 type GetJobRequest struct {
@@ -12023,7 +12060,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xfe\x0f\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\x98\x10\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -12081,7 +12118,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\tattempted\x18* \x03(\v2\x17.quaycrew.v1.JobAttemptR\tattempted\x12\x1f\n" +
 	"\vlooped_step\x18+ \x01(\x05R\n" +
 	"loopedStep\x12!\n" +
-	"\fescalated_to\x18, \x01(\tR\vescalatedTo\x12)\n" +
+	"\fescalated_to\x18, \x01(\tR\vescalatedTo\x12\x18\n" +
+	"\arequest\x18: \x01(\tR\arequest\x12)\n" +
 	"\x10observed_version\x18\x19 \x01(\x05R\x0fobservedVersion\x12\x19\n" +
 	"\btrace_id\x18\x1e \x01(\tR\atraceId\x12$\n" +
 	"\x0eparent_span_id\x18\x1f \x01(\tR\fparentSpanId\x129\n" +
@@ -12120,7 +12158,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x05tried\x18\x03 \x01(\tR\x05tried\x12\x18\n" +
 	"\asession\x18\x04 \x01(\tR\asession\x129\n" +
 	"\n" +
-	"written_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\twrittenAt\"\x89\x05\n" +
+	"written_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\twrittenAt\"\xa3\x05\n" +
 	"\x10CreateJobRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x14\n" +
@@ -12144,15 +12182,17 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\n" +
 	"escalation\x18\x12 \x01(\tR\n" +
 	"escalation\x12\x18\n" +
-	"\aungated\x18\x13 \x01(\bR\aungated\x12\x0e\n" +
+	"\aungated\x18\x13 \x01(\bR\aungated\x12\x18\n" +
+	"\arequest\x18\x14 \x01(\tR\arequest\x12\x0e\n" +
 	"\x02id\x18\f \x01(\tR\x02id\x12\x16\n" +
 	"\x06parent\x18\r \x01(\tR\x06parent\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"f\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x80\x01\n" +
 	"\x11CreateJobResponse\x12\"\n" +
 	"\x03job\x18\x01 \x01(\v2\x10.quaycrew.v1.JobR\x03job\x12-\n" +
-	"\bleft_out\x18\x02 \x03(\v2\x12.quaycrew.v1.SkillR\aleftOut\"\x1f\n" +
+	"\bleft_out\x18\x02 \x03(\v2\x12.quaycrew.v1.SkillR\aleftOut\x12\x18\n" +
+	"\adrifted\x18\x03 \x01(\tR\adrifted\"\x1f\n" +
 	"\rGetJobRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"4\n" +
 	"\x0eGetJobResponse\x12\"\n" +

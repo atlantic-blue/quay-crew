@@ -1452,6 +1452,11 @@ message Job {
   // escalates once: the second loop stops it rather than escalating it again.
   int32 looped_step = 43;
   string escalated_to = 44;
+  // request is what was asked for, in the words it was asked in. The brief was written from it, and
+  // the two are read against each other at the write. It is stated on the job at the top and every
+  // job under it carries the same one. It is not product: product is the outcome a person gets, and
+  // this is the ask.
+  string request = 58;
   // observed_version is the version of the declaration the status describes. A controller that has
   // not caught up leaves this behind the version above.
   int32 observed_version = 25;
@@ -1575,6 +1580,9 @@ message CreateJobRequest {
   // names a repository is otherwise passed by a reviewer and a tester, in sessions that did not do
   // the work, before it settles. Stated in the negative, so a caller that says nothing gets the gate.
   bool ungated = 19;
+  // request is what was asked for, in the words it was asked in. The system keeps it whole and never
+  // rewrites it, and the brief is read against it at the write.
+  string request = 20;
   // id and parent are here to be refused rather than ignored. The system assigns the identifier, and
   // the parent is read from the credential the caller presented: a caller that could set its own
   // parent could set its own depth, and the depth limit would bound nothing.
@@ -1591,6 +1599,14 @@ message CreateJobResponse {
   // refusing here would stop a job that never touches a repository over a token it never wanted. What
   // it can do is say, while the caller is looking, that the session starts without that capability.
   repeated Skill left_out = 2;
+  // drifted is one sentence naming the words the request used that the brief never says, and empty
+  // where the brief carries them.
+  //
+  // It is an answer rather than a refusal, for the reason left_out gives: the system cannot know that
+  // a brief is wrong, only that it dropped what was asked for. Empty is the point of the field. A
+  // check that speaks about every brief puts a person in front of every job, which is the cost this
+  // system exists to remove.
+  string drifted = 3;
 }
 
 message GetJobRequest {
