@@ -22,6 +22,32 @@ Feature: The operator sees the system from the console
     And the operator opens the console on sessions
     Then the console lists 2 sessions
 
+  # Choosing between workspaces without opening any of them. The counts are what the top level is for:
+  # a name on its own says nothing about whether anything is happening under it.
+  Scenario: A workspace row says how much work is under it
+    Given a job titled "read the electricity bill"
+    When the operator is at the console
+    Then the console screen says "PROJECTS"
+    And the console screen says "RUNNING"
+    And the console screen says "ASKING"
+
+  # A project says where its work lands. A job declared in a project that names no repository has
+  # nowhere to open a pull request, so this is the fact that decides whether the work can finish.
+  Scenario: A project row says the repository its work lands in
+    Given the project's work lands in "atlantic-blue/quay-krewe"
+    When the operator is at the console
+    And the operator presses "enter" in the console
+    Then the console screen says "atlantic-blue/quay-krewe"
+
+  # A job nobody answers is a job that never finishes. It is marked in the row and counted above the
+  # columns, because a listing longer than the screen hides every mark below the fold.
+  Scenario: A job waiting for a person is marked and counted
+    Given a job titled "choose where the transcripts are stored" whose session is still working
+    And the session running that job asked its question
+    When the operator is at the console on the "jobs" view
+    Then the console screen says "1 job is waiting for a person"
+    And the console screen says "asking"
+
   Scenario: The console lists a workspace it can drill into
     When the operator opens the console on workspaces
     Then the console lists 1 workspace
@@ -44,7 +70,7 @@ Feature: The operator sees the system from the console
     Then the console is on the "projects" view
     When the operator presses "enter" in the console
     Then the console is on the "jobs" view
-    And the console screen says "read the electricity"
+    And the console screen says "read the electric"
 
   # And back up. Escape from every level, including the one the console opens on, which has nowhere
   # to go and must not take the console with it.

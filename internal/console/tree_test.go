@@ -41,12 +41,19 @@ func (t *treeClient) ListProjects(_ context.Context, req *quaycrewv1.ListProject
 	return &quaycrewv1.ListProjectsResponse{Projects: matched}, nil
 }
 
+// Every narrowing the real control plane applies is applied here. A double that answers a narrowed
+// request with everything is looser than the system it stands in for, and a view built against it
+// passes while the real one is wrong.
 func (t *treeClient) ListJobs(_ context.Context, req *quaycrewv1.ListJobsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListJobsResponse, error) {
 	matched := make([]*quaycrewv1.Job, 0, len(t.jobs))
 	for _, one := range t.jobs {
-		if req.GetProject() == "" || one.GetProject() == req.GetProject() {
-			matched = append(matched, one)
+		if req.GetProject() != "" && one.GetProject() != req.GetProject() {
+			continue
 		}
+		if req.GetPhase() != "" && one.GetPhase() != req.GetPhase() {
+			continue
+		}
+		matched = append(matched, one)
 	}
 	return &quaycrewv1.ListJobsResponse{Jobs: matched}, nil
 }

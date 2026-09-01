@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/atlantic-blue/quay-krewe/internal/console"
 	"github.com/atlantic-blue/quay-krewe/internal/display"
 	"github.com/atlantic-blue/quay-krewe/internal/job"
 	tea "github.com/charmbracelet/bubbletea"
@@ -15,9 +16,21 @@ import (
 // steps, because what they drive is the console over the real control plane: the rows are the system's
 // actual jobs, and where a key lands is read off the screen the operator is left looking at.
 
-// sessionCell is where a job's session sits in its row. Named so a step reads as the cell it is about
-// rather than as a number in a slice.
-const sessionCell = 5
+// cellNamed is what a row says under one column heading, found by the heading rather than by counting
+// positions in a slice. A step that counted broke every time a column was added in front of the one it
+// was about, which has happened twice.
+func cellNamed(view console.Resource, row console.Row, title string) string {
+	for at, column := range view.Columns {
+		if column.Title != title {
+			continue
+		}
+		if at >= len(row.Cells) {
+			return ""
+		}
+		return row.Cells[at]
+	}
+	return ""
+}
 
 func initializeConsoleJobsSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the operator opens the console on jobs$`, func(ctx context.Context) error {
@@ -45,7 +58,7 @@ func initializeConsoleJobsSteps(sc *godog.ScenarioContext) {
 		}
 		// The words rather than an empty cell. Nothing there reads as a hole in the row rather than
 		// as a job waiting its turn.
-		if got := row.Cells[sessionCell]; got != "not yet" {
+		if got := cellNamed(consoleFrom(ctx).active, row, "session"); got != "not yet" {
 			return fmt.Errorf(`the session cell says %q, want "not yet"`, got)
 		}
 		return nil
@@ -67,7 +80,7 @@ func initializeConsoleJobsSteps(sc *godog.ScenarioContext) {
 		if row.Parent != one.GetSession() {
 			return fmt.Errorf("the row carries session %q and the system says %q", row.Parent, one.GetSession())
 		}
-		if got := row.Cells[sessionCell]; got != display.ShortID(one.GetSession()) {
+		if got := cellNamed(consoleFrom(ctx).active, row, "session"); got != display.ShortID(one.GetSession()) {
 			return fmt.Errorf("the session cell says %q, want %q", got, display.ShortID(one.GetSession()))
 		}
 		return nil
@@ -116,7 +129,7 @@ func initializeConsoleJobsSteps(sc *godog.ScenarioContext) {
 		// The opening of the title rather than the whole of it, the way the step above reads a brief:
 		// the column holds what it can and cuts the rest, and what this step is about is whether the
 		// operator is still on the listing at all.
-		opening := strings.Join(strings.Fields(one.GetTitle())[:3], " ")
+		opening := strings.Join(strings.Fields(one.GetTitle())[:2], " ")
 		if !strings.Contains(view, opening) {
 			return fmt.Errorf("the screen no longer carries the job %q:\n%s", one.GetTitle(), view)
 		}

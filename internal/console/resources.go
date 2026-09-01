@@ -12,12 +12,15 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/contextsize"
 	"github.com/atlantic-blue/quay-krewe/internal/display"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"github.com/atlantic-blue/quay-krewe/internal/name"
 	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 )
 
-// Workspaces lists the workspaces the control plane knows about, and drills into their sessions.
+// Workspaces is the top of the tree and what the console opens on. Each row carries enough beside the
+// name to choose between them without opening any: how many projects it holds, how much work is in
+// flight, and whether anything under it is waiting for a person.
 func Workspaces(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "workspaces",
@@ -25,6 +28,11 @@ func Workspaces(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		Columns: []Column{
 			{Title: "id", Width: 10, Colour: dim},
 			{Title: "name", Width: 0, Colour: colourOfName},
+			{Title: "projects", Width: 10, Give: 2, Colour: dim},
+			{Title: "running", Width: 9, Give: 1, Colour: dim},
+			// The call for a person. It never gives way, because the whole reason it is here is to be
+			// seen, and a column that drops at half a window is not seen on a half window.
+			{Title: "asking", Width: 10, Colour: colourOfAsking},
 			{Title: "age", Width: 10, Colour: dim},
 		},
 		DrillTo: "projects",
@@ -34,22 +42,31 @@ func Workspaces(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			if err != nil {
 				return nil, err
 			}
+			projects := countProjects(ctx, client)
+			work := countWork(ctx, client, func(one *quaycrewv1.Job) string { return one.GetWorkspace() })
 			rows := make([]Row, 0, len(resp.GetWorkspaces()))
 			for _, workspace := range resp.GetWorkspaces() {
-				rows = append(rows, workspaceRow(workspace))
+				rows = append(rows, workspaceRow(workspace, projects[workspace.GetId()], work[workspace.GetId()]))
 			}
 			return rows, nil
 		},
 	}
 }
 
-func workspaceRow(workspace *quaycrewv1.Workspace) Row {
+func workspaceRow(workspace *quaycrewv1.Workspace, projects int, work workCount) Row {
 	// ID stays whole: it is what actions and drilling down use. Only the cell is shortened.
 	return Row{
 		ID:    workspace.GetId(),
 		Label: workspace.GetName(),
-		Cells: []string{display.ShortID(workspace.GetId()), workspace.GetName(), display.Age(workspace.GetCreatedAt())},
-		State: StateReady,
+		Cells: []string{
+			display.ShortID(workspace.GetId()),
+			workspace.GetName(),
+			fmt.Sprintf("%d", projects),
+			runningCell(work),
+			askingCell(work),
+			display.Age(workspace.GetCreatedAt()),
+		},
+		State: stateOfWork(work),
 	}
 }
 
@@ -65,9 +82,15 @@ func Projects(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		Columns: []Column{
 			{Title: "id", Width: 10, Colour: dim},
 			{Title: "name", Width: 24, Colour: colourOfName},
-			{Title: "workspace", Width: 18, Colour: colourOfName},
-			{Title: "deploys to", Width: 26, Colour: dim},
-			{Title: "age", Width: 0, Colour: dim},
+			{Title: "workspace", Width: 18, Give: 4, Colour: colourOfName},
+			// Where the work lands. It is the flexible column, because an owner and a name together run
+			// past anything fixed, and it is the fact that decides whether a job declared here can
+			// finish at all.
+			{Title: "repository", Width: 0, Colour: dim},
+			{Title: "running", Width: 9, Give: 2, Colour: dim},
+			{Title: "asking", Width: 10, Colour: colourOfAsking},
+			{Title: "deploys to", Width: 26, Give: 3, Colour: dim},
+			{Title: "age", Width: 6, Give: 1, Colour: dim},
 		},
 		DrillTo: "jobs",
 		SortBy:  1,
@@ -86,16 +109,17 @@ func Projects(client quaycrewv1.ControlPlaneServiceClient) Resource {
 				return nil, err
 			}
 			names := workspaceNames(ctx, client)
+			work := countWork(ctx, client, func(one *quaycrewv1.Job) string { return one.GetProject() })
 			rows := make([]Row, 0, len(resp.GetProjects()))
 			for _, project := range resp.GetProjects() {
-				rows = append(rows, projectRow(project, names[project.GetWorkspace()]))
+				rows = append(rows, projectRow(project, names[project.GetWorkspace()], work[project.GetId()]))
 			}
 			return rows, nil
 		},
 	}
 }
 
-func projectRow(project *quaycrewv1.Project, workspaceName string) Row {
+func projectRow(project *quaycrewv1.Project, workspaceName string, work workCount) Row {
 	// ID and Parent stay whole: they are what drilling and actions use.
 	return Row{
 		ID:     project.GetId(),
@@ -105,10 +129,13 @@ func projectRow(project *quaycrewv1.Project, workspaceName string) Row {
 			display.ShortID(project.GetId()),
 			project.GetName(),
 			display.Name(workspaceName, project.GetWorkspace()),
+			repositoryCell(project),
+			runningCell(work),
+			askingCell(work),
 			deploysTo(project.GetDeployTarget()),
 			display.Age(project.GetCreatedAt()),
 		},
-		State: StateReady,
+		State: stateOfWork(work),
 	}
 }
 
@@ -123,6 +150,111 @@ func workspaceNames(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 		names[w.GetId()] = w.GetName()
 	}
 	return names
+}
+
+// workCount is what a workspace or a project has going on: how many jobs are on the row, how many are
+// running, and how many are waiting for a person. It is what the top two levels put beside a name so
+// somebody can choose between them without opening each one.
+type workCount struct {
+	jobs    int
+	running int
+	asking  int
+}
+
+// countWork buckets every job the system holds by whatever the by function reads off it, which is the
+// workspace at the top level and the project one below. One listing rather than one call per row: a
+// system with forty workspaces would otherwise cost forty calls to draw one screen.
+//
+// A listing that fails yields an empty map rather than failing the view. A workspace with no counts
+// beside it is worth more than an error screen where the workspaces used to be.
+func countWork(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
+	by func(*quaycrewv1.Job) string) map[string]workCount {
+	counts := map[string]workCount{}
+	resp, err := client.ListJobs(ctx, &quaycrewv1.ListJobsRequest{})
+	if err != nil {
+		return counts
+	}
+	for _, one := range resp.GetJobs() {
+		key := by(one)
+		held := counts[key]
+		held.jobs++
+		switch one.GetPhase() {
+		case job.PhaseRunning:
+			held.running++
+		case job.PhaseAsking:
+			held.asking++
+		}
+		counts[key] = held
+	}
+	return counts
+}
+
+// countProjects is how many projects each workspace holds, from one listing for the same reason.
+func countProjects(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) map[string]int {
+	counts := map[string]int{}
+	resp, err := client.ListProjects(ctx, &quaycrewv1.ListProjectsRequest{})
+	if err != nil {
+		return counts
+	}
+	for _, project := range resp.GetProjects() {
+		counts[project.GetWorkspace()]++
+	}
+	return counts
+}
+
+// nothingRunning is what the running cell says on a row with no work in flight. A zero would read as a
+// measurement and this is the ordinary state of most rows, so it says nothing rather than nothing loudly.
+const nothingRunning = "-"
+
+// runningCell is how much work is in flight, and a dash where none is.
+func runningCell(count workCount) string {
+	if count.running == 0 {
+		return nothingRunning
+	}
+	return fmt.Sprintf("%d", count.running)
+}
+
+// askingCell is the one cell on these two levels that is a call for a person. It is empty on every row
+// that wants nothing, so the column is blank down the whole screen until something needs answering and
+// then it is the only thing in it.
+func askingCell(count workCount) string {
+	if count.asking == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d asking", count.asking)
+}
+
+// stateOfWork is how a workspace or a project row is doing, read from the work under it. Asking wins
+// over running: a row somebody has to answer is the row to look at first.
+func stateOfWork(count workCount) State {
+	switch {
+	case count.asking > 0:
+		return StateBusy
+	case count.running > 0:
+		return StateBusy
+	default:
+		return StateReady
+	}
+}
+
+// colourOfAsking draws the call for a person in the colour the jobs listing already draws the asking
+// phase in, so the same fact reads the same way at every level. An empty cell is left alone.
+func colourOfAsking(cell string) string {
+	if cell == "" {
+		return ""
+	}
+	return ansiYellowCode
+}
+
+// noRepository is what the repository cell says on a project that names none. A job declared there
+// works nowhere in particular, and an empty cell would read as a column that failed to fill.
+const noRepository = "-"
+
+func repositoryCell(project *quaycrewv1.Project) string {
+	if project.GetRepository() == "" {
+		return noRepository
+	}
+	return project.GetRepository()
 }
 
 // Contexts lists the directories the model reads. An empty one is the normal state, so whether the
