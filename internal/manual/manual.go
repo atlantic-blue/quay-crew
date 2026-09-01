@@ -252,7 +252,7 @@ commands:
   role import <directory>                 take a role into the system from its directory. A role is a
                                           named way of working: a brief, the model it runs on, and
                                           the material it may receive
-                                          this build ships sixteen in roles/ at the root of the
+                                          this build ships seventeen in roles/ at the root of the
                                           repository, and a fresh system is seeded with none of them
   role list [<workspace>]                 what roles the system holds, or what one workspace holds
   role show [<workspace>] <name>          read one role back whole: what it is, what it may do, who
