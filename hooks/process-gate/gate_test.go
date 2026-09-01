@@ -56,6 +56,8 @@ func TestTheGateRefusesACommandThatEndsAProcess(t *testing.T) {
 		"docker system prune -af",
 		"docker volume prune -f",
 		"podman stop quaycrew-postgres-1",
+		"docker exec quaycrew-controlplane-1 kill 1",
+		"docker exec -i quaycrew-postgres-1 pkill postgres",
 
 		// The service manager, and the older screen program.
 		"systemctl stop docker",
@@ -108,6 +110,8 @@ func TestTheGateAllowsTheWorkASessionDoes(t *testing.T) {
 		"docker inspect quaycrew-postgres-1",
 		"docker rm quaycrew-postgres-1",
 		"docker image ls",
+		"docker exec quaycrew-postgres-1 psql -c \"select 1\"",
+		"docker exec -it quaycrew-controlplane-1 ls /hooks",
 		"tmux list-sessions",
 		"tmux new-session -d -s work",
 		"systemctl status docker",

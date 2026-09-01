@@ -167,6 +167,14 @@ func runtime(program string, argv []string) (Refusal, bool) {
 		}, true
 	}
 	verb := bare[0]
+	// `docker exec <container> kill 1` ends a process inside another container, and the services on
+	// this machine are containers. So the rest of the line is read as the command line it is.
+	if verb == "exec" && len(bare) > 2 {
+		inner, rest := Program(bare[2:])
+		if refusal, refused := ends(inner, rest); refused {
+			return refusal, true
+		}
+	}
 	// `docker container kill` and `docker container rm` say the same thing one word further along.
 	if verb == "container" && len(bare) > 1 {
 		verb = bare[1]

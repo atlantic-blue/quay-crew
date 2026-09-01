@@ -33,6 +33,9 @@ a pipe, an `&&`, a substitution, a shell of its own, or a `do` in the middle of 
   `podman` under all of the above.
 - **The two service manager equivalents**: `systemctl stop` and `systemctl kill`.
 - **The older screen program's quit form**: `screen -X quit`, and its `kill`.
+- **A signal sent into another container.** `docker exec <name> kill 1` ends a process inside the
+  container that holds it, and the services on this machine are containers, so the rest of that line
+  is read as the command line it is. `docker exec <name> ls` goes through.
 
 **A polite stop is refused beside a rude one.** `docker stop` sends a signal and waits ten seconds.
 `kill -9` waits for nothing. The difference is how long the work has to notice, and both end it, so
@@ -130,7 +133,9 @@ interface to send a signal is not a command line, and this gate reads command li
 commands. Something else with the same verbs goes through, and that is a gap rather than a decision.
 
 **A process ended from inside another program.** A shell script on disk, run by name, is one word to
-this gate. It reads what the session typed, not what the file says.
+this gate. It reads what the session typed, not what the file says. The same holds one level in:
+`docker exec <name> sh -c "kill 1"` hands the shell a string this reader does not open, while the
+direct form is refused.
 
 ## Building it
 
