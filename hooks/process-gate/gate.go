@@ -34,7 +34,8 @@ func decide(command string, lifted bool, left int) (Refusal, bool) {
 			return Refusal{
 				What: fmt.Sprintf("This command sets %s, which is the operator's to set.", Lift),
 				Instead: "A session that lifts its own gate has no gate. " +
-					"Ask the operator to set it in the environment they start a session with.",
+					"Ask the operator to set it in the environment they start a session with. " +
+					theOperators,
 			}, true
 		}
 		program, argv := Program(words)
