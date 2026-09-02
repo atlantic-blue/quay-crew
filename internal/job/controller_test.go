@@ -411,6 +411,20 @@ func (r *rows) approvePlan(id string) {
 	one.StartedAt = nil
 }
 
+// answerReading is a person answering what the job understood, the way the control plane writes it:
+// the words are kept whole, what it was told is cleared because the answer is not an instruction to
+// carry on with work, and the row goes back to pending so the plan is written from it.
+func (r *rows) answerReading(id, answer string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return
+	}
+	one.IdeationAnswer, one.Told, one.Phase = answer, "", job.PhasePending
+	one.StartedAt = nil
+}
+
 // recordStep is the session saying it finished something, the way krewe job step writes it.
 func (r *rows) recordStep(id, summary string) {
 	r.mu.Lock()
@@ -717,6 +731,29 @@ func (r *rows) ProposeJobPlan(_ context.Context, id, plan, question string,
 		return nil, job.ErrNotRunning
 	}
 	one.Phase, one.Plan, one.Question, one.Told = job.PhaseAsking, plan, question, ""
+	one.LeaseOwner, one.LeaseUntil = "", nil
+	one.UpdatedAt = time.Now().UTC()
+	r.record(id, []*job.Event{event})
+	kept := *one
+	return &kept, nil
+}
+
+// ProposeJobIdeation refuses what the real store refuses: a job nothing is running has nobody to
+// read the work. A double looser than the engine manufactures a green run.
+func (r *rows) ProposeJobIdeation(_ context.Context, id, understood, question string,
+	event *job.Event) (*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such job")
+	}
+	if one.Phase != job.PhaseRunning {
+		return nil, job.ErrNotRunning
+	}
+	one.Phase, one.Ideation, one.Question, one.Told =
+		job.PhaseAsking, understood, question, ""
+	one.Resuming = ""
 	one.LeaseOwner, one.LeaseUntil = "", nil
 	one.UpdatedAt = time.Now().UTC()
 	r.record(id, []*job.Event{event})

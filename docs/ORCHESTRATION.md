@@ -462,6 +462,66 @@ looser corpus of 121 issue titles held against their bodies, one in eight falls 
 Once fifty jobs carry a request, read where a job whose answer the operator kept sits against where a
 job the operator steered or stopped sits, and put the threshold at the fifth percentile of the first.
 
+### What it understood, and the person who answers
+
+The plan gate below stops the work and asks a person to approve seven steps. It stopped one step too
+late. The session read the sentence, read the brief, and wrote those steps out of whatever it made of
+the two, and nobody ever asked what the sentence meant. So the plan was the session marking its own
+reading, and a misreading passes that gate whole, because the steps agree with the misreading all the
+way down. The operator's report on the last job to go through it: it asked nothing, and the crew
+judged its own reading with no input.
+
+So a job that states the sentence says what it understood first, and a person answers in their own
+words. It is the plan's gate, one stage earlier, held by the same person: the sentence is the trigger,
+a job under another is never asked, and an errand has nothing to be read against.
+
+**`ideation`, text, written by the controller.** What the session said it understood, in the system's
+own rendering rather than as the reply: what the work is, what it is not, what it was told, what it
+assumed, what it does not know, how sure it is, and the questions it cannot answer for itself. Each
+line is held to the title's ceiling, each list to five lines, at most five questions, and the whole
+record to `job.IdeationLimit`, because the record is put to a person as one question and a question
+has its own ceiling.
+
+**`ideation_answer`, text, written by the control plane.** What the person wrote, whole and
+unrewritten. There is no flag beside it, which is where this differs from the plan: an approval is one
+word, so a plan needs a flag to tell a refusal from a reading nobody answered, and prose that is there
+was written by somebody.
+
+**Told and Assumed are the point of the record.** What the person who declared the job stated and what
+the session filled in for itself read the same on a row today, and a plan carries no sign of which of
+its footings a human put there. Marking them is what lets a person read the job a week later and see
+which parts of the understanding they own.
+
+**The confidence is information, and nothing is compared against it.** The session says how sure it is
+in its own words. No threshold reads it, and no number decides whether the work goes on. The person is
+the gate.
+
+**The answer is content rather than consent.** A plan is approved by the word `yes`. This is answered
+in prose, and whatever was written is kept: an answer opens each part with the number of the question
+it answers, and a question the answer leaves alone stays unknown rather than taken as agreed. So `yes`
+is a valid answer here that agrees with nothing, and the plan task then names every question as still
+open. What was marked Assumed is still an assumption after the answer, and the task that asks for the
+plan says so.
+
+```mermaid
+flowchart TD
+    SAID["a person declares a job stating the sentence"] --> SAY["first task: say what you understood,<br/>write no plan and do no work"]
+    SAY --> READ{"can the system read<br/>a reading out of the reply?"}
+    READ -->|"no, first time"| SAY
+    READ -->|"no, a second time"| NONE(["stopped: asked twice, and nothing<br/>a person could answer came back"])
+    READ -->|"yes"| ASK{"asking: the sentence, what it understood,<br/>what it assumed, what it does not know"}
+    ASK -->|"prose, in the person's own words"| KEPT["the words are kept whole,<br/>and a question they left alone stays unknown"]
+    KEPT --> PLAN["the plan, written against that answer,<br/>carrying what is still assumed"]
+    PLAN --> APPROVE{"asking: does this plan get that sentence?"}
+    APPROVE -->|"anything but yes"| PLAN
+    APPROVE -->|"yes"| WORK["the work, carrying the approved plan"]
+```
+
+**What it does not do.** It cannot tell a question worth asking from one whose answer is in the code:
+the ask says so and the person is the only reader who can. It refuses a question that asks whether to
+go on, because the record already stops the job. It reaches one job rather than a tree. And a person
+who answers without reading has answered nothing, which no system can prevent.
+
 ### The plan, and the person who approves it
 
 The sentence reaches every session and nothing ever holds the brief against it. That is the gap this
@@ -529,7 +589,7 @@ ceiling.
 
 ```mermaid
 flowchart TD
-    SAID["a person declares a job stating the sentence"] --> PLAN["first task: write the plan,<br/>do no work"]
+    SAID["a person answered what the job understood"] --> PLAN["the plan task: write the plan,<br/>do no work"]
     PLAN --> READ{"can the system read<br/>a plan out of the reply?"}
     READ -->|"no, first time"| PLAN
     READ -->|"no, a second time"| NOPLAN(["stopped: nobody could approve<br/>a plan nobody could read"])
@@ -914,8 +974,17 @@ purpose. The list, so a test can be written against it:
 - A job whose brief negates one of those phrases is declared, because "do not merge the pull request"
   is not an instruction to merge it.
 - A step of a flow is not held to that rule, because the graph around it holds the wait.
-- A job at the top that states the sentence is asked for its plan first, and its first task tells it
-  to do no work.
+- A job at the top that states the sentence is asked what it understood first, and that task tells it
+  to write no plan and do no work.
+- What it understood lands on the row in one movement with the question, and no plan is written until
+  a person answers.
+- A session that answers twice with nothing the system can read as a reading stops the job, and the
+  reason says it was asked twice.
+- An answer is kept whole, whatever it says, and a second answer is refused and leaves the first.
+- A question the answer did not open with is named as still unknown in the task that asks for the
+  plan, and `yes` leaves every question unknown.
+- A job at the top whose reading a person answered is asked for its plan, and that task carries the
+  answer and what the session marked as assumed.
 - A job that states no sentence, and a job declared under another, are asked for no plan at all.
 - A plan of eight steps, a step over the title's ceiling, and a plan numbered with a gap or a repeat
   are each refused, and the session is asked again.

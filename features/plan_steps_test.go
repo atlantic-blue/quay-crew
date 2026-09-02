@@ -41,6 +41,13 @@ func initializePlanSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// The stage in front of the plan, driven to the end: the session says what it understood, the job
+	// stops, and a person answers in their own words. Every scenario here begins after it, because a
+	// job that has not said what it understood is never asked to plan.
+	sc.Step(`^a person answered what that job understood$`, func(ctx context.Context) error {
+		return aPersonAnsweredTheReading(ctx)
+	})
+
 	// A job that has written its plan and is waiting for a person, which is the state every scenario
 	// about answering starts from.
 	sc.Step(`^a job whose plan is waiting to be approved$`, func(ctx context.Context) error {
@@ -212,11 +219,37 @@ func initializePlanSteps(sc *godog.ScenarioContext) {
 	})
 }
 
-// aJobWaitingForItsPlanToBeApproved declares a planned job, lets the crew answer with a plan, and
-// leaves the job asking.
+// aPersonAnsweredTheReading drives the stage in front of the plan on the job already declared: the
+// session says what it understood, the job stops for a person, and the person answers in prose.
+func aPersonAnsweredTheReading(ctx context.Context) error {
+	w := worldFrom(ctx)
+	w.server.TickJob(ctx)
+	if err := w.settled(ctx); err != nil {
+		return err
+	}
+	w.server.TickJob(ctx)
+	one, err := readJob(ctx, 0)
+	if err != nil {
+		return err
+	}
+	if one.GetPhase() != job.PhaseAsking {
+		return fmt.Errorf("the job is %q, want it waiting for a person to answer what it understood: %s",
+			one.GetPhase(), one.GetReason())
+	}
+	_, err = w.client.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{
+		Id: one.GetId(), Answer: theAnswerAPersonWrote,
+	})
+	return err
+}
+
+// theAnswerAPersonWrote is prose, opening with the number of the question it answers, which is how an
+// answer says which question it touched.
+const theAnswerAPersonWrote = "1: on the command line, the way every other listing is read"
+
+// aJobWaitingForItsPlanToBeApproved declares a planned job, drives the reading and its answer, lets
+// the crew answer with a plan, and leaves the job asking about that plan.
 func aJobWaitingForItsPlanToBeApproved(ctx context.Context) error {
 	w := worldFrom(ctx)
-	w.runner.willSay(thePlanTheCrewWrote)
 	if err := declareJob(ctx, &quaycrewv1.CreateJobRequest{
 		Title: "the transcript page", Brief: "build what the design describes",
 		Product: "pastes a link and gets the text back",
@@ -226,6 +259,10 @@ func aJobWaitingForItsPlanToBeApproved(ctx context.Context) error {
 	if w.lastErr != nil {
 		return w.lastErr
 	}
+	if err := aPersonAnsweredTheReading(ctx); err != nil {
+		return err
+	}
+	w.runner.willSay(thePlanTheCrewWrote)
 	w.server.TickJob(ctx)
 	if err := w.settled(ctx); err != nil {
 		return err
@@ -238,6 +275,9 @@ func aJobWaitingForItsPlanToBeApproved(ctx context.Context) error {
 	if one.GetPhase() != job.PhaseAsking {
 		return fmt.Errorf("the job is %q, want it waiting for its plan to be approved: %s",
 			one.GetPhase(), one.GetReason())
+	}
+	if one.GetPlan() == "" {
+		return fmt.Errorf("the job is asking and carries no plan, so it is still on the reading")
 	}
 	return nil
 }

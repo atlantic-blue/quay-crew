@@ -80,6 +80,29 @@ const OutcomeMarker = "Outcome:"
 // Reply itself.
 const FakeOutcome = "proved"
 
+// UnderstandingAsk is the phrase a task carries when it asks a session what it understood before it
+// plans, and UnderstandingMarker opens the first line of what comes back. Both are spelled here
+// because internal/job imports this package and a double cannot import what imports it. internal/job
+// holds them together in a test, and holds this double's reading to its own reader.
+const (
+	UnderstandingAsk    = "write no plan yet"
+	UnderstandingMarker = "Understood:"
+)
+
+// FakeUnderstanding is what this double says when it is asked what it understood.
+//
+// It is the same rule the outcome line follows: a job that states the sentence is asked what it
+// understood before anything else, so a double that answered its plan to that question would make
+// every test about a planned job into a test about the double ignoring its task. A test about a
+// session that says nothing readable sets Reply itself, or sets Exact.
+const FakeUnderstanding = "Understood: the work the brief describes, for the person in the sentence\n" +
+	"Not: anything the brief leaves out\n" +
+	"Told: the brief says what to build\n" +
+	"Assumed: the design in the repository is the current one\n" +
+	"Unknown: which surface a person reads the result on\n" +
+	"Confidence: fairly sure of the shape, and least sure of the surface\n" +
+	"Question 1: which surface does a person read this on"
+
 // answer is what the double says, which follows the task it was handed the way a model does.
 //
 // A task that asks for an outcome gets one. Every job says so beside its brief, so a double that
@@ -87,7 +110,16 @@ const FakeOutcome = "proved"
 // about a job would be a test about that. A reply that already states an outcome is left alone, which
 // is how a test says the word it means.
 func (f *FakeRunner) answer(req Request) string {
-	if f.Exact || !strings.Contains(req.Text, OutcomeMarker) || strings.Contains(f.Reply, OutcomeMarker) {
+	if f.Exact {
+		return f.Reply
+	}
+	// A task that asks what the session understood gets an understanding rather than whatever this
+	// double was going to say next, for the reason the outcome line exists: the double follows the
+	// task it was handed.
+	if strings.Contains(req.Text, UnderstandingAsk) && !strings.Contains(f.Reply, UnderstandingMarker) {
+		return FakeUnderstanding
+	}
+	if !strings.Contains(req.Text, OutcomeMarker) || strings.Contains(f.Reply, OutcomeMarker) {
 		return f.Reply
 	}
 	return f.Reply + "\n\n" + OutcomeMarker + " " + FakeOutcome

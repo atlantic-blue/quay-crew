@@ -1478,6 +1478,16 @@ message Job {
   // finishes with its number, and a step nothing accounts for stops the job.
   string plan = 45;
   bool plan_approved = 46;
+  // ideation is what the session said it understood before it wrote that plan: what the work is, what
+  // it is not, what it was told, what it filled in for itself, what it does not know, how sure it is,
+  // and the questions it cannot answer from the repository, the brief and the sentence.
+  // ideation_answer is what a person then wrote about it, in their own words and kept whole.
+  //
+  // The answer is content rather than consent, so there is no flag beside these: an answer being there
+  // is the fact that somebody answered, and a question the answer left alone stays unknown rather than
+  // being read as agreed.
+  string ideation = 60;
+  string ideation_answer = 61;
   // escalation is what this job does when it goes in circles, as it was declared: "ask", or
   // "role:<name>". Empty is asking.
   string escalation = 41;
