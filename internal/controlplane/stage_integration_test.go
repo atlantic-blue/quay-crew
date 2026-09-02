@@ -24,12 +24,18 @@ import (
 // store that missed one of them in jobColumns or in scanJob would leave every surface reading a job
 // in the wrong stage while the whole unit tier stayed green.
 func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	// Four stages, each of them several passes of the controller against a real engine, so the whole
+	// walk needs more room than one stage does.
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
 	durable := aRealStore(t, ctx)
+	// The double is held rather than made inline, because what it says has to change once: a session
+	// asked for a plan and answering anything else is asked again and then stopped, which is the plan
+	// gate working rather than this test failing.
+	runner := &model.FakeRunner{Reply: "i said what i understood"}
 	server := controlplane.NewServer(controlplane.Config{
-		Store: durable, Runner: &model.FakeRunner{Reply: "i said what i understood"},
+		Store: durable, Runner: runner,
 		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
 	})
 	client := servedOver(t, server)
@@ -148,6 +154,9 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 	}
 
 	// Then the plan those tests are turned green by, which a person approves before anything is built.
+	// The double says a plan from here on, because a session asked for one and answering anything else
+	// is asked again and then stopped.
+	runner.Reply = "Step 1: build the vertical on the command line\nStep 2: build the one in a browser"
 	tickUntilThePhase(t, ctx, server, client, id, job.PhaseAsking)
 	if planned := readJob(t, ctx, client, id); planned.GetPlan() == "" {
 		t.Fatalf("the job is asking and carries no plan, so there is nothing to approve")
