@@ -278,7 +278,7 @@ func TestAJobInBuildIsToldWhatItIsActuallyDoing(t *testing.T) {
 		Build: "Vertical 1: a person pastes a link\nRan 1: 14\nPasses 1: TestItFails\n" +
 			"Picture 1: paste.png\nTaken 1: the command line, drawn with krewe render",
 	})
-	if !strings.Contains(held.Doing, "look at 1 picture") {
+	if !strings.Contains(held.Doing, "look at the evidence for 1 vertical") {
 		t.Fatalf("a job whose verticals are all built is told %q", held.Doing)
 	}
 

@@ -32,12 +32,56 @@ const (
 		"Passing 1: TestPastingALinkPrintsTheTranscript\nChanged 1: internal/paste.go\n\nOutcome: proved"
 	aBuildThatChangedNothing = "It already passed.\n\nVertical: 1\nRan: 14\nRed: 0\n" +
 		"Passing 1: TestPastingALinkPrintsTheTranscript\n\nOutcome: proved"
+	// A green build shown with a picture, which is the wrong kind wherever the vertical asked for
+	// something else. Every machine check it makes passes, so what refuses it is the kind alone.
+	aBuildShownWithAPicture = "I built it and drew it.\n\nVertical: 1\nRan: 14\nRed: 0\n" +
+		"Passing 1: TestPastingALinkPrintsTheTranscript\nChanged 1: internal/paste.go\n" +
+		"Picture: paste.png\nTaken: the command line after ./transcript paste, captured with tmux " +
+		"capture-pane\n\nOutcome: proved"
 )
+
+// oneVerticalShownWith is a list of one vertical that says which kind of evidence it needs. A kind
+// the list does not name is a picture, so the picture case writes no line at all: that is the shape
+// every list written before the kinds existed has.
+func oneVerticalShownWith(kind string) string {
+	if kind == "picture" {
+		return oneVertical
+	}
+	return oneVertical + "\nEvidence 1: " + kind
+}
+
+// aJobWhosePlanWasApproved walks a job to the gate the build stage opens at: its list accepted, its
+// suite red, and a person's yes on the plan.
+func aJobWhosePlanWasApproved(ctx context.Context, verticals int) error {
+	w := worldFrom(ctx)
+	if err := aJobWaitingForItsPlanToBeApproved(ctx); err != nil {
+		return err
+	}
+	one, err := readJob(ctx, 0)
+	if err != nil {
+		return err
+	}
+	if got := len(job.RequirementsOf(jobAsKept(one))); got != verticals {
+		return fmt.Errorf("the accepted list carries %d verticals, want %d: %q",
+			got, verticals, one.GetDesign())
+	}
+	_, err = w.client.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{Id: one.GetId(), Answer: "yes"})
+	return err
+}
 
 func initializeBuildStageSteps(sc *godog.ScenarioContext) {
 	// A job at the last gate: its list is accepted, its suite is red, and a person approved the plan
 	// that turns those tests green. Every scenario here starts from there, because that is the state
 	// the fan out reads.
+	// The same job, whose one vertical says which kind of evidence it needs. It is a step of its own
+	// rather than a word in the one above, because what it changes is the list a person accepts, and
+	// that is three stages before the evidence arrives.
+	sc.Step(`^a job whose one vertical asks to be shown with a (picture|recording|steps)$`,
+		func(ctx context.Context, kind string) error {
+			worldFrom(ctx).runner.willAnswer(job.TheDesignAsk, oneVerticalShownWith(kind))
+			return aJobWhosePlanWasApproved(ctx, 1)
+		})
+
 	sc.Step(`^a job whose plan a person approved and whose suite is red for (\d+) verticals?$`,
 		func(ctx context.Context, verticals int) error {
 			w := worldFrom(ctx)
@@ -62,6 +106,11 @@ func initializeBuildStageSteps(sc *godog.ScenarioContext) {
 			}
 			return nil
 		})
+
+	sc.Step(`^the builder will answer with a picture instead$`, func(ctx context.Context) error {
+		worldFrom(ctx).runner.willAnswer(job.TheBuildAsk, aBuildShownWithAPicture)
+		return nil
+	})
 
 	sc.Step(`^the builder will answer that its run executed no tests$`, func(ctx context.Context) error {
 		worldFrom(ctx).runner.willAnswer(job.TheBuildAsk, aBuildThatExecutedNothing)
