@@ -18,44 +18,44 @@ import (
 // between. Nothing but an answer moves the job while it stands, which is the difference between a
 // gate and a note.
 const (
-	// QuestionLimit is how long a question may be.
+	// QuestionLimit is how long a question is expected to be, and how much of one a narrow place
+	// draws before it cuts.
 	//
 	// Shorter than a brief on purpose. A question is read by a person in a terminal, usually one who
-	// is doing something else, and one that does not fit on a screen is one nobody reads to the end.
-	// What it has to carry is the decision and what each answer costs, which fits.
+	// is doing something else. What it has to carry is the decision and what each answer costs.
+	//
+	// It refuses nothing. A question past it is asked, kept word for word, and read back in full.
 	QuestionLimit = 4096
-	// TellingLimit is how long an answer may be. It reaches the session as a task, so it is held to
-	// the same ceiling a brief is: it is read by a model, and the reason a brief has a ceiling is
-	// that a brief nobody reads to the end is a brief nobody follows.
+	// TellingLimit is how long an answer is expected to be. It reaches the session as a task, so the
+	// guide is the brief's.
+	//
+	// It refuses nothing. An answer past it is accepted and kept word for word: a person who writes
+	// three paragraphs to settle a decision must not be told to write two.
 	TellingLimit = BriefLimit
 )
 
 // TidyQuestion is a question as the system keeps it, and the refusal where it could not be kept.
+//
+// Silence is the only refusal left. A long question is kept whole here and cut where it is drawn,
+// because a person who cannot read it all on one screen can still read it all.
 func TidyQuestion(question string) (string, error) {
 	tidy := strings.TrimSpace(question)
-	switch {
-	case tidy == "":
+	if tidy == "" {
 		return "", fmt.Errorf("a question needs to say what is being decided: ask it in a sentence, " +
 			"and say what each answer costs, because the person answering has only what you write here")
-	case len(tidy) > QuestionLimit:
-		return "", fmt.Errorf("this question is %d bytes and a question may be %d: it is read by a person "+
-			"in a terminal, so say the decision and what each answer costs and leave the working out of it",
-			len(tidy), QuestionLimit)
 	}
 	return tidy, nil
 }
 
 // TidyTelling is an answer as the system keeps it, and the refusal where it could not be kept.
+//
+// Silence is the only refusal left. An answer is what unblocks a session, so length is the last
+// thing that may stand between a person writing one and a job carrying on.
 func TidyTelling(answer string) (string, error) {
 	tidy := strings.TrimSpace(answer)
-	switch {
-	case tidy == "":
+	if tidy == "" {
 		return "", fmt.Errorf("an answer needs words: the session is waiting to be told what to do, " +
 			"and an empty answer would start it again with nothing new")
-	case len(tidy) > TellingLimit:
-		return "", fmt.Errorf("this answer is %d bytes and an answer may be %d: it is sent to the session "+
-			"as its next task, so it is held to the ceiling a brief is held to",
-			len(tidy), TellingLimit)
 	}
 	return tidy, nil
 }

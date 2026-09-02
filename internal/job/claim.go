@@ -24,8 +24,10 @@ import (
 // a job's hold on a piece of work in the world, it lasts as long as the job does, and an operator
 // and a session both read it before they start.
 
-// ClaimLimit is how long a claim may be, which is the title's ceiling. A claim names a piece of
-// work in one line, and a line longer than a title is a brief.
+// ClaimLimit is how long a claim is expected to be, which is the title's length. A claim names a
+// piece of work in one line, and a line longer than a title reads as a brief.
+//
+// It refuses nothing. A claim past it is accepted and kept word for word.
 const ClaimLimit = TitleLimit
 
 // ClaimLife is how long a claim outlives the last movement of the job holding it.
@@ -51,18 +53,6 @@ const ClaimLife = 2 * time.Hour
 // costs the failure this exists to stop, and nobody sees that one until two pull requests conflict.
 func TidyClaim(claim string) string {
 	return strings.ToLower(strings.Join(strings.Fields(claim), " "))
-}
-
-// usableClaim refuses a claim nobody could hold to a piece of work.
-func usableClaim(claim string) error {
-	if claim == "" {
-		return nil
-	}
-	if len(claim) > ClaimLimit {
-		return fmt.Errorf("the claim is %d bytes and the ceiling is %d: name the piece of work in one line, "+
-			"as atlantic-blue/quay-krewe#540, and say what is to be done in the brief", len(claim), ClaimLimit)
-	}
-	return nil
 }
 
 // Holding says whether this job still holds the piece of work it claims, as of now.

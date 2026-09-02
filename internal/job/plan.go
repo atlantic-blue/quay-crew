@@ -36,8 +36,12 @@ const (
 	// records, which krewe job step already writes down: after fifty jobs, the ninety fifth
 	// percentile of steps recorded per job is the number.
 	PlanSteps = 7
-	// PlanStepLimit is how long one step may be. It is the title's ceiling, because both are one line
-	// a person reads in a listing.
+	// PlanStepLimit is how long one step is expected to be. It is the title's length, because both
+	// are one line a person reads in a listing.
+	//
+	// It refuses nothing. A step past it is read, kept word for word, and reaches the row a person
+	// approves. A plan the system would not read is a plan the system asks for again, and the second
+	// reply over the number used to stop the job for good.
 	PlanStepLimit = TitleLimit
 )
 
@@ -117,10 +121,6 @@ func ReadPlan(reply string) ([]PlanStep, error) {
 		text := TidySentence(one[2])
 		if text == "" {
 			return nil, fmt.Errorf("step %d says nothing: a step says what you will do, in a few words", number)
-		}
-		if len(text) > PlanStepLimit {
-			return nil, fmt.Errorf("step %d is %d bytes and a step may be %d: it is one line a person reads",
-				number, len(text), PlanStepLimit)
 		}
 		steps = append(steps, PlanStep{Number: number, Text: text})
 	}
