@@ -53,7 +53,7 @@ func initializeAcceptanceStageSteps(sc *godog.ScenarioContext) {
 		}
 		wanted := job.RequirementsOf(jobAsKept(one))
 		for _, vertical := range wanted {
-			shot := job.PictureOf(one.GetBuild(), vertical.Number)
+			shot := job.EvidenceFor(one.GetBuild(), vertical.Number)
 			if shot.File == "" {
 				return fmt.Errorf("nothing shows vertical %d working: %q", vertical.Number, one.GetBuild())
 			}
@@ -71,7 +71,7 @@ func initializeAcceptanceStageSteps(sc *godog.ScenarioContext) {
 			if err != nil {
 				return err
 			}
-			shots := job.PicturesIn(one.GetBuild())
+			shots := job.EvidenceIn(one.GetBuild())
 			if len(shots) == 0 {
 				return fmt.Errorf("the record carries no picture at all: %q", one.GetBuild())
 			}
@@ -88,7 +88,7 @@ func initializeAcceptanceStageSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		for _, shot := range job.PicturesIn(one.GetBuild()) {
+		for _, shot := range job.EvidenceIn(one.GetBuild()) {
 			if !strings.Contains(one.GetQuestion(), shot.File) {
 				return fmt.Errorf("the question does not name %q: %s", shot.File, one.GetQuestion())
 			}
@@ -149,7 +149,7 @@ func initializeAcceptanceStageSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		if len(job.PicturesIn(one.GetBuild())) == 0 {
+		if len(job.EvidenceIn(one.GetBuild())) == 0 {
 			return fmt.Errorf("landing the job lost the pictures: %q", one.GetBuild())
 		}
 		return nil
@@ -246,4 +246,60 @@ func wroteTheEvent(ctx context.Context, id, kind string) error {
 		}
 	}
 	return fmt.Errorf("nothing on this job's record is a %q", kind)
+}
+
+// The steps for the widening: a vertical asks to be shown with one of three kinds, and what the row
+// carries and what the person is asked have to be that kind.
+func initializeEvidenceKindSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^the row shows that vertical with a (picture|recording|steps)$`,
+		func(ctx context.Context, kind string) error {
+			one, err := readJob(ctx, 0)
+			if err != nil {
+				return err
+			}
+			shown := job.EvidenceFor(one.GetBuild(), 1)
+			if string(shown.Kind) != kind {
+				return fmt.Errorf("vertical 1 is shown with %q, want %q: %q",
+					shown.Kind, kind, one.GetBuild())
+			}
+			if err := shown.Shows(); err != nil {
+				return fmt.Errorf("what vertical 1 is shown with does not show it working: %w", err)
+			}
+			// The label, whichever kind it sits under. A kind is never a way around the evidence.
+			if shown.Taken == "" {
+				return fmt.Errorf("what vertical 1 is shown with carries no label: %q", one.GetBuild())
+			}
+			return nil
+		})
+
+	sc.Step(`^the steps are ones a person can follow, and the question carries them$`,
+		func(ctx context.Context) error {
+			one, err := readJob(ctx, 0)
+			if err != nil {
+				return err
+			}
+			steps := job.EvidenceFor(one.GetBuild(), 1).Steps
+			if len(steps) < 2 {
+				return fmt.Errorf("vertical 1 is shown with %d steps: %q", len(steps), steps)
+			}
+			for _, step := range steps {
+				if !strings.Contains(one.GetQuestion(), step) {
+					return fmt.Errorf("the question does not carry the step %q: %s", step, one.GetQuestion())
+				}
+			}
+			return nil
+		})
+
+	sc.Step(`^the question says which kind was asked for$`, func(ctx context.Context) error {
+		one, err := readJob(ctx, 0)
+		if err != nil {
+			return err
+		}
+		for _, want := range []string{"asks to be shown with", "offers picture"} {
+			if !strings.Contains(one.GetQuestion(), want) {
+				return fmt.Errorf("the question does not say %q: %s", want, one.GetQuestion())
+			}
+		}
+		return nil
+	})
 }

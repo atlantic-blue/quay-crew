@@ -3,6 +3,7 @@ package console
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -72,9 +73,18 @@ type answered struct {
 	said string
 }
 
+// Narrowed to the session that was asked for, the way the system narrows it. A double that answers
+// every session with the same tasks cannot tell a part's own work from the work of the job above it,
+// which is the one thing the key onto a part has to get right.
 func (j *jobClient) ListTasks(_ context.Context, req *quaycrewv1.ListTasksRequest, _ ...grpc.CallOption) (*quaycrewv1.ListTasksResponse, error) {
 	j.listedFrom = req.GetSession()
-	return &quaycrewv1.ListTasksResponse{Tasks: j.tasks}, nil
+	matched := make([]*quaycrewv1.Task, 0, len(j.tasks))
+	for _, task := range j.tasks {
+		if req.GetSession() == "" || task.GetSession() == req.GetSession() {
+			matched = append(matched, task)
+		}
+	}
+	return &quaycrewv1.ListTasksResponse{Tasks: matched}, nil
 }
 
 // aJob is a declared job with the fields a row is built from, so each case below says only what it
@@ -283,7 +293,7 @@ func TestEnterOnAJobOpensWhatItDid(t *testing.T) {
 	}
 	model, _ = update(t, model, cmd())
 	if len(model.rows) != 1 {
-		t.Fatalf("the exec view shows %d rows, want the one task the session ran", len(model.rows))
+		t.Fatalf("the tasks view shows %d rows, want the one task the session ran", len(model.rows))
 	}
 	if client.listedFrom != "2222222222222222bbbbbbbb" {
 		t.Fatalf("the tasks were read from %q, want the job's session", client.listedFrom)
@@ -417,6 +427,218 @@ func TestAJobWhoseWorkersAreRunningSaysHowManyAreAtWork(t *testing.T) {
 	// And a job with no workers at all still says it has no session yet rather than counting nothing.
 	if alone := jobRow(parent, 0); alone.Cells[sessionColumn] != "not yet" {
 		t.Fatalf(`a job with no workers says %q, want "not yet"`, alone.Cells[sessionColumn])
+	}
+}
+
+// ---------- a job and the parts it fanned out into ----------
+
+// aPart is one part of a plan approved on the job above it: the row a fan out produces, five at a
+// time, which used to sit beside the job that declared them.
+func aPart(id, parent, title string, fill func(*quaycrewv1.Job)) *quaycrewv1.Job {
+	return aJob(id, job.PhaseRunning, func(part *quaycrewv1.Job) {
+		part.Parent, part.Title = parent, title
+		if fill != nil {
+			fill(part)
+		}
+	})
+}
+
+// aFanOut is the shape this whole view was rebuilt for: one job a person declared, and the five parts
+// its test stage fanned out into, newest first the way both stores answer.
+func aFanOut() []*quaycrewv1.Job {
+	declared := aJob("1111111111111111aaaaaaaa", job.PhaseRunning, func(one *quaycrewv1.Job) {
+		one.Title, one.Session = "read the electricity bill", "2222222222222222bbbbbbbb"
+	})
+	jobs := make([]*quaycrewv1.Job, 0, 6)
+	for at := 1; at <= 5; at++ {
+		jobs = append(jobs, aPart(
+			fmt.Sprintf("777777777777777%dpppppppp", at), declared.GetId(),
+			fmt.Sprintf("tests for requirement %d", at),
+			func(one *quaycrewv1.Job) { one.Session = fmt.Sprintf("888888888888888%dssssssss", at) }))
+	}
+	return append(jobs, declared)
+}
+
+// onJobs stands the console on the jobs view over a listing the resource itself built, so what is
+// asserted below is the screen the operator has rather than rows a case wrote by hand.
+func onJobs(t *testing.T, client *jobClient) Model {
+	t.Helper()
+	model := newTestModel(t, Jobs(client), Exec(client))
+	rows, err := Jobs(client).List(context.Background(), "")
+	if err != nil {
+		t.Fatalf("listing jobs: %v", err)
+	}
+	model, _ = update(t, model, rowsFor(model, rows...))
+	return model
+}
+
+// The listing is the work a person declared. Five parts of one plan and the job that declared them
+// used to be six rows with nothing saying which was which, and the one somebody asked for was the one
+// at the bottom.
+func TestAJobThatFannedOutDrawsAsOneRow(t *testing.T) {
+	model := onJobs(t, &jobClient{jobs: aFanOut()})
+
+	if got := len(model.Listed()); got != 1 {
+		t.Fatalf("the jobs view draws %d rows, want the one job a person declared", got)
+	}
+	screen := model.View()
+	if !strings.Contains(screen, "read the electricity bill") {
+		t.Fatalf("the screen does not carry the job that was declared:\n%s", screen)
+	}
+	if strings.Contains(screen, "tests for requirement") {
+		t.Fatalf("the screen carries the parts, so the work is still buried under the machinery:\n%s", screen)
+	}
+	// The row says there are five under it. A key nothing on the screen asks for is a key nobody
+	// presses.
+	if !strings.Contains(screen, "▸5") {
+		t.Fatalf("the row does not say it has five parts, so nothing says the key is worth pressing:\n%s", screen)
+	}
+}
+
+// The way onto a part, read off the screen it leaves rather than off the call the key made.
+func TestTabDrawsThePartsUnderTheJobAndTabAgainTakesThemAway(t *testing.T) {
+	model := onJobs(t, &jobClient{jobs: aFanOut()})
+
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyTab})
+
+	if got := len(model.Listed()); got != 6 {
+		t.Fatalf("the jobs view draws %d rows with the parts open, want the job and its five parts", got)
+	}
+	screen := model.View()
+	for at := 1; at <= 5; at++ {
+		want := fmt.Sprintf("tests for requirement %d", at)
+		if !strings.Contains(screen, want) {
+			t.Fatalf("the screen does not carry %q:\n%s", want, screen)
+		}
+	}
+	// Indented, so a part reads as belonging to the row above it rather than as a job of its own.
+	// The cell rather than the screen: every cell is padded to its column, so a screen full of spaces
+	// carries an indent that was never drawn.
+	drawn := model.Listed()
+	if got := drawn[1].Cells[titleColumn]; got != "  tests for requirement 1" {
+		t.Fatalf("the first part is drawn as %q, want it indented under the job that declared it", got)
+	}
+	if got := drawn[0].Cells[titleColumn]; got != "▾5 read the electricity bill" {
+		t.Fatalf("the job is drawn as %q, want it to say its five parts are open", got)
+	}
+
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyTab})
+
+	if got := len(model.Listed()); got != 1 {
+		t.Fatalf("the jobs view draws %d rows after the key was pressed again, want the one job", got)
+	}
+	if strings.Contains(model.View(), "tests for requirement") {
+		t.Fatalf("the parts are still on screen, so the key only opens:\n%s", model.View())
+	}
+}
+
+// A part that fails is a thing somebody has to open, so enter on one has to reach that part's own
+// work. It is the row under the cursor and not the job above it: the two are one keystroke apart.
+func TestEnterOnAPartOpensThatPartAndNotTheJobAboveIt(t *testing.T) {
+	client := &jobClient{jobs: aFanOut(), tasks: []*quaycrewv1.Task{
+		{
+			Id: "4444444444444444dddddddd", Session: "2222222222222222bbbbbbbb", Status: "done",
+			Prompt: "read the electricity bill", OccurredAt: timestamppb.New(time.Now()),
+		},
+		{
+			Id: "5555555555555555eeeeeeee", Session: "8888888888888881ssssssss", Status: "done",
+			Prompt: "write the failing test for requirement 1", OccurredAt: timestamppb.New(time.Now()),
+		},
+	}}
+	model := onJobs(t, client)
+
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyTab})
+	model, _ = update(t, model, runes("j"))
+	selected, hasRow := model.Selected()
+	if !hasRow || selected.ID != "7777777777777771pppppppp" {
+		t.Fatalf("the cursor is on %q, want the first part", selected.ID)
+	}
+	model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+
+	if model.err != nil {
+		t.Fatalf("enter on a part refused: %v", model.err)
+	}
+	if model.parent != "8888888888888881ssssssss" {
+		t.Fatalf("enter opened the work of %q, want the part's own session", model.parent)
+	}
+	if cmd == nil {
+		t.Fatal("enter asked for no listing, so the view would draw empty")
+	}
+	model, _ = update(t, model, cmd())
+	screen := model.View()
+	// The opening of what was asked rather than the whole of it: the column holds what it can and
+	// cuts the rest, which is what any listing of a sentence does.
+	if !strings.Contains(screen, "write the failing test") {
+		t.Fatalf("the screen does not carry what the part was asked:\n%s", screen)
+	}
+	// And the breadcrumb says whose work this is, which is the other half of landing on the right row.
+	if !strings.Contains(screen, "exec(tests for requirement 1)") {
+		t.Fatalf("the screen does not say it is showing that part's work:\n%s", screen)
+	}
+	if strings.Contains(screen, "read the electricity bill") {
+		t.Fatalf("the screen carries what the job above it was asked, so enter opened the parent:\n%s", screen)
+	}
+}
+
+// The second way onto a part, and the reason a filtered listing is flat: a part hidden under a closed
+// job would otherwise be a row the filter cannot find.
+func TestFilteringFindsAPartWithoutOpeningTheJobAboveIt(t *testing.T) {
+	model := onJobs(t, &jobClient{jobs: aFanOut()})
+
+	model, _ = update(t, model, runes("/"))
+	model = typeAll(t, model, "requirement 3")
+
+	if got := len(model.Listed()); got != 1 {
+		t.Fatalf("the filter leaves %d rows, want the one part it names", got)
+	}
+	if !strings.Contains(model.View(), "tests for requirement 3") {
+		t.Fatalf("the filter does not reach the part:\n%s", model.View())
+	}
+}
+
+// A job with nothing under it is every job this view drew before any of this, and it has to draw the
+// same way now: no mark, no indent, and the title where the title was.
+func TestAJobWithNoPartsDrawsAsItAlwaysDid(t *testing.T) {
+	client := &jobClient{jobs: []*quaycrewv1.Job{
+		aJob("1111111111111111aaaaaaaa", job.PhaseRunning, func(one *quaycrewv1.Job) {
+			one.Session = "2222222222222222bbbbbbbb"
+		}),
+	}}
+	model := onJobs(t, client)
+
+	listed := model.Listed()
+	if len(listed) != 1 {
+		t.Fatalf("the jobs view draws %d rows, want the one job", len(listed))
+	}
+	want := jobRow(client.jobs[0], 0).Cells
+	for at, cell := range want {
+		if listed[0].Cells[at] != cell {
+			t.Fatalf("cell %d is %q, want %q (whole row %q)", at, listed[0].Cells[at], cell, listed[0].Cells)
+		}
+	}
+	if strings.Contains(model.View(), "▸") || strings.Contains(model.View(), "▾") {
+		t.Fatalf("a job with no parts carries a mark about parts:\n%s", model.View())
+	}
+	// The key still answers, and it does nothing to a row with nothing under it.
+	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyTab})
+	if got := len(model.Listed()); got != 1 {
+		t.Fatalf("the key left %d rows on a job with no parts, want the one job", got)
+	}
+}
+
+// A part whose job is not in the listing stays on screen. A row that quietly disappears is worse than
+// a row in the wrong place, and a listing narrowed to one project is where this arrives.
+func TestAPartWhoseJobIsNotListedIsStillDrawn(t *testing.T) {
+	client := &jobClient{jobs: []*quaycrewv1.Job{
+		aPart("7777777777777771pppppppp", "9999999999999999zzzzzzzz", "tests for requirement 1", nil),
+	}}
+	model := onJobs(t, client)
+
+	if got := len(model.Listed()); got != 1 {
+		t.Fatalf("the jobs view draws %d rows, want the part whose job is somewhere else", got)
+	}
+	if !strings.Contains(model.View(), "tests for requirement 1") {
+		t.Fatalf("the part is not on screen at all:\n%s", model.View())
 	}
 }
 

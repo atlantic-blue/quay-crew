@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/display"
 	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cucumber/godog"
 )
@@ -170,6 +172,115 @@ func initializeConsoleJobsSteps(sc *godog.ScenarioContext) {
 // openModelOnJobs stands the real console up and walks it to the jobs view.
 func (c *consoleWorld) openModelOnJobs(w *world) error {
 	return c.openModelOn(w, "jobs")
+}
+
+// titleCell is where a job's title sits in its row, and the cell the tree is drawn in: how many parts
+// are under a job, and an indent on each part.
+const titleCell = 5
+
+func initializeConsolePartsSteps(sc *godog.ScenarioContext) {
+	// The fan out this view was rebuilt for: a job in its test stage declares one part for each
+	// requirement. The parts are written the way a controller writes them, because standing the whole
+	// test stage up would make this a scenario about the test stage.
+	sc.Step(`^its test stage fans out into (\d+) parts$`, func(ctx context.Context, count int) error {
+		w := worldFrom(ctx)
+		one, err := readJob(ctx, 0)
+		if err != nil {
+			return err
+		}
+		for at := 1; at <= count; at++ {
+			part := &job.Job{
+				ID: store.NewID(), Workspace: w.workspaceID, Project: w.projectID,
+				Title: fmt.Sprintf("tests for requirement %d", at),
+				Brief: "write the failing test for it", Version: 1, Phase: job.PhaseRunning,
+				Parent: one.GetId(), Depth: 1, Session: store.NewID(),
+			}
+			if err := w.store.CreateJob(ctx, part, &job.Event{
+				ID: store.NewID(), Kind: job.EventDeclared, Job: part.ID,
+				Workspace: w.workspaceID, Project: w.projectID, Detail: part.Title,
+				OccurredAt: time.Now().UTC(),
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^the operator opens the console on jobs and presses tab on the job$`, func(ctx context.Context) error {
+		c := consoleFrom(ctx)
+		if err := c.openModelOnJobs(worldFrom(ctx)); err != nil {
+			return err
+		}
+		return c.press(tea.KeyMsg{Type: tea.KeyTab})
+	})
+
+	sc.Step(`^the operator presses tab again$`, func(ctx context.Context) error {
+		return consoleFrom(ctx).press(tea.KeyMsg{Type: tea.KeyTab})
+	})
+
+	sc.Step(`^the screen carries the job and not its parts$`, func(ctx context.Context) error {
+		one, err := readJob(ctx, 0)
+		if err != nil {
+			return err
+		}
+		c := consoleFrom(ctx)
+		rows := c.model.Listed()
+		if len(rows) != 1 {
+			return fmt.Errorf("the console draws %d rows, want the one job a person declared", len(rows))
+		}
+		view := c.model.View()
+		// The cell rather than the screen, because the column cuts a title it cannot hold and this
+		// step is about which row is there rather than about how wide the window is.
+		if !strings.Contains(rows[0].Cells[titleCell], one.GetTitle()) {
+			return fmt.Errorf("the row reads %q, want the job %q:\n%s",
+				rows[0].Cells[titleCell], one.GetTitle(), view)
+		}
+		if strings.Contains(view, "tests for requirement") {
+			return fmt.Errorf("the screen carries the parts, so the declared work is still buried:\n%s", view)
+		}
+		return nil
+	})
+
+	sc.Step(`^the job's row says it has (\d+) parts$`, func(ctx context.Context, count int) error {
+		rows := consoleFrom(ctx).model.Listed()
+		if len(rows) == 0 {
+			return fmt.Errorf("the console draws nothing")
+		}
+		want := fmt.Sprintf("%d ", count)
+		if !strings.HasPrefix(rows[0].Cells[titleCell], "▸"+want) {
+			return fmt.Errorf("the row reads %q, want it to say it has %d parts", rows[0].Cells[titleCell], count)
+		}
+		return nil
+	})
+
+	sc.Step(`^the console draws the job and its (\d+) parts under it$`, func(ctx context.Context, count int) error {
+		rows := consoleFrom(ctx).model.Listed()
+		if len(rows) != count+1 {
+			return fmt.Errorf("the console draws %d rows, want the job and its %d parts", len(rows), count)
+		}
+		view := consoleFrom(ctx).model.View()
+		// Every part is on the screen. The column cuts a title it cannot hold, and at this width the
+		// five read alike once cut, so which is which is read off the cells underneath.
+		if drawn := strings.Count(view, "tests for requi"); drawn != count {
+			return fmt.Errorf("the screen draws %d parts, want %d:\n%s", drawn, count, view)
+		}
+		// Read as a set. The store answers newest first, so which part is on which row is not
+		// anything this view promises, and a step that indexed into the order would pass by accident.
+		// The cells rather than the screen for the indent too: every cell is padded out to its
+		// column, so a screen full of spaces carries an indent that was never drawn.
+		drawn := map[string]bool{}
+		for _, part := range rows[1:] {
+			drawn[part.Cells[titleCell]] = true
+		}
+		for at := 1; at <= count; at++ {
+			want := fmt.Sprintf("  tests for requirement %d", at)
+			if !drawn[want] {
+				return fmt.Errorf("the parts are drawn as %v, want %q indented under the job above it",
+					drawn, want)
+			}
+		}
+		return nil
+	})
 }
 
 // initializeConsoleViewSteps registers the steps for the views this console gained: the stage on a

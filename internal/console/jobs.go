@@ -67,6 +67,18 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		DrillBy: sessionOfJob,
 		Actions: []Action{
 			{
+				// A job that fans out has one part for each requirement, and all of them used to be
+				// rows beside the job that declared them: six rows, five of them machinery, and the
+				// work a person asked for at the bottom of the six. The parts are under their job
+				// now, and this is the key that shows them.
+				//
+				// Tab, because it is the key that opens what is folded away in an editor, and
+				// because every letter a vim user reaches for is a move or already taken.
+				Key:   "tab",
+				Label: "Parts",
+				Folds: true,
+			},
+			{
 				// A job that stops for a person rings the bell and draws a line across the listing,
 				// and until now no key answered it: the answer had to be typed into the command line
 				// or into the web briefing, which is the one place the operator was not looking.
@@ -152,6 +164,9 @@ const (
 	stageColumn = 2
 	// outcomeColumn is the word the job ended on.
 	outcomeColumn = 3
+	// titleColumn is the line a person reads the row by, and the column the tree is drawn in: how
+	// many parts are under a job, and an indent on each part.
+	titleColumn = 5
 	// sessionColumn is the conversation the job runs in, or how many are running under it.
 	sessionColumn = 6
 	// attemptsColumn is how many times the job has been tried.
@@ -220,7 +235,11 @@ func jobRow(one *quaycrewv1.Job, working int) Row {
 	return Row{
 		ID:     one.GetId(),
 		Parent: one.GetSession(),
-		Label:  one.GetTitle(),
+		// The job this one is a part of, which is what keeps it off the listing until somebody opens
+		// that job. It is a second parent and not the one above: Parent is the session a row
+		// descends into, and these are two different questions about the same row.
+		Under: one.GetParent(),
+		Label: one.GetTitle(),
 		// A job is the one row a person reads by its title and types by its identifier, so the position
 		// line takes the short form the listing already prints.
 		Address: display.ShortID(one.GetId()),

@@ -471,6 +471,33 @@ Feature: The operator sees the system from the console
     And the operator answers "y"
     Then the job is stopped, and the reason says a person did it
 
+  # A job in its test stage fans out into one part for each requirement, and every part used to be a
+  # row beside the job that declared them: six rows with nothing saying which was which, and the work
+  # a person asked for at the bottom of the six. The parts are drawn under their job now, closed until
+  # somebody asks for them. See issue 653.
+
+  Scenario: A job that fanned out is one row, and it says how many parts are under it
+    Given a job titled "read the electricity bill"
+    And its test stage fans out into 5 parts
+    When the operator is at the console on the "jobs" view
+    Then the screen carries the job and not its parts
+    And the job's row says it has 5 parts
+
+  # The way onto a part, because a part that fails is a thing somebody has to open.
+  Scenario: Tab draws the parts under the job that declared them
+    Given a job titled "read the electricity bill"
+    And its test stage fans out into 5 parts
+    When the operator opens the console on jobs and presses tab on the job
+    Then the console draws the job and its 5 parts under it
+
+  # And the way off it. A key that only opens leaves the listing buried again.
+  Scenario: Tab again takes the parts away
+    Given a job titled "read the electricity bill"
+    And its test stage fans out into 5 parts
+    When the operator opens the console on jobs and presses tab on the job
+    And the operator presses tab again
+    Then the screen carries the job and not its parts
+
   # The phase says what the system is doing with the row: it is pending, it is running, it is asking.
   # It never said how far through the work the job is. A job waiting for an answer about what it
   # understood and a job waiting for an answer about a failed build both read "asking", and those two

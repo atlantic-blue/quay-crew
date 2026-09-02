@@ -2,6 +2,7 @@ package storetest
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/atlantic-blue/quay-krewe/internal/job"
@@ -15,6 +16,27 @@ const theBuiltWithPictures = theBuild + "\n" +
 	"Taken 1: the command line after ./transcript paste, captured with tmux capture-pane\n" +
 	"Picture 2: page.png\n" +
 	"Taken 2: the page at http://localhost:3000, drawn with krewe render"
+
+// theBuiltWithThreeKinds is the record of a job whose verticals were each shown with the kind of
+// evidence that vertical needed: a picture, a recording, and steps a person runs themselves.
+//
+// The steps are several lines written under one vertical, which is the shape this record did not
+// carry before. A store that keeps the build column as one string keeps them, and that is the whole
+// of what this asks: the evidence is read back out of the record, so a store that loses a line loses
+// a step and a person follows instructions with a hole in them.
+const theBuiltWithThreeKinds = theBuild + "\n" +
+	"Picture 1: paste.png\n" +
+	"Taken 1: the command line after ./transcript paste, captured with tmux capture-pane\n" +
+	"Recording 2: share.webm\n" +
+	"Taken 2: the page at http://localhost:3000, captured with tmux capture-pane and joined with " +
+	"krewe record\n" +
+	"Vertical 3: a person is refused a transcript that is not theirs\n" +
+	"Ran 3: 4\n" +
+	"Passes 3: TestAnotherPersonsTranscriptIsRefused\n" +
+	"Changed 3: internal/web/permission.go\n" +
+	"Steps 3: run ./transcript share, and the address is printed\n" +
+	"Steps 3: open that address signed in as somebody else, and the page says it is refused\n" +
+	"Taken 3: the server at http://localhost:3000, started with make run"
 
 // runJobAcceptanceConformance holds both stores to what the acceptance stage writes.
 //
@@ -77,8 +99,67 @@ func runJobAcceptanceConformance(t *testing.T, newDataset func(t *testing.T) Ope
 		}
 		// The record of what was built, with its pictures, stays. That is what the person accepted, and
 		// it is what anybody reading this job afterwards has to be able to see.
-		if len(job.PicturesIn(kept.Build)) != 2 {
-			t.Fatalf("the accepted job carries %d pictures", len(job.PicturesIn(kept.Build)))
+		if len(job.EvidenceIn(kept.Build)) != 2 {
+			t.Fatalf("the accepted job carries evidence for %d verticals",
+				len(job.EvidenceIn(kept.Build)))
+		}
+	})
+
+	// The three kinds through the real engine. What a person is shown is read back out of the build
+	// column, so a store that keeps that column differently shows them something different.
+	t.Run("every kind of evidence survives the store it was written to", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := waitingToBuild(t, s, workspace, project)
+		if _, err := s.HoldJobForAcceptance(ctx, id, theBuiltWithThreeKinds, job.TheAcceptanceAsk,
+			builtEvent(id, workspace, project),
+			askedEvent(id, workspace, project, job.TheAcceptanceAsk)); err != nil {
+			t.Fatalf("HoldJobForAcceptance: %v", err)
+		}
+
+		kept, err := s.GetJob(ctx, id)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+
+		shown := job.EvidenceIn(kept.Build)
+		if len(shown) != 3 {
+			t.Fatalf("the record of 3 verticals reads back with evidence for %d", len(shown))
+		}
+		want := map[int]job.Kind{1: job.KindPicture, 2: job.KindRecording, 3: job.KindSteps}
+		for vertical, kind := range want {
+			held := job.EvidenceFor(kept.Build, vertical)
+			if held.Kind != kind {
+				t.Errorf("vertical %d reads back as %s, want %s", vertical, held.Kind, kind)
+			}
+			if held.Taken == "" {
+				t.Errorf("vertical %d reads back with no label, so nobody can reproduce it", vertical)
+			}
+			if err := held.Shows(); err != nil {
+				t.Errorf("what vertical %d reads back with does not show it working: %v", vertical, err)
+			}
+		}
+		// Both steps, in the order a person follows them. One step lost is a person following
+		// instructions with a hole in them, and it reads exactly like a shorter list.
+		steps := job.EvidenceFor(kept.Build, 3).Steps
+		if len(steps) != 2 {
+			t.Fatalf("vertical 3 reads back with %d steps, want 2: %q", len(steps), steps)
+		}
+		if !strings.HasPrefix(steps[0], "run ./transcript share") {
+			t.Errorf("the steps came back out of order: %q", steps)
+		}
+
+		// And a person's word still lands it, whatever they looked at.
+		if _, err := s.AnswerJob(ctx, id, "yes", toldEvent(id, workspace, project)); err != nil {
+			t.Fatalf("AnswerJob: %v", err)
+		}
+		accepted, err := s.AcceptJob(ctx, id, "yes", acceptedEvent(id, workspace, project))
+		if err != nil {
+			t.Fatalf("AcceptJob: %v", err)
+		}
+		if !accepted.Accepted {
+			t.Fatal("a job shown with three kinds of evidence was not landed by the person's word")
 		}
 	})
 

@@ -1246,12 +1246,25 @@ func sayWhatWasBuilt(out io.Writer, one *quaycrewv1.Job) {
 // identifier three levels down, so the line names the command that answers with the path rather than
 // the path: this tool talks to a system that may be on another machine.
 func sayWhereThePicturesAre(out io.Writer, one *quaycrewv1.Job) {
-	shots := job.PicturesIn(one.GetBuild())
-	if len(shots) == 0 || one.GetAccepted() {
+	shown := job.EvidenceIn(one.GetBuild())
+	if len(shown) == 0 || one.GetAccepted() {
+		return
+	}
+	// Steps are read where they are, and a file has to be opened somewhere. A job whose verticals are
+	// shown both ways says both, because a person told only about the folder goes looking for a file
+	// that was never written.
+	files := 0
+	for _, one := range shown {
+		if one.Kind != job.KindSteps {
+			files++
+		}
+	}
+	if files == 0 {
+		fmt.Fprintf(out, "follow the steps on the record above, then answer this job\n")
 		return
 	}
 	fmt.Fprintf(out, "open the %s in this workspace's shared folder, which krewe where %s names, "+
-		"then answer this job\n", saidThePictures(len(shots)), one.GetWorkspace())
+		"then answer this job\n", saidThePictures(files), one.GetWorkspace())
 }
 
 // saidThePictures reads for one and for several, because a line that says "1 pictures" is a line that
