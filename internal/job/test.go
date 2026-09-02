@@ -45,6 +45,10 @@ type Requirement struct {
 	Number int
 	Text   string
 	Shown  string
+	// Evidence is the kind of evidence this vertical needs a person to be shown: a picture, a
+	// recording, or steps they run themselves. Empty is a picture, which is what every vertical
+	// written before the kinds existed asked for. See evidence.go.
+	Evidence Kind
 }
 
 // RequirementsOf is the requirement list, which is the list of verticals a person accepted.
@@ -59,6 +63,7 @@ func RequirementsOf(one *Job) []Requirement {
 	for _, vertical := range DesignIn(one.Design).Verticals {
 		wanted = append(wanted, Requirement{
 			Number: vertical.Number, Text: vertical.Text, Shown: vertical.Shown,
+			Evidence: vertical.Evidence,
 		})
 	}
 	return wanted

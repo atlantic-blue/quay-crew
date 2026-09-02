@@ -49,7 +49,7 @@ const (
 // Read off the reply rather than reported, the way a plan and a reading already are. What it finds is
 // then what the session meant to say, rather than a sentence that happened to hold the word.
 var designLine = regexp.MustCompile(
-	`(?im)^[ \t]*(vertical|yours|shown)[ \t]+(\d+)[ \t]*[:.][ \t]*(.+?)[ \t]*$`)
+	`(?im)^[ \t]*(vertical|yours|shown|evidence)[ \t]+(\d+)[ \t]*[:.][ \t]*(.+?)[ \t]*$`)
 
 // plumbingWord is the work a system does for itself. None of these is a thing a person can be shown
 // working, and each of them is real work that some vertical needs.
@@ -76,6 +76,11 @@ type Vertical struct {
 	Number int
 	Text   string
 	Shown  string
+	// Evidence is the kind of evidence a person needs to be shown before they can say this one landed:
+	// a picture, a recording, or steps they run themselves. Empty is a picture. It is decided here, on
+	// the list a person accepts, because the person accepting the list is the person who will be
+	// looking at it. See evidence.go.
+	Evidence Kind
 	// Yours says this one came from what the person wrote when they sent the list back. It is the mark
 	// ideation already makes between what a session was told and what it filled in for itself, on the
 	// list rather than on the reading: a list a person changed and a list the machine proposed read the
@@ -111,6 +116,17 @@ func ReadDesign(reply string) (Design, error) {
 		case "shown":
 			if one.Shown == "" {
 				one.Shown = said
+			}
+		case "evidence":
+			// The kind is read strictly, because a word this does not know is a session asking for a
+			// fourth kind of evidence, and the list a person accepts is where that gets settled rather
+			// than three stages later when a worker answers with it.
+			if one.Evidence == "" {
+				kind, err := ReadKind(said)
+				if err != nil {
+					return Design{}, fmt.Errorf("vertical %d: %w", number, err)
+				}
+				one.Evidence = kind
 			}
 		default:
 			// The first line under a number stands, the way the first thing said under a heading stands in
@@ -262,6 +278,12 @@ func DesignText(d Design) string {
 		}
 		lines = append(lines, fmt.Sprintf("%s %d: %s", opening, one.Number, one.Text),
 			fmt.Sprintf("Shown %d: %s", one.Number, one.Shown))
+		// Only where it was asked for. A vertical that says nothing is shown with a picture, so writing
+		// the default onto every line would spend the list a person reads saying what the system already
+		// does.
+		if one.Evidence != "" && one.Evidence != KindPicture {
+			lines = append(lines, fmt.Sprintf("Evidence %d: %s", one.Number, one.Evidence))
+		}
 	}
 	return strings.Join(lines, "\n")
 }
@@ -353,7 +375,8 @@ func theShapeOfADesign() string {
 	return fmt.Sprintf("Do no work yet, and write no plan. Turn what a person agreed with into the "+
 		"things you would build, and %s. Answer in these lines and nothing else:\n\n"+
 		"Vertical 1: what a person can do when this one lands\n"+
-		"Shown 1: what that person is shown when it lands, in one line\n\n"+
+		"Shown 1: what that person is shown when it lands, in one line\n"+
+		"Evidence 1: recording, or steps, only where a picture cannot show this one working\n\n"+
 		"List at most %d, numbered from 1, each line under %d bytes. A vertical is only a vertical if a "+
 		"person can be shown it working, so name the person in the line. A database is not a "+
 		"deliverable and nor is a piece of infrastructure: those are required work towards one, so a "+

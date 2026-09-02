@@ -1,4 +1,4 @@
 name: browser
 version: 1
-summary: Look at what you built; a change with a visual result is not finished until a picture of it exists.
+summary: Look at what you built; a change with a visual result is not finished until a picture or a recording of it exists.
 binaries: [krewe, playwright]

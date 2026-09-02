@@ -930,6 +930,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeProcessGateSteps(sc)
 	initializeBuildStageSteps(sc)
 	initializeAcceptanceStageSteps(sc)
+	initializeEvidenceKindSteps(sc)
 	initializeSystemSecretSteps(sc)
 	initializeGitConfigSteps(sc)
 	initializeWizardModeSteps(sc)

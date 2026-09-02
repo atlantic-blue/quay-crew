@@ -123,11 +123,11 @@ func theShapeOfABuildReport(wanted Requirement) string {
 		"Passing 2: the name of the next one\n"+
 		"Changed 1: a file you wrote to make them pass\n"+
 		"Changed 2: the next one\n"+
-		"Picture: the name of a picture of this vertical running\n"+
-		"Taken: what was running, the command that drew it, and what has to be up to draw it again\n\n"+
+		"%s"+
+		"Taken: what was running, the command behind it, and what has to be up to get it again\n\n"+
 		"A run that executed nothing is a failure of this task rather than a pass. A green run that "+
 		"changed no file means the test was already passing, which builds nothing.\n\n%s",
-		wanted.Number, ShowItWorking(wanted))
+		wanted.Number, theEvidenceLines(wanted.Evidence), ShowItWorking(wanted))
 }
 
 // buildLine is the shape a report is read back in: the vertical it was built for, what the run did,
@@ -137,7 +137,8 @@ func theShapeOfABuildReport(wanted Requirement) string {
 // it finds is then what the worker meant to say, rather than a sentence that happened to hold the
 // word.
 var buildLine = regexp.MustCompile(
-	`(?im)^[ \t]*(vertical|ran|red|passing|passes|changed|picture|taken)[ \t]*(\d*)[ \t]*[:.][ \t]*(.+?)[ \t]*$`)
+	`(?im)^[ \t]*(vertical|ran|red|passing|passes|changed|picture|recording|steps?|taken)[ \t]*(\d*)` +
+		`[ \t]*[:.][ \t]*(.+?)[ \t]*$`)
 
 // BuildReport is what one worker answers with: which vertical it built, what its run did, the tests
 // that pass now, the files it changed to make them, and the picture of the vertical running.
@@ -147,12 +148,34 @@ type BuildReport struct {
 	Red      int
 	Passing  []string
 	Changed  []string
-	// Picture is the name of a picture of this vertical running, in the workspace's shared folder, and
-	// Taken is the label saying where it came from and what it takes to draw it again. They are what a
-	// person is shown at the end of the stage, and neither of the two is any use without the other: a
-	// picture nobody can reproduce is worth nothing, and a label with no picture is a paragraph.
+	// Picture is the name of a picture or a recording of this vertical running, in the workspace's
+	// shared folder, Steps are what a person runs or presses to see it themselves, and Taken is the
+	// label saying where any of it came from and what it takes to get it again. They are what a person
+	// is shown at the end of the stage, and none of them is any use without the label: evidence nobody
+	// can reproduce is worth nothing, and a label with nothing under it is a paragraph.
+	//
+	// Which of the two arrived says which kind this is, and Kind holds it. A worker answers with the
+	// kind its vertical asked for, and the stage refuses a report that answers with another.
 	Picture string
+	Steps   []string
+	Kind    Kind
 	Taken   string
+}
+
+// Evidence is what this report offers a person, in the shape the acceptance stage reads.
+func (r BuildReport) Evidence() Evidence {
+	kind := r.Kind
+	if kind == "" {
+		kind = KindPicture
+		if len(r.Steps) > 0 {
+			kind = KindSteps
+		} else if AFileOfKind(KindRecording, r.Picture) {
+			kind = KindRecording
+		}
+	}
+	return Evidence{
+		Vertical: r.Vertical, Kind: kind, File: r.Picture, Steps: r.Steps, Taken: r.Taken,
+	}
 }
 
 // ReadBuildReport is the report a reply carries, and the refusal where it carries none.
@@ -191,13 +214,22 @@ func ReadBuildReport(reply string) (BuildReport, error) {
 			}
 		case "passing", "passes":
 			report.Passing = append(report.Passing, text)
-		case "picture":
-			// One picture stands, and it is the first readable one. A worker that named several showed
+		case "picture", "recording":
+			// One file stands, and it is the first readable one. A worker that named several showed
 			// several things, and the person is here to look at this vertical working rather than to pick
 			// which of four files is the one that shows it.
 			if report.Picture == "" {
-				report.Picture = path.Base(text)
+				report.Picture, report.Kind = path.Base(text), KindPicture
+				if strings.EqualFold(found[1], "recording") || AFileOfKind(KindRecording, report.Picture) {
+					report.Kind = KindRecording
+				}
 			}
+		case "step", "steps":
+			// Every step stands, in the order they were written, because the steps are the evidence here
+			// the way the file is the evidence above. The number on the line is the step rather than the
+			// vertical: a worker is given one vertical and says so on its own line.
+			report.Steps = append(report.Steps, text)
+			report.Kind = KindSteps
 		case "taken":
 			if report.Taken == "" {
 				report.Taken = text
@@ -269,7 +301,10 @@ func (r BuildReport) green() error {
 	}
 	// Last, because it is the check the machine cannot make for itself. Everything above is the run
 	// reporting on the run, and a person cannot read any of it and say whether the value arrived.
-	return Picture{Vertical: r.Vertical, File: r.Picture, Taken: r.Taken}.Shows()
+	//
+	// The kind is not checked here, because this reads a report and the kind belongs to the vertical.
+	// What holds a report to the kind its vertical asked for is BuiltGreen, which has the list.
+	return r.Evidence().Shows()
 }
 
 // aTestFile is the shape of a name that says a file is a test, in the ecosystems this system meets.
@@ -303,6 +338,11 @@ func BuiltGreen(wanted []Requirement, failing map[int][]string,
 				"system could read, so nothing holds this vertical", one.Number, one.Text)
 		}
 		if err := report.green(); err != nil {
+			return fmt.Errorf("vertical %d, %q: %w", one.Number, one.Text, err)
+		}
+		// The kind is the vertical's to decide, so this is where a report is held to it: here the list
+		// is in hand, and a report on its own says only what a worker chose to send.
+		if err := report.Evidence().Holds(one.Evidence); err != nil {
 			return fmt.Errorf("vertical %d, %q: %w", one.Number, one.Text, err)
 		}
 		if missing := notNamed(failing[one.Number], report.Passing); missing != "" {
@@ -357,11 +397,25 @@ func BuiltText(wanted []Requirement, reports map[int]BuildReport) string {
 		for _, changed := range report.Changed {
 			lines = append(lines, fmt.Sprintf("Changed %d: %s", one.Number, changed))
 		}
-		// The picture and its label travel with the vertical they show, because what a person is shown
+		// The evidence and its label travel with the vertical they show, because what a person is shown
 		// at the end of the stage is read back off this record rather than out of a worker's session,
 		// and by then every one of those sandboxes is gone.
-		lines = append(lines, fmt.Sprintf("Picture %d: %s", one.Number, report.Picture),
-			fmt.Sprintf("Taken %d: %s", one.Number, report.Taken))
+		//
+		// Each kind is written under its own word, so the record says which kind a vertical was shown
+		// with rather than leaving a reader to work it out from a file extension. Steps are written in
+		// full and never as "Step 1:", because the number here is the vertical.
+		shown := report.Evidence()
+		switch shown.Kind {
+		case KindSteps:
+			for _, step := range shown.Steps {
+				lines = append(lines, fmt.Sprintf("Steps %d: %s", one.Number, step))
+			}
+		case KindRecording:
+			lines = append(lines, fmt.Sprintf("Recording %d: %s", one.Number, shown.File))
+		default:
+			lines = append(lines, fmt.Sprintf("Picture %d: %s", one.Number, shown.File))
+		}
+		lines = append(lines, fmt.Sprintf("Taken %d: %s", one.Number, shown.Taken))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -595,6 +649,12 @@ func BuiltBy(workers []*Job, vertical Requirement, failing []string) (BuildRepor
 		return BuildReport{}, fmt.Sprintf("vertical %d, %q: the worker holding it reported on "+
 			"vertical %d instead", vertical.Number, vertical.Text, report.Vertical)
 	}
+	// Early, and again at the close of the stage. A worker that answered with the wrong kind is asked
+	// again while it still has a session, rather than at the end when every other vertical is green.
+	if err := report.Evidence().Holds(vertical.Evidence); err != nil {
+		return BuildReport{}, fmt.Sprintf("vertical %d, %q: %s",
+			vertical.Number, vertical.Text, oneLine(err.Error()))
+	}
 	if missing := notNamed(failing, report.Passing); missing != "" {
 		return BuildReport{}, fmt.Sprintf("vertical %d, %q: %q failed for this vertical before the "+
 			"build and the report does not say it passes now", vertical.Number, vertical.Text, missing)
@@ -645,4 +705,19 @@ func (c *Controller) askAboutTheBuild(ctx context.Context, one *Job, why string)
 		return
 	}
 	c.exported(ctx, record)
+}
+
+// theEvidenceLines are the lines a report answers with for the kind of evidence its vertical asked
+// for. A worker asked for a picture and shown the shape of steps sends a paragraph, and the whole
+// point of asking in the shape it is read back in is that it does not have to guess.
+func theEvidenceLines(wanted Kind) string {
+	switch wanted {
+	case KindRecording:
+		return "Recording: the name of a recording of this vertical running\n"
+	case KindSteps:
+		return "Steps 1: the first thing a person runs or presses, and what they should see\n" +
+			"Steps 2: the next one\n"
+	default:
+		return "Picture: the name of a picture of this vertical running\n"
+	}
 }
