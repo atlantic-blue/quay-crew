@@ -38,29 +38,88 @@ const theWayThrough = "You may read this test as much as you need to. You may no
 //
 // building is a value rather than a read of the environment, so what the gate refuses is a table
 // anybody can read and argue with, rather than behaviour you have to start a container to find out.
-func Decide(tool string, input Input, building bool) (Refusal, bool) {
+//
+// holds says whether a path this line takes whole has a test somewhere under it. It is a value for the
+// same reason, and the walk that answers it on a real disk has its own cases.
+func Decide(tool string, input Input, building bool, holds func(string) bool) (Refusal, bool) {
 	// The lift is checked first, and it is checked even where the gate is off. Setting the variable is
 	// the one thing that is refused whatever else the line says.
-	if refusal, refused := setsTheVariable(tool, input.Command); refused {
+	if refusal, refused := setsTheVariable(input.Command); refused {
 		return refusal, true
 	}
 	if !building {
 		return Refusal{}, false
 	}
-	if tool == "Bash" {
-		for _, where := range WrittenBy(input.Command) {
-			if why, is := ATest(where); is {
-				return writing(where, why, "This command writes to it."), true
-			}
+	// A tool that names a file. The field is what is read rather than the name of the tool, because a
+	// runtime that adds a write tool this gate has never heard of still sends its path in one of these,
+	// and a gate that knew the tools by name would let that one straight through.
+	for _, where := range []string{input.FilePath, input.NotebookPath, input.Path} {
+		if why, is := APath(where); is {
+			return writing(where, why, said(tool)+" writes to it."), true
 		}
+	}
+	if input.Command == "" {
 		return Refusal{}, false
 	}
-	for _, where := range []string{input.FilePath, input.NotebookPath} {
-		if why, is := ATest(where); is {
-			return writing(where, why, fmt.Sprintf("%s writes to it.", tool)), true
+	return theCommand(input.Command, holds)
+}
+
+// theCommand reads a shell command for the tests it writes to.
+func theCommand(command string, holds func(string) bool) (Refusal, bool) {
+	written := WrittenBy(command)
+	for _, where := range written.Paths {
+		if why, is := APath(where); is {
+			return writing(where, why, "This command writes to it."), true
 		}
 	}
+	// The words an unknown program was handed, and the words of a whole line where a writer reads its
+	// paths from a pipe. They are read as words rather than as paths, so a bare `features` here is a
+	// make target and `features/` is the directory of scenarios.
+	if len(written.Named) > 0 {
+		named := written.Named
+		for _, one := range named {
+			if one == "" {
+				named = append(named, EveryWord(command)...)
+				break
+			}
+		}
+		for _, where := range named {
+			if why, is := ANamed(where); is {
+				return writing(where, why, "This command may write to it."), true
+			}
+		}
+	}
+	// A path taken whole. The name of a directory says nothing about what is inside it, so
+	// `rm -rf build/` is ordinary work and `rm -rf internal/` takes every test in there with it. What
+	// tells those two apart is the disk.
+	if holds == nil {
+		return Refusal{}, false
+	}
+	for _, cover := range written.Covers {
+		where := cover.Path
+		if ATree(where) {
+			where = "."
+		}
+		if !holds(where) {
+			continue
+		}
+		return Refusal{
+			What: fmt.Sprintf("%q holds tests, and %q takes it whole. This session is building against "+
+				"tests it did not write, so a command that takes a directory of them away, or back to "+
+				"another revision, takes the thing holding the requirement.", where, cover.Program),
+			Instead: "Name the files you mean, one by one, and leave the tests out. " + theWayThrough,
+		}, true
+	}
 	return Refusal{}, false
+}
+
+// said is what to call the tool in a refusal, so a tool this gate has never heard of still reads as
+// itself rather than as nothing.
+func said(tool string) string {
+	if strings.TrimSpace(tool) == "" {
+		return "This tool"
+	}
+	return tool
 }
 
 // writing is the refusal a session gets when it is about to change a test.
@@ -74,8 +133,11 @@ func writing(where, why, doing string) Refusal {
 }
 
 // setsTheVariable refuses a session that puts itself inside or outside the boundary.
-func setsTheVariable(tool, command string) (Refusal, bool) {
-	if tool != "Bash" || !strings.Contains(command, Building) {
+//
+// Every tool rather than the shell alone, because a session that writes the variable into a file the
+// next command reads has set it just the same.
+func setsTheVariable(command string) (Refusal, bool) {
+	if !strings.Contains(command, Building) {
 		return Refusal{}, false
 	}
 	for _, words := range segmentsOf(command) {

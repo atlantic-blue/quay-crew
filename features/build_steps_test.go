@@ -338,6 +338,19 @@ func initializeBuildStageSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// A command that takes a directory whole names no test file, so what the refusal owes the session
+	// is the directory, what is in it, and the way through.
+	sc.Step(`^the refusal says to name the files it means$`, func(ctx context.Context) error {
+		said := worldFrom(ctx).testGate.said
+		for _, needed := range []string{"holds tests", "Name the files you mean", "say so in your answer"} {
+			if !strings.Contains(said, needed) {
+				return fmt.Errorf("the refusal does not say %q, so the session is left guessing:\n%s",
+					needed, said)
+			}
+		}
+		return nil
+	})
+
 	sc.Step(`^the refusal names the file and says to answer that the test is wrong$`,
 		func(ctx context.Context) error {
 			said := worldFrom(ctx).testGate.said

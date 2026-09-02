@@ -175,12 +175,10 @@ Each one is a rule the system already carries and nothing else checks.
   manager equivalents, and the older screen program's quit form. This product's own verbs stay open,
   because `krewe job stop` and `krewe flow stop` end the work in the record and signal nothing. It is
   designed in [`hooks/process-gate/README.md`](../hooks/process-gate/README.md).
-- **test-gate.** Reads each write and each Bash command of a session that builds against failing
-  tests, and refuses one that changes a test. It reads the write tools and the shell alike: a
-  redirect, an in place edit, a move, a copy, or a checkout of another revision. Reading a test is
-  allowed, on purpose: a build that cannot read the test cannot tell a failing assertion from a
-  broken one. It is off in every session but a worker of the build stage, because the stage before
-  that one writes the tests. It is designed in
+- **test-gate.** Reads every tool call of a session that builds against failing tests, and refuses one
+  that changes a test. A directory is read by what is in it, not by its name. Reading a test is allowed on purpose, because a build that
+  cannot read the test cannot tell a failing assertion from a broken one. It is off in every session
+  but a worker of the build stage. The classes, the walk and the shapes it cannot see are in
   [`hooks/test-gate/README.md`](../hooks/test-gate/README.md).
 - **prose-gate.** Reads prose written for a person and refuses what Simplified Technical English
   refuses, for the part of it a program can measure: a sentence of more than 25 words, a paragraph of

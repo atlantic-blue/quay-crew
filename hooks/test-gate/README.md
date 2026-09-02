@@ -20,14 +20,53 @@ suite.
 A command that sets or clears the variable is refused, whether the gate is on or off. A session that
 decides its own boundary has none.
 
-## What it refuses
+## How it reads a command
 
-A write to a test, in every shape the session can reach for.
+The program decides, in four classes, and this is the part worth arguing with.
 
-- **The write tools**: `Write`, `Edit`, `MultiEdit` and `NotebookEdit`, when the path is a test.
-- **The shell**: a redirect into a test. `sed -i` and `perl -i` on one. `rm`, `mv`, `cp`, `tee`,
-  `touch` and `patch`. `git checkout` or `git restore` of a test path. Under `sudo`, inside a loop, after `&&`, and inside
-  a shell of its own. The reader takes the line apart the way a shell does.
+A program that only **reads** is never asked about its paths. `cat`, `grep`, `go`, `make` and the rest
+of the list in `command.go`. That is what keeps `go test ./features/` and `make features` working
+while the gate is on.
+
+A program that **writes** has every path it was handed read as a path, so a bare word is a directory.
+`rm`, `mv`, `cp`, `ln`, `tee`, `truncate`, `patch`, `dd` and the others. Then `sed`, `perl`, `awk`,
+`gofmt` and `prettier`, once a flag tells them to write in place. The short spelling, the joined one
+and the long one. The verbs of version control that put another copy in the working tree: `git checkout`,
+`git restore`, `git stash`, `git clean`, `git rm` and `git mv`. And `find`, once it carries `-delete`
+or an `-exec`.
+
+A program that **applies** content from somewhere the line does not show has where it lands read as a
+directory taken whole. `tar` extracting, `unzip` and `patch`. Then the git verbs that write the tree
+out of another commit or a patch: `apply`, `am`, `cherry-pick`, `revert`, `merge`, `pull`, `rebase`
+and `reset --hard`.
+
+Anything **else** is unknown, and only the words that look like a path are read out of it. That is
+what stops `python3 -c "open('a_test.go','w')"` and lets `make features` through, and it is what a
+program nobody thought of falls into.
+
+Around all three, four readings. A redirect target is a file the line writes. A shell handed `-c` is
+read again. A wrapper such as `sudo`, `env` or `xargs` is unwrapped. A writer handed no path at all
+reads from a pipe, so the whole line is read for a path it names.
+
+## What makes a file a test
+
+The name, because the runner decides the same way. A name that ends in `_test.go`, `.spec.ts`,
+`_spec.rb` or `.feature`. A name that begins with `test_`. A path under `test`, `tests`, `spec`,
+`__tests__`, `features`, `fixtures` or `testdata`. A fixture is what a test asserts against. A change
+to one changes the assertion, and it touches no file named as a test.
+
+## What makes a directory a test
+
+What is in it, read off the disk. A name says nothing about the contents. `rm -rf build/` is
+ordinary work and `rm -rf internal/` takes every test in there with it. The two are the same sentence
+to any rule about names.
+
+The hook runs inside the sandbox, in the session's own working directory. So it walks the path and
+answers from what it finds. The walk is bounded at twenty thousand entries, and it skips `.git`,
+`node_modules`, `vendor` and `target`. A directory too big to read is refused rather than cleared.
+
+A command that names no path is pointed at the working directory, so `git checkout -- .`,
+`git stash` and `git clean -fd` are read as that directory.
 
 ## What it allows, on purpose
 
@@ -36,21 +75,29 @@ deliberate difference from the discipline the stage comes from, where the implem
 test at all. A build that cannot read the test cannot tell a failing assertion from a broken one, so
 it guesses instead.
 
-## What makes a file a test here
+## What it does not catch
 
-The name, because the runner decides the same way. A name that ends in `_test.go`, `.spec.ts`,
-`_spec.rb` or `.feature`. A name that begins with `test_`. A path under `test`, `tests`, `spec`,
-`__tests__`, `features`, `fixtures` or `testdata`. A fixture is what a test asserts against. A
-change to one changes the assertion, and it touches no file named as a test.
+This reads a command line. It does not run one, so three things go past it, and they are named here
+rather than left for somebody to find.
 
-The cost of a rule about names is that a repository whose deliverable is itself a test harness has
-files this refuses. The way through is the same as for a wrong test. Say so in the answer.
+A path that only exists after the shell expands it. A glob, a variable and a substitution are read as
+the words they are written as, so `rm $TESTS` says nothing to this gate.
+
+A program that writes through a name this reader does not know, in an argument that does not look like
+a path. An unknown program is read for path shaped words. That catches the ordinary spelling and not a clever
+one.
+
+A directory the walk cannot see, because the session works somewhere else on the disk. Then the
+name rules still answer, and they are what catch `features/` and `testdata/`.
+
+Behind all three stands the stage itself. A build report names the files it wrote, and a report that
+names a test is refused whatever the gate saw.
 
 ## The way through
 
-The refusal names the file. It says why the file reads as a test. It says what to do instead. Read it. If the test
-itself is wrong, say so in the answer, name the file and the assertion, and say what it must assert.
-A person decides that.
+The refusal names the file. It says why the file reads as a test. It says what to do instead. Read it.
+If the test itself is wrong, say so in the answer, name the file and the assertion, and say what it
+must assert. A person decides that.
 
-The stage reads an answer of that shape and puts it to somebody. So a worker between a broken test
-and this boundary is never stuck for long.
+The stage reads an answer of that shape and puts it to somebody. So a worker between a broken test and
+this boundary is never stuck for long.

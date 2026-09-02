@@ -30,12 +30,18 @@ import (
 // is a gate that quietly opens.
 const Refused = 2
 
-// Input is the part of what the runtime sends that says which file is about to change: the path for a
-// write or an edit, the notebook for a notebook edit, and the command for a shell.
+// Input is the part of what the runtime sends that says which file is about to change: the path a
+// write or an edit names, the notebook a notebook edit names, the bare path some tools use, and the
+// command a shell runs.
+//
+// Every field a tool could put a path in is read rather than the tool being recognised by name. A
+// runtime that adds a write tool this gate has never heard of still sends its path in one of these,
+// and a gate that knew the tools by name would let that one through.
 type Input struct {
 	Command      string `json:"command"`
 	FilePath     string `json:"file_path"`
 	NotebookPath string `json:"notebook_path"`
+	Path         string `json:"path"`
 }
 
 func main() {
@@ -57,7 +63,7 @@ func Run(in io.Reader, errs io.Writer, building bool) int {
 	if err := json.Unmarshal(body, &event); err != nil {
 		return 0
 	}
-	refusal, refused := Decide(event.ToolName, event.ToolInput, building)
+	refusal, refused := Decide(event.ToolName, event.ToolInput, building, HoldsATest)
 	if !refused {
 		return 0
 	}
