@@ -113,7 +113,8 @@ Feature: A hook is a constraint the system holds
     Then the system holds the "prompt-analyser" hook
     And the system holds the "merge-gate" hook
     And the system holds the "deploy-identity-gate" hook
-    And the workspace runs under 3 hooks
+    And the system holds the "process-gate" hook
+    And the workspace runs under 4 hooks
 
   # An operator who takes a hook off has said something. Putting it back on the next restart is the
   # system overruling the person operating it.

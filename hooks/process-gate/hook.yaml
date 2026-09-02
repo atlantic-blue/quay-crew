@@ -1,0 +1,8 @@
+name: process-gate
+version: 1
+summary: Refuses a command that ends a running process, because this machine also holds the system and the operator's terminal.
+events:
+  - on: PreToolUse
+    matcher: Bash
+    entry: bin/hook
+    timeoutSeconds: 5
