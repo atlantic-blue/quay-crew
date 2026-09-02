@@ -64,7 +64,7 @@ func TestALabelSaysWhereThePictureCameFromAndHowToGetItAgain(t *testing.T) {
 		{
 			name:  "a label that says nothing about how to get it again",
 			label: "a picture of the page working",
-			says:  "does not say how to get the picture again",
+			says:  "does not say how to get it again",
 		},
 		{
 			// The one this exists for. A sample presented as a capture is worse than no picture, because
@@ -113,7 +113,7 @@ func TestALabelSaysWhereThePictureCameFromAndHowToGetItAgain(t *testing.T) {
 func TestAVerticalIsNotBuiltUntilSomethingShowsItWorking(t *testing.T) {
 	vertical := job.Requirement{Number: 2, Text: "a person pastes a link", Shown: "the text"}
 
-	if err := job.ShownWorking(vertical, job.Picture{
+	if err := job.ShownWorking(vertical, job.Evidence{
 		Vertical: 2, File: "paste.png", Taken: aLabel,
 	}); err != nil {
 		t.Fatalf("a vertical with a picture and a label is refused: %v", err)
@@ -121,27 +121,27 @@ func TestAVerticalIsNotBuiltUntilSomethingShowsItWorking(t *testing.T) {
 
 	sad := []struct {
 		name string
-		shot job.Picture
+		shot job.Evidence
 		says string
 	}{
 		{
 			name: "no picture",
-			shot: job.Picture{Vertical: 2, Taken: aLabel},
+			shot: job.Evidence{Vertical: 2, Taken: aLabel},
 			says: "nothing shows this vertical working",
 		},
 		{
 			name: "a picture with no label",
-			shot: job.Picture{Vertical: 2, File: "paste.png"},
+			shot: job.Evidence{Vertical: 2, File: "paste.png"},
 			says: "carries no label",
 		},
 		{
 			name: "a description where a picture should be",
-			shot: job.Picture{Vertical: 2, File: "it works now", Taken: aLabel},
+			shot: job.Evidence{Vertical: 2, File: "it works now", Taken: aLabel},
 			says: "is not a picture",
 		},
 		{
 			name: "a passing test named after the vertical",
-			shot: job.Picture{Vertical: 2, File: "TestPastingALink", Taken: aLabel},
+			shot: job.Evidence{Vertical: 2, File: "TestPastingALink", Taken: aLabel},
 			says: "is not a picture",
 		},
 	}
@@ -211,12 +211,12 @@ func TestTheRecordKeepsEachPictureUnderItsVertical(t *testing.T) {
 	}
 
 	kept := job.BuiltText(wanted, reports)
-	shots := job.PicturesIn(kept)
+	shots := job.EvidenceIn(kept)
 	if len(shots) != len(wanted) {
 		t.Fatalf("the record of %d verticals carries %d pictures", len(wanted), len(shots))
 	}
 	for _, vertical := range wanted {
-		shot := job.PictureOf(kept, vertical.Number)
+		shot := job.EvidenceFor(kept, vertical.Number)
 		if shot.File == "" || shot.Taken == "" {
 			t.Fatalf("vertical %d is in the record with picture %q and label %q",
 				vertical.Number, shot.File, shot.Taken)
@@ -227,10 +227,10 @@ func TestTheRecordKeepsEachPictureUnderItsVertical(t *testing.T) {
 	}
 	// Each under its own number. Read back wrong, one vertical would be covered twice and another not
 	// at all, and a person would accept a picture of something else.
-	if job.PictureOf(kept, 1).File == job.PictureOf(kept, 2).File {
+	if job.EvidenceFor(kept, 1).File == job.EvidenceFor(kept, 2).File {
 		t.Fatal("two verticals are recorded against one picture")
 	}
-	if job.PictureOf(kept, 9).File != "" {
+	if job.EvidenceFor(kept, 9).File != "" {
 		t.Fatal("a vertical nobody built has a picture")
 	}
 }

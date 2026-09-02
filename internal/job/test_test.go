@@ -194,7 +194,10 @@ func TestTheStageIsNotDoneUntilEveryRequirementHasAFailingTest(t *testing.T) {
 // which requirement any one of these tests holds.
 func TestTheRecordNamesTheRequirementEachFailureCameFrom(t *testing.T) {
 	wanted := job.RequirementsOf(testingJob())
-	kept := job.TestsText(wanted, map[int]job.TestReport{
+	one := testingJob()
+	one.Repository = "atlantic-blue/quay-krewe"
+	wanted = job.RequirementsOf(one)
+	kept := job.TestsText(one, wanted, map[int]job.TestReport{
 		1: {Requirement: 1, Ran: 12, Failing: []string{"TestOne", "TestOneAgain"}},
 		2: {Requirement: 2, Ran: 9, Failing: []string{"TestTwo"}},
 	})

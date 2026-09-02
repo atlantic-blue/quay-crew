@@ -368,6 +368,10 @@ type Prover interface {
 // system that cannot reach a session's files at all, which is a state too and says so.
 type Publisher interface {
 	PublishSessionWork(ctx context.Context, session string) publish.Work
+	// PushSessionWork puts what a session committed onto one named branch, which is how the work of
+	// several sessions at once arrives in one place. It replays onto whatever is already there, so two
+	// workers that wrote different files both survive it.
+	PushSessionWork(ctx context.Context, session, branch string) publish.Work
 }
 
 // Controller makes reality match the job the system holds.

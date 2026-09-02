@@ -105,6 +105,47 @@ Feature: A job is not done until a person has looked at a picture of it running
     Then the job is asking, and the row carries nothing built
     And the question says a sample is not a capture
 
+  # The widening. A picture answers most verticals and it does not answer all of them: a list that
+  # refreshes needs something moving, and a refusal that arrives at the right moment needs a person
+  # doing it. So the vertical says which kind of evidence it needs, and the stage holds for that kind.
+  Scenario Outline: A vertical is shown with the kind of evidence it asked for
+    Given a job whose one vertical asks to be shown with a <kind>
+    When the controller ticks
+    And every worker answers with its run
+    And the controller ticks again
+    Then the row shows that vertical with a <kind>
+    And the job is waiting for a person to accept what was built
+    When the operator answers the job with "yes"
+    And the controller ticks again
+    Then the record says a person accepted it
+
+    Examples:
+      | kind      |
+      | picture   |
+      | recording |
+      | steps     |
+
+  # The kind that will be abused, so it is the one written out. A paragraph saying the thing works
+  # costs nothing to write and reads like evidence on the page, so the steps are held to the same
+  # standard the other two are: each one is something a person runs or presses, with what they see.
+  Scenario: Steps a person follows are what they are shown, and the question carries them
+    Given a job whose one vertical asks to be shown with a steps
+    When the controller ticks
+    And every worker answers with its run
+    And the controller ticks again
+    Then the steps are ones a person can follow, and the question carries them
+
+  # And the gate. A vertical asked for steps and shown a picture has not met it, however green the
+  # run was, and the refusal says which kind was asked for so the next worker does not send another.
+  Scenario: A vertical shown with the wrong kind is not built
+    Given a job whose one vertical asks to be shown with a steps
+    And the builder will answer with a picture instead
+    When the controller ticks
+    And every worker answers with its run
+    And the controller ticks again
+    Then the job is asking, and the row carries nothing built
+    And the question says which kind was asked for
+
   # The last one, and the one that names this stage. Whatever a person says short of the word, the
   # job does not end: it goes back to be built, and every tick after that leaves it in front of them.
   #

@@ -7,27 +7,30 @@ import (
 
 // One requirement, one branch, one pull request, and two workers on it.
 //
-// The tests one stage wrote never reached the next one. Each test worker took its own sandbox and
-// its own clone, wrote its test files there and answered with three lines, and the sandbox then went
-// away with the files in it. The build worker for the same requirement took another fresh clone, and
-// it was told to read tests that were not in it. The boundary that stage works under guarded files
-// that were not there.
+// The fault this answers: each test worker held a sandbox of its own with a clone of its own, wrote
+// its test files there and answered with three lines. The sandbox then went away with the files in
+// it. Each build worker cloned the default branch again, was handed the names of the failing tests
+// and was told to read them and not change them, and they were not in its checkout. The boundary the
+// build stage works under guarded files that were not there.
 //
-// So the work lands on a branch. The worker that writes a requirement's tests cuts the branch, pushes
-// it and opens the pull request from it, and that pull request is the one the work lands in: it stays
-// open and red, carrying the failing tests for its requirement and nothing else. The worker that
-// builds the same requirement fetches that branch, checks it out, and turns those tests green on it.
-// The build stage opens no pull request at all.
+// So the work lands on a branch, and the branch belongs to the requirement rather than to the job.
+// A branch for each requirement is what makes one pull request able to carry that requirement from
+// its first failing test to its last passing one: the worker that writes the tests opens it red, the
+// worker that builds turns it green on the same branch, and the build stage opens none of its own.
+// Nothing has to be merged when the stage closes, because no two requirements share a branch.
 //
-// The branch is the system's to name rather than the session's, for the reason the claim is: two
-// workers have to agree on one name without either of them being told by the other, and a name a
-// session invents is a name the next session cannot guess. It is derived from the job and the
-// requirement number, so the same requirement reads back the same branch on every tick, and two
-// requirements never share one.
+// It also settles the race by construction. One branch for the whole job has five workers pushing to
+// one place at once and needs the delivery to replay onto whatever is there; a branch per
+// requirement has one worker on it at a time, so the ordinary push is enough and the replay in
+// internal/publish is what catches a worker that committed and did not push.
 //
-// Nothing new stops two workers landing on one branch. A branch belongs to one requirement, the
-// claim already refuses a second job taking work a first job holds, and the two stages never run at
-// once: the build stage opens only once every requirement's tests are written.
+// The name is the system's rather than the session's, and it is derived rather than declared, for
+// the reason a claim is: two stages have to write the same string without either of them being told
+// it by the other, and a name a session invents is a name the next session cannot guess.
+//
+// Two workers never land on one branch. A branch belongs to one requirement, the claim already
+// refuses a second job taking work a first job holds, and the two stages never run at once: the
+// build stage opens only once every requirement's tests are written.
 
 // BranchForRequirement is the branch one requirement's work lives on, for the whole of that
 // requirement's life: the tests, and then the implementation that makes them pass.
@@ -37,6 +40,16 @@ import (
 // own branch, so a person reading the repository can tell what cut it.
 func BranchForRequirement(job string, wanted Requirement) string {
 	return fmt.Sprintf("krewe/%s-requirement-%d", job, wanted.Number)
+}
+
+// BranchFor is that branch for a job that has somewhere to push it, and nothing for a job that does
+// not. A job that names no repository has no remote, so a branch named for it would be a promise
+// about somewhere this job cannot reach.
+func BranchFor(one *Job, wanted Requirement) string {
+	if one == nil || one.Repository == "" {
+		return ""
+	}
+	return BranchForRequirement(one.ID, wanted)
 }
 
 // Opened is what the worker that wrote one requirement's tests left behind: the branch its failing
@@ -70,14 +83,19 @@ func OpenedFor(workers []*Job) Opened {
 //
 // The name is given rather than asked for. The worker that builds this requirement has to find these
 // files, and it is a different session in a different sandbox that will never speak to this one.
+//
+// It asks for the commit as well as the push, and it says why: the push is also the system's, on the
+// tick that reads this worker's answer, so a worker that committed and could not push has still put
+// its tests where the next stage reads them.
 func CutTheBranch(branch string) string {
 	return fmt.Sprintf("Your tests go on the branch %s, which is this requirement's branch and "+
 		"nobody else's. Cut it from the latest state of the default branch, write your tests on it, "+
-		"commit them and push it:\n\n"+
+		"commit every file you write, and push it:\n\n"+
 		"    git fetch origin\n"+
 		"    git switch --create %s origin/HEAD\n\n"+
 		"Do not work on any other branch, and do not rename this one. The worker that builds this "+
-		"requirement continues on it, and it finds the branch by this name.", branch, branch)
+		"requirement continues on it, and it finds the branch by this name. A worker that commits "+
+		"nothing has written tests nobody can read, and the stage refuses it.", branch, branch)
 }
 
 // AnOpenRedPullRequest is what that worker is told about the pull request it opens.
@@ -96,8 +114,8 @@ func AnOpenRedPullRequest(branch string) string {
 // are: the branch that holds them, and the two commands that put them in its checkout.
 //
 // The commands are given rather than described. This is the whole of the change: a worker told to
-// read tests it has never fetched reads nothing, and it cannot tell that from tests that say
-// nothing.
+// read tests it has never fetched reads nothing, and from inside the session it cannot tell that
+// from tests that say nothing.
 func ContinueOnTheBranch(opened Opened) string {
 	said := fmt.Sprintf("The failing tests for this vertical are already written, and they are on the "+
 		"branch %s. They are not in a fresh checkout, so fetch that branch and work on it:\n\n"+
@@ -158,6 +176,21 @@ func EndsOnItsBranch(one *Job) string {
 	default:
 		return OpensThePullRequestOn(one.Repository, one.Branch)
 	}
+}
+
+// TestsNotOnTheBranch is why a requirement whose worker answered a report is refused anyway: the
+// tests it reported on are not on the branch, so nothing the next stage reads holds this requirement.
+//
+// A report is a session's word about its own run, and the branch is the thing anybody else can read.
+// A stage that closed on the first of those would hand the build stage a list of test names and an
+// empty checkout, which is the fault this whole road exists to end.
+func TestsNotOnTheBranch(requirement Requirement, branch, why string) string {
+	said := fmt.Sprintf("requirement %d, %q: its tests are not on %s",
+		requirement.Number, requirement.Text, branch)
+	if why != "" {
+		said += ", " + why
+	}
+	return said
 }
 
 // TheGitCommandsIn is every git command written in one of these lines, in the order they are written.

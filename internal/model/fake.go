@@ -214,9 +214,31 @@ func FakeBuildReport(asked string) string {
 	}
 	return namingWhereTheWorkWent(fmt.Sprintf(
 		"I built vertical %d and ran the suite.\n\nVertical: %d\nRan: 14\nRed: 0\n%s\n"+
-			"Changed 1: internal/vertical%d.go\nPicture: vertical%d.png\n"+
-			"Taken: the page at http://localhost:3000, drawn with krewe render while the server was up",
-		vertical, vertical, strings.Join(passing, "\n"), vertical, vertical), asked, vertical)
+			"Changed 1: internal/vertical%d.go\n%s",
+		vertical, vertical, strings.Join(passing, "\n"), vertical, fakeEvidence(asked, vertical)),
+		asked, vertical)
+}
+
+// fakeEvidence is the evidence this double shows for the vertical it built, in the kind the ask asked
+// for.
+//
+// It reads the ask for the reason the vertical is read out of it: a vertical asks to be shown with a
+// picture, a recording or steps, and a double that always sent a picture would be refused by every
+// vertical that asked for one of the other two. What it looks for is the report line the ask spells
+// out, which is the same string the stage reads the answer back with.
+func fakeEvidence(asked string, vertical int) string {
+	switch {
+	case strings.Contains(asked, "Recording: the name of a recording"):
+		return fmt.Sprintf("Recording: vertical%d.webm\nTaken: the terminal under tmux, captured with "+
+			"tmux capture-pane and joined with krewe record", vertical)
+	case strings.Contains(asked, "Steps 1: the first thing a person runs"):
+		return fmt.Sprintf("Steps 1: run krewe job show job-%d, and the row says it is built\n"+
+			"Steps 2: press r, and the listing comes back with the job on it\n"+
+			"Taken: the console against a running system, started with krewe console", vertical)
+	default:
+		return fmt.Sprintf("Picture: vertical%d.png\nTaken: the page at http://localhost:3000, drawn "+
+			"with krewe render while the server was up", vertical)
+	}
 }
 
 // whichVertical finds the vertical a task was handed, which the ask states on a line of its own.

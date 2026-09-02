@@ -1,15 +1,12 @@
 package job_test
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -55,13 +52,13 @@ func TestTheBuildWorkerFindsTheTestsTheTestWorkerLeftOnTheBranch(t *testing.T) {
 			requirement.Number, testWorker.Branch, branch)
 	}
 	runTheGitIn(t, writing, testWorker.Brief)
-	if on := gitIn(t, writing, "rev-parse", "--abbrev-ref", "HEAD"); on != branch {
+	if on := gitSaid(t, writing, "rev-parse", "--abbrev-ref", "HEAD"); on != branch {
 		t.Fatalf("the brief left the worker writing tests on %q, want %q", on, branch)
 	}
-	writeFile(t, writing, where, aTestFileTheWorkerWrote)
-	gitIn(t, writing, "add", where)
-	gitIn(t, writing, "commit", "-m", "write the failing test for requirement 1")
-	gitIn(t, writing, "push", "--set-upstream", "origin", branch)
+	writeFileUnder(t, writing, where, aTestFileTheWorkerWrote)
+	gitSaid(t, writing, "add", where)
+	gitSaid(t, writing, "commit", "-m", "write the failing test for requirement 1")
+	gitSaid(t, writing, "push", "--set-upstream", "origin", branch)
 
 	// The worker that builds it, in a sandbox of its own with a fresh clone. This is the state the
 	// fault lived in: the tests it is told to read are not in this checkout.
@@ -83,7 +80,7 @@ func TestTheBuildWorkerFindsTheTestsTheTestWorkerLeftOnTheBranch(t *testing.T) {
 	if string(found) != aTestFileTheWorkerWrote {
 		t.Fatalf("the test reads back as %q", found)
 	}
-	if on := gitIn(t, building, "rev-parse", "--abbrev-ref", "HEAD"); on != branch {
+	if on := gitSaid(t, building, "rev-parse", "--abbrev-ref", "HEAD"); on != branch {
 		t.Fatalf("the worker building requirement %d is on %q, and its tests are on %q",
 			requirement.Number, on, branch)
 	}
@@ -117,13 +114,13 @@ func aJobInARepository() *job.Job {
 func aBareRemote(t *testing.T) string {
 	t.Helper()
 	remote := filepath.Join(t.TempDir(), "remote.git")
-	runGit(t, "", "init", "--bare", "--initial-branch=main", remote)
+	gitSaid(t, "", "init", "--bare", "--initial-branch=main", remote)
 	seed := filepath.Join(t.TempDir(), "seed")
-	runGit(t, "", "clone", remote, seed)
-	writeFile(t, seed, "README.md", "the transcript page\n")
-	gitIn(t, seed, "add", "README.md")
-	gitIn(t, seed, "commit", "-m", "the first commit")
-	gitIn(t, seed, "push", "origin", "main")
+	gitSaid(t, "", "clone", remote, seed)
+	writeFileUnder(t, seed, "README.md", "the transcript page\n")
+	gitSaid(t, seed, "add", "README.md")
+	gitSaid(t, seed, "commit", "-m", "the first commit")
+	gitSaid(t, seed, "push", "origin", "main")
 	return remote
 }
 
@@ -132,7 +129,7 @@ func aBareRemote(t *testing.T) string {
 func gitCloneOf(t *testing.T, remote, who string) string {
 	t.Helper()
 	at := filepath.Join(t.TempDir(), who)
-	runGit(t, "", "clone", remote, at)
+	gitSaid(t, "", "clone", remote, at)
 	return at
 }
 
@@ -145,29 +142,17 @@ func runTheGitIn(t *testing.T, at, brief string) {
 			"work goes: %s", brief)
 	}
 	for _, command := range commands {
-		gitIn(t, at, command[1:]...)
+		gitSaid(t, at, command[1:]...)
 	}
 }
 
-// gitIn runs one git command in a checkout, and fails the test with what git said.
-func gitIn(t *testing.T, at string, args ...string) string {
-	t.Helper()
-	return runGit(t, at, args...)
-}
-
-// runGit keeps git away from the operator's own configuration, so a test can never read or write it,
-// and gives it an identity of its own so a commit is never refused for want of one.
-func runGit(t *testing.T, at string, args ...string) string {
+// gitSaid runs one git command in a checkout and answers what it printed. It is the reading half of
+// the harness in testsbranch_test.go, which runs a command and checks nothing back.
+func gitSaid(t *testing.T, at string, args ...string) string {
 	t.Helper()
 	command := exec.Command("git", args...)
 	command.Dir = at
-	command.Env = []string{
-		"HOME=" + t.TempDir(),
-		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",
-		"GIT_AUTHOR_NAME=the operator", "GIT_AUTHOR_EMAIL=operator@example.com",
-		"GIT_COMMITTER_NAME=the operator", "GIT_COMMITTER_EMAIL=operator@example.com",
-		"PATH=" + os.Getenv("PATH"),
-	}
+	command.Env = aClosedGit(at)
 	out, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %s in %s: %v: %s", strings.Join(args, " "), at, err, out)
@@ -175,7 +160,8 @@ func runGit(t *testing.T, at string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
-func writeFile(t *testing.T, at, where, body string) {
+// writeFileUnder writes one file at a path inside a checkout, making the directories it needs.
+func writeFileUnder(t *testing.T, at, where, body string) {
 	t.Helper()
 	full := filepath.Join(at, where)
 	if err := os.MkdirAll(filepath.Dir(full), 0o777); err != nil {
@@ -370,85 +356,4 @@ func TestAWorkerWhoseTestsReachedNoBranchIsRefused(t *testing.T) {
 func aTestReport(requirement int) string {
 	return fmt.Sprintf("I wrote the tests for requirement %d.\n\nRequirement: %d\nRan: 12\n"+
 		"Failing 1: TestRequirement%dFailsUntilSomethingBuildsIt", requirement, requirement, requirement)
-}
-
-// The two stages joined, through the rows rather than through anything a stage remembers.
-//
-// The branch the build worker is put on is read off the row of the worker that wrote that
-// requirement's tests, so the tests one stage wrote are what the next stage checks out.
-func TestTheBuildStageReadsTheBranchOffTheWorkerThatWroteTheTests(t *testing.T) {
-	controller, kept, plane := aController(t)
-	one := kept.add(aJobOwingItsTests())
-	ctx := context.Background()
-
-	// The test stage: one worker for each requirement, each answering with its run and the pull
-	// request it opened.
-	controller.Tick(ctx)
-	controller.Tick(ctx)
-	writers := kept.children(one.ID)
-	if len(writers) != 2 {
-		t.Fatalf("the test stage declared %d workers for 2 requirements", len(writers))
-	}
-	for _, worker := range writers {
-		plane.landsIn(job.SessionFor(worker.ID), landed(aTestReport(theRequirementOn(t, worker))+
-			"\n\nOpened "+aPullRequestOn(job.Requirement{Number: theRequirementOn(t, worker)})))
-	}
-	controller.Tick(ctx)
-	if kept.get(one.ID).Tests == "" {
-		t.Fatalf("the test stage did not close: %s", kept.get(one.ID).Question)
-	}
-
-	// A person approves the plan, and the build stage fans out.
-	kept.approvePlan(one.ID)
-	controller.Tick(ctx)
-
-	builders := 0
-	for _, builder := range kept.children(one.ID) {
-		if !builder.Building {
-			continue
-		}
-		builders++
-		requirement := job.Requirement{Number: theRequirementOn(t, builder)}
-		want := job.BranchForRequirement(one.ID, requirement)
-		if builder.Branch != want {
-			t.Fatalf("the worker building requirement %d is on %q, and its tests are on %q",
-				requirement.Number, builder.Branch, want)
-		}
-		if !strings.Contains(builder.Brief, "git switch "+want) {
-			t.Fatalf("the worker building requirement %d is not told to check its tests out: %s",
-				requirement.Number, builder.Brief)
-		}
-		// And it lands in the pull request its tests are already open in, rather than opening one.
-		if !strings.Contains(builder.Brief, aPullRequestOn(requirement)) {
-			t.Fatalf("the worker building requirement %d is not told which pull request its work lands "+
-				"in: %s", requirement.Number, builder.Brief)
-		}
-	}
-	if builders != 2 {
-		t.Fatalf("the build stage declared %d workers for 2 verticals, so this checked nothing",
-			builders)
-	}
-}
-
-// aJobOwingItsTests is a job in a repository whose list a person accepted and whose requirements
-// have not become failing tests yet.
-func aJobOwingItsTests() *job.Job {
-	one := testingJob()
-	one.Repository = "atlantic-blue/quay-krewe"
-	return one
-}
-
-// theRequirementOn is the requirement number one worker holds, read off its title the way a person
-// reading a listing does.
-func theRequirementOn(t *testing.T, worker *job.Job) int {
-	t.Helper()
-	found := regexp.MustCompile(`(requirement|vertical) (\d+)`).FindStringSubmatch(worker.Title)
-	if found == nil {
-		t.Fatalf("the worker %q holds no requirement anybody can name", worker.Title)
-	}
-	number, err := strconv.Atoi(found[2])
-	if err != nil {
-		t.Fatal(err)
-	}
-	return number
 }

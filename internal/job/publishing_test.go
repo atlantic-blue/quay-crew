@@ -151,10 +151,19 @@ func mustCarryThePath(t *testing.T, said string) {
 type aPublisher struct {
 	found publish.Work
 	asked []string
+	onto  []string
 }
 
 func (p *aPublisher) PublishSessionWork(_ context.Context, session string) publish.Work {
 	p.asked = append(p.asked, session)
+	return p.found
+}
+
+// PushSessionWork is the same double answering the delivery of one session onto a named branch,
+// recording the branch beside the session so a test can say what was asked for.
+func (p *aPublisher) PushSessionWork(_ context.Context, session, branch string) publish.Work {
+	p.asked = append(p.asked, session)
+	p.onto = append(p.onto, branch)
 	return p.found
 }
 
