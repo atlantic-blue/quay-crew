@@ -278,8 +278,13 @@ func TestTheListStandsBetweenTheReadingAndThePlan(t *testing.T) {
 	}
 
 	one.Told, one.DesignAccepted = "", true
-	if job.WaitingForItsDesign(one) || !job.WaitingForItsPlan(one) {
-		t.Fatal("an accepted list still owes a list, or owes no plan")
+	if job.WaitingForItsDesign(one) || !job.WaitingForItsTests(one) {
+		t.Fatal("an accepted list still owes a list, or owes no failing tests")
+	}
+	// And the plan comes after those tests, never before them.
+	one.Tests = "Requirement 1: a person pastes a link\nRan 1: 12\nFails 1: TestItFails"
+	if !job.WaitingForItsPlan(one) {
+		t.Fatal("a job whose suite is red owes no plan")
 	}
 }
 

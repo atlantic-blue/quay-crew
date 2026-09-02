@@ -292,6 +292,11 @@ func aJobWaitingForItsPlanToBeApproved(ctx context.Context) error {
 	if err := aPersonAcceptedTheList(ctx); err != nil {
 		return err
 	}
+	// And the stage between that acceptance and the plan: the requirements become failing tests, and
+	// the plan is the steps that turn them green.
+	if err := theRequirementsBecameFailingTests(ctx); err != nil {
+		return err
+	}
 	w.runner.willSay(thePlanTheCrewWrote)
 	w.server.TickJob(ctx)
 	if err := w.settled(ctx); err != nil {

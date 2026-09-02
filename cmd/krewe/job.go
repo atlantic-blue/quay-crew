@@ -485,6 +485,9 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	// plan, where the stage itself sits, so a reader goes down the page in the order the job went
 	// through it.
 	sayWhatItWouldBuild(out, one)
+	// The requirements that became failing tests, in the same place for the same reason: the stage sits
+	// between the accepted list and the plan, and the page reads in the order the job went through it.
+	sayTheFailingTests(out, one)
 	// The plan, and whether a person approved it. It is above what the session finished, because the
 	// steps below are read against it: a reader holding both can see for themselves which step of the
 	// plan the work accounted for.
@@ -652,6 +655,36 @@ func sayWhatItWouldBuild(out io.Writer, one *quaycrewv1.Job) {
 	if yours := yoursOn(design); yours > 0 {
 		fmt.Fprintf(out, "  %s\n", saidYours(yours))
 	}
+}
+
+// sayTheFailingTests prints the requirements that became failing tests before anything was built.
+//
+// The count rather than every line. The record carries a line for each failing test and a reader of a
+// job wants to know the stage closed and what it covers; the whole of it is in the record for whoever
+// needs it.
+func sayTheFailingTests(out io.Writer, one *quaycrewv1.Job) {
+	kept := one.GetTests()
+	if kept == "" {
+		return
+	}
+	requirements, failing := job.TestsOn(kept)
+	fmt.Fprintf(out, "%s, before anything was built:\n", saidTheTests(requirements, failing))
+	for _, line := range strings.Split(kept, "\n") {
+		fmt.Fprintf(out, "  %s\n", line)
+	}
+}
+
+// saidTheTests reads for one and for several, because a line that says "1 requirements" is a line
+// that says nobody read it.
+func saidTheTests(requirements, failing int) string {
+	said := fmt.Sprintf("%d requirements became %d failing tests", requirements, failing)
+	if requirements == 1 {
+		said = fmt.Sprintf("one requirement became %d failing tests", failing)
+	}
+	if failing == 1 {
+		said = strings.Replace(said, "1 failing tests", "one failing test", 1)
+	}
+	return said
 }
 
 // yoursOn is how many verticals of a list the person put there themselves.
@@ -1171,7 +1204,8 @@ func stageOf(one *quaycrewv1.Job) job.Stage {
 		Product: one.GetProduct(), Parent: one.GetParent(),
 		IdeationAnswer: one.GetIdeationAnswer(),
 		Design:         one.GetDesign(), DesignAccepted: one.GetDesignAccepted(),
-		Plan: one.GetPlan(), PlanApproved: one.GetPlanApproved(),
+		Tests: one.GetTests(),
+		Plan:  one.GetPlan(), PlanApproved: one.GetPlanApproved(),
 	})
 }
 

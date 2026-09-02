@@ -1,0 +1,24 @@
+-- The requirements a person accepted become failing tests, before anything is built.
+--
+-- The failure it answers: requirements became code without ever becoming a failing test first. A
+-- session that builds and then tests writes the test its own code passes, so the suite records the
+-- implementation rather than the requirement, and it stays green through the change that breaks the
+-- product.
+--
+-- tests is the record of that stage, in the system's own rendering: one line per requirement, the
+-- number of tests the run covering it executed, and one line for each test that fails now. Each
+-- failure is written under the requirement it came from, because a failure nobody can trace to a
+-- requirement holds nothing.
+--
+-- There is no flag beside it. A list is answered by a person and needs one word from them; this is
+-- closed by the system reading a red suite, and the record lands only once the suite is red for the
+-- stated reasons, so the record being there is the fact.
+--
+-- It is not the tested column above, which is the settle gate saying an independent session ran the
+-- repository's own gates over finished work and passed it. This stage runs before anything is built
+-- and wants the opposite answer.
+--
+-- Empty string rather than null, the way every other column on this table already is. Every job
+-- written before this wrote no tests, and a job holding a plan is past this gate whether or not it
+-- ever went through it.
+alter table jobs add column if not exists tests text not null default '';

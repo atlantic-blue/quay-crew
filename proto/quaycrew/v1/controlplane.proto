@@ -1497,6 +1497,14 @@ message Job {
   // list a person sent back for a rewrite carries the same text as a list nobody has answered yet.
   string design = 64;
   bool design_accepted = 65;
+  // tests is the record of the requirements that became failing tests before anything was built: one
+  // line per requirement, the number of tests the run covering it executed, and one line for each test
+  // that fails now, written under the requirement it came from.
+  //
+  // There is no flag beside it. What closes that stage is a suite that ran and failed for every
+  // requirement, which the system reads rather than a person, so the record being there is the fact.
+  // It is not tested, which is the settle gate over finished work.
+  string tests = 66;
   // escalation is what this job does when it goes in circles, as it was declared: "ask", or
   // "role:<name>". Empty is asking.
   string escalation = 41;

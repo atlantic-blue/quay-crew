@@ -26,8 +26,18 @@ func plannedJob() *job.Job {
 	// beside these; a job that had not accepted one would be asked for a list rather than a plan.
 	one.Design = theAcceptedList
 	one.DesignAccepted = true
+	// And past the failing tests those requirements became, which is the stage between that
+	// acceptance and this gate. They have their own tests beside these; a job whose suite was not red
+	// would be writing tests rather than a plan.
+	one.Tests = theRedSuite
 	return one
 }
+
+// theRedSuite is the record of the requirements on that list becoming failing tests, as the system
+// keeps it.
+const theRedSuite = "Requirement 1: a person pastes a link on the command line and gets the text back\n" +
+	"Ran 1: 12\n" +
+	"Fails 1: TestPastingALinkPrintsTheTranscript"
 
 // theAcceptedList is a list of verticals the system can read back, as it keeps it.
 const theAcceptedList = "Vertical 1: a person pastes a link on the command line and gets the text back\n" +

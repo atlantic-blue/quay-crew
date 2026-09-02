@@ -1461,3 +1461,141 @@ func (r *rows) sessionIdle(id string) {
 		session.UpdatedAt = timestamppb.New(time.Now().UTC())
 	}
 }
+
+// RecordJobTests refuses what the real stores refuse: the record lands on a pending job that has
+// none, so two controllers reading one finished fan out leave one record.
+func (r *rows) RecordJobTests(_ context.Context, id, tests string, event *job.Event) (*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such job")
+	}
+	if one.Phase != job.PhasePending || one.Tests != "" {
+		return nil, job.ErrNotPending
+	}
+	one.Tests, one.Reason = tests, ""
+	one.UpdatedAt = time.Now().UTC()
+	r.record(id, []*job.Event{event})
+	kept := *one
+	return &kept, nil
+}
+
+// CreateJob writes a declared job, and refuses a claim another live job is holding.
+//
+// The refusal is the whole reason this method is here rather than a map write. Both real stores take
+// a lock on the claim and answer with the holder, and a double that accepted the second declaration
+// would pass a test the system fails: two workers would write the tests for one requirement.
+func (r *rows) CreateJob(_ context.Context, declared *job.Job, event *job.Event) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, taken := r.held[declared.ID]; taken {
+		return errors.New("that job is already declared")
+	}
+	if declared.Claim != "" {
+		now := time.Now().UTC()
+		for _, one := range r.held {
+			if one.Workspace != declared.Workspace || one.Claim != declared.Claim || !one.Holding(now) {
+				continue
+			}
+			return &job.Held{
+				Claim: declared.Claim, Holder: one.ID, Title: one.Title, TakenAt: one.CreatedAt,
+			}
+		}
+	}
+	kept := *declared
+	if kept.CreatedAt.IsZero() {
+		kept.CreatedAt = time.Now().UTC()
+	}
+	kept.UpdatedAt = kept.CreatedAt
+	r.held[kept.ID] = &kept
+	r.order = append(r.order, kept.ID)
+	r.record(kept.ID, []*job.Event{event})
+	return nil
+}
+
+// JobsClaiming is every job in a workspace claiming one of these pieces of work, whole and in the
+// order they were declared. Holding is not asked, the way it is not asked in either real store: a
+// worker that finished let its claim go, and its answer is what the caller came for.
+func (r *rows) JobsClaiming(_ context.Context, workspace string, claims []string) ([]*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	wanted := map[string]bool{}
+	for _, claim := range claims {
+		wanted[claim] = true
+	}
+	var found []*job.Job
+	for _, id := range r.order {
+		one, held := r.held[id]
+		if !held || one.Workspace != workspace || !wanted[one.Claim] {
+			continue
+		}
+		kept := *one
+		found = append(found, &kept)
+	}
+	return found, nil
+}
+
+// children is every job declared under one job, in the order they were declared. It is how a test
+// about a fan out reads the workers the system made, which no caller declared.
+func (r *rows) children(parent string) []*job.Job {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var found []*job.Job
+	for _, id := range r.order {
+		one, held := r.held[id]
+		if !held || one.Parent != parent {
+			continue
+		}
+		kept := *one
+		found = append(found, &kept)
+	}
+	return found
+}
+
+// declaredEvent is the record that lands with a job somebody declares, for a test that declares one
+// through the store itself.
+func declaredEvent(one *job.Job) *job.Event {
+	return &job.Event{
+		Kind: job.EventDeclared, Job: one.ID, Workspace: one.Workspace, Project: one.Project,
+		Parent: one.Parent, Depth: one.Depth, Detail: one.Title, OccurredAt: time.Now().UTC(),
+	}
+}
+
+// AskAboutJobTests puts the question to a person from the pending phase, and refuses what both real
+// stores refuse: a row that already carries the record has nothing to ask about.
+func (r *rows) AskAboutJobTests(_ context.Context, id, question string,
+	event *job.Event) (*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such job")
+	}
+	if one.Phase != job.PhasePending || one.Tests != "" {
+		return nil, job.ErrNotPending
+	}
+	one.Phase, one.Question, one.Told, one.Reason = job.PhaseAsking, question, "", ""
+	asked := time.Now().UTC()
+	one.AskedAt, one.RaisedAt = &asked, nil
+	one.LeaseOwner, one.LeaseUntil = "", nil
+	one.UpdatedAt = time.Now().UTC()
+	r.record(id, []*job.Event{event})
+	kept := *one
+	return &kept, nil
+}
+
+// theSuiteIsRed is the test stage having closed, the way RecordJobTests writes it: the record lands
+// and the row stays pending, so the next tick asks for the plan. Tests about the stages either side
+// of that one use it rather than driving a fan out they are not about.
+func (r *rows) theSuiteIsRed(id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return
+	}
+	one.Tests = "Requirement 1: a person pastes a link on the command line and gets the text back\n" +
+		"Ran 1: 12\nFails 1: TestPastingALinkPrintsTheTranscript"
+	one.Reason = ""
+}

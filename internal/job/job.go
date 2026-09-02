@@ -154,6 +154,19 @@ type Job struct {
 	Design         string
 	DesignAccepted bool
 
+	// Tests is the record of the requirements this job turned into failing tests: every requirement a
+	// person accepted, how many tests the run covering it executed, and the tests that fail now. See
+	// test.go.
+	//
+	// There is no flag beside it, and that is where it differs from the list above. A list is answered
+	// by a person and an acceptance is one word. This is closed by the system reading a red suite, and
+	// the record lands only when the suite is red, so the record being there is the fact.
+	//
+	// It is not Tested further down. That one is the settle gate: an independent session ran the
+	// repository's own gates over finished work and said pass. This is the stage before anything is
+	// built at all, and what it wants is the opposite answer.
+	Tests string
+
 	// Steers is how many times the operator had to say something this job should have known, counted
 	// on the job the steer landed on and on every job above it. On the job at the top it is the score
 	// of the whole tree, which is the number the acceptance job exists to move. See steer.go.
@@ -313,6 +326,11 @@ const (
 	// rather than a note.
 	EventAsked = "job.asked"
 	EventTold  = "job.told"
+	// EventTested is written when the requirements a person accepted have become failing tests: every
+	// one of them has a test, the runs executed those tests, and they fail. It is not a movement, the
+	// way a step is not: the job is pending before it and pending after it, and what it adds is the
+	// record the plan is then written against.
+	EventTested = "job.tested"
 	// EventRaised is written when the first surface names a waiting job to a person: the console, a
 	// command, or the line under a conversation. It carries which surface carried it.
 	//

@@ -18,8 +18,8 @@ import (
 
 // Which stage a job is in, read off the wire, over a real Postgres.
 //
-// The stage is read from five things the row carries: the sentence, the parent, the answer to what
-// the job understood, the plan and its approval. The memory store holds a job.Job in a map and
+// The stage is read from what the row carries: the sentence, the parent, the answer to what the job
+// understood, the accepted list, the record of the failing tests, the plan and its approval. The memory store holds a job.Job in a map and
 // cannot say whether those four reach the row, come back out of it, and cross the control plane. A
 // store that missed one of them in jobColumns or in scanJob would leave every surface reading a job
 // in the wrong stage while the whole unit tier stayed green.
@@ -116,14 +116,59 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 	if accepted.Closed != "design closed on your acceptance of the list it would build" {
 		t.Fatalf("it says design was closed by %q", accepted.Closed)
 	}
-	if accepted.Built || accepted.Unbuilt == "" {
-		t.Fatalf("test reads as built, and test is a later slice")
+	if !accepted.Built || accepted.Unbuilt != "" {
+		t.Fatalf("test reads as unbuilt, saying %q", accepted.Unbuilt)
 	}
-	// And what it says the job is doing instead is true of this job: its list was accepted a moment
-	// ago, so it has no plan, and nobody has approved anything.
-	if !strings.Contains(accepted.Unbuilt, "writes its plan next") {
-		t.Fatalf("a job with no plan is told %q", accepted.Unbuilt)
+
+	// Then the failing tests those requirements become, and the same trap once more: the record is a
+	// column of its own, and one written and never selected reads back empty, which would hold the job
+	// in test for ever while every unit test stayed green.
+	tickUntilTheTests(t, ctx, server, client, id)
+	red := stageOnTheWire(t, ctx, client, id)
+	if red.Name != job.StageBuild {
+		t.Fatalf("a job whose suite is red reads off the wire as stage %q, want build", red.Name)
 	}
+	if red.Closed != "test closed on a failing test for every requirement on that list" {
+		t.Fatalf("it says test was closed by %q", red.Closed)
+	}
+	if red.Built || red.Unbuilt == "" {
+		t.Fatalf("build reads as built, and build is a later slice")
+	}
+	// And what it says the job is doing instead is true of this job: its suite went red a moment ago,
+	// so it has no plan, and nobody has approved anything.
+	if !strings.Contains(red.Unbuilt, "writes its plan next") {
+		t.Fatalf("a job with no plan is told %q", red.Unbuilt)
+	}
+	// The record itself crosses the wire whole, with every failure under the requirement it came from.
+	kept := readJob(t, ctx, client, id)
+	requirements, failing := job.TestsOn(kept.GetTests())
+	if requirements == 0 || failing < requirements {
+		t.Fatalf("the record off the wire covers %d requirements with %d failing tests: %q",
+			requirements, failing, kept.GetTests())
+	}
+}
+
+// tickUntilTheTests drives the controller until every requirement of the accepted list has a failing
+// test and the record is on the row.
+//
+// The stage runs one job for each requirement, and each of those is started, dispatched and landed on
+// its own passes, so the number of ticks it takes is the machine's to decide rather than this test's.
+func tickUntilTheTests(t *testing.T, ctx context.Context, server *controlplane.Server,
+	client quaycrewv1.ControlPlaneServiceClient, id string) {
+	t.Helper()
+	deadline := time.Now().Add(120 * time.Second)
+	for time.Now().Before(deadline) {
+		server.TickJob(ctx)
+		one := readJob(t, ctx, client, id)
+		if one.GetTests() != "" {
+			return
+		}
+		if one.GetPhase() == job.PhaseAsking {
+			t.Fatalf("the job stopped in the test stage: %s", one.GetQuestion())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("job %s never wrote the failing tests for its requirements", id)
 }
 
 // stageOnTheWire is the stage one job reads as, off the job the control plane answers with.
@@ -135,7 +180,8 @@ func stageOnTheWire(t *testing.T, ctx context.Context,
 		Product: one.GetProduct(), Parent: one.GetParent(),
 		IdeationAnswer: one.GetIdeationAnswer(),
 		Design:         one.GetDesign(), DesignAccepted: one.GetDesignAccepted(),
-		Plan: one.GetPlan(), PlanApproved: one.GetPlanApproved(),
+		Tests: one.GetTests(),
+		Plan:  one.GetPlan(), PlanApproved: one.GetPlanApproved(),
 	})
 }
 

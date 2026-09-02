@@ -77,7 +77,25 @@ func aPlannedJob(t *testing.T, reply string) planning {
 	server.TickJob(ctx)
 	system.landed(t)
 	server.TickJob(ctx)
+	// And the failing tests those requirements become, because the plan is the steps that turn a red
+	// suite green and a job whose suite is not red is never asked for one. Each requirement is written
+	// by a worker of its own, so this is a fan out rather than one task.
+	system.wroteItsFailingTests(t)
 	return system
+}
+
+// wroteItsFailingTests ticks until every requirement of the accepted list has a failing test and the
+// record is on the row, which is what opens the plan gate.
+func (p planning) wroteItsFailingTests(t *testing.T) {
+	t.Helper()
+	ctx := context.Background()
+	waitFor(t, func() bool {
+		p.server.TickJob(ctx)
+		return p.reading(t).GetTests() != ""
+	})
+	p.server.TickJob(ctx)
+	p.landed(t)
+	p.server.TickJob(ctx)
 }
 
 // theAnswerToTheReading is what a person writes about what the job understood: prose, opening with

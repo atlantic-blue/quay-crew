@@ -62,10 +62,9 @@ func TestJobShowSaysTheStageTheAnswerOpened(t *testing.T) {
 	}
 }
 
-// The stage after the list, and the truth about it. Test is a later slice, and what the job is doing
-// instead is read off its own plan columns: a job whose list was just accepted has no plan, so it is
-// not carrying on under one.
-func TestJobShowSaysWhenTheStageItIsInIsNotBuilt(t *testing.T) {
+// The stage the acceptance opened. Test is built, so the reading says what opens the stage after it
+// and says nothing about a stage that does not work.
+func TestJobShowSaysTheStageTheAcceptanceOpened(t *testing.T) {
 	one := aJobWaitingToAcceptItsList(t)
 
 	mustRun(t, one.client, "job", "answer", one.id, "yes")
@@ -74,18 +73,16 @@ func TestJobShowSaysWhenTheStageItIsInIsNotBuilt(t *testing.T) {
 	for _, want := range []string{
 		"stage 3 of 4: test",
 		"design closed on your acceptance of the list it would build",
-		"nothing opens build yet, it is a later slice",
-		// The truth about this job at this moment: its list was accepted and it has written no plan,
-		// so nothing has been approved and nothing is being carried on with.
-		"test is not built yet, so this job writes its plan next, and a person approves it before " +
-			"any work starts",
+		"build opens on a failing test for every requirement on that list",
 	} {
 		if !strings.Contains(shown, want) {
 			t.Errorf("krewe job show does not say %q: %q", want, shown)
 		}
 	}
-	if strings.Contains(shown, "a person approved") {
-		t.Errorf("a job that has written no plan is told a person approved one: %q", shown)
+	// The way off the old reading: test used to be a name with nothing behind it, and a job standing
+	// in it was told so on this surface.
+	if strings.Contains(shown, "test is not built yet") {
+		t.Errorf("a job in test is told test does not work: %q", shown)
 	}
 }
 

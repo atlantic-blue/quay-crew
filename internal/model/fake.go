@@ -2,6 +2,9 @@ package model
 
 import (
 	"context"
+	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -123,6 +126,36 @@ const FakeDesign = "Vertical 1: a person pastes a link on the command line and g
 	"Vertical 2: a person opens the same transcript in a browser and sends the address to somebody\n" +
 	"Shown 2: the page renders that transcript at an address the person can share"
 
+// TestAsk is the phrase a task carries when it asks a session for the failing tests of one
+// requirement, and TestMarker opens the line of the report that says the run happened. Both are
+// spelled here for the reason the four above are: internal/job imports this package.
+const (
+	TestAsk = "write the tests that prove this requirement, and make them fail"
+	// The line that carries the count, because it is the one line every report has: a report names as
+	// many failing tests as it wrote and at least one.
+	TestMarker = "Ran:"
+)
+
+// FakeTestReport is what this double says when it is asked for the failing tests of one requirement.
+//
+// It reads the requirement number out of the task rather than stating one, because the stage refuses
+// a report filed against a requirement its worker does not hold. A double that always said the same
+// number would be refused for every worker but the first, and every test about a fan out would become
+// a test about the double ignoring its task.
+func FakeTestReport(asked string) string {
+	requirement := 1
+	if found := whichRequirement.FindStringSubmatch(asked); found != nil {
+		requirement, _ = strconv.Atoi(found[1])
+	}
+	return fmt.Sprintf("I wrote the tests for requirement %d and ran the suite.\n\n"+
+		"Requirement: %d\nRan: 12\nFailing 1: TestRequirement%dFailsUntilSomethingBuildsIt",
+		requirement, requirement, requirement)
+}
+
+// whichRequirement finds the requirement a task was handed, which the ask states on a line of its
+// own.
+var whichRequirement = regexp.MustCompile(`(?im)^Requirement:?[ \t]+(\d+)`)
+
 // answer is what the double says, which follows the task it was handed the way a model does.
 //
 // A task that asks for an outcome gets one. Every job says so beside its brief, so a double that
@@ -142,8 +175,18 @@ func (f *FakeRunner) answer(req Request) string {
 	if strings.Contains(req.Text, UnderstandingAsk) && !strings.Contains(f.Reply, UnderstandingMarker) {
 		return FakeUnderstanding
 	}
-	if !strings.Contains(req.Text, OutcomeMarker) || strings.Contains(f.Reply, OutcomeMarker) {
-		return f.Reply
+	if strings.Contains(req.Text, TestAsk) && !strings.Contains(f.Reply, TestMarker) {
+		return statingTheOutcome(FakeTestReport(req.Text), req.Text)
 	}
-	return f.Reply + "\n\n" + OutcomeMarker + " " + FakeOutcome
+	return statingTheOutcome(f.Reply, req.Text)
+}
+
+// statingTheOutcome ends an answer the way a session that read its task ends one: every job tells its
+// session to state an outcome on a line of its own, and a job whose answer states none does not
+// settle.
+func statingTheOutcome(reply, asked string) string {
+	if !strings.Contains(asked, OutcomeMarker) || strings.Contains(reply, OutcomeMarker) {
+		return reply
+	}
+	return reply + "\n\n" + OutcomeMarker + " " + FakeOutcome
 }

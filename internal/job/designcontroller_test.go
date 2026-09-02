@@ -143,6 +143,9 @@ func TestOnceAcceptedTheSessionIsAskedForThePlanAgainstTheList(t *testing.T) {
 	plane.lands(aListReply)
 	controller.Tick(ctx)
 	kept.acceptTheList(one.ID)
+	// The stage between the two, which has its own tests beside these: the requirements on that list
+	// become failing tests before anything plans how to make them pass.
+	kept.theSuiteIsRed(one.ID)
 
 	controller.Tick(ctx)
 

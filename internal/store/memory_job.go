@@ -869,3 +869,88 @@ func (m *Memory) RaiseJob(_ context.Context, id string, event *job.Event) (bool,
 	}
 	return true, nil
 }
+
+// RecordJobTests writes the record of the requirements this job turned into failing tests.
+//
+// It applies to a pending job that has no record yet, which is the same pair of conditions the real
+// engine holds it to in one statement. The job is pending while its workers run: the row itself is
+// doing nothing, and what is running is one job for each requirement.
+func (m *Memory) RecordJobTests(_ context.Context, id, tests string, event *job.Event) (*job.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != job.PhasePending || found.Tests != "" {
+		return nil, job.ErrNotPending
+	}
+	found.Tests, found.Reason = tests, ""
+	found.UpdatedAt = time.Now().UTC()
+	if err := m.appendJobEvent(event); err != nil {
+		return nil, err
+	}
+	kept := cloneJob(*found)
+	return &kept, nil
+}
+
+// JobsClaiming is the jobs in one workspace that claim any of these pieces of work, whole.
+//
+// Whole, answers included, because the fan out of a test stage finds its workers by the claim each
+// one holds and what it wants from them is what they answered. A worker that finished has let its
+// claim go, so holding is not what is asked here: the claim is read as the record of who took the
+// piece of work, which is what it is.
+func (m *Memory) JobsClaiming(_ context.Context, workspace string, claims []string) ([]*job.Job, error) {
+	if len(claims) == 0 {
+		return nil, nil
+	}
+	wanted := make(map[string]bool, len(claims))
+	for _, claim := range claims {
+		wanted[claim] = true
+	}
+	var held []*job.Job
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, one := range m.jobs {
+		if one.Workspace != workspace || !wanted[one.Claim] {
+			continue
+		}
+		kept := cloneJob(*one)
+		held = append(held, &kept)
+	}
+	sort.SliceStable(held, func(i, j int) bool {
+		if !held[i].CreatedAt.Equal(held[j].CreatedAt) {
+			return held[i].CreatedAt.Before(held[j].CreatedAt)
+		}
+		return held[i].ID < held[j].ID
+	})
+	return held, nil
+}
+
+// AskAboutJobTests puts the question about a suite that is not red to a person, and stops the job
+// there. It applies from the pending phase, because the row was never running while its workers
+// wrote: what ran was one job for each requirement.
+func (m *Memory) AskAboutJobTests(_ context.Context, id, question string,
+	event *job.Event) (*job.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != job.PhasePending || found.Tests != "" {
+		return nil, job.ErrNotPending
+	}
+	found.Phase, found.Question, found.Told, found.Reason =
+		job.PhaseAsking, question, "", ""
+	asked := time.Now().UTC()
+	found.AskedAt, found.RaisedAt = &asked, nil
+	found.Resuming = ""
+	found.LeaseOwner, found.LeaseUntil = "", nil
+	found.UpdatedAt = time.Now().UTC()
+	if err := m.appendJobEvent(event); err != nil {
+		return nil, err
+	}
+	kept := cloneJob(*found)
+	return &kept, nil
+}
