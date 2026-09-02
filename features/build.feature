@@ -161,6 +161,14 @@ Feature: The failing tests become an implementation, and nothing that builds can
       | git stash         |
       | git clean -fd     |
 
+    Examples: content from somewhere the line does not show
+      | command                        |
+      | git apply /tmp/fix.diff        |
+      | git cherry-pick 8f21ac0e       |
+      | tar -xzf /tmp/x.tgz            |
+      | unzip /tmp/x.zip               |
+      | patch -p1 < /tmp/fix.diff      |
+
   # The other direction, and the one that decides whether this boundary is worth having. Reading the
   # test is the whole difference between this and the discipline it comes from.
   Scenario Outline: A session that is building reads and builds freely

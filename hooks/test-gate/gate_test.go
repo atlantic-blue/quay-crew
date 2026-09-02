@@ -155,6 +155,23 @@ func TestWhatABuildWorkerMayNotDo(t *testing.T) {
 			input: Input{Command: "truncate -s 0 internal/job/build_test.go"}, refused: true},
 		{name: "a program this gate has never heard of", tool: "Bash",
 			input: Input{Command: "somewriter --out internal/job/build_test.go"}, refused: true},
+		{name: "an editor opened on a test", tool: "Bash",
+			input: Input{Command: "vim internal/job/build_test.go"}, refused: true},
+
+		// Content from somewhere the line does not show: an archive, a patch, another commit. What it
+		// writes cannot be read off the line at all, so where it lands is read as a directory taken whole.
+		{name: "a patch applied over the tree", tool: "Bash",
+			input: Input{Command: "git apply /tmp/fix.diff"}, refused: true},
+		{name: "a commit taken back over the tree", tool: "Bash",
+			input: Input{Command: "git cherry-pick 8f21ac0e"}, refused: true},
+		{name: "an archive unpacked over the tree", tool: "Bash",
+			input: Input{Command: "tar -xzf /tmp/x.tgz"}, refused: true},
+		{name: "an archive unpacked into a directory of tests", tool: "Bash",
+			input: Input{Command: "tar -xzf /tmp/x.tgz -C internal/job"}, refused: true},
+		{name: "a patch read from a pipe", tool: "Bash",
+			input: Input{Command: "patch -p1 < /tmp/fix.diff"}, refused: true},
+		{name: "an archive made, which writes no test", tool: "Bash",
+			input: Input{Command: "tar -czf /tmp/out.tgz internal/job"}},
 	}
 	for _, line := range lines {
 		t.Run(line.name, func(t *testing.T) {

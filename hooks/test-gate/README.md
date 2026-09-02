@@ -22,7 +22,7 @@ decides its own boundary has none.
 
 ## How it reads a command
 
-The program decides, in three classes, and this is the part worth arguing with.
+The program decides, in four classes, and this is the part worth arguing with.
 
 A program that only **reads** is never asked about its paths. `cat`, `grep`, `go`, `make` and the rest
 of the list in `command.go`. That is what keeps `go test ./features/` and `make features` working
@@ -34,6 +34,11 @@ A program that **writes** has every path it was handed read as a path, so a bare
 and the long one. The verbs of version control that put another copy in the working tree: `git checkout`,
 `git restore`, `git stash`, `git clean`, `git rm` and `git mv`. And `find`, once it carries `-delete`
 or an `-exec`.
+
+A program that **applies** content from somewhere the line does not show has where it lands read as a
+directory taken whole. `tar` extracting, `unzip` and `patch`. Then the git verbs that write the tree
+out of another commit or a patch: `apply`, `am`, `cherry-pick`, `revert`, `merge`, `pull`, `rebase`
+and `reset --hard`.
 
 Anything **else** is unknown, and only the words that look like a path are read out of it. That is
 what stops `python3 -c "open('a_test.go','w')"` and lets `make features` through, and it is what a

@@ -162,6 +162,18 @@ var restores = map[string]bool{
 	"checkout": true, "restore": true, "stash": true, "clean": true, "rm": true, "mv": true,
 }
 
+// applies are the programs that bring content from somewhere the command line does not show: an
+// archive, a patch, another commit. What they write cannot be read off the line at all, so what they
+// are pointed at is read as a directory taken whole.
+var applies = map[string]bool{"tar": true, "unzip": true, "patch": true}
+
+// gitApplies are the git verbs that write the working tree out of another commit or a patch. The same
+// reading: the files they touch are not on the line.
+var gitApplies = map[string]bool{
+	"apply": true, "am": true, "cherry-pick": true, "revert": true,
+	"merge": true, "pull": true, "rebase": true,
+}
+
 // gitReads are the git verbs that write nothing in the working tree.
 var gitReads = map[string]bool{
 	"status": true, "diff": true, "log": true, "show": true, "grep": true, "ls-files": true,
@@ -269,6 +281,10 @@ func writtenBySegment(segment []token, left int, found *Written) {
 		gitWrites(argv, found)
 	case program == "find":
 		findWrites(argv, found)
+	case applies[program] && extracting(program, argv):
+		// What it writes is inside an archive or a patch, so what it covers is where it puts it.
+		found.Covers = append(found.Covers, Cover{Program: program, Path: into(argv)})
+		takes(argv, found, program)
 	case writes[program]:
 		takes(argv, found, program)
 	case inPlace[program] != "" && told(argv, inPlace[program]):
@@ -316,6 +332,12 @@ func gitWrites(argv []string, found *Written) {
 		}
 		verb, rest = word, argv[at+1:]
 		break
+	}
+	// A verb that writes the working tree out of another commit or a patch. The files it touches are
+	// not on the line at all, so what it covers is the working directory.
+	if gitApplies[verb] || (verb == "reset" && told(rest, "hard")) {
+		found.Covers = append(found.Covers, Cover{Program: "git " + verb, Path: "."})
+		return
 	}
 	if verb == "" || gitReads[verb] || !restores[verb] {
 		return
@@ -456,4 +478,35 @@ func EveryWord(line string) []string {
 		found = append(found, pathish.FindAllString(one.text, -1)...)
 	}
 	return found
+}
+
+// extracting says whether this program is about to write what it was handed rather than read it. An
+// archive tool has to be told to extract; a patch and a zip write by default.
+func extracting(program string, argv []string) bool {
+	if program != "tar" {
+		return true
+	}
+	for _, word := range argv {
+		trimmed := strings.TrimPrefix(word, "-")
+		if trimmed != word && strings.Contains(trimmed, "x") {
+			return true
+		}
+		// The old form, where the flags carry no dash at all: `tar xzf archive.tgz`.
+		if trimmed == word && len(word) < 8 && strings.Contains(word, "x") &&
+			!strings.Contains(word, ".") && !strings.Contains(word, "/") {
+			return true
+		}
+	}
+	return false
+}
+
+// into is where a program that unpacks something puts it, which is the working directory unless it was
+// told otherwise.
+func into(argv []string) string {
+	for at, word := range argv {
+		if (word == "-C" || word == "-d" || word == "--directory") && at+1 < len(argv) {
+			return argv[at+1]
+		}
+	}
+	return "."
 }
