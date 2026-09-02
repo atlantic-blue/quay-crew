@@ -1520,10 +1520,11 @@ message Job {
   // No flag beside it either. The record lands only when every vertical is green, and the job is
   // stopped for a person to accept it in the same write, so the record being there is the fact.
   string build = 67;
-  // 68 was building, which said this job builds against tests it may not change. A job never did:
-  // the field was only ever set on the workers the build stage declared, and those are executions
-  // now, which say the stage they run rather than carrying a flag about it.
-  reserved 68;
+  // 68 was building, which said this job builds against tests it may not change, and 70 was branch,
+  // which said where its work lives. A job never carried either: both were only ever set on the
+  // workers a stage declared, and those are executions now, which say the stage they run and the
+  // branch their work went to.
+  reserved 68, 70;
   // accepted says a person looked at a picture of what this job built and said the value arrived. It
   // is the only road into done for a job whose verticals are built: the three checks the build stage
   // makes are the machine reading its own work, and the fourth is somebody looking at the thing.
@@ -1801,7 +1802,10 @@ message Execution {
   string answer = 9;
   string outcome = 10;
   string reason = 11;
-  // branch is where this run's commits ended up, and pull_request is the address its answer named.
+  // branch is where this run's work lives, and pull_request is the pull request that work is open
+  // in. One requirement has one of each, for the whole of its life: the run that writes its tests
+  // cuts the branch and opens the pull request red, and the run that builds the same requirement
+  // turns it green on the same branch.
   string branch = 12;
   string pull_request = 13;
   int64 spent_tokens = 14;

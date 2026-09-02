@@ -20,5 +20,4 @@ person approved. Test and build say nothing opens them, because nothing does.
 
 A job that states no sentence is an errand and runs no stages, and a job declared under another
 carries the stage of the job above it. Both say so rather than naming a stage they are not in. The
-console jobs view does not carry the stage yet: its table cuts the title on a narrow window as soon
-as a tenth column arrives.
+console jobs view carries the stage too: see `changelog.d/639-the-console-carries-the-stage.md`.

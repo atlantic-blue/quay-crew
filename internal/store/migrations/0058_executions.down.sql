@@ -1,5 +1,6 @@
--- The flag comes back before the rows that carried it do.
+-- The flag and the branch come back before the rows that carried them do.
 alter table jobs add column if not exists building boolean not null default false;
+alter table jobs add column if not exists branch text not null default '';
 
 -- The runs go back into the jobs table as the children they used to be, with the title a fan out
 -- wrote for them. The brief cannot come back: it was built from the job's own record at the moment

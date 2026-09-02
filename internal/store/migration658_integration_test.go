@@ -20,7 +20,7 @@ import (
 // empty and a move cannot be seen to work.
 func TestTheRunsOfAStageSurviveBecomingExecutions(t *testing.T) {
 	ctx := context.Background()
-	pool, ownURL := databaseOfItsOwn(t, "executions657")
+	pool, ownURL := databaseOfItsOwn(t, "executions658")
 
 	if err := store.Migrate(ctx, pool); err != nil {
 		t.Fatalf("migrate: %v", err)
@@ -33,7 +33,8 @@ func TestTheRunsOfAStageSurviveBecomingExecutions(t *testing.T) {
 		`drop table executions`,
 		`alter table job_events drop column execution`,
 		`alter table jobs add column building boolean not null default false`,
-		`delete from schema_migrations where version = '0057_executions'`,
+		`alter table jobs add column branch text not null default ''`,
+		`delete from schema_migrations where version = '0058_executions'`,
 	} {
 		if _, err := pool.Exec(ctx, statement); err != nil {
 			t.Fatalf("put the schema back to what it was: %s: %v", statement, err)
@@ -59,11 +60,12 @@ func TestTheRunsOfAStageSurviveBecomingExecutions(t *testing.T) {
 	if _, err := pool.Exec(ctx, `
 		insert into jobs (id, workspace, project, title, brief, parent, depth, phase, version,
 			claim, building, ungated, session, attempts, answer, outcome, spent_tokens,
-			pull_request, trace_id, parent_span_id)
+			branch, pull_request, trace_id, parent_span_id)
 		values ('run-2', 'w1', 'p1', 'build vertical 2: the page', 'build it', 'job-1', 1, 'done', 1,
 			'job-1 build 2', true, true, 'session-2', 1,
 			'Vertical: 2' || chr(10) || 'Ran: 14' || chr(10) || 'Red: 0', 'proved', 4096,
-			'https://github.com/an/owner/pull/7', '4bf92f3577b34da6a3ce929d0e0e4736', '00f067aa0ba902b7')`,
+			'krewe/job-1-requirement-2', 'https://github.com/an/owner/pull/7',
+			'4bf92f3577b34da6a3ce929d0e0e4736', '00f067aa0ba902b7')`,
 	); err != nil {
 		t.Fatalf("seed the worker: %v", err)
 	}
@@ -109,6 +111,8 @@ func TestTheRunsOfAStageSurviveBecomingExecutions(t *testing.T) {
 		t.Fatal("the run reads back with no answer, which is the only record of its work")
 	case moved.Session != "session-2" || moved.SpentTokens != 4096:
 		t.Fatalf("the run reads back in session %q having spent %d", moved.Session, moved.SpentTokens)
+	case moved.Branch != "krewe/job-1-requirement-2":
+		t.Fatalf("the run reads back on the branch %q, so the work it did is nowhere", moved.Branch)
 	case moved.PullRequest != "https://github.com/an/owner/pull/7":
 		t.Fatalf("the run reads back naming %q", moved.PullRequest)
 	case moved.TraceID != "4bf92f3577b34da6a3ce929d0e0e4736":

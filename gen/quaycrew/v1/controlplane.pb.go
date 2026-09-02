@@ -10507,7 +10507,10 @@ type Execution struct {
 	Answer   string `protobuf:"bytes,9,opt,name=answer,proto3" json:"answer,omitempty"`
 	Outcome  string `protobuf:"bytes,10,opt,name=outcome,proto3" json:"outcome,omitempty"`
 	Reason   string `protobuf:"bytes,11,opt,name=reason,proto3" json:"reason,omitempty"`
-	// branch is where this run's commits ended up, and pull_request is the address its answer named.
+	// branch is where this run's work lives, and pull_request is the pull request that work is open
+	// in. One requirement has one of each, for the whole of its life: the run that writes its tests
+	// cuts the branch and opens the pull request red, and the run that builds the same requirement
+	// turns it green on the same branch.
 	Branch        string                 `protobuf:"bytes,12,opt,name=branch,proto3" json:"branch,omitempty"`
 	PullRequest   string                 `protobuf:"bytes,13,opt,name=pull_request,json=pullRequest,proto3" json:"pull_request,omitempty"`
 	SpentTokens   int64                  `protobuf:"varint,14,opt,name=spent_tokens,json=spentTokens,proto3" json:"spent_tokens,omitempty"`
@@ -13375,7 +13378,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\x94\x13\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\x9a\x13\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -13458,7 +13461,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\traised_at\x18? \x01(\v2\x1a.google.protobuf.TimestampR\braisedAt\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\bD\x10E\"\xd1\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\bD\x10EJ\x04\bF\x10G\"\xd1\x01\n" +
 	"\n" +
 	"JobAttempt\x12\x12\n" +
 	"\x04task\x18\x01 \x01(\tR\x04task\x12\x10\n" +

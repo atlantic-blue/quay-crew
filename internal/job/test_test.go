@@ -195,13 +195,16 @@ func TestTheStageIsNotDoneUntilEveryRequirementHasAFailingTest(t *testing.T) {
 // The record ties every failure to the requirement it came from, so a reader of the row can say
 // which requirement any one of these tests holds.
 func TestTheRecordNamesTheRequirementEachFailureCameFrom(t *testing.T) {
-	wanted := job.RequirementsOf(testingJob())
-	kept := job.TestsText(wanted, map[int]job.TestReport{
+	one := testingJob()
+	one.Repository = "atlantic-blue/quay-krewe"
+	wanted := job.RequirementsOf(one)
+	kept := job.TestsText(one, wanted, map[int]job.TestReport{
 		1: {Requirement: 1, Ran: 12, Failing: []string{"TestOne", "TestOneAgain"}},
 		2: {Requirement: 2, Ran: 9, Failing: []string{"TestTwo"}},
-	}, "krewe/tests/9f2a")
+	})
 	for _, line := range []string{
 		"Requirement 1: a person pastes a link", "Ran 1: 12", "Fails 1: TestOne",
+		"Branch 1: " + job.BranchFor(one, wanted[0]), "Branch 2: " + job.BranchFor(one, wanted[1]),
 		"Fails 1: TestOneAgain", "Requirement 2: a person opens the same transcript", "Fails 2: TestTwo",
 	} {
 		if !strings.Contains(kept, line) {
@@ -222,7 +225,7 @@ func TestARunThatReportedOnSomebodyElsesRequirementIsRefused(t *testing.T) {
 	runs := job.TestExecutions(one, wanted)
 	runs[0].Answer, runs[0].Phase = aReport(2), job.PhaseDone
 
-	report, why := job.ReportFrom(runs[:1], wanted[0])
+	report, why := job.ReportFrom(one, runs[:1], wanted[0])
 	if why == "" {
 		t.Fatalf("a run reporting on another requirement was read as %+v", report)
 	}
@@ -231,7 +234,7 @@ func TestARunThatReportedOnSomebodyElsesRequirementIsRefused(t *testing.T) {
 	}
 
 	// And a requirement nothing has written for is named rather than passed over.
-	if _, why := job.ReportFrom(nil, wanted[1]); !strings.Contains(why, "nothing has written its tests") {
+	if _, why := job.ReportFrom(one, nil, wanted[1]); !strings.Contains(why, "nothing has written its tests") {
 		t.Fatalf("a requirement with no run reads %q", why)
 	}
 }

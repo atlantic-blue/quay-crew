@@ -90,7 +90,7 @@ func TestARunHasNoStageAndNoGate(t *testing.T) {
 	// The one thing a run says about a stage is which one it is a run of, and that is what puts a
 	// build run under the boundary. It is not a stage the run has to get through.
 	one := buildingJob()
-	run := job.BuildExecutions(one, job.RequirementsOf(one)[:1])[0]
+	run := job.BuildExecutions(one, job.RequirementsOf(one)[:1], nil)[0]
 	if run.Stage != job.StageBuild {
 		t.Fatalf("a run of the build stage says it is in stage %q", run.Stage)
 	}

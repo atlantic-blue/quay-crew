@@ -76,7 +76,7 @@ func TestAJobOwesABuildOnlyOnceItsPlanIsApprovedAndItsSuiteIsRed(t *testing.T) {
 func TestOneRunPerVerticalAndEachHoldsItsOwn(t *testing.T) {
 	one := buildingJob()
 	wanted := job.RequirementsOf(one)
-	runs := job.BuildExecutions(one, wanted)
+	runs := job.BuildExecutions(one, wanted, nil)
 	if len(runs) != 2 {
 		t.Fatalf("a list of 2 verticals made %d runs", len(runs))
 	}
@@ -108,7 +108,7 @@ func TestOneRunPerVerticalAndEachHoldsItsOwn(t *testing.T) {
 		}
 		// Its own vertical and nothing else, the tests it owns by name, and the boundary said in what
 		// it is asked as well as held by the gate.
-		asked := job.BuildTheVertical(one, vertical, job.FailuresOn(one.Tests)[vertical.Number])
+		asked := job.BuildTheVertical(one, vertical, job.FailuresOn(one.Tests)[vertical.Number], job.Opened{})
 		for _, phrase := range []string{
 			job.TheBuildAsk, vertical.Text, theFailures[vertical.Number],
 			"You may not change one", "Build this vertical only",
@@ -264,7 +264,7 @@ func TestTheStageIsNotDoneUntilEveryVerticalIsGreen(t *testing.T) {
 func TestARunThatReportedOnSomebodyElsesVerticalIsRefused(t *testing.T) {
 	one := buildingJob()
 	wanted := job.RequirementsOf(one)
-	run := job.BuildExecutions(one, wanted[1:])[0]
+	run := job.BuildExecutions(one, wanted[1:], nil)[0]
 	run.Phase, run.Answer = job.PhaseDone, aBuildReport(1, theFailures[1])
 
 	_, why := job.BuiltBy([]*job.Execution{run}, wanted[1], job.FailuresOn(one.Tests)[2])
@@ -313,7 +313,7 @@ func TestTheDoubleAnswersABuildReportTheSystemCanRead(t *testing.T) {
 	}
 	one := buildingJob()
 	wanted := job.RequirementsOf(one)
-	asked := job.BuildTheVertical(one, wanted[1], job.FailuresOn(one.Tests)[2])
+	asked := job.BuildTheVertical(one, wanted[1], job.FailuresOn(one.Tests)[2], job.Opened{})
 
 	report, err := job.ReadBuildReport(model.FakeBuildReport(asked))
 	if err != nil {

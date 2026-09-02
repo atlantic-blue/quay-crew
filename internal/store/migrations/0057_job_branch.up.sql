@@ -1,0 +1,21 @@
+-- The tests one stage writes reach the stage that builds against them.
+--
+-- The failure it answers: each test worker took its own sandbox and its own clone, wrote its test
+-- files there and answered with three lines. The sandbox then went away with the files in it. The
+-- worker that built the same requirement took another fresh clone and was told to read tests that
+-- were not in it, so the boundary that stage works under guarded files that were not there.
+--
+-- branch is where one requirement's work lives, for the whole of that requirement's life. The worker
+-- that writes the tests cuts this branch, pushes it and opens the pull request from it, and the
+-- worker that builds the same requirement fetches it and turns those tests green in the same pull
+-- request. So each requirement has one branch and one pull request, and the build stage opens none.
+--
+-- It is on the row because two workers have to agree on one name without either being told by the
+-- other. The system names it from the job and the requirement number, so the same requirement reads
+-- back the same branch on every tick, and a session that chose its own name would leave the next
+-- session nothing to look for.
+--
+-- Empty string rather than null, the way every other column on this table already is. Every job
+-- written before this worked wherever its session put it, and so does every job that names no
+-- repository, because a job with nowhere to push has no branch to name.
+alter table jobs add column if not exists branch text not null default '';

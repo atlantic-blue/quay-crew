@@ -45,27 +45,35 @@ func initializeTestStageSteps(sc *godog.ScenarioContext) {
 		})
 
 	// Where the tests have to end up. The worker writes them in a sandbox of its own, so a worker
-	// that never commits them writes tests nobody in the next stage can open.
-	sc.Step(`^each worker is told to commit its tests to the branch this job's tests live on$`,
+	// that never commits them writes tests nobody in the next stage can open. The branch belongs to
+	// the requirement, so each worker is told its own and no other worker's.
+	sc.Step(`^each worker is told to commit its tests to the branch its requirement's tests live on$`,
 		func(ctx context.Context) error {
 			one, err := readJob(ctx, 0)
 			if err != nil {
 				return err
 			}
-			branch := job.TestBranch(jobAsKept(one))
-			if branch == "" {
-				return fmt.Errorf("this job names no branch for its tests, so they go nowhere")
-			}
 			runs, err := theWorkers(ctx)
 			if err != nil {
 				return err
 			}
+			held := map[int]string{}
+			for _, requirement := range job.RequirementsOf(jobAsKept(one)) {
+				held[requirement.Number] = job.BranchFor(jobAsKept(one), requirement)
+			}
 			for _, run := range runs {
+				branch := held[int(run.GetNumber())]
+				if branch == "" {
+					return fmt.Errorf("the worker holding %q names no branch for its tests, so they go "+
+						"nowhere", run.GetClaim())
+				}
+				// What the session was actually asked, read off its task rather than off the row: a run
+				// carries no words a person wrote, and what it was sent is what it worked from.
 				asked, err := whatTheSessionWasAsked(ctx, run.GetSession())
 				if err != nil {
 					return err
 				}
-				for _, needed := range []string{branch, "Commit every test file"} {
+				for _, needed := range []string{branch, "commit every file you write"} {
 					if !strings.Contains(asked, needed) {
 						return fmt.Errorf("the worker holding %q is not told %q, so its tests stay in its "+
 							"own sandbox:\n%s", run.GetClaim(), needed, asked)
@@ -131,8 +139,6 @@ func initializeTestStageSteps(sc *godog.ScenarioContext) {
 				return err
 			}
 			for _, run := range runs {
-				// What the session was actually asked, read off its task rather than off the row: a run
-				// carries no words a person wrote, and what it was sent is what it worked from.
 				asked, err := whatTheSessionWasAsked(ctx, run.GetSession())
 				if err != nil {
 					return err
@@ -319,6 +325,43 @@ func theWorkers(ctx context.Context) ([]*quaycrewv1.Execution, error) {
 		return nil, err
 	}
 	return listed.GetExecutions(), nil
+}
+
+// whatTheSessionWasAsked is the text of the last task one session was sent. A run carries no words a
+// person wrote, so this is where what it worked from is read.
+func whatTheSessionWasAsked(ctx context.Context, session string) (string, error) {
+	if session == "" {
+		return "", fmt.Errorf("this run holds no session, so nothing was asked of it")
+	}
+	tasks, err := worldFrom(ctx).client.ListTasks(ctx,
+		&quaycrewv1.ListTasksRequest{Session: session})
+	if err != nil {
+		return "", err
+	}
+	if len(tasks.GetTasks()) == 0 {
+		return "", fmt.Errorf("session %s was sent no task", session)
+	}
+	return tasks.GetTasks()[len(tasks.GetTasks())-1].GetPrompt(), nil
+}
+
+// noRunsInTheJobsListing refuses a listing of declared work that carries a row nobody declared.
+//
+// It is the whole point of the split, and it is checked here rather than only in the store because
+// this is the surface a person reads: a job with five runs under it used to be six rows.
+func noRunsInTheJobsListing(ctx context.Context, one *quaycrewv1.Job) error {
+	listed, err := worldFrom(ctx).client.ListJobs(ctx, &quaycrewv1.ListJobsRequest{
+		Project: one.GetProject(),
+	})
+	if err != nil {
+		return err
+	}
+	for _, row := range listed.GetJobs() {
+		if row.GetId() != one.GetId() {
+			return fmt.Errorf("the jobs listing carries %q, %q, which nobody declared",
+				row.GetId(), row.GetTitle())
+		}
+	}
+	return nil
 }
 
 // theQuestionSays holds what a person was asked to a phrase, because the question is the whole of

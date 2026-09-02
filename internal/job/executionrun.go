@@ -144,11 +144,21 @@ func (c *Controller) whatTheRunIsFor(ctx context.Context, run *Execution) (*Job,
 }
 
 // askedOfTheRun is what the session is asked, built from the job at the moment of the dispatch.
+//
+// Nothing of it is stored on the run. What a stage asks changes when the system changes, and a copy
+// written when the run was made would send a session words the system has stopped using.
 func (c *Controller) askedOfTheRun(one *Job, run *Execution, wanted Requirement) string {
+	said := WriteFailingTests(one, wanted)
 	if run.Stage == StageBuild {
-		return BuildTheVertical(one, wanted, FailuresOn(one.Tests)[wanted.Number])
+		said = BuildTheVertical(one, wanted, FailuresOn(one.Tests)[wanted.Number],
+			Opened{Branch: run.Branch, PullRequest: run.PullRequest})
 	}
-	return WriteFailingTests(one, wanted)
+	// Where the work ends, which is the pull request on this requirement's branch: the test stage's
+	// run opens it red and the build stage's run turns it green in the same one.
+	if ending := EndsOnItsBranch(one, run); ending != "" {
+		said += "\n\n" + ending
+	}
+	return said
 }
 
 // titleOfTheRun is the line a listing of sessions shows for this run.

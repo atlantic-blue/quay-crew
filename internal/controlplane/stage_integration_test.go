@@ -104,6 +104,16 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 		t.Fatalf("design reads as unbuilt, or says where a job stands in it: %q", moved.Doing)
 	}
 
+	// The list this job builds names the kind of evidence each vertical needs, and the two verticals
+	// need different kinds. That is what carries through the rest of the walk: the kind is decided on
+	// the list a person accepts, it is kept in the design record, and the build stage three stages
+	// later reads it off that record to hold each worker to it.
+	runner.Reply = "Vertical 1: a person pastes a link on the command line and gets the text back\n" +
+		"Shown 1: the transcript prints in the terminal for a link the person chooses\n" +
+		"Vertical 2: a person is refused a transcript that is not theirs\n" +
+		"Shown 2: the page says it is refused\n" +
+		"Evidence 2: steps"
+
 	// Then the list, and the same trap one stage further on: the acceptance is a column too, and a
 	// flag that is written and never selected reads back false, which would hold the job in design
 	// after a person had moved it out.
@@ -176,9 +186,9 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 		t.Fatalf("a built job reads off the wire as stage %q, want build", built.Name)
 	}
 	// And it says so in the words a person acts on: what they are being asked to look at, how many
-	// pictures there are, and what they are being asked to say about them. A line that holds for a
+	// verticals there are, and what they are being asked to say about them. A line that holds for a
 	// person without telling them any of that is the failure this asserts phrase by phrase.
-	for _, ask := range []string{"waits for you to look at", "2 pictures of them running",
+	for _, ask := range []string{"waits for you to look at", "the evidence for 2 verticals",
 		"say whether the value arrived"} {
 		if !strings.Contains(built.Doing, ask) {
 			t.Fatalf("a built job is told %q, which does not say %q", built.Doing, ask)
@@ -233,16 +243,33 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 		}
 	}
 
-	// Every vertical arrives with a picture of it running and a label saying where the picture came
+	// Every vertical arrives with the kind of evidence it asked for and a label saying where that came
 	// from, and both cross the wire inside the record. A person answering from a terminal has nothing
 	// to look at without them.
-	shots := job.PicturesIn(whole.GetBuild())
-	if len(shots) != verticals {
-		t.Fatalf("%d verticals were built and %d pictures came off the wire", verticals, len(shots))
+	shown := job.EvidenceIn(whole.GetBuild())
+	if len(shown) != verticals {
+		t.Fatalf("%d verticals were built and %d came off the wire with evidence", verticals, len(shown))
 	}
-	for _, shot := range shots {
-		if err := shot.Shows(); err != nil {
-			t.Fatalf("the picture of vertical %d does not show it working: %v", shot.Vertical, err)
+	for _, one := range shown {
+		if err := one.Shows(); err != nil {
+			t.Fatalf("what vertical %d is shown with does not show it working: %v", one.Vertical, err)
+		}
+	}
+	// And each is the kind its own vertical asked for. Vertical 2 asked for steps on the list a person
+	// accepted, so a picture there is the whole walk quietly falling back to what it used to do.
+	if kind := job.EvidenceFor(whole.GetBuild(), 1).Kind; kind != job.KindPicture {
+		t.Fatalf("vertical 1 asked for nothing and came off the wire as %s", kind)
+	}
+	if kind := job.EvidenceFor(whole.GetBuild(), 2).Kind; kind != job.KindSteps {
+		t.Fatalf("vertical 2 asked for steps and came off the wire as %s", kind)
+	}
+	if steps := job.EvidenceFor(whole.GetBuild(), 2).Steps; len(steps) < 2 {
+		t.Fatalf("vertical 2 came off the wire with %d steps: %q", len(steps), steps)
+	}
+	// The question a person is answering says both, in the shape each kind is read in.
+	for _, want := range []string{"picture: vertical1.png", "steps:", "press r"} {
+		if !strings.Contains(whole.GetQuestion(), want) {
+			t.Fatalf("the question does not say %q: %s", want, whole.GetQuestion())
 		}
 	}
 
@@ -281,10 +308,10 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 	if done.GetOutcome() != job.OutcomeProved {
 		t.Fatalf("an accepted job settled %q, want proved", done.GetOutcome())
 	}
-	// The record of what was built, and its pictures, are still there. That is what the person
+	// The record of what was built, and its evidence, are still there. That is what the person
 	// accepted, and it is what anybody reading this job afterwards has to be able to see.
-	if len(job.PicturesIn(done.GetBuild())) != verticals {
-		t.Fatalf("landing the job lost the pictures: %q", done.GetBuild())
+	if len(job.EvidenceIn(done.GetBuild())) != verticals {
+		t.Fatalf("landing the job lost the evidence: %q", done.GetBuild())
 	}
 	if ended := stageOnTheWire(t, ctx, client, id); !strings.Contains(ended.Doing, "value arrived") {
 		t.Fatalf("an accepted job is told %q", ended.Doing)

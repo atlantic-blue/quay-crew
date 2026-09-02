@@ -131,7 +131,7 @@ func TestAnInteractiveCommandIsNeverCaptured(t *testing.T) {
 		if ran.args != nil {
 			t.Errorf("%q was captured, and capturing it would freeze the console", typed)
 		}
-		if model.mode == modeOutput {
+		if model.mode == modeReading {
 			t.Errorf("%q opened the output panel, so it was read rather than handed the terminal", typed)
 		}
 	}
@@ -222,7 +222,7 @@ func TestAPrintingCommandIsStillCaptured(t *testing.T) {
 	if ran.args == nil {
 		t.Fatal("a printing command was not captured")
 	}
-	if model.mode != modeOutput {
+	if model.mode != modeReading {
 		t.Fatalf("the console is in mode %v, want the output panel", model.mode)
 	}
 }
@@ -233,7 +233,7 @@ func TestOutputLinesFillThePanelWidth(t *testing.T) {
 	ran := &ranCommand{output: "short\na line that is quite a lot longer than the one above it\n"}
 	model := typeInto(t, openBar(t, barModel(t, ran)), "workspace list")
 
-	for _, line := range model.commandBody() {
+	for _, line := range model.readingBody() {
 		if width := lipgloss.Width(line); width != model.innerWidth() {
 			t.Fatalf("a panel line is %d wide and the panel is %d: %q", width, model.innerWidth(), line)
 		}
@@ -246,7 +246,7 @@ func TestALongOutputLineIsCutToFit(t *testing.T) {
 	ran := &ranCommand{output: strings.Repeat("x", 400)}
 	model := typeInto(t, openBar(t, barModel(t, ran)), "workspace list")
 
-	for _, line := range model.commandBody() {
+	for _, line := range model.readingBody() {
 		if width := lipgloss.Width(line); width > model.innerWidth() {
 			t.Fatalf("a panel line is %d wide and the panel is %d", width, model.innerWidth())
 		}

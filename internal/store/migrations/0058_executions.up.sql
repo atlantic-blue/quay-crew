@@ -60,12 +60,12 @@ alter table job_events add column if not exists execution text not null default 
 --
 -- The identifier is kept, so a link somebody wrote down still reaches the same run.
 insert into executions (id, job, stage, number, claim, phase, session, attempts, answer, outcome,
-    reason, pull_request, spent_tokens, lease_owner, lease_until, trace_id, parent_span_id,
+    reason, branch, pull_request, spent_tokens, lease_owner, lease_until, trace_id, parent_span_id,
     created_at, updated_at, started_at, finished_at)
 select j.id, j.parent,
     case when j.claim ~ ' requirement [0-9]+$' then 'test' else 'build' end,
     (regexp_match(j.claim, '([0-9]+)$'))[1]::int,
-    j.claim, j.phase, j.session, j.attempts, j.answer, j.outcome, j.reason, j.pull_request,
+    j.claim, j.phase, j.session, j.attempts, j.answer, j.outcome, j.reason, j.branch, j.pull_request,
     j.spent_tokens, j.lease_owner, j.lease_until, j.trace_id, j.parent_span_id,
     j.created_at, j.updated_at, j.started_at, j.finished_at
 from jobs j
@@ -90,3 +90,8 @@ delete from jobs where id in (select id from executions);
 -- set on the workers the build stage declared, and those are executions now, which say the stage
 -- they run.
 alter table jobs drop column if exists building;
+
+-- And the branch a requirement's work lives on, which was on this table for the same reason the flag
+-- was: it was only ever set on the workers a stage declared. It belongs to the run, and the run
+-- carries it.
+alter table jobs drop column if exists branch;

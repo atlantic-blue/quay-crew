@@ -46,6 +46,10 @@ type Requirement struct {
 	Number int
 	Text   string
 	Shown  string
+	// Evidence is the kind of evidence this vertical needs a person to be shown: a picture, a
+	// recording, or steps they run themselves. Empty is a picture, which is what every vertical
+	// written before the kinds existed asked for. See evidence.go.
+	Evidence Kind
 }
 
 // RequirementsOf is the requirement list, which is the list of verticals a person accepted.
@@ -60,6 +64,7 @@ func RequirementsOf(one *Job) []Requirement {
 	for _, vertical := range DesignIn(one.Design).Verticals {
 		wanted = append(wanted, Requirement{
 			Number: vertical.Number, Text: vertical.Text, Shown: vertical.Shown,
+			Evidence: vertical.Evidence,
 		})
 	}
 	return wanted
@@ -112,8 +117,10 @@ func WriteFailingTests(one *Job, wanted Requirement) string {
 		"exists to stop.")
 	said = append(said, "Write the tests for this requirement only. Another worker is writing the "+
 		"tests for each of the others at the same time, and it holds that requirement.")
-	if branch := TestBranch(one); branch != "" {
-		said = append(said, TheTestsGoOnABranch(branch))
+	// Where the work goes, and it is the whole difference between tests that hold a requirement and
+	// tests that die with the sandbox. Only a job that works in a repository has anywhere to put them.
+	if branch := BranchFor(one, wanted); branch != "" {
+		said = append(said, CutTheBranch(branch), AnOpenRedPullRequest(branch))
 	}
 	said = append(said, theShapeOfATestReport(wanted))
 	return strings.Join(said, "\n\n")
@@ -258,23 +265,23 @@ func TestsRed(wanted []Requirement, reports map[int]TestReport) error {
 // requirement any one of these tests holds. That provenance is the claim's rather than the test
 // name's: the worker that wrote this failure held the claim on that requirement and no other worker
 // could take it.
-func TestsText(wanted []Requirement, reports map[int]TestReport, branch string) string {
+func TestsText(one *Job, wanted []Requirement, reports map[int]TestReport) string {
 	var lines []string
-	// The branch first, because it is the one line about where the tests are rather than about what
-	// they say. A reader of the record can then open them, and so can the person reading it in a
-	// terminal, without knowing how the system names a branch.
-	if branch != "" {
-		lines = append(lines, "Branch: "+branch)
-	}
-	for _, one := range wanted {
-		report, held := reports[one.Number]
+	for _, requirement := range wanted {
+		report, held := reports[requirement.Number]
 		if !held {
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("Requirement %d: %s", one.Number, one.Text),
-			fmt.Sprintf("Ran %d: %d", one.Number, report.Ran))
+		lines = append(lines, fmt.Sprintf("Requirement %d: %s", requirement.Number, requirement.Text))
+		// The branch under the requirement it carries, because that is where a reader of the record
+		// opens these tests and where the worker that builds this requirement checks them out. One
+		// branch line for the job would name a place none of these tests are.
+		if branch := BranchFor(one, requirement); branch != "" {
+			lines = append(lines, fmt.Sprintf("Branch %d: %s", requirement.Number, branch))
+		}
+		lines = append(lines, fmt.Sprintf("Ran %d: %d", requirement.Number, report.Ran))
 		for _, failing := range report.Failing {
-			lines = append(lines, fmt.Sprintf("Fails %d: %s", one.Number, failing))
+			lines = append(lines, fmt.Sprintf("Fails %d: %s", requirement.Number, failing))
 		}
 	}
 	return strings.Join(lines, "\n")
@@ -340,39 +347,40 @@ func NoRedSuite(why string) string {
 		"job with krewe job stop.", why)
 }
 
-// TestExecutions is the runs a fan out writes: one for each requirement, each holding the claim on
-// its own requirement.
+// TestWorkers is the jobs a fan out declares: one for each requirement, each holding the claim on its
+// own requirement, each carrying what the parent job serves.
 //
-// They are runs and not jobs. Nobody declares them, they state no sentence, they pass through no
-// stages, and no person answers a gate on them: what checks them is the stage itself, which reads
-// the report off each answer and refuses one written for a requirement the run does not hold.
-//
-// Nothing a person wrote is copied onto them. The title, the words the session is asked, the mode
-// and the repository are read off the job at the moment of the dispatch, so a second copy of any of
-// it cannot disagree with the job.
+// They are declared with the settle gate off. A gate runs the repository's own suite and reads its
+// output, and the work these jobs do is deliberately red, so a gate would refuse every one of them
+// for doing exactly what it was asked. What checks them instead is the stage itself: the report is
+// read off each answer, and the requirement it was written for has to be the one it holds.
 func TestExecutions(one *Job, wanted []Requirement) []*Execution {
 	var runs []*Execution
 	for _, requirement := range wanted {
 		runs = append(runs, &Execution{
 			ID: newRowID(), Job: one.ID, Stage: StageTest, Number: requirement.Number,
 			Claim: ClaimOnRequirement(one.ID, requirement), Phase: PhasePending,
+			// The branch this requirement's work lives on, from its first failing test to its last
+			// passing one. It is on the row because the run that builds the same requirement has to find
+			// it, and it is written here rather than derived a second time by that run.
+			Branch:  BranchFor(one, requirement),
 			TraceID: one.TraceID, ParentSpanID: one.ParentSpanID,
 		})
 	}
 	return runs
 }
 
-// ReportFrom is the report the run holding one requirement answered with, and the refusal where no
-// run of that requirement answered anything the system can read.
+// ReportFrom is the report the worker holding one requirement answered with, and the refusal where
+// no worker of that requirement answered anything the system can read.
 //
-// The newest run is the one read. A requirement whose first run died has a second, and what the
-// stage stands on is the run that happened last.
+// The newest worker is the one read. A requirement whose first worker died has a second, and what
+// the stage stands on is the run that happened last.
 //
-// A run is read as holding the requirement its claim says it holds, rather than the number it wrote
-// in its answer. The two disagreeing is a run that wrote for somebody else's requirement, and it is
-// refused: a report filed under the wrong number would leave one requirement covered twice and
-// another not at all.
-func ReportFrom(runs []*Execution, requirement Requirement) (TestReport, string) {
+// A worker is read as holding the requirement its claim says it holds, rather than the number it
+// wrote in its answer. The two disagreeing is a worker that wrote for somebody else's requirement,
+// and it is refused: a report filed under the wrong number would leave one requirement covered twice
+// and another not at all.
+func ReportFrom(one *Job, runs []*Execution, requirement Requirement) (TestReport, string) {
 	if len(runs) == 0 {
 		return TestReport{}, fmt.Sprintf("requirement %d, %q: nothing has written its tests",
 			requirement.Number, requirement.Text)
@@ -381,6 +389,17 @@ func ReportFrom(runs []*Execution, requirement Requirement) (TestReport, string)
 	if worker.Answer == "" {
 		return TestReport{}, fmt.Sprintf("requirement %d, %q: the run holding it %s and said nothing, %s",
 			requirement.Number, requirement.Text, worker.Phase, oneLine(worker.Reason))
+	}
+	// A worker that pushed nothing is a failed worker rather than a quiet pass. Its report can be
+	// perfect and the tests it describes are in a sandbox that has gone, so nothing holds this
+	// requirement and the worker that builds it has nothing to read. What says the tests reached a
+	// branch is the pull request the system read off the answer itself, rather than the worker's word
+	// about its own push.
+	if one.Repository != "" && worker.PullRequest == "" {
+		return TestReport{}, fmt.Sprintf("requirement %d, %q: the run holding it opened no pull "+
+			"request against %s, so its tests reached no branch and went with the sandbox that wrote "+
+			"them. Nothing can build against them", requirement.Number, requirement.Text,
+			one.Repository)
 	}
 	report, err := ReadTestReport(worker.Answer)
 	if err != nil {
@@ -434,7 +453,7 @@ func (c *Controller) writeTheTests(ctx context.Context, one *Job) {
 			running++
 			continue
 		}
-		report, why := ReportFrom(theirs, requirement)
+		report, why := ReportFrom(one, theirs, requirement)
 		// A report is the worker's word about its own run, and the branch is the thing anybody else can
 		// read. So the tests have to be on it before the report counts: the delivery is asked for here,
 		// once the worker has finished and while its container is still there, because that is where
@@ -475,7 +494,7 @@ func (c *Controller) writeTheTests(ctx context.Context, one *Job) {
 	}
 
 	record := c.event(ctx, one, EventTested, WrittenTheTests(wanted, reports))
-	if _, err := c.store.RecordJobTests(ctx, one.ID, TestsText(wanted, reports, TestBranch(one)), record); err != nil {
+	if _, err := c.store.RecordJobTests(ctx, one.ID, TestsText(one, wanted, reports), record); err != nil {
 		if !errors.Is(err, ErrNotPending) {
 			c.logger.WarnContext(ctx, "could not record the failing tests a job's requirements became",
 				"job", one.ID, "error", err)
@@ -487,22 +506,19 @@ func (c *Controller) writeTheTests(ctx context.Context, one *Job) {
 	c.exported(ctx, record)
 }
 
-// delivered puts one run's tests on this job's branch, and says why the requirement is refused where
-// they did not get there.
+// delivered puts one worker's tests on this job's branch, and says why the requirement is refused
+// where they did not get there.
 //
 // Empty for a job that names no repository: there is no remote, so the tests of such a job go
 // nowhere and never did, and refusing every requirement of it would stop work this change is not
 // about.
 //
-// The newest run is the one delivered, which is the one the report was read off. Asked on the tick
-// that gathers rather than when the run settles, because a stage that reads its runs is the thing
-// that knows which of them the record stands on.
-//
-// Where the push lands, the branch goes on the run. It is the address a reader opens to see what
-// that run wrote, and it is written here because here is where the system learns it.
+// The newest worker is the one delivered, which is the one the report was read off. Asked on the
+// tick that gathers rather than when the worker settles, because a stage that reads its workers is
+// the thing that knows which of them the record stands on.
 func (c *Controller) delivered(ctx context.Context, one *Job, runs []*Execution,
 	requirement Requirement) string {
-	branch := TestBranch(one)
+	branch := BranchFor(one, requirement)
 	if branch == "" || len(runs) == 0 {
 		return ""
 	}
@@ -512,16 +528,10 @@ func (c *Controller) delivered(ctx context.Context, one *Job, runs []*Execution,
 			"this system has no way to reach a session's files, so it could not put them there")
 	}
 	found := c.publisher.PushSessionWork(ctx, worker.Session, branch)
-	if found.State != publish.Pushed {
-		return TestsNotOnTheBranch(requirement, branch, whyTheTestsAreNotThere(found))
+	if found.State == publish.Pushed {
+		return ""
 	}
-	if worker.Branch != branch {
-		if err := c.store.RecordExecutionBranch(ctx, worker.ID, branch); err != nil {
-			c.logger.WarnContext(ctx, "could not record the branch a run's tests went to",
-				"job", one.ID, "execution", worker.ID, "error", err)
-		}
-	}
-	return ""
+	return TestsNotOnTheBranch(requirement, branch, whyTheTestsAreNotThere(found))
 }
 
 // whyTheTestsAreNotThere is the one line an operator acts on, for each way a delivery ends short.
@@ -547,7 +557,9 @@ func whyTheTestsAreNotThere(found publish.Work) string {
 //
 // Read as the runs of the stage rather than as rows holding a claim. The table says which job and
 // which stage each run belongs to, so the two stages of one job never read each other's runs, and a
-// stage never has to ask whether a row it found is really one of its own.
+// stage never has to ask whether a row it found is really one of its own. It is a list under each
+// number, because a requirement whose first run died can have a second, and how many it has is the
+// bound on how many more it gets.
 func (c *Controller) runsOfTheStage(ctx context.Context, one *Job, stage string) (
 	map[int][]*Execution, error) {
 	runs, err := c.store.ListExecutions(ctx, ExecutionFilter{Job: one.ID, Stage: stage})

@@ -55,8 +55,8 @@ func (m Model) routeKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.updateTypeKey(msg)
 	case modeWizard:
 		return m.updateWizardKey(msg)
-	case modeOutput:
-		return m.updateOutputKey(msg)
+	case modeReading:
+		return m.updateReadingKey(msg)
 	case modeHelp:
 		// Moving scrolls it, because it is taller than a short window. Any other key closes it, and
 		// nothing in here acts on anything, so there is nothing to get wrong.
@@ -345,6 +345,14 @@ func (m Model) act(key string) (Model, tea.Cmd) {
 		if !action.Bound(key) {
 			continue
 		}
+		// A row this key cannot act on is answered here, before any mode opens. The refusal is what
+		// the operator gets instead of a line to type into or a question to say yes to.
+		if action.Refuses != nil {
+			if err := action.Refuses(row); err != nil {
+				m.err, m.held = err, true
+				return m, nil
+			}
+		}
 		if action.RunTyped != nil {
 			m.mode, m.typing, m.input = modeType, pending{action: action, row: row}, ""
 			if action.Typed != nil {
@@ -379,6 +387,9 @@ func (m Model) perform(action Action, row Row) (Model, tea.Cmd) {
 		if next, cmd, opened := m.openConversationFor(row); opened {
 			return next, cmd
 		}
+	}
+	if action.Reads != nil {
+		return m.showReading(m.active.One()+" "+row.Typed(), action.Reads(row)), nil
 	}
 	if action.Shell != nil {
 		return m, m.shellCmd(action, row)
