@@ -27,7 +27,7 @@ driving. A `krewe task --dispatch` is driving. A `krewe job stop` is driving. An
 driving. A push is driving.
 
 **Reading is free.** The operator may read anything at any moment. `krewe job list`, `krewe task list`,
-`krewe answer`, the console, the panel and the web view are all reads. A read is never a finding.
+`krewe answer`, the console, a conversation and the web view are all reads. A read is never a finding.
 
 Every time the operator drives, that is a finding. The site can still ship. The test still fails.
 See section 13.
@@ -383,7 +383,7 @@ One line per capability, grouped by who exercises it, each naming its failure. T
 29. **Drain and version drift.** The operator drains before the upgrade and compares the three builds
     after it. A failure reports a clean drain while a task is still working.
 30. **Health.** A failure answers every read, starts no work, and reports itself healthy.
-31. **The console, the panel and the web view.** A failure is a flat session list, or a view that shows a
+31. **The console, a conversation and the web view.** A failure is a flat session list, or a view that shows a
     session and not what it was asked.
 32. **Manual and features.** The orchestrator reads `krewe manual` to learn how to drive the system. A
     failure has to be told in its brief what the system can do.

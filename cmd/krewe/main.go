@@ -91,10 +91,42 @@ func unreachable(err error, told string, sandboxed bool) error {
 		"the system's configuration file, ~/.krewe/env on a compose stack. (%w)", err)
 }
 
+// opening is what an invocation asks the tool to put on the screen. `krewe` with no arguments has one
+// answer and only one, so the choice is made here where a test can read it rather than inside the
+// call that takes the terminal.
+type opening int
+
+const (
+	// theConsole is `krewe` with a terminal in front of it: the console, full width, on its own.
+	theConsole opening = iota
+	// plainLines is `krewe` with its output going somewhere else, so `krewe | grep` still works.
+	plainLines
+	// aCommand is every invocation that named one.
+	aCommand
+)
+
+// kreweOpens says which of the three an invocation is.
+//
+// Nothing else is on this list. `krewe` used to open a tmux window with the console in one half and a
+// conversation in the other, so typing the name of the tool gave a person a split terminal and a
+// conversation they had not asked for. A conversation is asked for by name now: p in the console, or
+// `krewe attach <session>`.
+func kreweOpens(args []string, terminal bool) opening {
+	switch {
+	case len(args) > 0:
+		return aCommand
+	case !terminal:
+		return plainLines
+	default:
+		return theConsole
+	}
+}
+
 // dispatch routes an invocation: no arguments opens the console, anything else runs a subcommand.
 // With no terminal attached the console prints plain lines instead, so `krewe | grep` still works.
 func dispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, addr string) error {
-	if len(args) > 0 {
+	switch kreweOpens(args, isatty.IsTerminal(os.Stdout.Fd())) {
+	case aCommand:
 		// Before the command, so an operator watching a task run sees it rather than finding it
 		// above the answer afterwards. The console says which build the system is in its own header
 		// and which part of it is down in its stats view, and a line drawn over a full screen view
@@ -102,40 +134,18 @@ func dispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 		reportDrift(ctx, client, os.Stderr)
 		reportDegraded(ctx, client, os.Stderr)
 		return run(ctx, client, args, os.Stdout, addr)
-	}
-	if !isatty.IsTerminal(os.Stdout.Fd()) {
+	case plainLines:
 		return console.Plain(ctx, client, os.Stdout)
-	}
-	return openTheSystem(
-		func() error { return runPanel(ctx, client, nil, os.Stdout, addr) },
-		func() error { return openConsoleAlone(ctx, client, addr) },
-	)
-}
-
-// openTheSystem is what `krewe` with no arguments does: the panel, and the console on its own when there
-// is nothing to put beside it yet.
-//
-// One command opens everything. A system with no conversation in it is the first run, and refusing to
-// open at all then would be absurd, so the console opens on its own.
-//
-// That is the only reason it falls back. Every failure used to land here and come out as a single
-// console pane: tmux missing, a system with two projects and nowhere named to open, a header that would
-// not fit. They all looked identical from the outside, which is a panel that sometimes does not
-// appear and never says why. Anything else is reported, because every one of those refusals already
-// names what to do about it and the operator cannot act on a message nobody prints.
-func openTheSystem(panel, alone func() error) error {
-	err := panel()
-	switch {
-	case err == nil:
-		return nil
-	case errors.Is(err, errNothingBeside):
-		return alone()
 	default:
-		return err
+		return openTheConsole(ctx, client, addr)
 	}
 }
 
-func openConsoleAlone(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, addr string) error {
+// openTheConsole is what `krewe` with no arguments does: the console, full width, on its own.
+//
+// Nothing opens beside it. A conversation is a thing the operator asks for by name, with p in the
+// console or with `krewe attach`, so opening the tool never puts one on half of the screen unasked.
+func openTheConsole(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, addr string) error {
 	current, err := currentPath()
 	if err != nil {
 		// Not being able to read where you are standing is not a reason to refuse to open the

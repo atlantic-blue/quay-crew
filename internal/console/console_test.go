@@ -2545,6 +2545,9 @@ func TestPressingPWithNoSystemSaysSo(t *testing.T) {
 
 // TestPressingPOutsideTmuxSaysWhatToRun. tmux is what splits the screen, so outside it there is
 // nothing to split, and a key that silently does nothing reads as broken.
+//
+// It used to name `krewe panel`, which is a command the tool refuses. `krewe` opens the console alone
+// now, so the way to a conversation beside it is tmux and this key.
 func TestPressingPOutsideTmuxSaysWhatToRun(t *testing.T) {
 	t.Setenv("TMUX_PANE", "")
 	model := newTestModel(t, Sessions(&fakeClient{})).
@@ -2554,13 +2557,22 @@ func TestPressingPOutsideTmuxSaysWhatToRun(t *testing.T) {
 	if cmd != nil {
 		t.Fatal("p tried to split a screen with no tmux to split it")
 	}
-	if model.err == nil || !strings.Contains(model.err.Error(), "krewe panel") {
-		t.Fatalf("p said %v, want it to name what to run", model.err)
+	if model.err == nil {
+		t.Fatal("p did nothing and said nothing outside tmux")
+	}
+	for _, says := range []string{"tmux", "`krewe`", "press p again"} {
+		if !strings.Contains(model.err.Error(), says) {
+			t.Fatalf("p said %q, and it never says %q", model.err, says)
+		}
+	}
+	// The panel is gone, so a refusal that sends the operator to it sends them nowhere.
+	if strings.Contains(model.err.Error(), "krewe panel") {
+		t.Fatalf("p said %q, which names a command the tool refuses", model.err)
 	}
 }
 
-// TestPressingPHandsOverTheRowUnderTheCursor, and what is made of it is the command line's business:
-// the panel always opens the driver, whatever the cursor is on.
+// TestPressingPHandsOverTheRowUnderTheCursor, and what is made of it is the command line.s business:
+// nothing under the cursor is what asks for the driver.
 func TestPressingPOpensTheConversationUnderTheCursor(t *testing.T) {
 	t.Setenv("TMUX_PANE", "%3")
 	asked := make([]string, 0, 1)
@@ -2580,9 +2592,9 @@ func TestPressingPOpensTheConversationUnderTheCursor(t *testing.T) {
 	}
 }
 
-// TestPressingPClosesTheConversationBesideIt, which may be one the console never opened: `krewe` opens
-// the panel with a conversation already there, so a console that only knew about the ones it opened
-// would answer the first p by opening a second.
+// TestPressingPClosesTheConversationBesideIt, which may be one the console never opened: the operator
+// can split their own window, so a console that only knew about the panes it opened would answer the
+// first p by opening a second.
 //
 // It is asked of tmux instead: the pane at the same top and further right is the conversation. A pane
 // above or below is the header.

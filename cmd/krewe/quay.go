@@ -133,7 +133,8 @@ var removedCommands = map[string]string{
 	"header": "the header is gone. Which build this is and the way to help are on the console.s own\n" +
 		"footer row now, on the right of the line that says where you are standing. What the machine has\n" +
 		"left is a command\n\n  krewe room",
-	"panel": "`krewe` on its own opens the system, and p shows or hides the conversation beside it",
+	"panel": "the panel is gone. `krewe` on its own opens the console, full width, and nothing beside\n" +
+		"it. A conversation is asked for: press p in the console from inside tmux, or open one on its own\n\n  krewe attach <session>",
 	"work": "declared intent is called a job now, because that is what Kubernetes calls the same " +
 		"thing: run to completion, watched by a controller, with a disposable container underneath" +
 		"\n\n  krewe job <create|list|show|stop>",

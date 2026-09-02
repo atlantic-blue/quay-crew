@@ -13,8 +13,8 @@ import (
 
 // The conversation beside the console, and the key that shows and hides it.
 //
-// `krewe panel` builds this in one go. This is the same thing around a console already running, so the
-// operator does not have to decide before opening it whether they wanted a conversation next to it.
+// `krewe` opens the console and nothing else, so this is the only way a conversation reaches the
+// screen beside one. It is asked for, never opened for you.
 
 // Panes is how the console opens and closes the conversation beside it. tmux is the one that runs in
 // front of an operator, and a scenario gives it one whose panes it can read: without a seam here a
@@ -86,14 +86,14 @@ func (m Model) toggleConversation() (Model, tea.Cmd) {
 	if here == "" {
 		// tmux is what splits the screen. Outside it there is nothing to split, and saying so beats a
 		// key that looks broken.
-		m.err = fmt.Errorf("a conversation opens beside the console inside tmux: run `krewe panel`, " +
-			"or start tmux and press p again")
+		m.err = fmt.Errorf("a conversation opens beside the console inside tmux: start tmux, run " +
+			"`krewe` in it, and press p again")
 		return m, nil
 	}
 
-	// Asked of tmux rather than remembered, because `krewe` opens the conversation itself and the
-	// console did not put it there. A console that only knew about the ones it opened would answer
-	// the first p by opening a second.
+	// Asked of tmux rather than remembered, because the operator can split their own window and the
+	// console did not put that pane there. A console that only knew about the ones it opened would
+	// answer the first p by opening a second.
 	panes := m.panesOrTmux()
 	if beside, found := panes.Beside(here); found {
 		return m, closeConversationCmd(panes, beside)
@@ -132,7 +132,8 @@ func closeConversationCmd(panes Panes, pane string) tea.Cmd {
 }
 
 // tmuxPanes is the real one: the panes are tmux's, and every answer is asked of it rather than
-// remembered, because `krewe` opens the panel itself and the console did not put that pane there.
+// remembered, because the operator can split their own window and the console did not put that pane
+// there.
 type tmuxPanes struct{}
 
 // Beside is the pane immediately to the right of this one, which is where a conversation beside the
@@ -271,7 +272,8 @@ func (m Model) startFreshConversation() (Model, tea.Cmd) {
 	}
 	here := os.Getenv("TMUX_PANE")
 	if here == "" {
-		m.err = fmt.Errorf("a conversation opens beside the console inside tmux: run `krewe` from tmux")
+		m.err = fmt.Errorf("a conversation opens beside the console inside tmux: start tmux, run " +
+			"`krewe` in it, and press this key again")
 		return m, nil
 	}
 
@@ -284,9 +286,9 @@ func (m Model) startFreshConversation() (Model, tea.Cmd) {
 		m.err = err
 		return m, nil
 	}
-	// The pane beside the console, asked of tmux rather than remembered: `krewe` opens the conversation
-	// itself, so the console did not put it there and does not know its identifier. Remembering was
-	// how this opened a fourth pane instead of replacing the third.
+	// The pane beside the console, asked of tmux rather than remembered: the operator can split their
+	// own window, so the console does not know that pane.s identifier. Remembering was how this opened
+	// a fourth pane instead of replacing the third.
 	panes := m.panesOrTmux()
 	beside, _ := panes.Beside(here)
 	freshen := m.freshen
