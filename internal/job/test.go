@@ -162,11 +162,18 @@ func ReadTestReport(reply string) (TestReport, error) {
 		}
 		switch strings.ToLower(found[1]) {
 		case "requirement":
-			// The first one stands, the way the first line under a number stands in a list: a reply that
-			// names two requirements wrote for one of them and mentioned the other.
-			if report.Requirement == 0 {
-				report.Requirement, _ = strconv.Atoi(strings.Fields(text)[0])
+			// Either shape it can arrive in: the number after the word, as the ask asks for it, or the
+			// number the requirement itself is written under. The first readable one stands, the way the
+			// first line under a number stands in a list: a reply naming two requirements wrote for one of
+			// them and mentioned the other.
+			if report.Requirement != 0 {
+				continue
 			}
+			if number, err := strconv.Atoi(found[2]); err == nil {
+				report.Requirement = number
+				continue
+			}
+			report.Requirement, _ = strconv.Atoi(strings.Fields(text)[0])
 		case "ran":
 			if !said {
 				ran, said = strings.Fields(text)[0], true

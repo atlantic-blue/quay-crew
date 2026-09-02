@@ -485,3 +485,26 @@ func TestAWorkerOfTheFanOutNeverFansOutItself(t *testing.T) {
 		t.Fatalf("the system was asked to run %d tasks for %d workers", plane.sent(), len(workers))
 	}
 }
+
+// A worker says which requirement it holds in either shape: the number after the word, which is what
+// the ask asks for, or the number the requirement itself is written under, which is how the ask
+// states it. Both are the same claim, and refusing one of them would cost a task to find out.
+func TestAReportNamesItsRequirementInEitherShape(t *testing.T) {
+	for _, one := range []struct {
+		name, reply string
+	}{
+		{"the number after the word", "Requirement: 3\nRan: 12\nFailing 1: TestOne"},
+		{"the number it is written under",
+			"Requirement 3: a person pastes a link\nRan: 12\nFailing 1: TestOne"},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			report, err := job.ReadTestReport(one.reply)
+			if err != nil {
+				t.Fatalf("ReadTestReport: %v", err)
+			}
+			if report.Requirement != 3 {
+				t.Fatalf("the report reads as requirement %d, want 3", report.Requirement)
+			}
+		})
+	}
+}
