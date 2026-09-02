@@ -367,6 +367,11 @@ func (m Model) act(key string) (Model, tea.Cmd) {
 
 // perform runs an action, whether it was confirmed or never needed to be.
 func (m Model) perform(action Action, row Row) (Model, tea.Cmd) {
+	if action.Folds {
+		// Nothing is asked for. The parts are rows of the listing already on screen, so opening one
+		// is a redraw rather than a call.
+		return m.fold(row), nil
+	}
 	if action.Descend != "" {
 		return m.descendInto(action.Descend, row)
 	}

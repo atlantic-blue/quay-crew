@@ -197,7 +197,7 @@ func TestTheRecordNamesTheRequirementEachFailureCameFrom(t *testing.T) {
 	kept := job.TestsText(wanted, map[int]job.TestReport{
 		1: {Requirement: 1, Ran: 12, Failing: []string{"TestOne", "TestOneAgain"}},
 		2: {Requirement: 2, Ran: 9, Failing: []string{"TestTwo"}},
-	})
+	}, "krewe/tests/9f2a")
 	for _, line := range []string{
 		"Requirement 1: a person pastes a link", "Ran 1: 12", "Fails 1: TestOne",
 		"Fails 1: TestOneAgain", "Requirement 2: a person opens the same transcript", "Fails 2: TestTwo",

@@ -60,6 +60,14 @@ type Row struct {
 	// and a project are addressed by the name in the listing, and a job by the shortened identifier
 	// beside its title, so a job is the one row where the two differ. Empty falls back to the name.
 	Address string
+	// Under is the row this one belongs beneath, by identifier, for a listing where some rows are
+	// parts of others. A job that fans out is the case: five parts of one plan and the job somebody
+	// declared read as six unrelated rows, and the one a person asked for is the one at the bottom.
+	//
+	// A row with it is drawn under its parent and only while that parent is open, so a listing is
+	// the work a person declared until they ask for more. Empty is a row that stands on its own,
+	// which is every row in every other view.
+	Under string
 }
 
 // Name is what to call the row where a human reads it.
@@ -154,6 +162,10 @@ type Action struct {
 	// the case: its asked column holds 34 characters, so the row is a fragment of a sentence and the
 	// rest of it used to be at the command line.
 	Reads func(row Row) string
+	// Folds says this key opens and closes the rows drawn under the selected one, rather than doing
+	// anything to the system. It is the way onto a part: the listing holds the work a person
+	// declared, and this is how the parts of one job are read without the other jobs losing theirs.
+	Folds bool
 	// Descend opens another resource scoped to the selected row, the way enter does where a view has
 	// somewhere to drill into. It exists because a session already spends enter on opening the
 	// conversation, which is the thing an operator does most, and a history is worth a key of its own

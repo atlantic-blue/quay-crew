@@ -7,6 +7,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"github.com/cucumber/godog"
 )
 
@@ -34,38 +35,41 @@ func initializeTestStageSteps(sc *godog.ScenarioContext) {
 	// requirement list: there is no second record of what this job would build.
 	sc.Step(`^a job whose list of (\d+) verticals? a person accepted$`,
 		func(ctx context.Context, verticals int) error {
-			w := worldFrom(ctx)
-			// Matched on the ask rather than queued by position: this job answers a reading first, and a
-			// queue by position would hand the list to that question instead.
-			if verticals == 1 {
-				w.runner.willAnswer(job.TheDesignAsk, oneVertical)
-			}
-			if err := declareJob(ctx, &quaycrewv1.CreateJobRequest{
-				Title: "the transcript page", Brief: "build what the design describes",
-				Product: "pastes a link and gets the text back",
-			}); err != nil {
-				return err
-			}
-			if w.lastErr != nil {
-				return w.lastErr
-			}
-			if err := aPersonAnsweredTheReading(ctx); err != nil {
-				return err
-			}
-			if err := aPersonAcceptedTheList(ctx); err != nil {
-				return err
-			}
+			return aListAPersonAccepted(ctx, verticals, "")
+		})
+
+	// The same job in a repository, which is where its tests have somewhere to go.
+	sc.Step(`^a job in a repository whose list of (\d+) verticals? a person accepted$`,
+		func(ctx context.Context, verticals int) error {
+			return aListAPersonAccepted(ctx, verticals, "atlantic-blue/quay-crew")
+		})
+
+	// Where the tests have to end up. The worker writes them in a sandbox of its own, so a worker
+	// that never commits them writes tests nobody in the next stage can open.
+	sc.Step(`^each worker is told to commit its tests to the branch this job's tests live on$`,
+		func(ctx context.Context) error {
 			one, err := readJob(ctx, 0)
 			if err != nil {
 				return err
 			}
-			if got := len(job.RequirementsOf(jobAsKept(one))); got != verticals {
-				return fmt.Errorf("the accepted list carries %d requirements, want %d: %q",
-					got, verticals, one.GetDesign())
+			branch := job.TestBranch(jobAsKept(one))
+			if branch == "" {
+				return fmt.Errorf("this job names no branch for its tests, so they go nowhere")
+			}
+			workers, err := theWorkers(ctx)
+			if err != nil {
+				return err
+			}
+			for _, worker := range workers {
+				for _, needed := range []string{branch, "Commit every test file"} {
+					if !strings.Contains(worker.GetBrief(), needed) {
+						return fmt.Errorf("the worker holding %q is not told %q, so its tests stay in its "+
+							"own sandbox:\n%s", worker.GetClaim(), needed, worker.GetBrief())
+					}
+				}
 			}
 			return nil
 		})
-
 	// The stage driven to its end, for the scenarios about what comes after it.
 	sc.Step(`^its requirements became failing tests$`, func(ctx context.Context) error {
 		return theRequirementsBecameFailingTests(ctx)
@@ -324,6 +328,7 @@ func theQuestionSays(ctx context.Context, phrase string) error {
 func jobAsKept(one *quaycrewv1.Job) *job.Job {
 	return &job.Job{
 		ID: one.GetId(), Product: one.GetProduct(), Parent: one.GetParent(),
+		Repository:     one.GetRepository(),
 		IdeationAnswer: one.GetIdeationAnswer(),
 		Design:         one.GetDesign(), DesignAccepted: one.GetDesignAccepted(),
 		Tests: one.GetTests(), Build: one.GetBuild(), Accepted: one.GetAccepted(),
@@ -356,4 +361,47 @@ func theRequirementsBecameFailingTests(ctx context.Context) error {
 		}
 	}
 	return fmt.Errorf("the requirements never became failing tests")
+}
+
+// aListAPersonAccepted is a job driven to the point every scenario here starts from: it read the
+// work, it said what it would build, and a person accepted the list.
+//
+// The repository is empty for a job that works in none. A job that names one is the same job with
+// somewhere for its tests to go, and it needs the mode that reaches the network, because every way
+// into a repository is a command that needs it.
+func aListAPersonAccepted(ctx context.Context, verticals int, repository string) error {
+	w := worldFrom(ctx)
+	// Matched on the ask rather than queued by position: this job answers a reading first, and a
+	// queue by position would hand the list to that question instead.
+	if verticals == 1 {
+		w.runner.willAnswer(job.TheDesignAsk, oneVertical)
+	}
+	declared := &quaycrewv1.CreateJobRequest{
+		Title: "the transcript page", Brief: "build what the design describes",
+		Product: "pastes a link and gets the text back",
+	}
+	if repository != "" {
+		declared.Repository, declared.Mode = repository, model.PermissionModeOnTheNetwork()
+	}
+	if err := declareJob(ctx, declared); err != nil {
+		return err
+	}
+	if w.lastErr != nil {
+		return w.lastErr
+	}
+	if err := aPersonAnsweredTheReading(ctx); err != nil {
+		return err
+	}
+	if err := aPersonAcceptedTheList(ctx); err != nil {
+		return err
+	}
+	one, err := readJob(ctx, 0)
+	if err != nil {
+		return err
+	}
+	if got := len(job.RequirementsOf(jobAsKept(one))); got != verticals {
+		return fmt.Errorf("the accepted list carries %d requirements, want %d: %q",
+			got, verticals, one.GetDesign())
+	}
+	return nil
 }

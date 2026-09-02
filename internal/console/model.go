@@ -214,6 +214,11 @@ type Model struct {
 	typing pending
 	input  string
 	filter string
+	// opened are the rows whose parts are drawn under them, by identifier. A row is closed until
+	// somebody opens it, so a listing is the work a person declared rather than that work and every
+	// part of it. It is kept across a drill and the way back, because a listing returned to should be
+	// the listing that was left, and an identifier belongs to one row in one view anyway.
+	opened map[string]bool
 	// search is what the filter was last typed with, kept after the filter itself is cleared, so the
 	// keys for the next and previous match have something to jump through. Escape out of the filter
 	// puts every row back on screen, and that is exactly when jumping between the matches is worth
@@ -538,18 +543,127 @@ func (m Model) clampSelection() Model {
 
 // visibleRows is the rows after the filter, in the order the active resource sorts by. An empty
 // filter shows everything.
+//
+// A filtered listing is flat. A row that is part of another is otherwise hidden by whether its
+// parent is open, so filtering for a part would find nothing, and the filter is the second way onto
+// a part: typing what it is about reaches it without opening the job above it first.
 func (m Model) visibleRows() []Row {
-	matched := m.rows
 	if m.filter != "" {
 		needle := strings.ToLower(m.filter)
-		matched = make([]Row, 0, len(m.rows))
+		matched := make([]Row, 0, len(m.rows))
 		for _, row := range m.rows {
 			if rowMatches(row, needle) {
 				matched = append(matched, row)
 			}
 		}
+		return sortRows(matched, m.active.SortBy)
 	}
-	return sortRows(matched, m.active.SortBy)
+	return m.arranged(sortRows(m.rows, m.active.SortBy))
+}
+
+// arranged draws the listing in the shape its rows describe. A row that says it is part of another
+// is drawn under that one and only while it is open, so the listing is the work a person declared
+// until they ask for the rest of it.
+//
+// A part whose parent is not in this listing stays where it is. A row that quietly disappears is
+// worse than a row in the wrong place, and a listing narrowed by a phase is exactly where a part
+// arrives without the job above it.
+func (m Model) arranged(rows []Row) []Row {
+	parts := map[string][]Row{}
+	listed := make(map[string]bool, len(rows))
+	for _, row := range rows {
+		listed[row.ID] = true
+	}
+	for _, row := range rows {
+		if row.Under != "" && listed[row.Under] {
+			parts[row.Under] = append(parts[row.Under], row)
+		}
+	}
+	if len(parts) == 0 {
+		return rows
+	}
+	arranged := make([]Row, 0, len(rows))
+	for _, row := range rows {
+		if row.Under != "" && listed[row.Under] {
+			continue
+		}
+		arranged = m.put(arranged, row, parts, 0)
+	}
+	return arranged
+}
+
+// put lays one row down, marked with what is under it, and then whatever it is open over.
+func (m Model) put(into []Row, row Row, parts map[string][]Row, depth int) []Row {
+	into = append(into, m.marked(row, len(parts[row.ID]), depth))
+	if !m.opened[row.ID] {
+		return into
+	}
+	for _, part := range parts[row.ID] {
+		into = m.put(into, part, parts, depth+1)
+	}
+	return into
+}
+
+// marked writes the tree into the one cell a person reads the row by: how many parts are under this
+// job and whether they are on screen, and an indent on each part so it reads as belonging to the row
+// above it.
+//
+// The cells are copied rather than written in place. They belong to the listing, which is drawn
+// again on the next refresh, and a marker written onto one would be marked a second time.
+func (m Model) marked(row Row, parts, depth int) Row {
+	if parts == 0 && depth == 0 {
+		return row
+	}
+	at := m.markerColumn()
+	if at >= len(row.Cells) {
+		return row
+	}
+	cells := make([]string, len(row.Cells))
+	copy(cells, row.Cells)
+	cells[at] = strings.Repeat("  ", depth) + partsMarker(parts, m.opened[row.ID]) + cells[at]
+	row.Cells = cells
+	return row
+}
+
+// partsMarker says how many rows are under this one and which way the key would move them. Nothing
+// at all on a row with none, so the mark is only ever on the rows it is about.
+func partsMarker(parts int, open bool) string {
+	if parts == 0 {
+		return ""
+	}
+	if open {
+		return fmt.Sprintf("▾%d ", parts)
+	}
+	return fmt.Sprintf("▸%d ", parts)
+}
+
+// markerColumn is where the tree is drawn, which is the column that flexes: it is the line a person
+// reads the row by, and it is the only one with room to give. A view with no flexible column marks
+// its first.
+func (m Model) markerColumn() int {
+	for at, column := range m.active.Columns {
+		if column.Width == 0 {
+			return at
+		}
+	}
+	return 0
+}
+
+// fold opens the rows under this one, or closes them. The map is rebuilt rather than written to,
+// because a model is a value every scenario holds copies of, and a map written in place would open a
+// row in a copy nobody pressed a key on.
+func (m Model) fold(row Row) Model {
+	opened := make(map[string]bool, len(m.opened)+1)
+	for id, open := range m.opened {
+		opened[id] = open
+	}
+	if opened[row.ID] {
+		delete(opened, row.ID)
+	} else {
+		opened[row.ID] = true
+	}
+	m.opened = opened
+	return m
 }
 
 // sortRows orders rows by one column, stably, so rows that tie keep the order the control plane
