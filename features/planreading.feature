@@ -34,11 +34,11 @@ Feature: A plan is read by several roles, and only what none of them settled is 
         critic:
           type: dispatch
           role: plan-critic
-          prompt: "Read the plan. Write down what you cannot settle."
+          prompt: "Read this plan:\n{{plan}}\nWrite down what you cannot settle."
         tester:
           type: dispatch
           role: test-writer
-          prompt: "Read the same plan. Still open:\n{{questions.open}}"
+          prompt: "Read the same plan:\n{{plan}}\nStill open:\n{{questions.open}}"
         anything:
           type: choice
           on: { questions.open: "" }
@@ -63,6 +63,18 @@ Feature: A plan is read by several roles, and only what none of them settled is 
     Then the run is asking, and the question carries "what does a person type"
     And the question does not carry "which store holds the text"
     And the plan carries 2 questions, 1 of them settled
+
+  # A reading is told to read a plan, so the plan has to be in front of it. A step is a new session
+  # with an empty working directory, and a plan is a column on a row rather than a file, so the run
+  # carries it and every reading renders it.
+  Scenario: Every reading is handed the plan it is told to read
+    When the operator starts the flow "three-readers" in the project, about this plan:
+      """
+      Step 1: read the design
+      Step 2: build the page a person pastes a link into
+      """
+    Then the reading "critic" was given "Step 2: build the page a person pastes a link into"
+    And the reading "tester" was given "Step 2: build the page a person pastes a link into"
 
   # The rows travel to the next reading and the reading behind them does not.
   Scenario: The reading that comes second is handed the open rows and no answer
