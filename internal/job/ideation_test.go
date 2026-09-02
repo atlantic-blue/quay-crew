@@ -293,3 +293,21 @@ func TestTheBiggestReadingStillFitsAQuestion(t *testing.T) {
 		t.Fatalf("the biggest reading makes a question the system cannot ask: %v", err)
 	}
 }
+
+// A session can put a question of its own while it still owes a reading, and a person can answer it.
+// That answer reaches the session in front of the ask rather than being dropped, because a task that
+// arrived without it would be the system asking a person to answer twice.
+func TestAnAnswerToTheSessionsOwnQuestionReachesItWithTheAsk(t *testing.T) {
+	asked := job.Asked(&job.Job{
+		Brief: "build what the design describes", Product: "you paste a link and get the text back",
+		Question: "which of the two stores does this workspace already pay for",
+		Told:     "neither, use the key value one",
+	})
+	for _, phrase := range []string{
+		"which of the two stores", "neither, use the key value one", "write no plan yet",
+	} {
+		if !strings.Contains(asked, phrase) {
+			t.Fatalf("the session was asked %q, want it to say %q", asked, phrase)
+		}
+	}
+}

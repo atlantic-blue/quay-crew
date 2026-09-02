@@ -110,6 +110,12 @@ func Asked(one *Job) string {
 	// decides what gets built, and a plan written from a misreading is consistent with that misreading
 	// the whole way down.
 	case WaitingForItsIdeation(one):
+		// Where the session put a question of its own while it still owed a reading, the answer goes in
+		// front of the ask rather than being dropped. A person answered something, and a task arriving
+		// without it would be the system asking them to answer twice.
+		if one.Told != "" {
+			return CarryOn(one) + "\n\n" + SayWhatYouUnderstood(one)
+		}
 		return SayWhatYouUnderstood(one)
 	// A job that owes a person a plan writes the plan and nothing else. It comes before what it was
 	// told, because what a planned job was told is the correction to a plan rather than the answer to
