@@ -58,11 +58,9 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 	}
 
 	// Through ideation, the way the controller runs it: the session is asked what it understood, it
-	// says so, and the job stops for a person.
-	server.TickJob(ctx)
-	waitForThePhase(t, ctx, client, id, job.PhaseAsking)
-	server.TickJob(ctx)
-	waitForThePhase(t, ctx, client, id, job.PhaseAsking)
+	// says so, and the job stops for a person. The tick that starts the job and the tick that reads
+	// what came back are two passes over the row, so this keeps ticking until the row moves.
+	tickUntilThePhase(t, ctx, server, client, id, job.PhaseAsking)
 
 	asking := readJob(t, ctx, client, id)
 	if asking.GetIdeation() == "" {
@@ -119,16 +117,21 @@ func readJob(t *testing.T, ctx context.Context, client quaycrewv1.ControlPlaneSe
 	return read.GetJob()
 }
 
-// waitForThePhase holds until the row reaches a phase, because the controller does its work in a task of its
-// own and the read that follows it would otherwise race it.
-func waitForThePhase(t *testing.T, ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
-	id, phase string) {
+// tickUntilThePhase drives the controller until the row reaches a phase.
+//
+// The controller does one thing per pass: one tick starts the job, the task runs detached, and a
+// later tick reads what came back. So a test that ticked a fixed number of times would pass on a
+// fast machine and fail on a loaded one.
+func tickUntilThePhase(t *testing.T, ctx context.Context, server *controlplane.Server,
+	client quaycrewv1.ControlPlaneServiceClient, id, phase string) {
 	t.Helper()
-	for i := 0; i < 600; i++ {
+	deadline := time.Now().Add(120 * time.Second)
+	for time.Now().Before(deadline) {
+		server.TickJob(ctx)
 		if readJob(t, ctx, client, id).GetPhase() == phase {
 			return
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatalf("job %s never reached %s, it is %s", id, phase, readJob(t, ctx, client, id).GetPhase())
 }
