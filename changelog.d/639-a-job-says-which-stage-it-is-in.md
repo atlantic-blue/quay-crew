@@ -14,8 +14,11 @@ off the row rather than written on it. Every boundary is already a fact the row 
 copy of it could only disagree with it.
 
 **Only ideation is built.** A job that passed it reads as being in design, and the reading says
-design is not built yet, so nobody takes a named stage for a stage that works. Test and build say
-nothing opens them, because nothing does. A job that states no sentence is an errand and runs no
-stages, and a job declared under another carries the stage of the job above it. Both say so rather
-than naming a stage they are not in. The console jobs view does not carry the stage yet: its table
-cuts the title on a narrow window as soon as a tenth column arrives.
+design is not built yet. The same line says what the job is doing instead, read off its own plan
+columns: it writes its plan next, or it holds a plan nobody approved, or it carries on under a plan a
+person approved. Test and build say nothing opens them, because nothing does.
+
+A job that states no sentence is an errand and runs no stages, and a job declared under another
+carries the stage of the job above it. Both say so rather than naming a stage they are not in. The
+console jobs view does not carry the stage yet: its table cuts the title on a narrow window as soon
+as a tenth column arrives.

@@ -61,6 +61,11 @@ type Stage struct {
 	Opens string
 	// Outside is why this job runs no stages at all, and empty on a job that does.
 	Outside string
+	// Unbuilt is what a reader of a job in a stage that is not built is told, and empty where the
+	// stage works. It names what the job is doing instead, which is a fact about that job rather than
+	// about the stage: a job that has just left ideation has no plan at all, and one further on is
+	// working to a plan a person approved.
+	Unbuilt string
 }
 
 // StageOf is the stage a job is in, read off what the job has done.
@@ -94,7 +99,28 @@ func StageOf(one *Job) Stage {
 	if !Ideated(one) {
 		closedOn = "the plan a person approved, because this job is older than the ideation stage"
 	}
-	return stageStanding(StageDesign, closedOn)
+	design := stageStanding(StageDesign, closedOn)
+	design.Unbuilt = whatItDoesWhileDesignIsNotBuilt(one)
+	return design
+}
+
+// whatItDoesWhileDesignIsNotBuilt is what a job in design is actually doing.
+//
+// The moment ideation closes there is no plan, and a job that said it was carrying on under a plan a
+// person approved would be describing a state no job is in yet: the plan is written next, and a
+// person approves it before any work starts. So this reads the two plan columns rather than the
+// stage, for the reason the stage itself is read off the row: what a reader is told has to be true of
+// the job in front of them.
+func whatItDoesWhileDesignIsNotBuilt(one *Job) string {
+	const notBuilt = "design is not built yet, so this job "
+	switch {
+	case one.PlanApproved:
+		return notBuilt + "carries on under the plan a person approved"
+	case one.Plan != "":
+		return notBuilt + "holds a plan nobody has approved yet"
+	default:
+		return notBuilt + "writes its plan next, and a person approves it before any work starts"
+	}
 }
 
 // stageStanding says what is true of the stage itself, so StageOf says only what is true of the job.
@@ -137,17 +163,4 @@ func (s Stage) Where() string {
 		return "no stage"
 	}
 	return fmt.Sprintf("stage %d of %d: %s", s.Number, len(Stages), s.Name)
-}
-
-// NotBuiltYet is what a reader of a job in an unbuilt stage is told, and empty where the stage
-// works.
-//
-// It says what the job is doing as well, because "design is not built" on its own reads as a broken
-// job rather than as a job carrying on under the plan a person approved.
-func (s Stage) NotBuiltYet() string {
-	if s.Name == "" || s.Built {
-		return ""
-	}
-	return fmt.Sprintf("%s is not built yet, so this job carries on under the plan a person approved",
-		s.Name)
 }

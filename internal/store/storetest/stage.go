@@ -2,6 +2,7 @@ package storetest
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/atlantic-blue/quay-krewe/internal/job"
@@ -12,7 +13,7 @@ import (
 //
 // The stage is read off the row rather than written on it, so what has to be the same in both tiers
 // is the material it is read from: the sentence, the parent, the answer to what the job understood,
-// and the approval of the plan. A store that writes one of those and does not select it, or selects
+// the plan and its approval. A store that writes one of those and does not select it, or selects
 // it and does not scan it, reads back a job in the wrong stage while every reading of the same rows
 // in memory is right. That is the shape this suite exists for, and it is why the stage is read here
 // through the ordinary read rather than off the value the write answered with.
@@ -90,8 +91,14 @@ func runJobStageConformance(t *testing.T, newDataset func(t *testing.T) Opener) 
 		if stage.Built {
 			t.Fatalf("design reads as built, and design is a later slice")
 		}
-		if stage.NotBuiltYet() == "" {
+		if stage.Unbuilt == "" {
 			t.Fatalf("a job in design says nothing about design not being built")
+		}
+		// And it says what the job is doing instead, truthfully. This job answered its reading a
+		// moment ago and has written no plan, so a line about carrying on under an approved plan
+		// would describe a state no job is in yet.
+		if strings.Contains(stage.Unbuilt, "a person approved") {
+			t.Fatalf("a job with no plan is told %q", stage.Unbuilt)
 		}
 	})
 

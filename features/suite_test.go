@@ -821,6 +821,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeFlowSteps(sc)
 	initializePlanReadingSteps(sc)
 	initializeStageSteps(sc)
+	initializeStageWorkSteps(sc)
 	initializeFlowSurfaceSteps(sc)
 	initializePullRequestReviewSteps(sc)
 	initializePullRequestSteps(sc)

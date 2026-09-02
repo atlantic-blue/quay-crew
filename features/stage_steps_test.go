@@ -141,3 +141,38 @@ func theRowFor(ctx context.Context) (string, error) {
 	}
 	return "", fmt.Errorf("the listing carries no row for %s: %s", short, toolFrom(ctx).stdout)
 }
+
+// What a job in a stage that is not built is doing instead. The line is a fact about that job rather
+// than about the stage, so a job that has just left ideation and a job working to an approved plan
+// are told different things.
+func initializeStageWorkSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^the reading says the job writes its plan next$`, func(ctx context.Context) error {
+		const want = "writes its plan next, and a person approves it before any work starts"
+		if out := toolFrom(ctx).stdout; !strings.Contains(out, want) {
+			return fmt.Errorf("the reading does not say %q: %s", want, out)
+		}
+		return nil
+	})
+
+	// The moment ideation closes there is no plan at all, so a reader told the job is carrying on
+	// under one a person approved is being told about a state no job is in yet.
+	sc.Step(`^the reading does not claim a plan nobody approved$`, func(ctx context.Context) error {
+		out := toolFrom(ctx).stdout
+		if strings.Contains(out, "a person approved") {
+			return fmt.Errorf("a job that has written no plan is told a person approved one: %s", out)
+		}
+		if strings.Contains(out, "plan, approved") {
+			return fmt.Errorf("the row carries an approved plan, so this scenario proves nothing: %s", out)
+		}
+		return nil
+	})
+
+	sc.Step(`^the reading says the job carries on under the plan a person approved$`,
+		func(ctx context.Context) error {
+			const want = "carries on under the plan a person approved"
+			if out := toolFrom(ctx).stdout; !strings.Contains(out, want) {
+				return fmt.Errorf("the reading does not say %q: %s", want, out)
+			}
+			return nil
+		})
+}

@@ -17,8 +17,8 @@ func TestAJobThatHasNotStartedIsInIdeation(t *testing.T) {
 	if stage.Opens != "design opens on your answer to what it understood" {
 		t.Fatalf("ideation says the next stage opens on %q", stage.Opens)
 	}
-	if stage.NotBuiltYet() != "" {
-		t.Fatalf("a job in ideation is told its stage is not built: %q", stage.NotBuiltYet())
+	if stage.Unbuilt != "" {
+		t.Fatalf("a job in ideation is told its stage is not built: %q", stage.Unbuilt)
 	}
 }
 
@@ -51,7 +51,7 @@ func TestAJobInAnUnbuiltStageSaysSo(t *testing.T) {
 	if stage.Built {
 		t.Fatalf("design reads as built, and design is a later slice")
 	}
-	if stage.NotBuiltYet() == "" {
+	if stage.Unbuilt == "" {
 		t.Fatalf("a job in design is told nothing about design not being built")
 	}
 	if stage.Where() != "stage 2 of 4: design" {
@@ -143,5 +143,40 @@ func TestWhatClosesAndOpensEachStage(t *testing.T) {
 func TestNoJobIsInNoStage(t *testing.T) {
 	if stage := StageOf(nil); stage.Name != "" || stage.Outside != "" {
 		t.Fatalf("nothing at all is in stage %q", stage.Name)
+	}
+}
+
+// What a job in design is told it is doing, for each of the three states it can be in. The line has
+// to be true of the job in front of the reader: the moment ideation closes there is no plan at all,
+// and a job cannot be carrying on under one nobody has written.
+func TestAJobInDesignIsToldWhatItIsActuallyDoing(t *testing.T) {
+	justAnswered := StageOf(&Job{
+		Product:        "you paste a link and get the text back",
+		IdeationAnswer: "1: on the command line",
+	})
+	want := "design is not built yet, so this job writes its plan next, and a person approves it " +
+		"before any work starts"
+	if justAnswered.Unbuilt != want {
+		t.Fatalf("a job that has just answered its reading is told %q", justAnswered.Unbuilt)
+	}
+
+	written := StageOf(&Job{
+		Product:        "you paste a link and get the text back",
+		IdeationAnswer: "1: on the command line",
+		Plan:           "Step 1: read the design",
+	})
+	if written.Unbuilt != "design is not built yet, so this job holds a plan nobody has approved yet" {
+		t.Fatalf("a job whose plan nobody answered is told %q", written.Unbuilt)
+	}
+
+	approved := StageOf(&Job{
+		Product:        "you paste a link and get the text back",
+		IdeationAnswer: "1: on the command line",
+		Plan:           "Step 1: read the design",
+		PlanApproved:   true,
+	})
+	working := "design is not built yet, so this job carries on under the plan a person approved"
+	if approved.Unbuilt != working {
+		t.Fatalf("a job working to an approved plan is told %q", approved.Unbuilt)
 	}
 }
