@@ -69,8 +69,10 @@ func TestAJobStatingNoOutcomeIsNotAskedAgain(t *testing.T) {
 	}
 }
 
+// Three of the four words settle the job. The fourth is decide, and a job that stops with a person
+// is not settled: TestASessionThatSaysAPersonMustDecideStopsTheJobWithThatPerson holds that one.
 func TestAnAnswerStatingAnOutcomeSettlesTheJobWithThatWord(t *testing.T) {
-	for _, outcome := range job.Outcomes() {
+	for _, outcome := range []string{job.OutcomeProved, job.OutcomeUnproved, job.OutcomeBlocked} {
 		t.Run(outcome, func(t *testing.T) {
 			controller, kept, plane := aController(t)
 			one := kept.add(declaredJob("read the electricity bill"))

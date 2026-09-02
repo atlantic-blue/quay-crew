@@ -145,3 +145,83 @@ func statingTheOutcome(reply, asked string) string {
 	}
 	return reply + "\n\n" + job.OutcomeMarker + " " + job.OutcomeProved
 }
+
+// The word decide does not settle the job, it stops it with a person, and the row that says so is
+// the row every reader of what waits on you already reads.
+//
+// Over the real engine because that is where the incident was: four rows read running while four
+// conversations held a question, and a listing narrowing on the phase is the one query that has to
+// find them.
+func TestASessionThatStopsForAPersonLeavesAnAskingRowInPostgres(t *testing.T) {
+	s, _ := aSystemWithAController(t, &model.FakeRunner{
+		Reply: "One store bills nothing at rest and the other bills a minimum capacity. Which?\n\n" +
+			job.OutcomeMarker + " " + job.OutcomeDecide,
+		Exact: true,
+	})
+	ctx := context.Background()
+	_, project := aProjectOnPostgres(t, s)
+
+	declared, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
+		Project: project, Title: "choose where the transcripts are kept",
+		Brief: "read what the project says about cost and pick the store",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+
+	asking := waitForJob(t, s, declared.GetJob().GetId(), job.PhaseAsking)
+
+	if !strings.Contains(asking.GetQuestion(), "Which?") {
+		t.Fatalf("the row carries the question %q", asking.GetQuestion())
+	}
+	if strings.Contains(asking.GetQuestion(), job.OutcomeMarker) {
+		t.Fatalf("the question a person reads carries the system's own line: %q", asking.GetQuestion())
+	}
+	// The one query. A person who does not know which job needs them reads this and nothing else.
+	waiting, err := s.ListJobs(ctx, &quaycrewv1.ListJobsRequest{Phase: job.PhaseAsking})
+	if err != nil {
+		t.Fatalf("ListJobs: %v", err)
+	}
+	if len(waiting.GetJobs()) != 1 || waiting.GetJobs()[0].GetId() != declared.GetJob().GetId() {
+		t.Fatalf("%d rows read as waiting on a person, want the one that stopped", len(waiting.GetJobs()))
+	}
+	// And the answer goes back, which is what makes the phase worth reaching: an asking row nothing
+	// can answer would be a job stopped in a state with no way out of it.
+	answered, err := s.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{
+		Id: declared.GetJob().GetId(), Answer: "the key value store, on demand",
+	})
+	if err != nil {
+		t.Fatalf("AnswerJob: %v", err)
+	}
+	if answered.GetJob().GetPhase() != job.PhasePending {
+		t.Fatalf("an answered job is %q, want pending", answered.GetJob().GetPhase())
+	}
+}
+
+// The quiet case over the real engine. A job that finished its work leaves no row for a person to
+// answer, so a listing of what waits on you is empty.
+func TestAJobThatFinishedItsWorkLeavesNothingWaitingInPostgres(t *testing.T) {
+	s, _ := aSystemWithAController(t, &model.FakeRunner{
+		Reply: "The bill is due on the 14th.\n\n" + job.OutcomeMarker + " " + job.OutcomeProved,
+		Exact: true,
+	})
+	ctx := context.Background()
+	_, project := aProjectOnPostgres(t, s)
+
+	declared, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
+		Project: project, Title: "read the electricity bill", Brief: "open it and say when it is due",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+
+	waitForJob(t, s, declared.GetJob().GetId(), job.PhaseDone)
+
+	waiting, err := s.ListJobs(ctx, &quaycrewv1.ListJobsRequest{Phase: job.PhaseAsking})
+	if err != nil {
+		t.Fatalf("ListJobs: %v", err)
+	}
+	if len(waiting.GetJobs()) != 0 {
+		t.Fatalf("%d rows read as waiting on a person, and the work finished", len(waiting.GetJobs()))
+	}
+}

@@ -194,6 +194,12 @@ type Store interface {
 	// person, in one movement, for the reason above: a job asking with no record on it is a question
 	// about nothing.
 	ProposeJobIdeation(ctx context.Context, id, understood, question string, event *Event) (*Job, error)
+	// AskJob puts a question to a person and stops the job there. It applies only to a running job.
+	//
+	// The controller reaches for it where a session answered that a person has to decide, so that job
+	// and a job whose session called krewe job ask reach one state rather than two. A second state for
+	// the same fact would mean every reader of what waits on a person had to know both.
+	AskJob(ctx context.Context, id, question string, event *Event) (*Job, error)
 	// IdleSandboxes is the fourth query: the sessions that still hold a container and nothing is
 	// holding open, oldest touched first. A session is not a second resource with a declaration of its
 	// own, so what is wanted of it is derived from the job that names it, and a job still in flight
@@ -978,6 +984,17 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 		}
 	}
 
+	// The session stopped for a person rather than for the work, so the job stops with them and the
+	// record says which. It is read off the answer, the way the pull request address and the outcome
+	// are, because a session that stopped for a person and a session that finished must never read
+	// the same: that is the whole of this. Nothing else is asked of it below, and nothing lands: work
+	// that stopped at a decision has no pull request to be asked for and no plan to be held against.
+	if kind == EventAnswered && OutcomeIn(landing.Answer) == OutcomeDecide {
+		if c.putItToAPerson(ctx, whole, landing.Answer) {
+			return
+		}
+	}
+
 	// Where the job names a repository, the answer has to say where the work went. Read off the answer
 	// rather than reported by the model, the way an expectation is, and read on every path so a job
 	// that stopped for some other reason still records the pull request it did open.
@@ -1239,6 +1256,37 @@ func (c *Controller) proposeThePlan(ctx context.Context, one *Job, tasks []*quay
 	}
 	c.exported(ctx, record)
 	return true, ""
+}
+
+// putItToAPerson stops the job with a person, where its session answered that a person has to
+// decide, and says whether the record took it.
+//
+// It writes what krewe job ask writes, through the same store call, so a job stopped for a person by
+// a measurement and a job stopped for a person by the session itself are one state and not two.
+// Anything that reads what waits on you finds both, and nothing has to learn a second field.
+//
+// The session is left alone. The job holds the question, the lease is let go, and an answer starts it
+// again in the same conversation, which is what a session waiting on a person needs to happen.
+//
+// False on any refusal, and the caller lands the job the ordinary way. A job that could not be put to
+// a person must not be left running: that is the state this whole change exists to remove, and
+// reaching it through the fix for it would be the worst of both.
+func (c *Controller) putItToAPerson(ctx context.Context, one *Job, answer string) bool {
+	ctx = telemetry.Under(ctx, one.TraceID, one.ParentSpanID)
+	question := TheDecisionPutToAPerson(answer, one.Session)
+	record := c.event(ctx, one, EventAsked, question)
+	if _, err := c.store.AskJob(ctx, one.ID, question, record); err != nil {
+		if !errors.Is(err, ErrNotRunning) {
+			c.logger.WarnContext(ctx, "could not stop a job with the person its session asked for",
+				"job", one.ID, "session", one.Session, "error", err)
+			return false
+		}
+		// The row moved under this controller, so somebody else already wrote what came of it.
+		// Landing it here would write a second ending over the first.
+		return true
+	}
+	c.exported(ctx, record)
+	return true
 }
 
 // askWhatMovedUnderIt sends a continued session back for the one thing its answer did not carry, and
