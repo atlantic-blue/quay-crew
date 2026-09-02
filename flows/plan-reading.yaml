@@ -1,0 +1,86 @@
+# Several roles read one plan, and only what none of them could settle is put to a person.
+#
+# A plan used to be read by one role, in one session, once. One reading finds what that reading looks
+# for: a design named the address shape of a page, /videos?id=<video id>, and nobody asked what a
+# person types into it. A test writer asks that first, because an example needs an input and an
+# output. The discipline is example mapping, and the questions nobody can answer are the output of it.
+#
+# The three lenses here are this graph author's choice and not a rule of the system. plan-critic
+# reads the plan against the classes of finding it holds, architect reads it as the person who has
+# to build it, and test-writer reads it as the person who has to write an example of it. A different
+# set of three is a different file.
+#
+# Each reader is a dispatch, so each already runs in a session of its own and cannot be led by what
+# the reading before it said. What travels between them is the rows: a reader writes what its lens
+# could not settle with `krewe job question`, and the next reader is handed every row still open and
+# may settle one with `krewe job settle`. The reader that comes second is the thing most likely to
+# answer the first one's question, which is why the person is asked once, at the end.
+#
+# It runs in edits mode because a reader writes its reading to a file and records its rows through
+# the tool. It creates nothing and it changes no code.
+#
+# The run asks only where something is left. A reading that settled everything reaches the work with
+# no question at all, which is the choice node below: {{questions.open}} is empty when every row is
+# settled.
+name: plan-reading
+version: 1
+mode: edits
+product: a person reads a plan and learns what nobody could settle
+nodes:
+  critic:
+    type: dispatch
+    role: plan-critic
+    prompt: >-
+      Read the plan of the job above you against the sentence it serves. Write your reading to
+      reading.md in your working directory: what the plan says, and what in it you cannot settle
+      from your own lens. Then write each thing you could not settle as its own row, with
+      `krewe job question "<the question>"`, at most three, one line each. A reading that settles
+      everything writes no row at all, and that is a result: say so in reading.md rather than
+      inventing a question to justify the reading. Reply with what you read and what you left open.
+    expect:
+      file: reading.md
+  architect:
+    type: dispatch
+    role: architect
+    prompt: >-
+      Read the same plan, as the person who has to build it. These rows are what an earlier reading
+      could not settle, and you are given no part of that reading but the rows themselves:
+      {{questions.open}}
+      Settle every row your lens can answer, with `krewe job settle <number> "<what settles it>"`.
+      Write what you could not settle as a new row, with `krewe job question "<the question>"`, at
+      most three. Write your reading to reading.md in your working directory. A reading that settles
+      everything and asks nothing is a result: say so rather than inventing a finding.
+    expect:
+      file: reading.md
+  tester:
+    type: dispatch
+    role: test-writer
+    prompt: >-
+      Read the same plan, as the person who has to write an example of it. An example needs an
+      input and an output, so ask what a person types and what comes back before anything else.
+      These rows are what the earlier readings could not settle:
+      {{questions.open}}
+      Settle every row your lens can answer, with `krewe job settle <number> "<what settles it>"`.
+      Write what you could not settle as a new row, with `krewe job question "<the question>"`, at
+      most three. Write your reading to reading.md in your working directory.
+    expect:
+      file: reading.md
+  anythingleft:
+    type: choice
+    on:
+      questions.open: ""
+  ask:
+    type: ask
+    text: >-
+      Three readings of this plan left these questions, and no lens could settle them:
+
+      {{questions.open}}
+
+      Answer them, or say what the plan is instead.
+edges:
+  - [critic, architect]
+  - [architect, tester]
+  - [tester, anythingleft]
+  - [anythingleft, done, "true"]
+  - [anythingleft, ask, "false"]
+  - [ask, done]

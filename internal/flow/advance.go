@@ -234,6 +234,10 @@ func Advance(graph Graph, run Run, event Event) (Run, []Command, error) {
 			return run, nil, fmt.Errorf("flow: run %s sits on %s, which is not a dispatch, so no task result belongs to it", run.ID, run.Node)
 		}
 		run.State["result.reply"] = event.Reply
+		// And under a key of this node's own, beside the session key that is already per node. The run
+		// keeps one result.reply, so a graph whose steps are several readings of one plan could read only
+		// the last of them. Both are written: nothing that reads result.reply changes.
+		run.State[ReplyKeyPrefix+run.Node] = event.Reply
 		// The word the step ended on, beside the prose rather than inside it. This is what a choice
 		// node is meant to read: "the work is done and proved" and "the work cannot be done" are one
 		// sentence apart in a reply and two different edges here.
