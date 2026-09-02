@@ -297,7 +297,7 @@ Feature: Sessions run in isolated sandboxes
     And the command opens the conversation the system holds
 
   # Tokens are what a system costs, and the conversations that cost the most never pass through the
-  # control plane: an operator talking in the panel is talking to the sandbox. The model's own
+  # control plane: an operator talking in a conversation is talking to the sandbox. The model's own
   # transcript is the only record, so that is what the system reads.
   Scenario: A session reports what its conversation has cost
     Given a session started by dispatching "hello"
@@ -312,7 +312,7 @@ Feature: Sessions run in isolated sandboxes
     Then the driver reports no cost, rather than a cost of nothing
 
   # A conversation started inside a sandbox picks its own identifier and tells nobody, so every
-  # conversation opened from the panel was one the system could not name: no history to read back, no
+  # conversation opened beside the console was one the system could not name: no history to read back, no
   # tokens to count, and no way to tell one transcript in a workspace from another. The system names it
   # instead.
   Scenario: The system names a conversation when it opens one

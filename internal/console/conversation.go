@@ -287,7 +287,7 @@ func (m Model) startFreshConversation() (Model, tea.Cmd) {
 		return m, nil
 	}
 	// The pane beside the console, asked of tmux rather than remembered: the operator can split their
-	// own window, so the console does not know that pane.s identifier. Remembering was how this opened
+	// own window, so the console does not know that pane's identifier. Remembering was how this opened
 	// a fourth pane instead of replacing the third.
 	panes := m.panesOrTmux()
 	beside, _ := panes.Beside(here)

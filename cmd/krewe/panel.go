@@ -28,7 +28,7 @@ func panelSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	}
 
 	// The driver, made the first time a conversation is asked for. Not whichever conversation happens
-	// to be newest: that is somebody else.s job, and asking for one should not drop you into it.
+	// to be newest: that is somebody else's job, and asking for one should not drop you into it.
 	opened, err := client.OpenDriver(ctx, &quaycrewv1.OpenDriverRequest{Project: project})
 	if err != nil {
 		return "", err

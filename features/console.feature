@@ -106,7 +106,7 @@ Feature: The operator sees the system from the console
     And the operator presses enter on the selected session
     Then the console opens that session's conversation
 
-  # The console in a panel has a conversation beside it, and enter is how the operator changes which
+  # A console with a conversation beside it: enter is how the operator changes which
   # one. Every open used to land on the driver, whatever the cursor was on, because the session the
   # console handed over was dropped on the way to the pane. The list had several conversations in it
   # and every key gave back the same one.

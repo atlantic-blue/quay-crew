@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-// Beside splits target, tmux.s own pane identifier, to put a conversation next to a console that is
+// Beside splits target, tmux's own pane identifier, to put a conversation next to a console that is
 // already running. This is what p in the console does, and the only way a conversation reaches the
 // screen beside one.
 func Beside(target string, right []string) ([][]string, error) {

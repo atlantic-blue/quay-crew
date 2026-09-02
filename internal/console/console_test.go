@@ -2571,7 +2571,7 @@ func TestPressingPOutsideTmuxSaysWhatToRun(t *testing.T) {
 	}
 }
 
-// TestPressingPHandsOverTheRowUnderTheCursor, and what is made of it is the command line.s business:
+// TestPressingPHandsOverTheRowUnderTheCursor, and what is made of it is the command line's business:
 // nothing under the cursor is what asks for the driver.
 func TestPressingPOpensTheConversationUnderTheCursor(t *testing.T) {
 	t.Setenv("TMUX_PANE", "%3")
