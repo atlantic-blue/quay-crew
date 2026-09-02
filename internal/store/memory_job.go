@@ -231,6 +231,65 @@ func (m *Memory) ProposeJobPlan(_ context.Context, id, plan, question string,
 	return &kept, nil
 }
 
+// ProposeJobIdeation writes what the session said it understood and puts the questions about it to a
+// person, in one movement.
+//
+// The same shape as the plan below it, one stage earlier: only from running, the hold goes with it,
+// and the resume goes with it for the reason AskJob gives.
+func (m *Memory) ProposeJobIdeation(_ context.Context, id, understood, question string,
+	event *job.Event) (*job.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != job.PhaseRunning {
+		return nil, job.ErrNotRunning
+	}
+	found.Phase, found.Ideation, found.Question, found.Told =
+		job.PhaseAsking, understood, question, ""
+	found.Resuming = ""
+	found.LeaseOwner, found.LeaseUntil = "", nil
+	found.UpdatedAt = time.Now().UTC()
+	if err := m.appendJobEvent(event); err != nil {
+		return nil, err
+	}
+	kept := cloneJob(*found)
+	return &kept, nil
+}
+
+// AnswerJobIdeation keeps what a person wrote about what the job understood, whole, and puts the job
+// back to pending so it plans from it.
+//
+// Only from asking and only where nothing has been answered yet, in the same movement, so an answer
+// that arrives twice leaves the first one and one task. The first is kept rather than the last
+// because the job is already planning from it by then, and a record that quietly changed under a plan
+// would leave a reader unable to say which words the plan was written from.
+//
+// What it was told is cleared, the way an approval clears it. The answer is not an instruction to
+// carry on with work: it is the material the plan is written from, and it reaches the session inside
+// the task that asks for the plan.
+func (m *Memory) AnswerJobIdeation(_ context.Context, id, answer string,
+	event *job.Event) (*job.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != job.PhaseAsking || found.IdeationAnswer != "" {
+		return nil, job.ErrNotAsking
+	}
+	found.Phase, found.Told, found.IdeationAnswer = job.PhasePending, "", answer
+	found.StartedAt, found.UpdatedAt = nil, time.Now().UTC()
+	if err := m.appendJobEvent(event); err != nil {
+		return nil, err
+	}
+	kept := cloneJob(*found)
+	return &kept, nil
+}
+
 // ApproveJobPlan records that a person approved the plan and puts the job back to pending, so a
 // controller starts the work against it.
 //

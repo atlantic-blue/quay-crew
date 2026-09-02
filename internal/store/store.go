@@ -433,6 +433,15 @@ type Store interface {
 	// ordinary AnswerJob road, because it is a correction the session writes the next plan from.
 	ProposeJobPlan(ctx context.Context, id, plan, question string, event *job.Event) (*job.Job, error)
 	ApproveJobPlan(ctx context.Context, id string, event *job.Event) (*job.Job, error)
+	// ProposeJobIdeation and AnswerJobIdeation are the same pair one stage earlier: the first writes
+	// what the session said it understood and puts the questions to a person, and the second keeps
+	// what that person wrote, whole, and puts the job back to pending so it plans from the answer.
+	//
+	// The answer is content rather than consent, so there is no word that passes and no word that
+	// refuses. What was written is kept, and a question the answer left alone stays unknown.
+	ProposeJobIdeation(ctx context.Context, id, understood, question string,
+		event *job.Event) (*job.Job, error)
+	AnswerJobIdeation(ctx context.Context, id, answer string, event *job.Event) (*job.Job, error)
 	// RecordJobStep writes down one thing the session doing a running job finished. The same words
 	// twice leave one step, because the record is the set of what is finished rather than a log of
 	// what was said, and a session continuing a job says again what it said before.

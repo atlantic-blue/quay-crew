@@ -1,0 +1,23 @@
+-- A job that states the sentence says what it understood before it writes a plan, and a person
+-- answers in their own words.
+--
+-- The failure it answers: the plan gate stops a job before any work, and it stopped it one step too
+-- late. The session read a sentence and a brief, and wrote its steps out of whatever it made of the
+-- two. Nobody was ever asked what the sentence meant, so the plan was the session marking its own
+-- reading, and a person answering yes to it approved steps standing on an understanding they had
+-- never seen. A misreading passes that gate whole, because the steps agree with the misreading.
+--
+-- ideation is what the session said it understood, kept in the system's own rendering rather than as
+-- the reply: what it understood, what the work is not, what it was told, what it assumed, what it
+-- does not know, how sure it is, and the questions it cannot answer for itself. ideation_answer is
+-- what a person then wrote about it, whole and unrewritten.
+--
+-- Two text columns and no flag beside them. An answer is prose a person wrote, so an answer being
+-- there is the fact that somebody answered. A plan needs its flag because approval is one word, and
+-- a plan that was refused carries the same text as a plan nobody read.
+--
+-- Empty string rather than null, the way every other column on this table already is: a reader that
+-- has to tell null from empty is a reader with two cases where there is one. Every job written
+-- before this understood nothing and was answered by nobody, which is what an errand is.
+alter table jobs add column if not exists ideation text not null default '';
+alter table jobs add column if not exists ideation_answer text not null default '';

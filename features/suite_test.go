@@ -181,16 +181,25 @@ func (r *recordingRunner) answerFor(asked int, text string) string {
 			return pair[1]
 		}
 	}
-	if len(r.says) == 0 {
-		return statingTheOutcome("you said: "+text, text)
+	said, exact := "you said: "+text, false
+	if len(r.says) > 0 {
+		if asked > len(r.says) {
+			asked = len(r.says)
+		}
+		said, exact = r.says[asked-1], r.exact[asked-1]
 	}
-	if asked > len(r.says) {
-		asked = len(r.says)
+	if exact {
+		return said
 	}
-	if r.exact[asked-1] {
-		return r.says[asked-1]
+	// A task that asks what the session understood gets a reading, unless the scenario queued one
+	// itself. Every job that states the sentence is asked this before anything else, so a double that
+	// answered a plan to it would make every scenario about a planned job into a scenario about the
+	// double ignoring its task. It is the rule the outcome line already follows.
+	if strings.Contains(text, job.TheUnderstandingAsk) &&
+		!strings.Contains(said, job.UnderstandingMarker) {
+		return model.FakeUnderstanding
 	}
-	return statingTheOutcome(r.says[asked-1], text)
+	return statingTheOutcome(said, text)
 }
 
 // statingTheOutcome ends an answer the way a session that read its task ends one.
@@ -834,6 +843,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeContextCeilingSteps(sc)
 	initializeSettlingSteps(sc)
 	initializePlanSteps(sc)
+	initializeIdeationSteps(sc)
 	initializeLoopingSteps(sc)
 	initializeCapabilitySteps(sc)
 	initializeProductSteps(sc)

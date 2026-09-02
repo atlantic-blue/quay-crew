@@ -89,6 +89,23 @@ func (s *Server) AnswerJob(ctx context.Context, req *quaycrewv1.AnswerJobRequest
 	}
 
 	told := s.jobEvent(ctx, found, job.EventTold, answer)
+	// What a person says about what the job understood, before it plans. It is kept whole and the plan
+	// is written from it, so there is no word that passes and no word that refuses: this road takes
+	// whatever was written, including "yes", which touches no question and leaves every one of them
+	// unknown. Reading that as agreement is the failure the whole stage exists for.
+	if job.WaitingForItsIdeation(found) && found.Ideation != "" {
+		understood, err := s.store.AnswerJobIdeation(ctx, found.ID, answer, told)
+		if err != nil {
+			if errors.Is(err, job.ErrNotAsking) {
+				return nil, status.Errorf(codes.FailedPrecondition,
+					"job %s is %s, so there is nothing of its waiting to be answered: "+
+						"krewe job list --phase asking says which are waiting", found.ID, found.Phase)
+			}
+			return nil, storeError(err, "answer")
+		}
+		s.ExportJob(ctx, told)
+		return &quaycrewv1.AnswerJobResponse{Job: asJob(understood)}, nil
+	}
 	// The one question the system itself put, rather than the session: whether the plan the crew wrote
 	// serves the sentence the job states. An answer of yes starts the work against that plan. Anything
 	// else is the correction, and it takes the ordinary road below: the job goes back to pending with

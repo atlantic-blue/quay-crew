@@ -16,6 +16,10 @@ Feature: A person approves the plan before any work starts
   nothing. An answer of no does not end the job: it replaces the plan, and the session writes the
   next one from what the person said, so nobody has to write a plan by hand.
 
+  One stage stands in front of this one. Before it writes a plan the job says what it understood and
+  a person answers that in their own words, which is its own feature file. The plan is then written
+  from what the person wrote, so the scenarios here begin after that exchange.
+
   The approval is worth nothing on its own, so the work is then held to it. The plan is numbered, the
   session records each step it finishes with its number, and a step nothing accounts for stops the
   job.
@@ -27,11 +31,13 @@ Feature: A person approves the plan before any work starts
 
   Scenario: A job that states the sentence is asked for its plan and for no work
     Given a job that says a person "pastes a link and gets the text back"
+    And a person answered what that job understood
     When the controller ticks
     Then the session is asked for a plan and told to do no work
 
   Scenario: The plan lands on the row and the job stops for a person
     Given a job that says a person "pastes a link and gets the text back"
+    And a person answered what that job understood
     And the session will answer with a plan of 2 steps
     When the controller ticks
     And the task the controller sent lands
@@ -39,7 +45,7 @@ Feature: A person approves the plan before any work starts
     Then the job is asking, and the row carries the plan it wrote
     And the question names the sentence and the plan
     And the plan is not approved yet
-    And the system was asked to run 1 task
+    And the system was asked to run 2 tasks
 
   # The whole point of an answer of no. It costs one task, and the same answer after everything is
   # built costs the job.

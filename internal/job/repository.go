@@ -105,15 +105,21 @@ func Asked(one *Job) string {
 	// a question, so only one of the two is ever the instruction in hand.
 	case one.Resuming != "":
 		said = append(said, Continued(one))
+	// Then what the session understood the work to be. It comes above the plan for the same
+	// reason the plan comes above the work: what is put in front of a person has to be the thing that
+	// decides what gets built, and a plan written from a misreading is consistent with that misreading
+	// the whole way down.
+	case WaitingForItsIdeation(one):
+		return SayWhatYouUnderstood(one)
 	// A job that owes a person a plan writes the plan and nothing else. It comes before what it was
 	// told, because what a planned job was told is the correction to a plan rather than the answer to
 	// a question: a session given CarryOn here would be told to carry on with work it has not started.
 	// It comes before a handoff for the same reason: a job with no approved plan has no work to carry
 	// on with, so the session taking it over is owed the plan rather than the record.
 	//
-	// It is the one road that carries no line about an outcome. The answer to it is a plan, the
-	// controller reads the plan and puts it to a person, and no job is ever settled on it, so a
-	// session asked for a word that ends the job would be asked for something this task cannot end.
+	// Neither this road nor the one above it carries a line about an outcome. The answer to each is
+	// something the controller reads and puts to a person, and no job is ever settled on either, so a
+	// session asked for a word that ends the job would be asked for something the task cannot end.
 	case WaitingForItsPlan(one):
 		if one.Told != "" {
 			return WriteThePlanAgain(one)

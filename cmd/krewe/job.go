@@ -467,6 +467,11 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	// and carries no reason at all: without this line it reads as a job that has always been this
 	// role's, and the three attempts that came before it are invisible.
 	sayItLooped(out, one)
+	// What the job understood before it planned, what a person said about it, and which of the
+	// questions that answer left alone. It is above the plan because it comes before the plan and
+	// because the plan is read against it: a reader holding both can see which parts of the
+	// understanding a person put there and which the session filled in for itself.
+	sayWhatItUnderstood(out, one)
 	// The plan, and whether a person approved it. It is above what the session finished, because the
 	// steps below are read against it: a reader holding both can see for themselves which step of the
 	// plan the work accounted for.
@@ -564,6 +569,38 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 // The attempts are printed under it, oldest first, each held to a line. What a person deciding what
 // to do next needs is what the session actually said, and a similarity on its own is a number nobody
 // can act on.
+// sayWhatItUnderstood prints what the job said it understood before it planned, what a person
+// answered, and the questions that answer left alone.
+//
+// Told and Assumed reach the reader as the session marked them, unrewritten, because that mark is the
+// whole point: a plan carries no sign of which of its footings a human put there, and this is where a
+// reader finds out. The questions still unknown are worked out again here rather than stored, the way
+// the reading of the request is, because they are a function of two fields the row already carries
+// and a third copy could only disagree with them.
+func sayWhatItUnderstood(out io.Writer, one *quaycrewv1.Job) {
+	understood := one.GetIdeation()
+	if understood == "" {
+		return
+	}
+	if one.GetIdeationAnswer() == "" {
+		fmt.Fprintln(out, "what it understands, waiting for you to answer in your own words:")
+	} else {
+		fmt.Fprintln(out, "what it understood before it planned:")
+	}
+	for _, line := range strings.Split(understood, "\n") {
+		fmt.Fprintf(out, "  %s\n", line)
+	}
+	if answer := one.GetIdeationAnswer(); answer != "" {
+		fmt.Fprintln(out, "you answered:")
+		for _, line := range strings.Split(answer, "\n") {
+			fmt.Fprintf(out, "  %s\n", line)
+		}
+		for _, left := range job.StillUnknown(understood, answer) {
+			fmt.Fprintf(out, "  still unknown: question %d, %s\n", left.Number, left.Text)
+		}
+	}
+}
+
 func sayItLooped(out io.Writer, one *quaycrewv1.Job) {
 	if one.GetLoopedStep() == 0 {
 		return

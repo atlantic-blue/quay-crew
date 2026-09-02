@@ -8925,6 +8925,16 @@ type Job struct {
 	// finishes with its number, and a step nothing accounts for stops the job.
 	Plan         string `protobuf:"bytes,45,opt,name=plan,proto3" json:"plan,omitempty"`
 	PlanApproved bool   `protobuf:"varint,46,opt,name=plan_approved,json=planApproved,proto3" json:"plan_approved,omitempty"`
+	// ideation is what the session said it understood before it wrote that plan: what the work is, what
+	// it is not, what it was told, what it filled in for itself, what it does not know, how sure it is,
+	// and the questions it cannot answer from the repository, the brief and the sentence.
+	// ideation_answer is what a person then wrote about it, in their own words and kept whole.
+	//
+	// The answer is content rather than consent, so there is no flag beside these: an answer being there
+	// is the fact that somebody answered, and a question the answer left alone stays unknown rather than
+	// being read as agreed.
+	Ideation       string `protobuf:"bytes,59,opt,name=ideation,proto3" json:"ideation,omitempty"`
+	IdeationAnswer string `protobuf:"bytes,60,opt,name=ideation_answer,json=ideationAnswer,proto3" json:"ideation_answer,omitempty"`
 	// escalation is what this job does when it goes in circles, as it was declared: "ask", or
 	// "role:<name>". Empty is asking.
 	Escalation string `protobuf:"bytes,41,opt,name=escalation,proto3" json:"escalation,omitempty"`
@@ -9313,6 +9323,20 @@ func (x *Job) GetPlanApproved() bool {
 		return x.PlanApproved
 	}
 	return false
+}
+
+func (x *Job) GetIdeation() string {
+	if x != nil {
+		return x.Ideation
+	}
+	return ""
+}
+
+func (x *Job) GetIdeationAnswer() string {
+	if x != nil {
+		return x.IdeationAnswer
+	}
+	return ""
 }
 
 func (x *Job) GetEscalation() string {
@@ -12255,7 +12279,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\x98\x10\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xdd\x10\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -12306,7 +12330,9 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\bhandoffs\x182 \x03(\v2\x17.quaycrew.v1.JobHandoffR\bhandoffs\x12\x1a\n" +
 	"\bresuming\x18' \x01(\tR\bresuming\x12\x12\n" +
 	"\x04plan\x18- \x01(\tR\x04plan\x12#\n" +
-	"\rplan_approved\x18. \x01(\bR\fplanApproved\x12\x1e\n" +
+	"\rplan_approved\x18. \x01(\bR\fplanApproved\x12\x1a\n" +
+	"\bideation\x18; \x01(\tR\bideation\x12'\n" +
+	"\x0fideation_answer\x18< \x01(\tR\x0eideationAnswer\x12\x1e\n" +
 	"\n" +
 	"escalation\x18) \x01(\tR\n" +
 	"escalation\x125\n" +
