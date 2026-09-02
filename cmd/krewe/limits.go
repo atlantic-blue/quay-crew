@@ -259,5 +259,5 @@ func waitingMeans(limits *quaycrewv1.WorkspaceLimits) string {
 	if limits.GetWaitingSeconds() > 0 {
 		return "  (past this the telling names how long the job has waited)"
 	}
-	return "  (the system's own, a guess: the median from job.asked to job.raised replaces it)"
+	return "  (the system's own, a guess: the median gap from a wait starting to its telling replaces it)"
 }

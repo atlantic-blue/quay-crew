@@ -56,3 +56,9 @@ Feature: A job that stops for a person tells them
     When two surfaces draw the same waiting job
     Then the record holds one telling, naming the surface that carried it
     And krewe job show prints the gap between the question and the telling
+
+  Scenario: A wait that follows an answered question is not dated from that question
+    Given the session running that job asked its question
+    And a person answered it and the job ran on
+    When that job fails and a surface names it
+    Then krewe job show dates the wait from the failure, not from the answered question

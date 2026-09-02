@@ -1017,12 +1017,17 @@ func pullRequestState(one *quaycrewv1.Job) string {
 	return fmt.Sprintf("%s, read %s ago", reading, display.Age(read))
 }
 
-// sayWhenItWasTold prints when this job asked, when the first surface named it to a person, and the
-// gap between the two.
+// sayWhenItWasTold prints when this wait started, when the first surface named it to a person, and
+// the gap between the two.
 //
-// The gap is the number the telling is judged on: it is how long somebody was not knowing that
-// something waited on them. Four jobs once waited more than an hour because nothing read job.asked,
-// and a system that fixed that and never measured it would have no way to say whether it had.
+// The gap is the number the telling is judged on: how long somebody was not knowing that something
+// waited on them. Four jobs once waited more than an hour because nothing read job.asked, and a
+// system that fixed that and never measured it would have no way to say whether it had.
+//
+// It belongs to the wait a person is in now, so it is measured from where that wait began rather
+// than from the question column, which holds the last question this job asked however many waits ago
+// that was. A red board records no start at all, so it says so rather than printing a number
+// measured from something else.
 //
 // A wait nothing has named yet says so rather than printing a gap. That is the state the incident
 // was in, and reading it as though nobody had asked would hide exactly the case this exists for.
@@ -1031,7 +1036,10 @@ func sayWhenItWasTold(out io.Writer, one *quaycrewv1.Job) {
 	if asked == nil && raised == nil {
 		return
 	}
-	if asked != nil {
+	why, _, waiting := job.WaitsOn(one)
+	// The question stays on the row after it is answered, so it is this wait's only while this job
+	// is the one asking. On any other wait it belongs to a decision somebody already made.
+	if asked != nil && why == job.WaitingAsking {
 		fmt.Fprintf(out, "asked at: %s\n", asked.AsTime().Local().Format(time.RFC3339))
 	}
 	if raised == nil {
@@ -1039,10 +1047,25 @@ func sayWhenItWasTold(out io.Writer, one *quaycrewv1.Job) {
 		return
 	}
 	fmt.Fprintf(out, "told at:  %s\n", raised.AsTime().Local().Format(time.RFC3339))
-	if asked != nil {
-		fmt.Fprintf(out, "the wait was carried after %s\n",
-			job.Waited(raised.AsTime().Sub(asked.AsTime())))
+	if !waiting {
+		return
 	}
+	began, known := job.WaitBegan(why, stampOrZero(asked), one.GetUpdatedAt().AsTime())
+	if !known {
+		fmt.Fprintln(out, "how long that took is not known: nothing records when the checks turned red")
+		return
+	}
+	fmt.Fprintf(out, "the wait was carried after %s\n", job.Waited(raised.AsTime().Sub(began)))
+}
+
+// stampOrZero is the moment a row carries, and nil where it carries none, which is the shape the
+// arithmetic takes so a column that was never written is never read as the zero moment.
+func stampOrZero(at *timestamppb.Timestamp) *time.Time {
+	if at == nil {
+		return nil
+	}
+	moment := at.AsTime()
+	return &moment
 }
 
 // runJobQuestion writes down one thing this reading of the plan could not settle.

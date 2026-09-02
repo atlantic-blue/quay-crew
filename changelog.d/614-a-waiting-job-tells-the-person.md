@@ -24,7 +24,8 @@ so. What replaces it is the median time from `job.asked` to `job.raised` over on
 
 `job.raised` is the new record, written by the first surface to name a waiting job and carrying which
 surface that was, once for each wait rather than once for each redraw. `krewe job show` prints both
-moments and the gap between them, which is the time somebody spent not knowing.
+moments and the gap between them. That gap is measured from where the wait in hand began: see
+`changelog.d/637-the-wait-gap-belongs-to-the-wait.md`, which corrects what this claimed.
 
 Nothing leaves this machine. No phone, no chat, no mail: reaching a device off it needs a credential
 the crew does not have, and that decision is recorded in `docs/ARCHITECTURE.md` under 31 August 2026.
