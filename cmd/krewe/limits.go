@@ -34,6 +34,9 @@ const (
 	// job it is doing. It is the one number on this row that ships set rather than unset, and where it
 	// came from is printed beside it.
 	flagContextCeiling = "--context-ceiling"
+	// How long a job may wait for a person here before the telling names the age beside it. It ships
+	// at fifteen minutes, which is a guess: job.DefaultWaiting names the measurement that replaces it.
+	flagWaiting = "--waiting"
 )
 
 // runLimits reads and sets what a workspace lets its sessions declare.
@@ -48,10 +51,10 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 	}
 	if len(rest) > 1 {
 		return fmt.Errorf("usage: krewe limits [<workspace>] [%s <n>] [%s <n>] [%s <n>] "+
-			"[%s <duration>] [%s <duration>] [%s <duration>] [%s <mebibytes>] [%s <per cent>] "+
-			"[%s <per cent>]",
+			"[%s <duration>] [%s <duration>] [%s <duration>] [%s <duration>] [%s <mebibytes>] "+
+			"[%s <per cent>] [%s <per cent>]",
 			flagMaxDepth, flagMaxRunning, flagBudgetTokens, flagLease, flagReclaim, flagArchive,
-			flagRequestMemory, flagRequestProcessor, flagContextCeiling)
+			flagWaiting, flagRequestMemory, flagRequestProcessor, flagContextCeiling)
 	}
 	typed := ""
 	if len(rest) == 1 {
@@ -102,6 +105,7 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 		{flagLease, func(seconds int32) { asked.LeaseSeconds = seconds }},
 		{flagReclaim, func(seconds int32) { asked.ReclaimSeconds = seconds }},
 		{flagArchive, func(seconds int32) { asked.ArchiveSeconds = seconds }},
+		{flagWaiting, func(seconds int32) { asked.WaitingSeconds = seconds }},
 	} {
 		if !values.has(given.flag) {
 			continue
@@ -134,6 +138,7 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 	fmt.Fprintf(out, "archive        %s%s\n", lengthOr(asked.GetArchiveSeconds()),
 		timeMeans(asked.GetArchiveSeconds(), "nothing here is filed away on its own"))
 	fmt.Fprintf(out, "ctx ceiling    %d%%%s\n", ceilingOf(asked), ceilingMeans(asked))
+	fmt.Fprintf(out, "waiting        %s%s\n", waitingOf(asked), waitingMeans(asked))
 	if !setting {
 		fmt.Fprintf(out, "\nraise one with krewe limits %s %s <n>\n", located.Path, flagMaxDepth)
 	}
@@ -213,7 +218,7 @@ func leaseOr(seconds int32) string {
 func limitsFlagsTaken() map[string]bool {
 	return map[string]bool{
 		flagMaxDepth: true, flagMaxRunning: true, flagBudgetTokens: true, flagLease: true,
-		flagReclaim: true, flagArchive: true,
+		flagReclaim: true, flagArchive: true, flagWaiting: true,
 		flagRequestMemory: true, flagRequestProcessor: true,
 		flagContextCeiling: true,
 	}
@@ -236,4 +241,23 @@ func ceilingMeans(limits *quaycrewv1.WorkspaceLimits) string {
 		return "  (a session past this hands the rest of its job to a fresh one)"
 	}
 	return "  (the system's own, from a standard rather than from any measurement of this system)"
+}
+
+// waitingOf is how long a job may wait for a person here before the telling names the age beside it,
+// which is the workspace's where it set one and the system's where it did not.
+func waitingOf(limits *quaycrewv1.WorkspaceLimits) string {
+	if set := limits.GetWaitingSeconds(); set > 0 {
+		return (time.Duration(set) * time.Second).String()
+	}
+	return job.DefaultWaiting.String()
+}
+
+// waitingMeans says where the number came from, because this one is a guess and reads exactly like
+// the ones that are measured. It also says what happens at it: a limit that only prints a length
+// tells an operator nothing about what the system does when a wait passes it.
+func waitingMeans(limits *quaycrewv1.WorkspaceLimits) string {
+	if limits.GetWaitingSeconds() > 0 {
+		return "  (past this the telling names how long the job has waited)"
+	}
+	return "  (the system's own, a guess: the median from job.asked to job.raised replaces it)"
 }

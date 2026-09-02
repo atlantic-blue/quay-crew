@@ -53,6 +53,7 @@ func (s *Server) SetWorkspaceLimits(ctx context.Context, req *quaycrewv1.SetWork
 		{"lease", int64(asked.GetLeaseSeconds())},
 		{"reclaim time", int64(asked.GetReclaimSeconds())},
 		{"archive time", int64(asked.GetArchiveSeconds())},
+		{"waiting time", int64(asked.GetWaitingSeconds())},
 	} {
 		if refusal.value < 0 {
 			return nil, status.Errorf(codes.InvalidArgument,
@@ -77,6 +78,7 @@ func (s *Server) SetWorkspaceLimits(ctx context.Context, req *quaycrewv1.SetWork
 		ReclaimSeconds:        int(asked.GetReclaimSeconds()),
 		ArchiveSeconds:        int(asked.GetArchiveSeconds()),
 		ContextCeilingPercent: int(asked.GetContextCeilingPercent()),
+		WaitingSeconds:        int(asked.GetWaitingSeconds()),
 	})
 	if err != nil {
 		return nil, storeError(err, "set workspace limits")
@@ -92,6 +94,7 @@ func asLimits(from job.Limits) *quaycrewv1.WorkspaceLimits {
 		LeaseSeconds:   int32(from.LeaseSeconds),
 		ReclaimSeconds: int32(from.ReclaimSeconds),
 		ArchiveSeconds: int32(from.ArchiveSeconds),
+		WaitingSeconds: int32(from.WaitingSeconds),
 		// The share as the row holds it, which is zero where the workspace has said nothing. What zero
 		// means is the reader's to say, and both readers say it: the command line prints the system's
 		// own beside it, and the controller takes the system's own.

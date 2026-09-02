@@ -86,6 +86,7 @@ const (
 	ControlPlaneService_RefuseJob_FullMethodName                = "/quaycrew.v1.ControlPlaneService/RefuseJob"
 	ControlPlaneService_RecordSteer_FullMethodName              = "/quaycrew.v1.ControlPlaneService/RecordSteer"
 	ControlPlaneService_ListSteers_FullMethodName               = "/quaycrew.v1.ControlPlaneService/ListSteers"
+	ControlPlaneService_GetWaiting_FullMethodName               = "/quaycrew.v1.ControlPlaneService/GetWaiting"
 	ControlPlaneService_GetWorkspaceLimits_FullMethodName       = "/quaycrew.v1.ControlPlaneService/GetWorkspaceLimits"
 	ControlPlaneService_SetWorkspaceLimits_FullMethodName       = "/quaycrew.v1.ControlPlaneService/SetWorkspaceLimits"
 	ControlPlaneService_ListSessionEvents_FullMethodName        = "/quaycrew.v1.ControlPlaneService/ListSessionEvents"
@@ -193,6 +194,8 @@ type ControlPlaneServiceClient interface {
 	ListSteers(ctx context.Context, in *ListSteersRequest, opts ...grpc.CallOption) (*ListSteersResponse, error)
 	// What a workspace lets its sessions declare. The operator reads and sets these; a session may do
 	// neither, because a caller that could raise its own ceiling has no ceiling.
+	// What waits for a person, in one read, so every surface tells them the same thing.
+	GetWaiting(ctx context.Context, in *GetWaitingRequest, opts ...grpc.CallOption) (*GetWaitingResponse, error)
 	GetWorkspaceLimits(ctx context.Context, in *GetWorkspaceLimitsRequest, opts ...grpc.CallOption) (*GetWorkspaceLimitsResponse, error)
 	SetWorkspaceLimits(ctx context.Context, in *SetWorkspaceLimitsRequest, opts ...grpc.CallOption) (*SetWorkspaceLimitsResponse, error)
 	ListSessionEvents(ctx context.Context, in *ListSessionEventsRequest, opts ...grpc.CallOption) (*ListSessionEventsResponse, error)
@@ -889,6 +892,16 @@ func (c *controlPlaneServiceClient) ListSteers(ctx context.Context, in *ListStee
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) GetWaiting(ctx context.Context, in *GetWaitingRequest, opts ...grpc.CallOption) (*GetWaitingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetWaitingResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_GetWaiting_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) GetWorkspaceLimits(ctx context.Context, in *GetWorkspaceLimitsRequest, opts ...grpc.CallOption) (*GetWorkspaceLimitsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetWorkspaceLimitsResponse)
@@ -1066,6 +1079,8 @@ type ControlPlaneServiceServer interface {
 	ListSteers(context.Context, *ListSteersRequest) (*ListSteersResponse, error)
 	// What a workspace lets its sessions declare. The operator reads and sets these; a session may do
 	// neither, because a caller that could raise its own ceiling has no ceiling.
+	// What waits for a person, in one read, so every surface tells them the same thing.
+	GetWaiting(context.Context, *GetWaitingRequest) (*GetWaitingResponse, error)
 	GetWorkspaceLimits(context.Context, *GetWorkspaceLimitsRequest) (*GetWorkspaceLimitsResponse, error)
 	SetWorkspaceLimits(context.Context, *SetWorkspaceLimitsRequest) (*SetWorkspaceLimitsResponse, error)
 	ListSessionEvents(context.Context, *ListSessionEventsRequest) (*ListSessionEventsResponse, error)
@@ -1292,6 +1307,9 @@ func (UnimplementedControlPlaneServiceServer) RecordSteer(context.Context, *Reco
 }
 func (UnimplementedControlPlaneServiceServer) ListSteers(context.Context, *ListSteersRequest) (*ListSteersResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSteers not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) GetWaiting(context.Context, *GetWaitingRequest) (*GetWaitingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetWaiting not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) GetWorkspaceLimits(context.Context, *GetWorkspaceLimitsRequest) (*GetWorkspaceLimitsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetWorkspaceLimits not implemented")
@@ -2544,6 +2562,24 @@ func _ControlPlaneService_ListSteers_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_GetWaiting_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetWaitingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).GetWaiting(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_GetWaiting_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).GetWaiting(ctx, req.(*GetWaitingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_GetWorkspaceLimits_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetWorkspaceLimitsRequest)
 	if err := dec(in); err != nil {
@@ -2962,6 +2998,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListSteers",
 			Handler:    _ControlPlaneService_ListSteers_Handler,
+		},
+		{
+			MethodName: "GetWaiting",
+			Handler:    _ControlPlaneService_GetWaiting_Handler,
 		},
 		{
 			MethodName: "GetWorkspaceLimits",

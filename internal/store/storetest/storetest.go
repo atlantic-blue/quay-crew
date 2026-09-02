@@ -2233,6 +2233,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	runJobControllerConformance(t, newDataset)
 	runJobLeaseConformance(t, newDataset)
 	runJobAskingConformance(t, newDataset)
+	runJobTellingConformance(t, newDataset)
 	runJobPlanConformance(t, newDataset)
 	runJobIdeationConformance(t, newDataset)
 	runJobClaimConformance(t, newDataset)
