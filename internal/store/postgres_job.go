@@ -21,6 +21,7 @@ const jobColumns = `id, workspace, project, title, brief, role, role_version, mo
 	pull_request_status, pull_request_checks, pull_request_check, pull_request_review,
 	pull_request_read_at, pull_request_failed,
 	request,
+	asked_at, raised_at,
 	created_at, updated_at, started_at, finished_at`
 
 // CreateJob writes a job and the record of its declaration in one transaction.
@@ -296,7 +297,7 @@ func (p *Postgres) StopJob(ctx context.Context, id, reason string, event *job.Ev
 func (p *Postgres) AskJob(ctx context.Context, id, question string, event *job.Event) (*job.Job, error) {
 	return p.moveJob(ctx, id, "ask job", job.ErrNotRunning, []*job.Event{event}, `
 		update jobs set phase = $2, question = $3, told = '', resuming = '', lease_owner = '',
-			lease_until = null, updated_at = now()
+			lease_until = null, updated_at = now(), asked_at = now(), raised_at = null
 		where id = $1 and phase = $4`,
 		job.PhaseAsking, question, job.PhaseRunning)
 }
@@ -325,7 +326,7 @@ func (p *Postgres) ProposeJobPlan(ctx context.Context, id, plan, question string
 	event *job.Event) (*job.Job, error) {
 	return p.moveJob(ctx, id, "propose job plan", job.ErrNotRunning, []*job.Event{event}, `
 		update jobs set phase = $2, plan = $3, question = $4, told = '', resuming = '', lease_owner = '',
-			lease_until = null, updated_at = now()
+			lease_until = null, updated_at = now(), asked_at = now(), raised_at = null
 		where id = $1 and phase = $5`,
 		job.PhaseAsking, plan, question, job.PhaseRunning)
 }
@@ -415,6 +416,7 @@ func scanJob(row rowScanner) (*job.Job, error) {
 		&found.PullRequestState.FailedCheck, &found.PullRequestState.Review,
 		&readAt, &found.PullRequestState.Failed,
 		&found.Request,
+		&found.AskedAt, &found.RaisedAt,
 		&found.CreatedAt, &found.UpdatedAt, &found.StartedAt, &found.FinishedAt); err != nil {
 		return nil, err
 	}
@@ -605,7 +607,7 @@ func (p *Postgres) StartJob(ctx context.Context, id string, lease job.Lease, eve
 	// run carrying "there is not enough memory".
 	return p.moveJob(ctx, id, "start job", job.ErrNotPending, events, `
 		update jobs set phase = $2, attempts = attempts + 1, lease_owner = $3, lease_until = $4,
-			reason = '', started_at = now(), updated_at = now()
+			reason = '', started_at = now(), updated_at = now(), raised_at = null
 		where id = $1 and phase = $5`,
 		job.PhaseRunning, lease.Owner, lease.Until, job.PhasePending)
 }
@@ -845,4 +847,40 @@ func scanDigest(row rowScanner) (*job.Digest, error) {
 	}
 	one.CreatedAt = one.CreatedAt.UTC()
 	return &one, nil
+}
+
+// RaiseJob writes that a surface named this job as waiting, and the record of the telling with it,
+// in one transaction.
+//
+// Conditional on raised_at being null, in the same statement, so the console redrawing every three
+// seconds and the command line printing its line at the same moment write one job.raised between
+// them rather than one each. The caller learns which of them wrote it from the answer, and only that
+// one offers the record to the event log.
+//
+// It leaves updated_at alone on purpose. That column is when the wait started, which is what every
+// surface measures the age from, so a raise that touched it would reset the age it is reporting.
+func (p *Postgres) RaiseJob(ctx context.Context, id string, event *job.Event) (bool, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("raise job: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	tag, err := tx.Exec(ctx,
+		`update jobs set raised_at = now() where id = $1 and raised_at is null`, id)
+	if err != nil {
+		return false, fmt.Errorf("raise job: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return false, nil
+	}
+	if event != nil {
+		if err := appendJobEvent(ctx, tx, event); err != nil {
+			return false, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("raise job: %w", err)
+	}
+	return true, nil
 }

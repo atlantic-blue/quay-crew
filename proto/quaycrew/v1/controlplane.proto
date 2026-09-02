@@ -1510,6 +1510,16 @@ message Job {
   google.protobuf.Timestamp updated_at = 27;
   google.protobuf.Timestamp started_at = 28;
   google.protobuf.Timestamp finished_at = 29;
+
+  // asked_at is when this job put its question to a person, and raised_at is when the first surface
+  // named it as waiting. The gap between the two is the time a person spent not knowing, which is
+  // the number the telling is judged on.
+  //
+  // Both are unset where the moment has not happened. A raise is written once for each wait rather
+  // than once for each poll, so a surface that draws the same waiting job every three seconds moves
+  // neither of them.
+  google.protobuf.Timestamp asked_at = 59;
+  google.protobuf.Timestamp raised_at = 60;
 }
 
 // JobAttempt is what one attempt at one step of a job produced, and how like the attempts before it
@@ -1878,8 +1888,57 @@ message WorkspaceLimits {
   // cent of a window and is poor past 70, and from no measurement anybody has taken here. A
   // workspace that wants the gate off sets it to 100, which refuses nothing until the window is full.
   int32 context_ceiling_percent = 10;
+  // waiting_seconds is how long a job may wait for a person here before the telling names the age
+  // beside it. Zero takes the system's own, which is 15 minutes.
+  //
+  // That 15 is a guess and nothing has measured it. The measurement that replaces it is the median
+  // time from job.asked to job.raised over one week of real jobs: a limit under that median names
+  // the age on every wait and stops being read, and one far above it says nothing while a person
+  // waits an hour.
+  int32 waiting_seconds = 11;
 }
 
+
+// Waiting is one job that waits for a person, and what it wants from them. It is the one shape every
+// surface draws the telling from, so the console, the command line and the status line can never
+// disagree about how many jobs wait or about what one of them asked.
+message Waiting {
+  string job = 1;
+  string workspace = 2;
+  string project = 3;
+  string title = 4;
+  // why is the kind of wait, in one word: "asking" for a question a person has to answer, "blocked"
+  // for a job that failed or was stopped, and "checks" for one whose pull request the forge says is
+  // red.
+  string why = 5;
+  // want is what this job wants from a person: the question it put, the reason it stopped, or the
+  // check that failed. It goes through the same redactor a record does, so a sealed value a question
+  // quoted never reaches a screen.
+  string want = 6;
+  // since is when the wait started, and waited_seconds how long it has lasted at the moment of the
+  // read. over_limit says the wait passed the workspace's limit, which is what makes a surface name
+  // the age rather than only the job.
+  google.protobuf.Timestamp since = 7;
+  int64 waited_seconds = 8;
+  bool over_limit = 9;
+  // pull_request is the address of the work, for a wait a person answers by opening it. Empty where
+  // there is none.
+  string pull_request = 10;
+}
+
+// GetWaitingRequest asks what waits for a person.
+//
+// surface is what is asking: the console, the command line, the status line. The first surface to
+// name a waiting job writes job.raised carrying its name, so the gap from job.asked reads back
+// afterwards. A request that names no surface is answered and records nothing, because a caller that
+// will not say who it is has not told anybody.
+message GetWaitingRequest {
+  string workspace = 1;
+  string surface = 2;
+}
+message GetWaitingResponse {
+  repeated Waiting waiting = 1;
+}
 message GetWorkspaceLimitsRequest {
   string workspace = 1;
 }
@@ -2005,6 +2064,9 @@ service ControlPlaneService {
   rpc ListSteers(ListSteersRequest) returns (ListSteersResponse);
   // What a workspace lets its sessions declare. The operator reads and sets these; a session may do
   // neither, because a caller that could raise its own ceiling has no ceiling.
+  // What waits for a person, in one read, so every surface tells them the same thing.
+  rpc GetWaiting(GetWaitingRequest) returns (GetWaitingResponse);
+
   rpc GetWorkspaceLimits(GetWorkspaceLimitsRequest) returns (GetWorkspaceLimitsResponse);
   rpc SetWorkspaceLimits(SetWorkspaceLimitsRequest) returns (SetWorkspaceLimitsResponse);
   rpc ListSessionEvents(ListSessionEventsRequest) returns (ListSessionEventsResponse);

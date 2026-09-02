@@ -231,7 +231,7 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 	// Internal: the panes krewe opens run these, and the model runtime in a sandbox runs the last of
 	// them. Not in the usage, because they are not commands anybody types.
 	case "statusline":
-		return runStatusLine(args[1:], os.Stdin, out)
+		return runStatusLine(ctx, client, args[1:], os.Stdin, out)
 	case "console":
 		return runBareConsole(ctx, client, args[1:], addr)
 	case "sessions", "session":

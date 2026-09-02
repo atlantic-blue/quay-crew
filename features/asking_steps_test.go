@@ -56,7 +56,7 @@ func initializeAskingSteps(sc *godog.ScenarioContext) {
 		return askAsTheSession(ctx, question, "")
 	})
 
-	sc.Step(`^the session running that job asked its question$`, func(ctx context.Context) error {
+	sc.Step(`^the session running that job (?:asks|asked) its question$`, func(ctx context.Context) error {
 		if err := askAsTheSession(ctx, theCostQuestion, ""); err != nil {
 			return err
 		}

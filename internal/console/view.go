@@ -15,6 +15,11 @@ func (m Model) View() string {
 	visible := m.visibleRows()
 
 	var lines []string
+	// Above everything, in every mode. A job waiting on a person is not a property of the view they
+	// happen to have open, and a telling drawn only on one screen is a telling they have to navigate to.
+	if line := m.waitingLine(); line != "" {
+		lines = append(lines, alert.Render(m.fit(line)))
+	}
 	if m.mode == modeOutput {
 		lines = append(lines, m.panelTop(len(m.commandOutput)))
 		for _, line := range m.commandBody() {

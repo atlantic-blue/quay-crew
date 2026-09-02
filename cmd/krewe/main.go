@@ -101,6 +101,15 @@ func dispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 		// would corrupt it.
 		reportDrift(ctx, client, os.Stderr)
 		reportDegraded(ctx, client, os.Stderr)
+		// Last of the three, so it is the line closest to the command the operator typed. It is also the
+		// only one of them about their work rather than about the system.
+		//
+		// Not under the status line, which is the model runtime redrawing several times a second and
+		// carries the same count itself. Two tellings of one wait, one of them printed where nobody can
+		// read it, is worse than one.
+		if args[0] != "statusline" {
+			reportWaiting(ctx, client, os.Stderr)
+		}
 		return run(ctx, client, args, os.Stdout, addr)
 	}
 	if !isatty.IsTerminal(os.Stdout.Fd()) {

@@ -167,6 +167,10 @@ func (m *Memory) AskJob(_ context.Context, id, question string, event *job.Event
 		return nil, job.ErrNotRunning
 	}
 	found.Phase, found.Question, found.Told = job.PhaseAsking, question, ""
+	// The moment the question went on the row, kept where nothing later moves it: updated_at is what
+	// every surface measures the wait from, and the gap this is half of is measured to the raise.
+	asked := time.Now().UTC()
+	found.AskedAt, found.RaisedAt = &asked, nil
 	// And the resume with it. A job that asked is carried on by the answer rather than by the steps it
 	// had finished, so only one of the two is ever the instruction in hand.
 	found.Resuming = ""
@@ -222,6 +226,9 @@ func (m *Memory) ProposeJobPlan(_ context.Context, id, plan, question string,
 		return nil, job.ErrNotRunning
 	}
 	found.Phase, found.Plan, found.Question, found.Told = job.PhaseAsking, plan, question, ""
+	// A plan waiting for approval is a question like any other, so the wait is stamped the same way.
+	asked := time.Now().UTC()
+	found.AskedAt, found.RaisedAt = &asked, nil
 	found.LeaseOwner, found.LeaseUntil = "", nil
 	found.UpdatedAt = time.Now().UTC()
 	if err := m.appendJobEvent(event); err != nil {
@@ -351,6 +358,8 @@ func cloneJob(from job.Job) job.Job {
 	from.LeaseUntil = cloneTime(from.LeaseUntil)
 	from.StartedAt = cloneTime(from.StartedAt)
 	from.FinishedAt = cloneTime(from.FinishedAt)
+	from.AskedAt = cloneTime(from.AskedAt)
+	from.RaisedAt = cloneTime(from.RaisedAt)
 	return from
 }
 
@@ -468,6 +477,9 @@ func (m *Memory) StartJob(_ context.Context, id string, lease job.Lease, events 
 	// The reason goes with the pending phase it described. A job held for want of room and then
 	// admitted must not carry "there is not enough memory" while it runs.
 	found.Reason = ""
+	// And the raise with it. A job back in motion has nobody waiting on it, so the next wait it
+	// falls into is told about rather than read as one somebody was already shown.
+	found.RaisedAt = nil
 	found.LeaseOwner, found.LeaseUntil = lease.Owner, leaseEnd(lease)
 	found.StartedAt, found.UpdatedAt = &now, now
 	if err := m.appendJobEvents(events); err != nil {
@@ -701,4 +713,30 @@ func inHistory(held *job.Job, query job.HistoryQuery) bool {
 		}
 	}
 	return query.Window.Holds(held.CreatedAt)
+}
+
+// RaiseJob writes that a surface named this job as waiting, and the record of the telling with it.
+//
+// Only where nothing has raised it yet, under the same lock, so two surfaces drawing at the same
+// moment write one job.raised between them rather than one each. The answer says which of them
+// wrote it, and only that one offers the record to the event log.
+//
+// UpdatedAt is left alone on purpose. It is when the wait started, which is what every surface
+// measures the age from, so a raise that touched it would reset the age it is reporting.
+func (m *Memory) RaiseJob(_ context.Context, id string, event *job.Event) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return false, ErrNotFound
+	}
+	if found.RaisedAt != nil {
+		return false, nil
+	}
+	raised := time.Now().UTC()
+	found.RaisedAt = &raised
+	if err := m.appendJobEvent(event); err != nil {
+		return false, err
+	}
+	return true, nil
 }

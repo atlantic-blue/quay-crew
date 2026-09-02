@@ -515,6 +515,7 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	if one.GetTold() != "" {
 		fmt.Fprintf(out, "told: %s\n", one.GetTold())
 	}
+	sayWhenItWasTold(out, one)
 	for _, waits := range one.GetAfter() {
 		fmt.Fprintf(out, "waits for %s\n", display.ShortID(waits))
 	}
@@ -952,4 +953,32 @@ func pullRequestState(one *quaycrewv1.Job) string {
 	}
 	reading.ReadAt = read.AsTime()
 	return fmt.Sprintf("%s, read %s ago", reading, display.Age(read))
+}
+
+// sayWhenItWasTold prints when this job asked, when the first surface named it to a person, and the
+// gap between the two.
+//
+// The gap is the number the telling is judged on: it is how long somebody was not knowing that
+// something waited on them. Four jobs once waited more than an hour because nothing read job.asked,
+// and a system that fixed that and never measured it would have no way to say whether it had.
+//
+// A wait nothing has named yet says so rather than printing a gap. That is the state the incident
+// was in, and reading it as though nobody had asked would hide exactly the case this exists for.
+func sayWhenItWasTold(out io.Writer, one *quaycrewv1.Job) {
+	asked, raised := one.GetAskedAt(), one.GetRaisedAt()
+	if asked == nil && raised == nil {
+		return
+	}
+	if asked != nil {
+		fmt.Fprintf(out, "asked at: %s\n", asked.AsTime().Local().Format(time.RFC3339))
+	}
+	if raised == nil {
+		fmt.Fprintln(out, "told to nobody yet: no surface has named this as waiting")
+		return
+	}
+	fmt.Fprintf(out, "told at:  %s\n", raised.AsTime().Local().Format(time.RFC3339))
+	if asked != nil {
+		fmt.Fprintf(out, "the wait was carried after %s\n",
+			job.Waited(raised.AsTime().Sub(asked.AsTime())))
+	}
 }

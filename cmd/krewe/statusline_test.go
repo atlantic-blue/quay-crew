@@ -73,7 +73,7 @@ func TestTheLineIsDrawnFromWhatTheRuntimePipesIn(t *testing.T) {
 // drawing a line that ignores what was typed, because the person who typed it is debugging.
 func TestTheStatusLineTakesNoArguments(t *testing.T) {
 	var out bytes.Buffer
-	err := runStatusLine([]string{"anything"}, strings.NewReader(""), &out)
+	err := runStatusLine(context.Background(), nil, []string{"anything"}, strings.NewReader(""), &out)
 	if err == nil {
 		t.Fatalf("krewe statusline anything was answered rather than refused: %q", out.String())
 	}
