@@ -11,9 +11,14 @@ asks first, the way it does on a job and on a session, and the reason it writes 
 `:roles`, `:skills` and `:hooks` are the catalogue. Each row says how far it reaches: the system
 holds some of them, so every workspace has those without attaching anything, and the rest reach a
 session only where somebody attached them. That is the question a name and a version cannot answer,
-and it is why a workspace nobody attached anything to still holds four skills. A skill or a hook the
-system keeps and does not give out says why where its summary would be, so nobody hunts for a skill
-the model never had.
+and it is why a workspace nobody attached anything to still holds four skills.
+
+No row says why a skill is held and not given. That reason belongs to a workspace or to a session,
+because what leaves a skill out is a secret one of them has not set, and these views ask for the
+system's own catalogue. The control plane fills `left_out` on a workspace listing and on a session
+listing and leaves it empty on this one, so a cell reading it would be empty on every row.
+`krewe skill list <workspace>` still answers it. The console can answer it the day one of these views
+is scoped to a workspace.
 
 A run has no age column, and every other listing here has one. Nothing records when a run began: not
 the wire, not the store, so the column could only draw a dash.

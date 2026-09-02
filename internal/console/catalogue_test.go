@@ -8,6 +8,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
 // catalogueClient is a control plane double for the three listings of what the system holds. It
@@ -16,31 +17,61 @@ import (
 type catalogueClient struct {
 	quaycrewv1.ControlPlaneServiceClient
 
-	roles   []*quaycrewv1.Role
-	skills  []*quaycrewv1.Skill
-	hooks   []*quaycrewv1.Hook
+	roles  []*quaycrewv1.Role
+	skills []*quaycrewv1.Skill
+	hooks  []*quaycrewv1.Hook
+
+	// What each view asked for, so a case can say the request was the system's own catalogue rather
+	// than a workspace's or a session's. The three answers are different, and only two of them carry
+	// a reason a thing is held and not given.
+	rolesFor  *quaycrewv1.ListRolesRequest
+	skillsFor *quaycrewv1.ListSkillsRequest
+	hooksFor  *quaycrewv1.ListHooksRequest
+
 	listErr error
 }
 
-func (c *catalogueClient) ListRoles(_ context.Context, _ *quaycrewv1.ListRolesRequest, _ ...grpc.CallOption) (*quaycrewv1.ListRolesResponse, error) {
+func (c *catalogueClient) ListRoles(_ context.Context, req *quaycrewv1.ListRolesRequest, _ ...grpc.CallOption) (*quaycrewv1.ListRolesResponse, error) {
 	if c.listErr != nil {
 		return nil, c.listErr
 	}
+	c.rolesFor = req
 	return &quaycrewv1.ListRolesResponse{Roles: c.roles}, nil
 }
 
-func (c *catalogueClient) ListSkills(_ context.Context, _ *quaycrewv1.ListSkillsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListSkillsResponse, error) {
+// The system's own listing is answered the way the control plane answers it, `left_out` included:
+// it fills that field on a workspace listing and on a session listing, and never on this one. A
+// double looser than the real thing is how a cell that is empty on every real row passes a test.
+func (c *catalogueClient) ListSkills(_ context.Context, req *quaycrewv1.ListSkillsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListSkillsResponse, error) {
 	if c.listErr != nil {
 		return nil, c.listErr
 	}
-	return &quaycrewv1.ListSkillsResponse{Skills: c.skills}, nil
+	c.skillsFor = req
+	answered := make([]*quaycrewv1.Skill, 0, len(c.skills))
+	for _, one := range c.skills {
+		carried := proto.Clone(one).(*quaycrewv1.Skill)
+		if req.GetWorkspace() == "" && req.GetSession() == "" {
+			carried.LeftOut = ""
+		}
+		answered = append(answered, carried)
+	}
+	return &quaycrewv1.ListSkillsResponse{Skills: answered}, nil
 }
 
-func (c *catalogueClient) ListHooks(_ context.Context, _ *quaycrewv1.ListHooksRequest, _ ...grpc.CallOption) (*quaycrewv1.ListHooksResponse, error) {
+// Hooks carry no reason at all: nothing in the control plane fills `left_out` on a hook, on any of
+// its listings, so this answers what the real one answers.
+func (c *catalogueClient) ListHooks(_ context.Context, req *quaycrewv1.ListHooksRequest, _ ...grpc.CallOption) (*quaycrewv1.ListHooksResponse, error) {
 	if c.listErr != nil {
 		return nil, c.listErr
 	}
-	return &quaycrewv1.ListHooksResponse{Hooks: c.hooks}, nil
+	c.hooksFor = req
+	answered := make([]*quaycrewv1.Hook, 0, len(c.hooks))
+	for _, one := range c.hooks {
+		carried := proto.Clone(one).(*quaycrewv1.Hook)
+		carried.LeftOut = ""
+		answered = append(answered, carried)
+	}
+	return &quaycrewv1.ListHooksResponse{Hooks: answered}, nil
 }
 
 func aCatalogue() *catalogueClient {
@@ -161,25 +192,27 @@ func TestAHoldingSaysHowFarItReaches(t *testing.T) {
 	}
 }
 
-// A skill the workspace holds and the session was not given is the row somebody is reading when they
-// go hunting for a skill the model never had. The reason goes where the summary would be.
-func TestASkillHeldAndNotGivenSaysWhyOnTheScreen(t *testing.T) {
+// The three views ask for the system's own catalogue, and the control plane fills `left_out` only on a
+// workspace listing and on a session listing. A double that answered with a reason would let a cell
+// pass here that is empty on every row in front of an operator.
+func TestTheseViewsAskForWhatTheSystemHoldsAndNothingNarrower(t *testing.T) {
 	client := aCatalogue()
-	client.skills[0].LeftOut = "the workspace has not set GITHUB_TOKEN"
 
-	rows, err := Skills(client).List(context.Background(), "")
-	if err != nil {
-		t.Fatalf("listing skills: %v", err)
+	for _, resource := range []Resource{Roles(client), Skills(client), Hooks(client)} {
+		if _, err := resource.List(context.Background(), ""); err != nil {
+			t.Fatalf("listing %s: %v", resource.Name, err)
+		}
 	}
-	if rows[0].State != StateStopped {
-		t.Fatalf("a skill that is not given is drawn as %v, want dimmed rather than as a failure", rows[0].State)
+	if client.skillsFor.GetWorkspace() != "" || client.skillsFor.GetSession() != "" {
+		t.Fatalf("the skills view asked for workspace %q session %q, want the system's own catalogue",
+			client.skillsFor.GetWorkspace(), client.skillsFor.GetSession())
 	}
-	model := newTestModel(t, Skills(client))
-	model.width = 140
-	model, _ = update(t, model, rowsFor(model, rows...))
-	drawn := model.View()
-	if !strings.Contains(drawn, "left out") || !strings.Contains(drawn, "GITHUB_TOKEN") {
-		t.Fatalf("the listing does not say why the skill is not given:\n%s", drawn)
+	if client.hooksFor.GetWorkspace() != "" || client.hooksFor.GetSession() != "" {
+		t.Fatalf("the hooks view asked for workspace %q session %q, want the system's own catalogue",
+			client.hooksFor.GetWorkspace(), client.hooksFor.GetSession())
+	}
+	if client.rolesFor.GetWorkspace() != "" {
+		t.Fatalf("the roles view asked for workspace %q, want the system's own catalogue", client.rolesFor.GetWorkspace())
 	}
 }
 
