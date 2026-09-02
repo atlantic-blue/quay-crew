@@ -5,16 +5,9 @@ import (
 	"time"
 )
 
-// What waits for a person, in one reading, so every surface says the same thing.
-//
-// Four jobs stopped for a person on 1 September 2026 and nothing told him. The oldest waited more
-// than one hour, and he found out because he asked what the state was. The transition wrote
-// job.asked to the event log and nothing read it, while the briefing, the job listing and the
-// console all answered the question and all three waited to be opened.
-//
-// So the reading moves here, where the control plane can hand it to every surface. This file holds
-// the part that is a function of a row: which jobs wait, what each one wants, and how long it has
-// been. Where the telling then goes is issue 614's other five pieces.
+// What waits for a person, read off a row, so every surface says the same thing. Four jobs stopped
+// on 1 September 2026 and nothing told anybody, because the briefing, the job listing and the console
+// all answered this question and all three waited to be opened.
 
 // The kinds of wait, in one word each. A surface prints the word, so they are what a person reads.
 const (
@@ -28,13 +21,11 @@ const (
 	WaitingChecks = "checks"
 )
 
-// DefaultWaiting is how long a job waits for a person before the telling names the age beside it.
+// DefaultWaiting is how long a job waits before the telling names the age beside it.
 //
-// Fifteen minutes, and it is a guess. Nothing has measured it. The measurement that replaces it is
-// the median time from job.asked to job.raised over one week of real jobs: a limit under that median
-// names an age on every wait and stops being read, and one far above it says nothing while a person
-// waits an hour. The one figure in hand is the incident this answers, where the oldest of four jobs
-// waited more than one hour, so the guess is deliberately well under that.
+// Fifteen minutes, and it is a guess: nothing has measured it. What replaces it is the median time
+// from job.asked to job.raised over one week of real jobs. A limit under that median names an age on
+// every wait and stops being read; one far above it says nothing while a person waits an hour.
 const DefaultWaiting = 15 * time.Minute
 
 // Waiting is how long a job may wait here before the telling names the age, or the system's own
