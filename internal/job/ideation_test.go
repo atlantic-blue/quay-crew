@@ -1,6 +1,7 @@
 package job_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -261,4 +262,34 @@ func readingOrFail(t *testing.T, reply string) job.Ideation {
 		t.Fatalf("ReadIdeation: %v", err)
 	}
 	return understood
+}
+
+// The record is put to a person as one question, and a question has its own ceiling in asking.go.
+// The two have to agree, or the system would write a question it could not ask. This holds the
+// largest record the reader accepts against that ceiling.
+func TestTheBiggestReadingStillFitsAQuestion(t *testing.T) {
+	line := strings.Repeat("x", job.IdeationLineLimit)
+	said := []string{
+		"Understood: " + strings.Repeat("y", job.UnderstandingLimit),
+		"Not: " + strings.Repeat("z", job.UnderstandingLimit),
+		"Confidence: " + line,
+	}
+	for i := range job.IdeationPoints {
+		said = append(said, "Told: "+line, "Assumed: "+line, "Unknown: "+line)
+		said = append(said, fmt.Sprintf("Question %d: %s", i+1, line))
+	}
+	understood, err := job.ReadIdeation(strings.Join(said, "\n"))
+	if err != nil {
+		// The reader refuses it, which is the other way the two ceilings can agree, and the refusal
+		// has to be about the size rather than about the shape.
+		if !strings.Contains(err.Error(), "put to a person as one") {
+			t.Fatalf("the biggest reading is refused for the wrong reason: %v", err)
+		}
+		return
+	}
+	asked := job.AskingWhetherThisIsRight(strings.Repeat("s", job.ProductLimit),
+		job.IdeationText(understood))
+	if _, err := job.TidyQuestion(asked); err != nil {
+		t.Fatalf("the biggest reading makes a question the system cannot ask: %v", err)
+	}
 }
