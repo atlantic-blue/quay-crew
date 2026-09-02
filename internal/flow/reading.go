@@ -87,3 +87,33 @@ func questionsFor(rows []job.Question, onto string) []job.Question {
 	}
 	return carried
 }
+
+// thePlanBeingRead puts the plan the readings read into the run's opening state, off the job the run
+// hangs under.
+//
+// Without it a graph whose steps say "read the plan" hands every reading nothing. A step is a new
+// session with an empty working directory, and a plan is a column on a row rather than a file, so
+// there is nowhere else a reading could get one: the run has to carry it and the prompt has to
+// render it.
+//
+// A run started with a plan in its state keeps that one, because a caller that passed a plan was
+// asking for a reading of that plan. A run under nothing, or under a job that carries no plan, gets
+// no key at all, and the prompt then renders the template as typed, which is the graph author's
+// signal that the run was started with nothing to read.
+func (e *Engine) thePlanBeingRead(ctx context.Context, run *Run, above string) {
+	if run.State == nil {
+		run.State = map[string]string{}
+	}
+	if above == "" || run.State[PlanKey] != "" {
+		return
+	}
+	held, err := e.store.GetJob(ctx, above)
+	if err != nil {
+		slog.WarnContext(ctx, "the job this run hangs under could not be read, so its readings are handed no plan",
+			"run", run.ID, "job", above, "error", err)
+		return
+	}
+	if held.Plan != "" {
+		run.State[PlanKey] = held.Plan
+	}
+}

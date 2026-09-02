@@ -380,6 +380,10 @@ func (e *Engine) create(ctx context.Context, from starting) (Run, string, Graph,
 	if carrier.Product != "" {
 		run.State[stateProduct] = carrier.Product
 	}
+	// And the plan its readings read, off the job the run hangs under. A graph whose steps read a plan
+	// has no other way to reach one: a step is a new session with an empty working directory, and a
+	// plan is a column rather than a file.
+	e.thePlanBeingRead(ctx, &run, carrier.Parent)
 	// Held back rather than pending, because a controller must never send this one as a task. It is a
 	// parent whose children are outstanding, which is what waiting already means, and the controller's
 	// queries pass over it on that.

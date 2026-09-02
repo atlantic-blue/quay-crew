@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/flow"
 	"github.com/atlantic-blue/quay-krewe/internal/job"
 	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"github.com/cucumber/godog"
@@ -63,6 +64,22 @@ func initializePlanReadingSteps(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+
+	// Started about a plan, which is what a run of the shipped graph is: the plan reaches the run and
+	// every reading renders it. A step is a new session with an empty working directory, so a reading
+	// told to read a plan and handed none reads nothing at all.
+	sc.Step(`^the operator starts the flow "([^"]*)" in the project, about this plan:$`,
+		func(ctx context.Context, name string, plan *godog.DocString) error {
+			w := worldFrom(ctx)
+			engine := flow.NewEngine(w.store, planeClient{client: w.client}, nil, w.server)
+			run, err := engine.Start(ctx, name, w.workspaceID, w.projectID,
+				map[string]string{flow.PlanKey: plan.Content})
+			w.flowRun, w.lastErr = run, err
+			if err != nil {
+				return err
+			}
+			return driveTheSystem(ctx)
+		})
 
 	sc.Step(`^the reading "([^"]*)" writes down "([^"]*)"$`,
 		func(ctx context.Context, node, question string) error {
