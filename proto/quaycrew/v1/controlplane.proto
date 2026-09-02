@@ -1488,6 +1488,15 @@ message Job {
   // being read as agreed.
   string ideation = 60;
   string ideation_answer = 61;
+  // design is the list of verticals the crew said it would build once a person had answered what it
+  // understood: one line per vertical saying what a person can do when it lands, and a line under it
+  // saying what that person is shown. A line opening with Yours is one the person put on the list
+  // themselves. design_accepted says whether a person accepted the list.
+  //
+  // There is a flag here and none beside the reading above, because this is answered by one word. A
+  // list a person sent back for a rewrite carries the same text as a list nobody has answered yet.
+  string design = 64;
+  bool design_accepted = 65;
   // escalation is what this job does when it goes in circles, as it was declared: "ask", or
   // "role:<name>". Empty is asking.
   string escalation = 41;

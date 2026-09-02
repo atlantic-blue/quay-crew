@@ -481,6 +481,10 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	// because the plan is read against it: a reader holding both can see which parts of the
 	// understanding a person put there and which the session filled in for itself.
 	sayWhatItUnderstood(out, one)
+	// What it would build, and whether a person accepted the list. It sits between the reading and the
+	// plan, where the stage itself sits, so a reader goes down the page in the order the job went
+	// through it.
+	sayWhatItWouldBuild(out, one)
 	// The plan, and whether a person approved it. It is above what the session finished, because the
 	// steps below are read against it: a reader holding both can see for themselves which step of the
 	// plan the work accounted for.
@@ -625,6 +629,49 @@ func sayWhatItUnderstood(out io.Writer, one *quaycrewv1.Job) {
 			fmt.Fprintf(out, "  still unknown: question %d, %s\n", left.Number, left.Text)
 		}
 	}
+}
+
+// sayWhatItWouldBuild prints the verticals the job proposed and whether a person accepted them.
+//
+// A line the person put on the list themselves is marked as theirs, because the mark is the point:
+// once both are on the row, a list a person changed and a list the machine proposed read the same,
+// and a reader a week later cannot say which of the two chose what was built.
+func sayWhatItWouldBuild(out io.Writer, one *quaycrewv1.Job) {
+	design := one.GetDesign()
+	if design == "" {
+		return
+	}
+	if one.GetDesignAccepted() {
+		fmt.Fprintln(out, "what it builds, accepted:")
+	} else {
+		fmt.Fprintln(out, "what it would build, waiting for you to accept the list:")
+	}
+	for _, line := range strings.Split(design, "\n") {
+		fmt.Fprintf(out, "  %s\n", line)
+	}
+	if yours := yoursOn(design); yours > 0 {
+		fmt.Fprintf(out, "  %s\n", saidYours(yours))
+	}
+}
+
+// yoursOn is how many verticals of a list the person put there themselves.
+func yoursOn(design string) int {
+	count := 0
+	for _, one := range job.DesignIn(design).Verticals {
+		if one.Yours {
+			count++
+		}
+	}
+	return count
+}
+
+// saidYours reads for one and for several, because a line that says "1 verticals" is a line that
+// says nobody read it.
+func saidYours(count int) string {
+	if count == 1 {
+		return "one of these is yours, opening with Yours"
+	}
+	return fmt.Sprintf("%d of these are yours, opening with Yours", count)
 }
 
 func sayItLooped(out io.Writer, one *quaycrewv1.Job) {
@@ -1123,7 +1170,8 @@ func stageOf(one *quaycrewv1.Job) job.Stage {
 	return job.StageOf(&job.Job{
 		Product: one.GetProduct(), Parent: one.GetParent(),
 		IdeationAnswer: one.GetIdeationAnswer(),
-		Plan:           one.GetPlan(), PlanApproved: one.GetPlanApproved(),
+		Design:         one.GetDesign(), DesignAccepted: one.GetDesignAccepted(),
+		Plan: one.GetPlan(), PlanApproved: one.GetPlanApproved(),
 	})
 }
 

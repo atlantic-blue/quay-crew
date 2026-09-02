@@ -1,0 +1,23 @@
+-- A job says what it would build, as verticals a person accepts, before it writes a plan.
+--
+-- The failure it answers: ideation puts the reading in front of a person and the plan gate puts the
+-- steps in front of them, and between the two there was nothing. The steps say what the crew will
+-- do rather than what a person will get, so nobody was ever asked which deliverable arrives first.
+-- A plan of seven steps that all land together is a plan with one delivery at the end of it.
+--
+-- design is the list the crew proposed, kept in the system's own rendering rather than as the reply:
+-- one line per vertical saying what a person can do when it lands, and one line under it saying what
+-- that person is shown. A line opening with Yours is one the person put on the list themselves when
+-- they sent the first list back, which is the mark the reading already makes between what a session
+-- was told and what it filled in for itself.
+--
+-- design_accepted is the flag beside it, and this is where the list follows the plan rather than the
+-- reading. An acceptance is one word, so a list a person sent back for a rewrite carries the same
+-- text as a list nobody has answered yet, and only the flag tells those two apart.
+--
+-- Empty string and false rather than null, the way every other column on this table already is: a
+-- reader that has to tell null from empty is a reader with two cases where there is one. Every job
+-- written before this proposed nothing and was accepted by nobody, and a job holding a plan is past
+-- this gate whether or not it ever went through it.
+alter table jobs add column if not exists design text not null default '';
+alter table jobs add column if not exists design_accepted boolean not null default false;

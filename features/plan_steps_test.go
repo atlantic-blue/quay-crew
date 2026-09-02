@@ -48,6 +48,12 @@ func initializePlanSteps(sc *godog.ScenarioContext) {
 		return aPersonAnsweredTheReading(ctx)
 	})
 
+	// And the stage after it, driven to the end the same way: the crew says what it would build and a
+	// person accepts the list. A job whose list nobody accepted is never asked to plan.
+	sc.Step(`^a person accepted the list it would build$`, func(ctx context.Context) error {
+		return aPersonAcceptedTheList(ctx)
+	})
+
 	// A job that has written its plan and is waiting for a person, which is the state every scenario
 	// about answering starts from.
 	sc.Step(`^a job whose plan is waiting to be approved$`, func(ctx context.Context) error {
@@ -246,6 +252,27 @@ func aPersonAnsweredTheReading(ctx context.Context) error {
 // answer says which question it touched.
 const theAnswerAPersonWrote = "1: on the command line, the way every other listing is read"
 
+// aPersonAcceptedTheList drives the stage between the reading and the plan: the crew says what it
+// would build, and a person accepts the list with the one word that accepts it.
+func aPersonAcceptedTheList(ctx context.Context) error {
+	w := worldFrom(ctx)
+	w.server.TickJob(ctx)
+	if err := w.settled(ctx); err != nil {
+		return err
+	}
+	w.server.TickJob(ctx)
+	one, err := readJob(ctx, 0)
+	if err != nil {
+		return err
+	}
+	if one.GetPhase() != job.PhaseAsking {
+		return fmt.Errorf("the job is %q, want it waiting for a person to accept what it would build: %s",
+			one.GetPhase(), one.GetReason())
+	}
+	_, err = w.client.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{Id: one.GetId(), Answer: "yes"})
+	return err
+}
+
 // aJobWaitingForItsPlanToBeApproved declares a planned job, drives the reading and its answer, lets
 // the crew answer with a plan, and leaves the job asking about that plan.
 func aJobWaitingForItsPlanToBeApproved(ctx context.Context) error {
@@ -260,6 +287,9 @@ func aJobWaitingForItsPlanToBeApproved(ctx context.Context) error {
 		return w.lastErr
 	}
 	if err := aPersonAnsweredTheReading(ctx); err != nil {
+		return err
+	}
+	if err := aPersonAcceptedTheList(ctx); err != nil {
 		return err
 	}
 	w.runner.willSay(thePlanTheCrewWrote)

@@ -117,6 +117,15 @@ func Asked(one *Job) string {
 			return CarryOn(one) + "\n\n" + SayWhatYouUnderstood(one)
 		}
 		return SayWhatYouUnderstood(one)
+	// Then the list of what it would build. It comes after the reading, because a list of verticals
+	// written before anybody agreed with the reading is a list of the wrong things, and before the plan,
+	// because the plan is the steps towards the deliverables on this list. What it was told is the
+	// person saying what is wrong with the list, so the second ask carries it rather than dropping it.
+	case WaitingForItsDesign(one):
+		if one.Told != "" {
+			return WriteTheListAgain(one)
+		}
+		return WhatWouldYouBuild(one)
 	// A job that owes a person a plan writes the plan and nothing else. It comes before what it was
 	// told, because what a planned job was told is the correction to a plan rather than the answer to
 	// a question: a session given CarryOn here would be told to carry on with work it has not started.

@@ -98,8 +98,9 @@ func TestWhatItUnderstoodLandsOnTheRowAndTheJobStopsForAPerson(t *testing.T) {
 	}
 }
 
-// Once a person has answered, the plan is asked for, and it is asked for against what they wrote.
-func TestOnceAnsweredTheSessionIsAskedForThePlanAgainstTheAnswer(t *testing.T) {
+// Once a person has answered, the list is asked for, and it is asked for against what they wrote.
+// The plan comes after the list, so this is the ask the answer reaches first.
+func TestOnceAnsweredTheSessionIsAskedForTheListAgainstTheAnswer(t *testing.T) {
 	controller, kept, plane := aController(t)
 	one := kept.add(readingJob())
 	ctx := context.Background()
@@ -113,12 +114,15 @@ func TestOnceAnsweredTheSessionIsAskedForThePlanAgainstTheAnswer(t *testing.T) {
 
 	sent := plane.lastText()
 	for _, phrase := range []string{
-		"Step 1:", "Assumed: the transcript is already stored",
+		"Vertical 1:", "Assumed: the transcript is already stored",
 		"on the command line, the way every other listing is read", "still an assumption",
 	} {
 		if !strings.Contains(sent, phrase) {
-			t.Fatalf("the plan task is %q, want it to say %q", sent, phrase)
+			t.Fatalf("the list task is %q, want it to say %q", sent, phrase)
 		}
+	}
+	if strings.Contains(sent, "Step 1:") {
+		t.Fatalf("a session that owes a list was asked for a plan: %q", sent)
 	}
 }
 

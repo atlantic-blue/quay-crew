@@ -18,6 +18,7 @@ const jobColumns = `id, workspace, project, title, brief, role, role_version, mo
 	phase, session, attempts, answer, outcome, reason, question, told, resuming, spent_tokens, observed_version,
 	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product, steers, claim,
 	escalation, looped_step, escalated_to, plan, plan_approved, ideation, ideation_answer,
+	design, design_accepted,
 	ungated, reviewed, tested,
 	pull_request_status, pull_request_checks, pull_request_check, pull_request_review,
 	pull_request_read_at, pull_request_failed,
@@ -364,6 +365,32 @@ func (p *Postgres) AnswerJobIdeation(ctx context.Context, id, answer string,
 		job.PhasePending, answer, job.PhaseAsking)
 }
 
+// ProposeJobDesign writes the list of verticals the crew said it would build and puts it to a person,
+// in one movement.
+//
+// The same statement the plan uses one stage later, and conditional on the running phase for the same
+// reason: a job nothing is running has nobody to write a list.
+func (p *Postgres) ProposeJobDesign(ctx context.Context, id, design, question string,
+	event *job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "propose job design", job.ErrNotRunning, []*job.Event{event}, `
+		update jobs set phase = $2, design = $3, question = $4, told = '', resuming = '',
+			lease_owner = '', lease_until = null, updated_at = now(), asked_at = now(), raised_at = null
+		where id = $1 and phase = $5`,
+		job.PhaseAsking, design, question, job.PhaseRunning)
+}
+
+// AcceptJobDesign records that a person accepted the list and puts the job back to pending, so the
+// job plans against it.
+//
+// Conditional on the asking phase and on nothing being accepted yet, in the same statement, so an
+// acceptance that arrives twice leaves one acceptance and one task.
+func (p *Postgres) AcceptJobDesign(ctx context.Context, id string, event *job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "accept job design", job.ErrNotAsking, []*job.Event{event}, `
+		update jobs set phase = $2, told = '', design_accepted = true, started_at = null, updated_at = now()
+		where id = $1 and phase = $3 and design_accepted = false`,
+		job.PhasePending, job.PhaseAsking)
+}
+
 // ApproveJobPlan records that a person approved the plan and puts the job back to pending, so a
 // controller starts the work against it.
 //
@@ -445,6 +472,7 @@ func scanJob(row rowScanner) (*job.Job, error) {
 		&found.Repository, &found.PullRequest, &found.Product, &found.Steers, &found.Claim,
 		&found.Escalation, &found.LoopedStep, &found.EscalatedTo, &found.Plan, &found.PlanApproved,
 		&found.Ideation, &found.IdeationAnswer,
+		&found.Design, &found.DesignAccepted,
 		&found.Ungated, &found.Reviewed, &found.Tested,
 		&found.PullRequestState.Status, &found.PullRequestState.Checks,
 		&found.PullRequestState.FailedCheck, &found.PullRequestState.Review,

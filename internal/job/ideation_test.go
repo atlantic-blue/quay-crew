@@ -181,9 +181,19 @@ func TestAJobOwesNoPlanUntilItsReadingIsAnswered(t *testing.T) {
 		t.Fatalf("the reading was asked for without the sentence: %q", asked)
 	}
 
+	// An answered reading owes the list of what it would build, and not yet a plan. The list stands
+	// between the two gates, so a job that went straight from the reading to the plan would be
+	// planning steps towards deliverables nobody had chosen.
 	one.Ideation, one.IdeationAnswer = "Understood: a page", "1: on the command line"
+	if !job.WaitingForItsDesign(one) {
+		t.Fatal("a job whose reading was answered does not owe the list it would build")
+	}
+	if job.WaitingForItsPlan(one) {
+		t.Fatal("a job owes a plan before anybody accepted the list it would build")
+	}
+	one.Design, one.DesignAccepted = "Vertical 1: a person pastes a link", true
 	if !job.WaitingForItsPlan(one) {
-		t.Fatal("a job whose reading was answered does not owe a plan")
+		t.Fatal("a job whose list was accepted does not owe a plan")
 	}
 }
 
@@ -224,6 +234,10 @@ func TestThePlanIsWrittenAgainstTheAnswerAndKeepsTheAssumedMarks(t *testing.T) {
 		Brief: "build what the design describes", Product: "you paste a link and get the text back",
 		Ideation:       job.IdeationText(readingOrFail(t, aReading)),
 		IdeationAnswer: "1: on the command line, the way every other listing is read",
+		// Past the list, so what this job is asked for next is the plan. The reading travels into both
+		// asks, and this is the one about the plan.
+		Design:         "Vertical 1: a person pastes a link and gets the text back\nShown 1: the terminal prints it",
+		DesignAccepted: true,
 	}
 	asked := job.Asked(one)
 	for _, phrase := range []string{

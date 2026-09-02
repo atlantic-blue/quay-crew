@@ -40,12 +40,21 @@ Feature: A job says which of the four stages it is in
     Then the reading says the job is in the "ideation" stage
     And the reading says the phase is "asking"
 
-  Scenario: The answer closes ideation, and design says it is not built
+  Scenario: The answer closes ideation, and design is where the job stands
     Given a job waiting for a person to answer what it understood
     When the operator answers the job with "1: on the command line first"
     And the caller reads that job back through the tool
     Then the reading says the job is in the "design" stage
     And the reading says the answer closed ideation
+    And the reading says accepting the list opens the next stage
+    And the reading does not say the stage is unbuilt
+
+  Scenario: The acceptance closes design, and test says it is not built
+    Given a job waiting for a person to accept the list it would build
+    When the operator answers the job with "yes"
+    And the caller reads that job back through the tool
+    Then the reading says the job is in the "test" stage
+    And the reading says the acceptance closed design
     And the reading says the stage is not built yet
     And the reading says the job writes its plan next
     And the reading does not claim a plan nobody approved

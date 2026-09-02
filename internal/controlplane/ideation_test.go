@@ -100,11 +100,13 @@ func TestTheAnswerIsKeptWholeAndThePlanIsWrittenFromIt(t *testing.T) {
 		t.Fatalf("the answered job is %q, want pending", got.GetPhase())
 	}
 
+	// The next ask is the list of what it would build, and their words travel into it. The plan comes
+	// after the list, so this is where the answer lands first.
 	system.server.TickJob(ctx)
 	asked := system.asked(t)
-	for _, phrase := range []string{"Step 1:", answered, "Assumed:", "still an assumption"} {
+	for _, phrase := range []string{"Vertical 1:", answered, "Assumed:", "still an assumption"} {
 		if !strings.Contains(asked, phrase) {
-			t.Fatalf("the plan task is %q, want it to say %q", asked, phrase)
+			t.Fatalf("the list task is %q, want it to say %q", asked, phrase)
 		}
 	}
 }

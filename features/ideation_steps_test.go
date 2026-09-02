@@ -164,14 +164,14 @@ func initializeIdeationSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the session is asked for a plan carrying that answer and what it assumed$`,
+	sc.Step(`^the session is asked what it would build, carrying that answer and what it assumed$`,
 		func(ctx context.Context) error {
-			return theSessionWasSent(ctx, "Step 1:", "the panel can come later",
+			return theSessionWasSent(ctx, "Vertical 1:", "the panel can come later",
 				"Assumed:", "still an assumption")
 		})
 
 	sc.Step(`^the session is told which question is still unknown$`, func(ctx context.Context) error {
-		return theSessionWasSent(ctx, "still unknown", "Step 1:")
+		return theSessionWasSent(ctx, "still unknown", "Vertical 1:")
 	})
 
 	sc.Step(`^the session is asked again and told what was wrong$`, func(ctx context.Context) error {

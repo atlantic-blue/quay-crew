@@ -511,7 +511,10 @@ flowchart TD
     READ -->|"no, a second time"| NONE(["stopped: asked twice, and nothing<br/>a person could answer came back"])
     READ -->|"yes"| ASK{"asking: the sentence, what it understood,<br/>what it assumed, what it does not know"}
     ASK -->|"prose, in the person's own words"| KEPT["the words are kept whole,<br/>and a question they left alone stays unknown"]
-    KEPT --> PLAN["the plan, written against that answer,<br/>carrying what is still assumed"]
+    KEPT --> LIST["the list of what it would build,<br/>written against that answer"]
+    LIST --> ACCEPT{"asking: does this list get that sentence?"}
+    ACCEPT -->|"anything but yes"| LIST
+    ACCEPT -->|"yes"| PLAN["the plan, written against the answer<br/>and the list a person accepted"]
     PLAN --> APPROVE{"asking: does this plan get that sentence?"}
     APPROVE -->|"anything but yes"| PLAN
     APPROVE -->|"yes"| WORK["the work, carrying the approved plan"]
@@ -521,6 +524,56 @@ flowchart TD
 the ask says so and the person is the only reader who can. It refuses a question that asks whether to
 go on, because the record already stops the job. It reaches one job rather than a tree. And a person
 who answers without reading has answered nothing, which no system can prevent.
+
+### What it would build, and the person who accepts it
+
+The reading above is put to a person and the plan below is put to a person, and between the two there
+was nothing. The plan says what the system will do, in the order it will do it, and it never says what
+somebody gets or when. So nobody was ever asked which deliverable arrives first, and seven steps that
+all land together are one delivery at the end of the work.
+
+So a job that states the sentence lists what it would build, and a person accepts the list before any
+plan is written. Each line says what a person can do when that one lands, and the line under it says
+what that person is shown.
+
+**`design`, text, written by the controller.** The list, in the system's own rendering rather than as
+the reply: `Vertical 1:` and `Shown 1:` for each one, at most seven, each line held to the title's
+ceiling and the whole record to `job.DesignLimit`, because the record is put to a person as one
+question and a question has its own ceiling.
+
+**`design_accepted`, boolean, written by the control plane.** Whether a person accepted the list. It
+has a flag where the reading above has none, and the answer is the difference: an acceptance is one
+word, so a list somebody sent back for a rewrite carries the same text as a list nobody has answered.
+
+**A vertical is only a vertical if a person can be shown it working.** A database is not a
+deliverable and nor is a piece of infrastructure. Those are required work towards one, so a schema, a
+queue and a role are one vertical with its plumbing inside them rather than three, and the system
+refuses that list rather than putting it to a person.
+
+**The rule is in the code rather than in the wording of the ask**, because an ask is advice and a
+rule is a rule. It reads two vocabularies and calls no model: a line that names infrastructure and
+names nobody it serves is plumbing, and the same line with the person in it is a vertical, because
+then it says who is shown the thing working. Where every line is refused, the refusal says the list
+is one vertical with its plumbing inside it and names each line with the word it was refused for.
+
+**Measured on the text this repository holds.** The corpus is the opening claim of every changelog
+entry, 366 of them, which is the closest thing here to a body of deliverables. 38 of those name the
+person they serve, which is the shape the ask demands, and the rule refuses none of them. It refuses
+42 of the whole 366, all of them lines that name only the machinery.
+`internal/job/designcalibration_test.go` runs the measurement on every build, the way the drift
+threshold's does. What replaces it is the record: once fifty lists have been put to a person, read
+how many lines the rule refused against how many the person then sent back themselves.
+
+**What it does not catch, said plainly.** A line that names a person and builds a database anyway
+passes, because this reads who the line serves and not what the work is. A person who accepts a list
+without reading it has accepted nothing, which no system can prevent.
+
+**An answer that is not the acceptance is the correction.** The job goes back to the session with what
+the person said, and the list is written again from it: the person who says what is wrong writes no
+list. A vertical they asked for comes back opening with `Yours` rather than `Vertical`, so what they
+changed stays apart from what the machine proposed, which is the mark the reading already makes
+between what a session was told and what it filled in for itself. That mark travels into the plan
+task with the list.
 
 ### The plan, and the person who approves it
 

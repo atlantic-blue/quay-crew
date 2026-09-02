@@ -22,8 +22,16 @@ func plannedJob() *job.Job {
 	// tests beside these.
 	one.Ideation = understoodAndAnswered
 	one.IdeationAnswer = "1: on the command line"
+	// And past the list, which stands between that answer and this gate. The list has its own tests
+	// beside these; a job that had not accepted one would be asked for a list rather than a plan.
+	one.Design = theAcceptedList
+	one.DesignAccepted = true
 	return one
 }
+
+// theAcceptedList is a list of verticals the system can read back, as it keeps it.
+const theAcceptedList = "Vertical 1: a person pastes a link on the command line and gets the text back\n" +
+	"Shown 1: the transcript prints in the terminal for a link the person chooses"
 
 // understoodAndAnswered is a reading the system can read back, as it keeps it.
 const understoodAndAnswered = "Understood: a page that takes a link and gives back the text\n" +
