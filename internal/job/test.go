@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/atlantic-blue/quay-krewe/internal/publish"
 )
 
 // The accepted requirements become failing tests, written by workers that never see an
@@ -111,6 +113,9 @@ func WriteFailingTests(one *Job, wanted Requirement) string {
 		"exists to stop.")
 	said = append(said, "Write the tests for this requirement only. Another worker is writing the "+
 		"tests for each of the others at the same time, and it holds that requirement.")
+	if branch := TestBranch(one); branch != "" {
+		said = append(said, TheTestsGoOnABranch(branch))
+	}
 	said = append(said, theShapeOfATestReport(wanted))
 	return strings.Join(said, "\n\n")
 }
@@ -254,8 +259,14 @@ func TestsRed(wanted []Requirement, reports map[int]TestReport) error {
 // requirement any one of these tests holds. That provenance is the claim's rather than the test
 // name's: the worker that wrote this failure held the claim on that requirement and no other worker
 // could take it.
-func TestsText(wanted []Requirement, reports map[int]TestReport) string {
+func TestsText(wanted []Requirement, reports map[int]TestReport, branch string) string {
 	var lines []string
+	// The branch first, because it is the one line about where the tests are rather than about what
+	// they say. A reader of the record can then open them, and so can the person reading it in a
+	// terminal, without knowing how the system names a branch.
+	if branch != "" {
+		lines = append(lines, "Branch: "+branch)
+	}
 	for _, one := range wanted {
 		report, held := reports[one.Number]
 		if !held {
@@ -425,6 +436,17 @@ func (c *Controller) writeTheTests(ctx context.Context, one *Job) {
 			continue
 		}
 		report, why := ReportFrom(theirs, requirement)
+		// A report is the worker's word about its own run, and the branch is the thing anybody else can
+		// read. So the tests have to be on it before the report counts: the delivery is asked for here,
+		// once the worker has finished and while its container is still there, because that is where
+		// the git and the credential are. A worker whose tests reached no branch is refused by name,
+		// the way one that died is, rather than closing the stage on a list of test names the next
+		// stage cannot open.
+		if why == "" {
+			if said := c.delivered(ctx, one, theirs, requirement); said != "" {
+				why = said
+			}
+		}
 		if why == "" {
 			written++
 			reports[requirement.Number] = report
@@ -454,7 +476,7 @@ func (c *Controller) writeTheTests(ctx context.Context, one *Job) {
 	}
 
 	record := c.event(ctx, one, EventTested, WrittenTheTests(wanted, reports))
-	if _, err := c.store.RecordJobTests(ctx, one.ID, TestsText(wanted, reports), record); err != nil {
+	if _, err := c.store.RecordJobTests(ctx, one.ID, TestsText(wanted, reports, TestBranch(one)), record); err != nil {
 		if !errors.Is(err, ErrNotPending) {
 			c.logger.WarnContext(ctx, "could not record the failing tests a job's requirements became",
 				"job", one.ID, "error", err)
@@ -464,6 +486,52 @@ func (c *Controller) writeTheTests(ctx context.Context, one *Job) {
 		return
 	}
 	c.exported(ctx, record)
+}
+
+// delivered puts one worker's tests on this job's branch, and says why the requirement is refused
+// where they did not get there.
+//
+// Empty for a job that names no repository: there is no remote, so the tests of such a job go
+// nowhere and never did, and refusing every requirement of it would stop work this change is not
+// about.
+//
+// The newest worker is the one delivered, which is the one the report was read off. Asked on the
+// tick that gathers rather than when the worker settles, because a stage that reads its workers is
+// the thing that knows which of them the record stands on.
+func (c *Controller) delivered(ctx context.Context, one *Job, workers []*Job,
+	requirement Requirement) string {
+	branch := TestBranch(one)
+	if branch == "" || len(workers) == 0 {
+		return ""
+	}
+	worker := workers[len(workers)-1]
+	if c.publisher == nil {
+		return TestsNotOnTheBranch(requirement, branch,
+			"this system has no way to reach a session's files, so it could not put them there")
+	}
+	found := c.publisher.PushSessionWork(ctx, worker.Session, branch)
+	if found.State == publish.Pushed {
+		return ""
+	}
+	return TestsNotOnTheBranch(requirement, branch, whyTheTestsAreNotThere(found))
+}
+
+// whyTheTestsAreNotThere is the one line an operator acts on, for each way a delivery ends short.
+//
+// The empty case is the one that matters. A worker that committed nothing wrote tests nobody can
+// read, however well its report reads, and saying the push failed would send somebody looking at a
+// remote that is working.
+func whyTheTestsAreNotThere(found publish.Work) string {
+	switch found.State {
+	case publish.Nothing:
+		return "the worker committed nothing, so there is nothing to put there"
+	case publish.Absent:
+		return "the worker holds no repository"
+	case publish.Held:
+		return "the system could not push them: " + found.Why
+	default:
+		return "the system could not read the worker's files: " + found.Why
+	}
 }
 
 // workersOn is every worker declared for each of this job's requirements, by the claim it holds,

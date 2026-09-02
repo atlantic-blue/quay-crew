@@ -100,6 +100,9 @@ func BuildTheVertical(one *Job, wanted Requirement, failing []string) string {
 		"the requirement, so the system refuses the write rather than trusting this sentence. If you "+
 		"believe a test is wrong, say so in your answer, name the file and the assertion, and say what "+
 		"it should assert instead. A person decides that.")
+	if branch := TestBranch(one); branch != "" {
+		said = append(said, TheTestsAreOnABranch(branch))
+	}
 	said = append(said, "Build this vertical only. Another worker is building each of the others at "+
 		"the same time, and it holds that vertical. The whole suite is red until all of them land, so "+
 		"judge yourself on your own tests rather than on the suite.")
