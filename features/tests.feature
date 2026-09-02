@@ -90,3 +90,11 @@ Feature: The requirements a person accepted become failing tests before anything
     Then the row carries a failing test for every requirement
     When the controller ticks again
     Then the session is asked for a plan and told to do no work
+
+  # Where the tests go. Each worker writes them in a sandbox of its own, which the stage after this
+  # one never sees, so a worker that only reports on them writes tests nobody can open.
+  Scenario: The tests of a job in a repository go on a branch of its own
+    Given a job in a repository whose list of 2 verticals a person accepted
+    When the controller ticks
+    Then a worker is writing the tests for each requirement, and the job itself has no session
+    And each worker is told to commit its tests to the branch this job's tests live on
