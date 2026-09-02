@@ -30,7 +30,7 @@ func kreweWorldFrom(ctx context.Context) *kreweWorld {
 	return k
 }
 
-func initializePanelSteps(sc *godog.ScenarioContext) {
+func initializeOpensSteps(sc *godog.ScenarioContext) {
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		return context.WithValue(ctx, kreweKey{}, &kreweWorld{}), nil
 	})

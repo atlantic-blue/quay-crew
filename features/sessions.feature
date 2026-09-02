@@ -439,8 +439,8 @@ Feature: Sessions run in isolated sandboxes
     Then the terminal holds one pane
     And no second window was built to hold a conversation
 
-  # Rule 46: the way off a thing is tested with the way on to it. The word is in somebody's fingers
-  # and in their notes, so it refuses by name and says what to type now.
+  # A removed word is tested as well as the thing that replaced it. It is in somebody's fingers and in
+  # their notes, so it refuses by name and says what to press now.
   Scenario: The panel command is refused and says what to press instead
     Given the system listens on an address the tool can dial
     When the operator asks the tool to open the panel
