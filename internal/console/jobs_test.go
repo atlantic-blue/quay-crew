@@ -359,3 +359,41 @@ func TestEveryOutcomeIsColouredOrLeftAlone(t *testing.T) {
 		}
 	}
 }
+
+// A job whose workers are running has no session of its own and is not idle. The build stage runs one
+// worker for each vertical, all at once, and the row that declared them waits, so a cell reading
+// "not yet" would say nothing is happening while three sessions build.
+func TestAJobWhoseWorkersAreRunningSaysHowManyAreAtWork(t *testing.T) {
+	parent := aJob("1111111111111111aaaaaaaa", job.PhasePending, nil)
+	building := func(id, phase string) *quaycrewv1.Job {
+		return aJob(id, phase, func(one *quaycrewv1.Job) {
+			one.Parent = parent.GetId()
+			one.Title = "build vertical 1: a person pastes a link"
+			one.Session = id
+		})
+	}
+	listed := []*quaycrewv1.Job{
+		parent,
+		building("2222222222222222bbbbbbbb", job.PhaseRunning),
+		building("3333333333333333cccccccc", job.PhaseRunning),
+		// The worker that finished is not at work any more, so it is not counted. A count that included
+		// it would say two sessions are building after both have landed.
+		building("4444444444444444dddddddd", job.PhaseDone),
+	}
+
+	working := sessionsUnder(listed)
+	got := jobRow(parent, working[parent.GetId()])
+
+	if got.Cells[5] != "2 working" {
+		t.Fatalf(`the session cell of a job with two live workers says %q, want "2 working"`, got.Cells[5])
+	}
+	// The worker's own row still says the conversation it runs in, because that is what descending
+	// into it uses.
+	if worker := jobRow(listed[1], working[listed[1].GetId()]); worker.Cells[5] == "2 working" {
+		t.Fatalf("a worker's own row says %q, want the conversation it runs in", worker.Cells[5])
+	}
+	// And a job with no workers at all still says it has no session yet rather than counting nothing.
+	if alone := jobRow(parent, 0); alone.Cells[5] != "not yet" {
+		t.Fatalf(`a job with no workers says %q, want "not yet"`, alone.Cells[5])
+	}
+}
