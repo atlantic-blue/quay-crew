@@ -16,6 +16,13 @@ engine carries what each reading wrote up onto the plan, and hands the rows that
 to the reading that comes next, without the earlier reader's prose. The graph ends in one question,
 and that question carries the open rows and nothing else.
 
+The plan itself reaches every reading as `{{plan}}`, rendered into each prompt. A step is a new
+session with an empty working directory and a plan is a column on a row rather than a file, so a run
+carries the plan of the job it hangs under: a session running a planned job starts the reading, and
+its readings read that plan. A run started with a plan in its state keeps that one. A run under
+nothing renders the template as typed, and each reading is told to stop and say so rather than report
+on a plan it never got.
+
 A dispatch reply now also lands under `reply.<node>`, beside the `session.<node>` key that was
 already there. `result.reply` is exactly what it was, so every graph written against it keeps
 working. Before this a run kept one reply, so the second reading took the first one's place and the

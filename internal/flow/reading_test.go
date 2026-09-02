@@ -152,6 +152,12 @@ func TestTheShippedPlanReadingGraphAsksWithRowsAndNamesRolesTheCrewHolds(t *test
 			continue
 		}
 		readers++
+		// The reading has to be handed the plan it is told to read. A prompt that says "read the plan"
+		// and renders none gives the lens nothing, and every reading then reports on nothing while the
+		// run walks its whole success path.
+		if !strings.Contains(node.Prompt, "{{"+PlanKey+"}}") {
+			t.Errorf("reading %s is told to read a plan and is handed none: %q", name, node.Prompt)
+		}
 		if node.Role == "" {
 			t.Errorf("reading %s names no role, so two readings would run through one lens", name)
 			continue
