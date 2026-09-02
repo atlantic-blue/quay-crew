@@ -176,6 +176,15 @@ type Job struct {
 	// same movement that writes it.
 	Build string
 
+	// Accepted says a person looked at a picture of what this job built and said the value arrived. It
+	// is the only thing that lands such a job done, which is the whole of the acceptance stage: the
+	// three checks before it are the machine reading its own work. See acceptance.go.
+	//
+	// A flag beside the build record above, for the reason the list has one and the reading has none.
+	// An acceptance is one word, so a build a person sent back carries the same record as a build
+	// nobody has answered yet, and only the flag tells those two apart.
+	Accepted bool
+
 	// Building says this job builds against tests it did not write and may not change. The system sets
 	// it on a worker the build stage declares, and on nothing else.
 	//
@@ -355,6 +364,15 @@ const (
 	// are named. Unlike the record above it is a movement, because the job holds for a person's
 	// acceptance in the same write: a build nobody has looked at is not a build that arrived.
 	EventBuilt = "job.built"
+	// EventAccepted is written when a person looked at a picture of what this job built and said the
+	// value arrived, and EventSentBack when they said it did not. They are the two ends of the last
+	// stage, and they are separate kinds because a job somebody accepted and a job somebody sent back
+	// are the two facts anything counting this system's work has to be able to tell apart.
+	//
+	// EventAccepted is a movement: the job lands done in the same write, because a person's word is the
+	// only thing that lands a job whose verticals are built.
+	EventAccepted = "job.accepted"
+	EventSentBack = "job.sentback"
 	// EventRaised is written when the first surface names a waiting job to a person: the console, a
 	// command, or the line under a conversation. It carries which surface carried it.
 	//

@@ -989,6 +989,65 @@ func (m *Memory) HoldJobForAcceptance(_ context.Context, id, built, question str
 	return &kept, nil
 }
 
+// AcceptJob writes that a person looked at a picture of what was built and said the value arrived.
+//
+// The row stays pending and keeps its question and what they said, because the acceptance is
+// permission rather than an ending: the job still owes the pull request its work is read in, and the
+// ordinary road carries it there under this flag. What refuses that road without this is
+// job.NotYetAccepted.
+func (m *Memory) AcceptJob(_ context.Context, id, answer string,
+	events ...*job.Event) (*job.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != job.PhasePending || found.Build == "" || found.Accepted {
+		return nil, job.ErrNotPending
+	}
+	found.Accepted, found.Told, found.Reason = true, answer, ""
+	found.UpdatedAt = time.Now().UTC()
+	for _, event := range events {
+		if err := m.appendJobEvent(event); err != nil {
+			return nil, err
+		}
+	}
+	kept := cloneJob(*found)
+	return &kept, nil
+}
+
+// SendJobBackToBuild clears what was built and puts the job back to pending, so the build stage fans
+// out again against what the person said was missing.
+//
+// What the person said stays on the row, which is what the next fan out is built against. The record
+// of what was built goes, because a row that carried both would read as built and as being built.
+func (m *Memory) SendJobBackToBuild(_ context.Context, id string,
+	events ...*job.Event) (*job.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != job.PhasePending || found.Build == "" || found.Accepted {
+		return nil, job.ErrNotPending
+	}
+	found.Build = ""
+	found.Phase = job.PhasePending
+	found.Question, found.Reason, found.Answer, found.Outcome = "", "", "", ""
+	found.LeaseOwner, found.LeaseUntil = "", nil
+	found.AskedAt, found.RaisedAt = nil, nil
+	found.UpdatedAt = time.Now().UTC()
+	for _, event := range events {
+		if err := m.appendJobEvent(event); err != nil {
+			return nil, err
+		}
+	}
+	kept := cloneJob(*found)
+	return &kept, nil
+}
+
 // AskAboutJobBuild puts the question about verticals that are not built to a person, and stops the
 // job there. It applies from the pending phase, because the row was never running while its workers
 // built: what ran was one job for each vertical.

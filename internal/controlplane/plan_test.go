@@ -345,9 +345,17 @@ func (p planning) builtItsVerticals(t *testing.T) {
 		p.server.TickJob(ctx)
 		return p.reading(t).GetBuild() != ""
 	})
+	// The word, because the acceptance is a word: any other answer says the value did not arrive and
+	// sends the verticals back to be built again.
 	if _, err := p.server.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{
-		Id: p.job.GetId(), Answer: "I looked at both and the value arrived",
+		Id: p.job.GetId(), Answer: "yes",
 	}); err != nil {
 		t.Fatalf("AnswerJob: %v", err)
 	}
+	// Two movements. The first tick records the acceptance and leaves the row pending, because their
+	// word is permission rather than an ending, and the job's own session comes after it.
+	waitFor(t, func() bool {
+		p.server.TickJob(ctx)
+		return p.reading(t).GetAccepted()
+	})
 }

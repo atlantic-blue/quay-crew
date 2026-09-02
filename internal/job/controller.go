@@ -212,6 +212,14 @@ type Store interface {
 	// AskAboutJobBuild puts the question about verticals that are not built to a person, from the
 	// pending phase, for the reason the ask about the tests is made from there.
 	AskAboutJobBuild(ctx context.Context, id, question string, event *Event) (*Job, error)
+	// AcceptJob writes that a person looked at a picture of what was built and said the value arrived.
+	// The row stays pending under it, because the acceptance is permission rather than an ending: what
+	// refuses done to a job that never got it is NotYetAccepted.
+	AcceptJob(ctx context.Context, id, answer string, events ...*Event) (*Job, error)
+	// SendJobBackToBuild clears what was built and puts the job back to pending, so the build stage
+	// fans out again against what the person said was missing. It applies to a job that carries a build
+	// record and no acceptance, so an accepted job can never be sent back over its own acceptance.
+	SendJobBackToBuild(ctx context.Context, id string, events ...*Event) (*Job, error)
 	// CreateJob declares one job and the record of declaring it, in one transaction. It is how a test
 	// stage and a build stage fan out, and it is the same call every other declaration goes through,
 	// so the claim on a requirement or on a vertical is refused here exactly as a claim typed by a
@@ -647,6 +655,15 @@ func (c *Controller) start(ctx context.Context, one *Job, moving *stillMoving) {
 	// them under the same arithmetic the stage before it waits under.
 	if WaitingForItsBuild(one) {
 		c.buildIt(ctx, one)
+		return
+	}
+
+	// A job a person has answered about what was built never gets a session either, and this is the
+	// only stage where that is true of the answer rather than of the work. Their word is the last thing
+	// that happens: it lands the job, or it sends the verticals back to be built again. A session
+	// started here would be a session carrying on past the acceptance, which is work nobody accepted.
+	if WaitingForItsAcceptance(one) {
+		c.acceptIt(ctx, one)
 		return
 	}
 
@@ -1090,6 +1107,18 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 	// all, one step further along, so the record is held against the plan before the job is called
 	// done. It is arithmetic over the numbers the session recorded: no model call, and no judgement
 	// about prose.
+	// A job whose verticals are built reaches done one way, which is a person looking at a picture of
+	// them running and saying the value arrived. Every other road into done on such a row is the
+	// system calling its own work finished, so this one closes: the answer stays on the record, the
+	// job stops, and the reason names the command that ends it.
+	//
+	// In front of the plan, because a job nobody has looked at and a job whose steps do not add up are
+	// two different problems and only one of them has somebody waiting on it. Told that its plan is
+	// unaccounted for, a person goes and reads the session; told that nobody looked at the pictures,
+	// they go and look.
+	if kind == EventAnswered && NotYetAccepted(whole) {
+		landing.Phase, landing.Reason, kind = PhaseStopped, NotAccepted(whole), EventStopped
+	}
 	if kind == EventAnswered && whole.PlanApproved {
 		if missing := NotAccountedFor(whole.Plan, whole.Steps); len(missing) > 0 {
 			landing.Phase, landing.Reason, kind = PhaseStopped, PlanNotFollowed(missing), EventStopped

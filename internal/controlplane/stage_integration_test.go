@@ -4,6 +4,7 @@ package controlplane_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -174,8 +175,14 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 	if built.Name != job.StageBuild {
 		t.Fatalf("a built job reads off the wire as stage %q, want build", built.Name)
 	}
-	if !strings.Contains(built.Doing, "waits for you to accept") {
-		t.Fatalf("a built job is told %q", built.Doing)
+	// And it says so in the words a person acts on: what they are being asked to look at, how many
+	// pictures there are, and what they are being asked to say about them. A line that holds for a
+	// person without telling them any of that is the failure this asserts phrase by phrase.
+	for _, ask := range []string{"waits for you to look at", "2 pictures of them running",
+		"say whether the value arrived"} {
+		if !strings.Contains(built.Doing, ask) {
+			t.Fatalf("a built job is told %q, which does not say %q", built.Doing, ask)
+		}
 	}
 
 	// It holds for a person rather than calling itself done, and the question names what they are
@@ -213,6 +220,63 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 	}
 	if builders != verticals {
 		t.Fatalf("%d workers built %d verticals", builders, verticals)
+	}
+
+	// Every vertical arrives with a picture of it running and a label saying where the picture came
+	// from, and both cross the wire inside the record. A person answering from a terminal has nothing
+	// to look at without them.
+	shots := job.PicturesIn(whole.GetBuild())
+	if len(shots) != verticals {
+		t.Fatalf("%d verticals were built and %d pictures came off the wire", verticals, len(shots))
+	}
+	for _, shot := range shots {
+		if err := shot.Shows(); err != nil {
+			t.Fatalf("the picture of vertical %d does not show it working: %v", shot.Vertical, err)
+		}
+	}
+
+	// The gate itself, over a real engine. Ticking changes nothing while the question stands: an
+	// acceptance that never comes has to leave the job exactly where it is, or the gate is decoration.
+	for i := 0; i < 3; i++ {
+		server.TickJob(ctx)
+	}
+	waiting := readJob(t, ctx, client, id)
+	if waiting.GetPhase() != job.PhaseAsking || waiting.GetAccepted() {
+		t.Fatalf("three ticks with nobody answering left the job %q, accepted %v",
+			waiting.GetPhase(), waiting.GetAccepted())
+	}
+
+	// Then the person's word, which is the only thing that lands it. This is the trap one last time
+	// and the one this slice turns on: accepted is a column, and one written and never selected reads
+	// back false, so the job would stop on its own acceptance gate for ever while every unit test
+	// stayed green.
+	if _, err := client.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{Id: id, Answer: "yes"}); err != nil {
+		t.Fatalf("AnswerJob: %v", err)
+	}
+	tickUntilItIsAccepted(t, ctx, server, client, id)
+
+	// Their word is permission rather than an ending, so what is left is the ending every job has: the
+	// pull request the work is read in, and an account of the plan a person approved. The model double
+	// answers a task, it never records a step, so the account is written here the way the session is
+	// told to write it. Without it the job stops on the plan gate, which is a different gate from the
+	// one this test is about, and a test that cannot tell those two apart proves neither.
+	accountForThePlan(t, ctx, server, client, id)
+	tickUntilThePhase(t, ctx, server, client, id, job.PhaseDone)
+
+	done := readJob(t, ctx, client, id)
+	if !done.GetAccepted() {
+		t.Fatal("the job reads back unaccepted off the wire, so the column is written and never read")
+	}
+	if done.GetOutcome() != job.OutcomeProved {
+		t.Fatalf("an accepted job settled %q, want proved", done.GetOutcome())
+	}
+	// The record of what was built, and its pictures, are still there. That is what the person
+	// accepted, and it is what anybody reading this job afterwards has to be able to see.
+	if len(job.PicturesIn(done.GetBuild())) != verticals {
+		t.Fatalf("landing the job lost the pictures: %q", done.GetBuild())
+	}
+	if ended := stageOnTheWire(t, ctx, client, id); !strings.Contains(ended.Doing, "value arrived") {
+		t.Fatalf("an accepted job is told %q", ended.Doing)
 	}
 }
 
@@ -273,7 +337,7 @@ func stageOnTheWire(t *testing.T, ctx context.Context,
 		Product: one.GetProduct(), Parent: one.GetParent(),
 		IdeationAnswer: one.GetIdeationAnswer(),
 		Design:         one.GetDesign(), DesignAccepted: one.GetDesignAccepted(),
-		Tests: one.GetTests(), Build: one.GetBuild(),
+		Tests: one.GetTests(), Build: one.GetBuild(), Accepted: one.GetAccepted(),
 		Plan: one.GetPlan(), PlanApproved: one.GetPlanApproved(),
 	})
 }
@@ -305,4 +369,62 @@ func tickUntilThePhase(t *testing.T, ctx context.Context, server *controlplane.S
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatalf("job %s never reached %s, it is %s", id, phase, readJob(t, ctx, client, id).GetPhase())
+}
+
+// tickUntilItIsAccepted drives the controller until a person's word is on the row.
+//
+// It is its own wait rather than part of the one below, because the acceptance and the ending are two
+// movements and only the first of them is what this test is about. A run that never gets here fails
+// saying the word never landed, which is the column trap, and a run that gets past here and stops
+// fails saying something else, which is not.
+func tickUntilItIsAccepted(t *testing.T, ctx context.Context, server *controlplane.Server,
+	client quaycrewv1.ControlPlaneServiceClient, id string) {
+	t.Helper()
+	deadline := time.Now().Add(120 * time.Second)
+	for time.Now().Before(deadline) {
+		server.TickJob(ctx)
+		if readJob(t, ctx, client, id).GetAccepted() {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	one := readJob(t, ctx, client, id)
+	t.Fatalf("a person answered %q and job %s reads accepted %v, it is %s: %s",
+		"yes", id, one.GetAccepted(), one.GetPhase(), one.GetReason())
+}
+
+// accountForThePlan records one step against each step of the plan, while the job's own session runs.
+//
+// The session is told to do this, in the same words: a person approved this plan and the job does not
+// end until every step of it has a record. A real session runs krewe job step as it goes, and the
+// model double cannot, so the test writes what the session would write. It waits for the job to run
+// first, because a step is something a running job's session finished and the store refuses it from
+// any other phase.
+func accountForThePlan(t *testing.T, ctx context.Context, server *controlplane.Server,
+	client quaycrewv1.ControlPlaneServiceClient, id string) {
+	t.Helper()
+	deadline := time.Now().Add(120 * time.Second)
+	for time.Now().Before(deadline) {
+		server.TickJob(ctx)
+		one := readJob(t, ctx, client, id)
+		if one.GetPhase() != job.PhaseRunning {
+			time.Sleep(20 * time.Millisecond)
+			continue
+		}
+		steps := job.PlanIn(one.GetPlan())
+		if len(steps) == 0 {
+			t.Fatalf("the plan a person approved reads as no steps at all: %q", one.GetPlan())
+		}
+		for _, step := range steps {
+			if _, err := server.RecordJobStep(asJobCredential(ctx, id),
+				&quaycrewv1.RecordJobStepRequest{
+					Summary: fmt.Sprintf("%d: %s", step.Number, step.Text),
+				}); err != nil {
+				t.Fatalf("RecordJobStep(%d): %v", step.Number, err)
+			}
+		}
+		return
+	}
+	t.Fatalf("job %s never ran the session that ends it, it is %s", id,
+		readJob(t, ctx, client, id).GetPhase())
 }

@@ -18,7 +18,7 @@ const jobColumns = `id, workspace, project, title, brief, role, role_version, mo
 	phase, session, attempts, answer, outcome, reason, question, told, resuming, spent_tokens, observed_version,
 	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product, steers, claim,
 	escalation, looped_step, escalated_to, plan, plan_approved, ideation, ideation_answer,
-	design, design_accepted, tests, build, building,
+	design, design_accepted, tests, build, building, accepted,
 	ungated, reviewed, tested,
 	pull_request_status, pull_request_checks, pull_request_check, pull_request_review,
 	pull_request_read_at, pull_request_failed,
@@ -114,11 +114,11 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 			resuming, claim, escalation, ungated, reviewed, tested, tests, build, building,
 			pull_request_status,
 			pull_request_checks, pull_request_check, pull_request_review, pull_request_read_at,
-			pull_request_failed, request, created_at, updated_at)
+			pull_request_failed, request, created_at, updated_at, accepted)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
 			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38,
 			$39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53,
-			coalesce($54::timestamptz, now()), coalesce($55::timestamptz, now()))`,
+			coalesce($54::timestamptz, now()), coalesce($55::timestamptz, now()), $56)`,
 		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
 		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
 		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
@@ -134,7 +134,8 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 		declared.PullRequestState.FailedCheck, declared.PullRequestState.Review,
 		stampOrNil(declared.PullRequestState.ReadAt), declared.PullRequestState.Failed,
 		declared.Request,
-		stampOrNow(declared.CreatedAt), stampOrNow(declared.UpdatedAt)); err != nil {
+		stampOrNow(declared.CreatedAt), stampOrNow(declared.UpdatedAt),
+		declared.Accepted); err != nil {
 		return fmt.Errorf("create job: %w", err)
 	}
 	// The rows this reading was handed, in the same transaction as the job itself, so a reading is
@@ -474,7 +475,7 @@ func scanJob(row rowScanner) (*job.Job, error) {
 		&found.Repository, &found.PullRequest, &found.Product, &found.Steers, &found.Claim,
 		&found.Escalation, &found.LoopedStep, &found.EscalatedTo, &found.Plan, &found.PlanApproved,
 		&found.Ideation, &found.IdeationAnswer,
-		&found.Design, &found.DesignAccepted, &found.Tests, &found.Build, &found.Building,
+		&found.Design, &found.DesignAccepted, &found.Tests, &found.Build, &found.Building, &found.Accepted,
 		&found.Ungated, &found.Reviewed, &found.Tested,
 		&found.PullRequestState.Status, &found.PullRequestState.Checks,
 		&found.PullRequestState.FailedCheck, &found.PullRequestState.Review,
@@ -1046,4 +1047,37 @@ func (p *Postgres) AskAboutJobBuild(ctx context.Context, id, question string,
 			lease_owner = '', lease_until = null, updated_at = now(), asked_at = now(), raised_at = null
 		where id = $1 and phase = $4 and build = ''`,
 		job.PhaseAsking, question, job.PhasePending)
+}
+
+// AcceptJob writes that a person looked at a picture of what was built and said the value arrived.
+//
+// The row stays pending and keeps its question and what they said. The acceptance is permission
+// rather than an ending: the job still owes the pull request its work is read in and an account of
+// the plan somebody approved, and the ordinary road carries it to done under this flag. What refuses
+// that road without this is job.NotYetAccepted.
+//
+// It applies to a pending job that carries a build record and no acceptance, so two controllers
+// reading one answered job record it once. The answer goes on the row whole, because the word that
+// let this job end is the only thing anybody can read afterwards to see that a person let it.
+func (p *Postgres) AcceptJob(ctx context.Context, id, answer string,
+	events ...*job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "accept job", job.ErrNotPending, events, `
+		update jobs set accepted = true, told = $2, reason = '', updated_at = now()
+		where id = $1 and phase = $3 and build <> '' and accepted = false`,
+		answer, job.PhasePending)
+}
+
+// SendJobBackToBuild clears what was built and puts the job back to pending, so the build stage fans
+// out again against what the person said was missing.
+//
+// The build record goes and what the person said stays, which is what makes the next fan out build
+// against their words rather than against the same list again. It applies to a job that carries a
+// record and no acceptance, so nothing can send an accepted job back over its own acceptance.
+func (p *Postgres) SendJobBackToBuild(ctx context.Context, id string,
+	events ...*job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "send job back to build", job.ErrNotPending, events, `
+		update jobs set build = '', phase = $2, question = '', reason = '', answer = '', outcome = '',
+			lease_owner = '', lease_until = null, updated_at = now(), asked_at = null, raised_at = null
+		where id = $1 and phase = $3 and build <> '' and accepted = false`,
+		job.PhasePending, job.PhasePending)
 }

@@ -27,7 +27,9 @@ func buildingJob() *job.Job {
 // passes now, and the file it wrote to make it pass.
 func aBuildReport(vertical int, passing string) string {
 	return fmt.Sprintf("I built vertical %d and ran the suite.\n\nVertical: %d\nRan: 14\nRed: 0\n"+
-		"Passing 1: %s\nChanged 1: internal/transcript/vertical%d.go", vertical, vertical, passing, vertical)
+		"Passing 1: %s\nChanged 1: internal/transcript/vertical%d.go\nPicture: vertical%d.png\n"+
+		"Taken: the page at http://localhost:3000, drawn with krewe render while the server was up",
+		vertical, vertical, passing, vertical, vertical)
 }
 
 // theFailures are the tests the test stage recorded as failing, by the requirement each was written
@@ -389,9 +391,10 @@ func TestAnApprovedPlanFansOutIntoAWorkerForEachVertical(t *testing.T) {
 	}
 }
 
-// What the person does next. A hold that nothing can leave is a stopped job, so the answer has to put
-// the job back on the road it was on: its own session, with the plan it is accountable to.
-func TestOnceAPersonAcceptsItTheJobCarriesOnWithItsPlan(t *testing.T) {
+// What the person's word does. It lands the job, and it is the only thing that does: the stage
+// before this one ended by holding, and a hold nothing can leave is a stopped job wearing another
+// word.
+func TestOnlyThePersonsWordLandsAJobWhoseVerticalsAreBuilt(t *testing.T) {
 	controller, kept, plane := aController(t)
 	one := kept.add(buildingJob())
 	ctx := context.Background()
@@ -406,26 +409,147 @@ func TestOnceAPersonAcceptsItTheJobCarriesOnWithItsPlan(t *testing.T) {
 		t.Fatalf("the job is %q before anybody accepted it", kept.get(one.ID).Phase)
 	}
 
-	kept.sendTheListBack(one.ID, "I looked at both and the value arrived")
+	// Every tick between the question and the answer leaves the job exactly where it is. An
+	// acceptance that never comes is the sad path that decides whether this is a gate at all: a job
+	// that moved on by itself here would be a job accepted by the passage of time.
+	tasks := plane.sent()
+	for i := 0; i < 3; i++ {
+		controller.Tick(ctx)
+	}
+	waiting := kept.get(one.ID)
+	if waiting.Phase != job.PhaseAsking || waiting.Accepted {
+		t.Fatalf("three ticks with nobody answering left the job %q, accepted %v",
+			waiting.Phase, waiting.Accepted)
+	}
+	if plane.sent() != tasks {
+		t.Fatalf("waiting for an acceptance spent %d tasks", plane.sent()-tasks)
+	}
 
+	kept.sendTheListBack(one.ID, "yes")
 	controller.Tick(ctx)
 
-	// It is dispatched into its own session now, carrying what the person said, rather than fanned out
-	// a second time. That is the whole of what the hold has to leave: a job nothing can move on from
-	// is a stopped job wearing another word.
+	// Their word is on the row, and no second fan out came of it. It is permission rather than an
+	// ending: what is left is the ending every job has, and the session is told to build nothing
+	// further because what they accepted is what is built.
 	got := kept.get(one.ID)
+	if !got.Accepted {
+		t.Fatalf("the job a person accepted does not say so: %s", got.Reason)
+	}
 	if len(kept.children(one.ID)) != 2 {
 		t.Fatalf("accepting the build declared %d workers, want the same 2", len(kept.children(one.ID)))
-	}
-	if got.Phase != job.PhaseRunning {
-		t.Fatalf("an accepted job is %q, want running: %s", got.Phase, got.Reason)
-	}
-	if sent := plane.lastText(); !strings.Contains(sent, "the value arrived") {
-		t.Fatalf("the task after acceptance is %q, want it to carry what the person said", sent)
 	}
 	// And the record of what was built stays on the row, because that is what the person accepted.
 	if got.Build == "" {
 		t.Fatal("accepting the build lost the record of it")
+	}
+	if !kept.wrote(one.ID, job.EventAccepted) {
+		t.Fatal("nothing on the record says a person accepted this job")
+	}
+
+	// Then the ordinary road, which was refused before their word and is open now. The session that
+	// finishes the job is told what it is finishing.
+	controller.Tick(ctx)
+	if plane.sent() <= tasks {
+		t.Fatal("nothing carried the accepted job to its ending")
+	}
+	if sent := plane.lastText(); !strings.Contains(sent, "said the value arrived") ||
+		!strings.Contains(sent, "Build nothing further") {
+		t.Fatalf("the task after acceptance is %q", sent)
+	}
+	kept.recordStep(one.ID, "1: build the two verticals")
+	plane.lands("the work is in a pull request")
+	controller.Tick(ctx)
+	if landed := kept.get(one.ID); landed.Phase != job.PhaseDone {
+		t.Fatalf("an accepted job that finished is %q: %s", landed.Phase, landed.Reason)
+	}
+}
+
+// The other answer. A person who looked and did not see the value says what is missing, and the
+// verticals go back to the stage that built them rather than the job stopping.
+func TestAnAnswerThatIsNotTheAcceptanceSendsTheVerticalsBackToBuild(t *testing.T) {
+	controller, kept, plane := aController(t)
+	one := kept.add(buildingJob())
+	ctx := context.Background()
+
+	controller.Tick(ctx)
+	controller.Tick(ctx)
+	for i, worker := range kept.children(one.ID) {
+		plane.landsIn(job.SessionFor(worker.ID), landed(aBuildReport(i+1, theFailures[i+1])))
+	}
+	controller.Tick(ctx)
+
+	kept.sendTheListBack(one.ID, "the second picture shows an empty page, the link is not read")
+	controller.Tick(ctx)
+
+	// Back to pending with the record cleared, which is what puts it in front of the build stage
+	// again. What the person said stays on the row, because that is what the next fan out builds
+	// against.
+	sent := kept.get(one.ID)
+	if sent.Accepted {
+		t.Fatal("a job nobody accepted says it was accepted")
+	}
+	if sent.Phase != job.PhasePending {
+		t.Fatalf("a job that was not accepted is %q, want pending so the build stage takes it back",
+			sent.Phase)
+	}
+	if sent.Build != "" {
+		t.Fatal("a job sent back still carries the record of a build nobody accepted")
+	}
+	if !strings.Contains(sent.Told, "empty page") {
+		t.Fatalf("what the person said is %q, want it kept whole", sent.Told)
+	}
+	if !kept.wrote(one.ID, job.EventSentBack) {
+		t.Fatal("nothing on the record says the job was sent back")
+	}
+
+	// And the build stage picks it up again, with a second worker for each vertical.
+	controller.Tick(ctx)
+	if len(kept.children(one.ID)) != 4 {
+		t.Fatalf("the build stage declared %d workers in total, want a second for each of the 2",
+			len(kept.children(one.ID)))
+	}
+}
+
+// The last sad path, and the one that names this stage. A job whose verticals are built cannot
+// settle on its own answer, however green everything it ran was.
+func TestAJobCannotCallItselfDoneWithNobodyHavingLookedAtAPicture(t *testing.T) {
+	controller, kept, plane := aController(t)
+	// A job whose verticals are built and whose record shows nothing running. The row is past every
+	// stage, so it is dispatched into its own session the way any other job is, and the session
+	// answers as though it were finished: every check the machine can make is green and the answer
+	// states an outcome, which is exactly the shape that used to settle a job.
+	built := buildingJob()
+	built.Build = "Vertical 1: a person pastes a link\nRan 1: 14\nPasses 1: TestItPasses\n" +
+		"Changed 1: internal/transcript/paste.go"
+	one := kept.add(built)
+	ctx := context.Background()
+
+	controller.Tick(ctx)
+	if kept.get(one.ID).Phase != job.PhaseRunning {
+		t.Fatalf("the job is %q, want a session of its own to answer from", kept.get(one.ID).Phase)
+	}
+	// Its plan is accounted for, so the gate in front of this one passes and what stops the job is
+	// this one alone. A test that trips two gates proves nothing about either.
+	kept.recordStep(one.ID, "1: build the two verticals")
+	plane.lands("everything passes and the work is finished\n\nOutcome: proved")
+	controller.Tick(ctx)
+
+	got := kept.get(one.ID)
+	if got.Phase == job.PhaseDone {
+		t.Fatal("a job called itself done with nobody having looked at a picture")
+	}
+	if got.Phase != job.PhaseStopped {
+		t.Fatalf("the job is %q, want stopped", got.Phase)
+	}
+	for _, phrase := range []string{"nothing shows any of them running", "not done until a person"} {
+		if !strings.Contains(got.Reason, phrase) {
+			t.Fatalf("the reason is %q, want it to say %q", got.Reason, phrase)
+		}
+	}
+	// The work is not lost. It is unaccepted, which is a different thing, and the answer stays where a
+	// person reads it next to the reason.
+	if !strings.Contains(got.Answer, "the work is finished") {
+		t.Fatalf("the answer is %q, want the work still on the row", got.Answer)
 	}
 }
 

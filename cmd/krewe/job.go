@@ -1207,7 +1207,7 @@ func stageOf(one *quaycrewv1.Job) job.Stage {
 		Product: one.GetProduct(), Parent: one.GetParent(),
 		IdeationAnswer: one.GetIdeationAnswer(),
 		Design:         one.GetDesign(), DesignAccepted: one.GetDesignAccepted(),
-		Tests: one.GetTests(), Build: one.GetBuild(),
+		Tests: one.GetTests(), Build: one.GetBuild(), Accepted: one.GetAccepted(),
 		Plan: one.GetPlan(), PlanApproved: one.GetPlanApproved(),
 	})
 }
@@ -1248,6 +1248,31 @@ func sayWhatWasBuilt(out io.Writer, one *quaycrewv1.Job) {
 	for _, line := range strings.Split(kept, "\n") {
 		fmt.Fprintf(out, "  %s\n", line)
 	}
+	sayWhereThePicturesAre(out, one)
+}
+
+// sayWhereThePicturesAre tells a person how to open what they are being asked to look at.
+//
+// The record above names each picture and says where it came from, and a file name is not something
+// anybody can open. The pictures are in the workspace's shared folder, which is a generated
+// identifier three levels down, so the line names the command that answers with the path rather than
+// the path: this tool talks to a system that may be on another machine.
+func sayWhereThePicturesAre(out io.Writer, one *quaycrewv1.Job) {
+	shots := job.PicturesIn(one.GetBuild())
+	if len(shots) == 0 || one.GetAccepted() {
+		return
+	}
+	fmt.Fprintf(out, "open the %s in this workspace's shared folder, which krewe where %s names, "+
+		"then answer this job\n", saidThePictures(len(shots)), one.GetWorkspace())
+}
+
+// saidThePictures reads for one and for several, because a line that says "1 pictures" is a line that
+// says nobody read it.
+func saidThePictures(count int) string {
+	if count == 1 {
+		return "picture"
+	}
+	return fmt.Sprintf("%d pictures", count)
 }
 
 // saidTheBuild reads for one and for several, because a line that says "1 verticals" is a line that

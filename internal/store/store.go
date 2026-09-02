@@ -478,6 +478,24 @@ type Store interface {
 	// green for the reasons the stage needs, so the question goes to a person. It applies from the
 	// pending phase, for the reason the ask about the tests does.
 	AskAboutJobBuild(ctx context.Context, id, question string, event *job.Event) (*job.Job, error)
+	// AcceptJob writes that a person looked at a picture of what was built and said the value arrived.
+	// Nothing whose verticals are built reaches done without it, which is the whole of the acceptance
+	// stage: every other road into done on such a row is the system calling its own work finished.
+	//
+	// It is permission rather than an ending, so the row stays pending and keeps its question and what
+	// the person said. The job still owes the pull request its work is read in and an account of the
+	// plan somebody approved, and the ordinary road carries it there under this flag.
+	//
+	// It applies to a pending job that carries a build record and no acceptance, so two controllers
+	// reading one answered job record it once.
+	AcceptJob(ctx context.Context, id, answer string, events ...*job.Event) (*job.Job, error)
+	// SendJobBackToBuild is the other way the acceptance stage ends: the person looked and said the
+	// value did not arrive. What was built is cleared and the row goes back to pending, so the build
+	// stage fans out again, and what the person said stays on the row as the thing it builds against.
+	//
+	// It applies to a job that carries a record and no acceptance, so nothing sends an accepted job
+	// back over its own acceptance.
+	SendJobBackToBuild(ctx context.Context, id string, events ...*job.Event) (*job.Job, error)
 	// JobsClaiming is the jobs in one workspace claiming any of these pieces of work, whole. It is how
 	// the test stage finds the workers it declared, each of which holds the claim on one requirement,
 	// and how the build stage finds the workers it declared, each of which holds the claim on one

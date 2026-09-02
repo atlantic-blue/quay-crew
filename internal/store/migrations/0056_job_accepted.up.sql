@@ -1,0 +1,19 @@
+-- A job is not done until a person has looked at a picture of the thing running.
+--
+-- The failure it answers: a job called itself done on its own word. The build stage closes on three
+-- checks, and all three are the machine reading its own work. A session that finishes the work writes
+-- the answer that says the work is right, and it says so in good faith, because from inside the
+-- session there is nothing to compare against.
+--
+-- accepted says a person looked at what this job built and said the value arrived. It is the only
+-- road into done for a job whose verticals are built, and every other road on such a row is refused.
+--
+-- A flag rather than text, and the pictures are not here. The pictures and their labels arrive inside
+-- the build reports and the build column already holds them, so a column of their own could only
+-- disagree with that one. What is not in that column is the one word a person writes, and a build
+-- somebody sent back carries the same record as a build nobody has answered yet: only this tells
+-- those two apart.
+--
+-- False rather than null, the way every other flag on this table already is. Every job written before
+-- this ended without anybody looking at a picture, and false is the honest reading of that.
+alter table jobs add column if not exists accepted boolean not null default false;

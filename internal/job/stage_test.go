@@ -275,9 +275,28 @@ func TestAJobInBuildIsToldWhatItIsActuallyDoing(t *testing.T) {
 		Tests:          red,
 		Plan:           "Step 1: read the design",
 		PlanApproved:   true,
-		Build:          "Vertical 1: a person pastes a link\nRan 1: 14\nPasses 1: TestItFails",
+		Build: "Vertical 1: a person pastes a link\nRan 1: 14\nPasses 1: TestItFails\n" +
+			"Picture 1: paste.png\nTaken 1: the command line, drawn with krewe render",
 	})
-	if !strings.Contains(held.Doing, "waits for you to accept") {
+	if !strings.Contains(held.Doing, "look at 1 picture") {
 		t.Fatalf("a job whose verticals are all built is told %q", held.Doing)
+	}
+
+	// And once a person has looked, the same stage holds a job that is finished, which is a fourth
+	// standing. A reader told it waits for them to look, on a job they already looked at, is being
+	// asked for something they gave.
+	accepted := StageOf(&Job{
+		Product:        "you paste a link and get the text back",
+		IdeationAnswer: "1: on the command line",
+		DesignAccepted: true,
+		Tests:          red,
+		Plan:           "Step 1: read the design",
+		PlanApproved:   true,
+		Build: "Vertical 1: a person pastes a link\nRan 1: 14\nPasses 1: TestItFails\n" +
+			"Picture 1: paste.png\nTaken 1: the command line, drawn with krewe render",
+		Accepted: true,
+	})
+	if !strings.Contains(accepted.Doing, "said the value arrived") {
+		t.Fatalf("a job a person accepted is told %q", accepted.Doing)
 	}
 }

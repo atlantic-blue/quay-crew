@@ -8967,6 +8967,14 @@ type Job struct {
 	// it on a worker the build stage declares and on nothing else, and a session it is set on is refused
 	// a write to a test by the test gate.
 	Building bool `protobuf:"varint,68,opt,name=building,proto3" json:"building,omitempty"`
+	// accepted says a person looked at a picture of what this job built and said the value arrived. It
+	// is the only road into done for a job whose verticals are built: the three checks the build stage
+	// makes are the machine reading its own work, and the fourth is somebody looking at the thing.
+	//
+	// A flag beside the record above, and the pictures are inside that record with the labels that say
+	// where each of them came from. What is not in there is the one word a person writes, and a build
+	// somebody sent back carries the same record as a build nobody has answered yet.
+	Accepted bool `protobuf:"varint,69,opt,name=accepted,proto3" json:"accepted,omitempty"`
 	// escalation is what this job does when it goes in circles, as it was declared: "ask", or
 	// "role:<name>". Empty is asking.
 	Escalation string `protobuf:"bytes,41,opt,name=escalation,proto3" json:"escalation,omitempty"`
@@ -9418,6 +9426,13 @@ func (x *Job) GetBuild() string {
 func (x *Job) GetBuilding() bool {
 	if x != nil {
 		return x.Building
+	}
+	return false
+}
+
+func (x *Job) GetAccepted() bool {
+	if x != nil {
+		return x.Accepted
 	}
 	return false
 }
@@ -12959,7 +12974,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\x8e\x13\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xaa\x13\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -13018,7 +13033,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x0fdesign_accepted\x18A \x01(\bR\x0edesignAccepted\x12\x14\n" +
 	"\x05tests\x18B \x01(\tR\x05tests\x12\x14\n" +
 	"\x05build\x18C \x01(\tR\x05build\x12\x1a\n" +
-	"\bbuilding\x18D \x01(\bR\bbuilding\x12\x1e\n" +
+	"\bbuilding\x18D \x01(\bR\bbuilding\x12\x1a\n" +
+	"\baccepted\x18E \x01(\bR\baccepted\x12\x1e\n" +
 	"\n" +
 	"escalation\x18) \x01(\tR\n" +
 	"escalation\x125\n" +

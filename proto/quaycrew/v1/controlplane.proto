@@ -1516,6 +1516,14 @@ message Job {
   // it on a worker the build stage declares and on nothing else, and a session it is set on is refused
   // a write to a test by the test gate.
   bool building = 68;
+  // accepted says a person looked at a picture of what this job built and said the value arrived. It
+  // is the only road into done for a job whose verticals are built: the three checks the build stage
+  // makes are the machine reading its own work, and the fourth is somebody looking at the thing.
+  //
+  // A flag beside the record above, and the pictures are inside that record with the labels that say
+  // where each of them came from. What is not in there is the one word a person writes, and a build
+  // somebody sent back carries the same record as a build nobody has answered yet.
+  bool accepted = 69;
   // escalation is what this job does when it goes in circles, as it was declared: "ask", or
   // "role:<name>". Empty is asking.
   string escalation = 41;
