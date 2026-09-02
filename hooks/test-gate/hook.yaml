@@ -1,12 +1,10 @@
 name: test-gate
 version: 1
-summary: Refuses a session that is building against failing tests when it changes a test, because a build that edits the test proves nothing.
+summary: Refuses a session that builds against failing tests when it changes a test, because a build that edits the test proves nothing.
 events:
+  # Every tool, rather than the ones that write today. A runtime that adds a write tool under a name
+  # this gate has never heard of would walk straight past a matcher, and the matcher is the one part
+  # of a hook the hook itself cannot check.
   - on: PreToolUse
-    matcher: Write|Edit|MultiEdit|NotebookEdit
-    entry: bin/hook
-    timeoutSeconds: 5
-  - on: PreToolUse
-    matcher: Bash
     entry: bin/hook
     timeoutSeconds: 5

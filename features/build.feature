@@ -121,7 +121,7 @@ Feature: The failing tests become an implementation, and nothing that builds can
     Then the test gate refuses it
     And the refusal names the file and says to answer that the test is wrong
 
-    Examples: the shapes a session reaches for next
+    Examples: the file, named
       | command                                              |
       | rm internal/job/build_test.go                        |
       | mv internal/job/build_test.go /tmp/aside             |
@@ -130,12 +130,54 @@ Feature: The failing tests become an implementation, and nothing that builds can
       | git checkout origin/main -- features/build.feature   |
       | sudo rm internal/job/build_test.go                   |
 
+    Examples: the same write, in the spelling a session reaches for next
+      | command                                            |
+      | sed --in-place 's/a/b/' internal/job/build_test.go |
+      | gofmt -w internal/job/build_test.go                |
+      | ln -sf /tmp/mine internal/job/build_test.go        |
+      | echo internal/job/build_test.go \| xargs rm        |
+      | find . -name '*_test.go' -delete                   |
+      | python3 -c "open('features/build.feature','w')"    |
+      | somewriter --out internal/job/build_test.go        |
+
+    Examples: the directory of tests, taken whole
+      | command                       |
+      | rm -rf features/              |
+      | rm -r internal/store/testdata |
+      | mv features /tmp/aside        |
+
+  # A command that names no path is pointed at the working directory, and the tests are under it. A
+  # name says nothing about what a directory holds, so this reads the disk rather than the word.
+  Scenario Outline: A session that is building and about to take a directory of tests whole is refused
+    Given a session that the system is building with
+    When that session is about to run the command: <command>
+    Then the test gate refuses it
+    And the refusal says to name the files it means
+
+    Examples: the verbs that cover everything under them
+      | command           |
+      | git checkout -- . |
+      | git checkout .    |
+      | git stash         |
+      | git clean -fd     |
+
   # The other direction, and the one that decides whether this boundary is worth having. Reading the
   # test is the whole difference between this and the discipline it comes from.
   Scenario Outline: A session that is building reads and builds freely
     Given a session that the system is building with
     When that session is about to run the command: <command>
     Then the test gate allows it
+
+    Examples: the work, which a gate that stopped it would be worse than no gate
+      | command                                    |
+      | go test ./features/                        |
+      | make features                              |
+      | gofmt -w internal/job/build.go             |
+      | rm -rf build/                              |
+      | find . -name '*_test.go'                   |
+      | git checkout -- internal/job/build.go      |
+      | git add internal/job/build.go              |
+      | git commit -m "make the failing test pass" |
 
     Examples: reading the tests, which this stage allows on purpose
       | command                                     |

@@ -14,6 +14,14 @@ boundary. The system sets a name on the task of a worker in this stage and on no
 gate then refuses the write in that session alone. Every other session is refused nothing, because
 the stage before this one writes the tests.
 
+The gate reads a command by the class of the program it runs. A program that only reads is never
+asked about its paths, which is what keeps `go test ./features/` and `make features` working. A
+program that writes has every path it holds read as a path. A program the reader does not know is
+read for the words that look like a path. That is what stops an interpreter handed a line of code.
+
+A directory is read by what is in it rather than by its name, off the disk. So `rm -rf build/` is
+ordinary work and `rm -rf internal/` is not.
+
 The stage fans out. One worker for each vertical a person accepted, all at once, each turning its own
 failing tests green and nothing else. Two workers must never build one vertical. So the system gives
 each worker the claim on its own, which is the refusal a second job taking a first job's work already

@@ -5,6 +5,18 @@ import (
 	"testing"
 )
 
+// aRepository answers the way a repository does: these directories hold tests and nothing else does.
+// It stands in for the disk so the table below stays a table, and the walk that reads the real disk
+// is held to its own cases in walk_test.go.
+func aRepository(where string) bool {
+	switch where {
+	case ".", "internal", "internal/", "internal/job", "internal/job/", "features", "features/",
+		"internal/store/testdata":
+		return true
+	}
+	return false
+}
+
 // The table is the gate. A reader who wants to know what a build worker may do reads this rather than
 // starting a container, and a line that moves from one column to the other is a change somebody has
 // to argue for.
@@ -32,6 +44,12 @@ func TestWhatABuildWorkerMayNotDo(t *testing.T) {
 			input: Input{FilePath: "web/src/basket.spec.ts"}, refused: true},
 		{name: "python's spelling", tool: "Write",
 			input: Input{FilePath: "api/test_basket.py"}, refused: true},
+		// A tool this gate has never heard of, sending its path under either name. The field is what
+		// is read, because a runtime that adds a write tool would otherwise walk past a list of names.
+		{name: "a write tool by another name", tool: "Update",
+			input: Input{FilePath: "internal/job/build_test.go"}, refused: true},
+		{name: "a write tool using the bare path field", tool: "str_replace_editor",
+			input: Input{Path: "internal/job/build_test.go"}, refused: true},
 
 		// Building, which is the work.
 		{name: "writing the code under test", tool: "Write",
@@ -50,8 +68,20 @@ func TestWhatABuildWorkerMayNotDo(t *testing.T) {
 			input: Input{Command: "grep -rn TestBuild features/ internal/"}},
 		{name: "running the tests", tool: "Bash",
 			input: Input{Command: "go test -count=1 ./internal/job/ -run TestBuild"}},
+		{name: "running the whole suite by its target", tool: "Bash",
+			input: Input{Command: "make features"}},
+		{name: "running the tests of a directory named after them", tool: "Bash",
+			input: Input{Command: "go test ./features/"}},
 		{name: "a commit message that holds the word test", tool: "Bash",
 			input: Input{Command: `git commit -m "make the failing test pass"`}},
+		{name: "formatting the code under test", tool: "Bash",
+			input: Input{Command: "gofmt -w internal/job/build.go"}},
+		{name: "deleting a directory that holds no test", tool: "Bash",
+			input: Input{Command: "rm -rf build/"}},
+		{name: "listing tests without acting on them", tool: "Bash",
+			input: Input{Command: "find . -name '*_test.go'"}},
+		{name: "restoring the code under test", tool: "Bash",
+			input: Input{Command: "git checkout -- internal/job/build.go"}},
 
 		// Writing a test through the shell, in the shapes a session reaches for next.
 		{name: "a redirect into a test", tool: "Bash",
@@ -61,18 +91,58 @@ func TestWhatABuildWorkerMayNotDo(t *testing.T) {
 			input: Input{Command: "cat extra >> internal/job/build_test.go"}, refused: true},
 		{name: "an in place edit", tool: "Bash",
 			input: Input{Command: "sed -i 's/want 3/want 2/' internal/job/build_test.go"}, refused: true},
+		{name: "an in place edit spelled long", tool: "Bash",
+			input:   Input{Command: "sed --in-place 's/want 3/want 2/' internal/job/build_test.go"},
+			refused: true},
+		{name: "an in place edit keeping a copy", tool: "Bash",
+			input: Input{Command: "sed -i.bak 's/a/b/' internal/job/build_test.go"}, refused: true},
 		{name: "perl in place", tool: "Bash",
 			input: Input{Command: "perl -pi -e 's/3/2/' features/build_steps_test.go"}, refused: true},
+		{name: "formatting a test back into shape", tool: "Bash",
+			input: Input{Command: "gofmt -w internal/job/build_test.go"}, refused: true},
 		{name: "moving a test out of the way", tool: "Bash",
 			input: Input{Command: "mv internal/job/build_test.go /tmp/aside"}, refused: true},
+		{name: "moving the directory of tests away", tool: "Bash",
+			input: Input{Command: "mv features /tmp/aside"}, refused: true},
 		{name: "deleting a test", tool: "Bash",
 			input: Input{Command: "rm -f internal/job/build_test.go"}, refused: true},
+		{name: "deleting the directory of tests", tool: "Bash",
+			input: Input{Command: "rm -rf features/"}, refused: true},
+		{name: "deleting the fixtures a test asserts against", tool: "Bash",
+			input: Input{Command: "rm -r internal/store/testdata"}, refused: true},
+		{name: "deleting a directory that holds tests", tool: "Bash",
+			input: Input{Command: "rm -rf internal/job"}, refused: true},
 		{name: "copying over a test", tool: "Bash",
 			input: Input{Command: "cp /tmp/mine internal/job/build_test.go"}, refused: true},
+		{name: "linking over a test", tool: "Bash",
+			input: Input{Command: "ln -sf /tmp/mine internal/job/build_test.go"}, refused: true},
 		{name: "teeing into a test", tool: "Bash",
 			input: Input{Command: "echo x | tee internal/job/build_test.go"}, refused: true},
+		{name: "piping a test into a writer", tool: "Bash",
+			input: Input{Command: "echo internal/job/build_test.go | xargs rm"}, refused: true},
+		{name: "finding every test and deleting it", tool: "Bash",
+			input: Input{Command: "find . -name '*_test.go' -delete"}, refused: true},
+		{name: "finding every scenario and running a writer over it", tool: "Bash",
+			input:   Input{Command: `find features -name '*.feature' -exec rm {} \;`},
+			refused: true},
 		{name: "restoring a test from another revision", tool: "Bash",
 			input: Input{Command: "git checkout origin/main -- internal/job/build_test.go"}, refused: true},
+		{name: "restoring the whole tree", tool: "Bash",
+			input: Input{Command: "git checkout -- ."}, refused: true},
+		{name: "restoring the tree without the marker", tool: "Bash",
+			input: Input{Command: "git checkout ."}, refused: true},
+		{name: "restoring a directory of tests", tool: "Bash",
+			input: Input{Command: "git restore internal/job/"}, refused: true},
+		{name: "stashing everything, tests included", tool: "Bash",
+			input: Input{Command: "git stash"}, refused: true},
+		{name: "cleaning the untracked tests away", tool: "Bash",
+			input: Input{Command: "git clean -fd"}, refused: true},
+		{name: "an interpreter writing a test", tool: "Bash",
+			input:   Input{Command: `python3 -c "open('internal/job/build_test.go','w').write('')"`},
+			refused: true},
+		{name: "another interpreter writing a test", tool: "Bash",
+			input:   Input{Command: `node -e "require('fs').writeFileSync('features/build.feature','')"`},
+			refused: true},
 		{name: "under a shell of its own", tool: "Bash",
 			input: Input{Command: `bash -c "rm internal/job/build_test.go"`}, refused: true},
 		{name: "under sudo", tool: "Bash",
@@ -81,10 +151,14 @@ func TestWhatABuildWorkerMayNotDo(t *testing.T) {
 			input: Input{Command: "go build ./... && rm features/build.feature"}, refused: true},
 		{name: "inside a loop", tool: "Bash",
 			input: Input{Command: "for f in a b; do rm internal/job/build_test.go; done"}, refused: true},
+		{name: "truncating a test", tool: "Bash",
+			input: Input{Command: "truncate -s 0 internal/job/build_test.go"}, refused: true},
+		{name: "a program this gate has never heard of", tool: "Bash",
+			input: Input{Command: "somewriter --out internal/job/build_test.go"}, refused: true},
 	}
 	for _, line := range lines {
 		t.Run(line.name, func(t *testing.T) {
-			refusal, refused := Decide(line.tool, line.input, true)
+			refusal, refused := Decide(line.tool, line.input, true, aRepository)
 			if refused != line.refused {
 				t.Fatalf("refused=%v, want %v: %s", refused, line.refused, refusal)
 			}
@@ -111,10 +185,12 @@ func TestASessionThatIsNotBuildingIsRefusedNothing(t *testing.T) {
 		{tool: "Write", input: Input{FilePath: "internal/job/build_test.go"}},
 		{tool: "Edit", input: Input{FilePath: "features/build.feature"}},
 		{tool: "Bash", input: Input{Command: "rm internal/job/build_test.go"}},
+		{tool: "Bash", input: Input{Command: "rm -rf features/"}},
+		{tool: "Bash", input: Input{Command: "git checkout -- ."}},
 		{tool: "Bash", input: Input{Command: "sed -i 's/a/b/' features/build_steps_test.go"}},
 	}
 	for _, one := range writes {
-		if refusal, refused := Decide(one.tool, one.input, false); refused {
+		if refusal, refused := Decide(one.tool, one.input, false, aRepository); refused {
 			t.Fatalf("a session that is not building was refused %v: %s", one.input, refusal)
 		}
 	}
@@ -132,7 +208,7 @@ func TestASessionCannotSetTheVariableItself(t *testing.T) {
 	}
 	for _, line := range lines {
 		for _, building := range []bool{true, false} {
-			refusal, refused := Decide("Bash", Input{Command: line}, building)
+			refusal, refused := Decide("Bash", Input{Command: line}, building, aRepository)
 			if !refused {
 				t.Fatalf("%q was allowed with building=%v", line, building)
 			}
@@ -143,10 +219,28 @@ func TestASessionCannotSetTheVariableItself(t *testing.T) {
 	}
 }
 
+// A directory is refused for what is in it rather than for its name, so the same command is ordinary
+// work in one repository and a boundary crossing in another.
+func TestADirectoryIsRefusedForWhatIsInIt(t *testing.T) {
+	empty := func(string) bool { return false }
+	line := Input{Command: "rm -rf internal/job"}
+
+	if _, refused := Decide("Bash", line, true, aRepository); !refused {
+		t.Fatal("a directory holding tests was taken whole")
+	}
+	if refusal, refused := Decide("Bash", line, true, empty); refused {
+		t.Fatalf("a directory holding no test was refused: %s", refusal)
+	}
+	// And with nothing to ask, the names still answer: a directory named after tests is a test.
+	if _, refused := Decide("Bash", Input{Command: "rm -rf features/"}, true, empty); !refused {
+		t.Fatal("the directory of scenarios was taken whole while nothing could read the disk")
+	}
+}
+
 // The refusal names the file and says why the file is read as a test. A session told only that
 // something is a test argues with the verdict; one told the rule knows which of its files it covers.
 func TestTheRefusalNamesTheFileAndTheRule(t *testing.T) {
-	refusal, refused := Decide("Edit", Input{FilePath: "internal/job/build_test.go"}, true)
+	refusal, refused := Decide("Edit", Input{FilePath: "internal/job/build_test.go"}, true, aRepository)
 	if !refused {
 		t.Fatal("editing a test was allowed")
 	}
