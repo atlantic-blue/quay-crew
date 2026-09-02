@@ -86,13 +86,13 @@ func Skills(client quaycrewv1.ControlPlaneServiceClient) Resource {
 				rows = append(rows, Row{
 					ID:    one.GetName(),
 					Label: one.GetName(),
-					State: heldState(one.GetLeftOut()),
+					State: StateReady,
 					Cells: []string{
 						one.GetName(),
 						versionCell(one.GetVersion()),
 						reachCell(one.GetSystem()),
 						strings.Join(one.GetBinaries(), " "),
-						saysWhy(one.GetSummary(), one.GetLeftOut()),
+						oneLine(one.GetSummary()),
 					},
 					Detail: one.GetSummary(),
 				})
@@ -127,13 +127,13 @@ func Hooks(client quaycrewv1.ControlPlaneServiceClient) Resource {
 				rows = append(rows, Row{
 					ID:    one.GetName(),
 					Label: one.GetName(),
-					State: heldState(one.GetLeftOut()),
+					State: StateReady,
 					Cells: []string{
 						one.GetName(),
 						versionCell(one.GetVersion()),
 						reachCell(one.GetSystem()),
 						firesOn(one),
-						saysWhy(one.GetSummary(), one.GetLeftOut()),
+						oneLine(one.GetSummary()),
 					},
 					Detail: one.GetSummary(),
 				})
@@ -167,28 +167,15 @@ const (
 	onAttachment   = "on attach"
 )
 
-// saysWhy is what a held thing is for, or why it is held and not given. A skill naming a secret the
-// workspace has not set is kept and left out rather than refusing every task, and an operator hunting
-// for a skill the model never had is reading this row.
+// No row here says a skill is held and not given. That reason belongs to a workspace or to a session,
+// because what leaves a skill out is a secret one of them has not set, and these views ask for the
+// system's own catalogue, which has no workspace to answer for. The control plane says so itself: it
+// fills `left_out` on a workspace listing and on a session listing, and never on this one. A cell
+// reading it here would be empty on every row, and a test proving it would need a double that answers
+// what the system never says.
 //
-// The reason goes where the summary would be, which is the rule the exec view already follows with a
-// failed task: it shows why it failed where the reply would have been, because that is the answer to
-// what happened.
-func saysWhy(summary, leftOut string) string {
-	if leftOut != "" {
-		return "left out: " + oneLine(leftOut)
-	}
-	return oneLine(summary)
-}
-
-// heldState draws a thing that is held and not given the way a stopped session is drawn. It is not a
-// failure: nothing is broken, and the row is simply not reaching any conversation.
-func heldState(leftOut string) State {
-	if leftOut != "" {
-		return StateStopped
-	}
-	return StateReady
-}
+// `krewe skill list <workspace>` and `krewe skill list <session>` are where that question is answered
+// today. The console can ask it the day one of these views is scoped to a workspace.
 
 // firesOn is the events a hook answers to, with the tools each one is narrowed to. A hook bound to
 // every tool says the event alone, because "PreToolUse()" reads as a matcher that failed to print.
