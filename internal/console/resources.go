@@ -365,9 +365,10 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 // is for that, and that is a key here.
 //
 // This is the deepest level of the tree, and the level a person watches something happen on, so the
-// two keys that reach the machine live here: enter opens the conversation and s opens a shell in the
-// sandbox. Both act on the session this view is scoped to rather than on a row, because a job whose
-// session has produced no task yet lists nothing and still has a container worth opening.
+// keys that reach the machine live here: a opens the conversation and s opens a shell in the sandbox.
+// Both act on the session this view is scoped to rather than on a row, because a job whose session
+// has produced no task yet lists nothing and still has a container worth opening. Enter is the row's
+// own: it opens the task under the cursor.
 //
 // tasks and task stay as aliases. The word changed and the muscle memory did not, and a view that
 // answers to what somebody already types costs nothing.
@@ -402,18 +403,28 @@ func Tasks(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	}
 }
 
-// workActions are the two keys on the deepest level of the tree: open the conversation, and open a
-// shell in the sandbox it runs in. Both are the same keys, with the same meaning, that the sessions
-// view already binds, because the thing being acted on is the same thing.
+// workActions are the three keys on the deepest level of the tree: read the task under the cursor,
+// open the conversation, and open a shell in the sandbox it runs in. The last two are the same keys,
+// with the same meaning, that the sessions view already binds, because the thing being acted on is
+// the same thing.
 //
-// Both act on the session the view is scoped to. A row here is one task, and a task has no container
-// to open; the session does. Reading the session off a row would also leave a job whose session has
-// answered nothing with no way in, and that is the job somebody is most likely to be watching.
+// The conversation and the shell act on the session the view is scoped to. A row here is one task,
+// and a task has no container to open; the session does. Reading the session off a row would also
+// leave a job whose session has answered nothing with no way in, and that is the job somebody is most
+// likely to be watching.
+//
+// Enter is the exception, because the thing on the row is a task and a reader wants to read the task.
+// Every row opened the same shell before, so the one key that means "this one" acted on something
+// else. The conversation keeps `a`, which it already answered to.
 func workActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 	return []Action{
 		{
-			Key:     "enter",
-			Also:    []string{"a"},
+			Key:   "enter",
+			Label: "Read",
+			Reads: func(row Row) string { return row.Detail },
+		},
+		{
+			Key:     "a",
 			Label:   "Open",
 			OnScope: true,
 			Shell: func(row Row) (*exec.Cmd, error) {
@@ -452,8 +463,26 @@ func turnRow(task *quaycrewv1.Task) Row {
 			answered,
 		},
 		// The whole of what was said, for a view that can show more than a row.
-		Detail: task.GetPrompt(),
+		Detail: taskReading(task),
 	}
+}
+
+// taskReading is one task as a person reads it: what was asked, and what came back or why it did not.
+// Neither is flattened or cut here, which is the difference between this and the row: a row holds 34
+// characters of a sentence, and this holds the sentence.
+func taskReading(task *quaycrewv1.Task) string {
+	lines := []string{"asked", task.GetPrompt(), ""}
+	switch task.GetStatus() {
+	case "failed":
+		lines = append(lines, "failed", task.GetFailure())
+	// A task is written when it starts, so the last one in a listing is often still working. Saying
+	// so is the difference between a task in flight and one that answered with nothing.
+	case "running":
+		lines = append(lines, "still running")
+	default:
+		lines = append(lines, "answered", task.GetReply())
+	}
+	return strings.Join(lines, "\n")
 }
 
 // oneLine flattens text onto one line, so a reply that runs to paragraphs does not break the table.

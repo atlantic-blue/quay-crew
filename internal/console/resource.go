@@ -150,6 +150,10 @@ type Action struct {
 	// the conversation the operator is talking to becomes the one they pointed at. A console with
 	// nothing beside it has only its own screen to give, and Shell is what it hands over.
 	Conversation bool
+	// Reads is the whole of what the row under the cursor is, put over the rows to be read. A task is
+	// the case: its asked column holds 34 characters, so the row is a fragment of a sentence and the
+	// rest of it used to be at the command line.
+	Reads func(row Row) string
 	// Descend opens another resource scoped to the selected row, the way enter does where a view has
 	// somewhere to drill into. It exists because a session already spends enter on opening the
 	// conversation, which is the thing an operator does most, and a history is worth a key of its own

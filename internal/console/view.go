@@ -20,9 +20,9 @@ func (m Model) View() string {
 	if line := m.waitingLine(); line != "" {
 		lines = append(lines, alert.Render(m.fit(line)))
 	}
-	if m.mode == modeOutput {
-		lines = append(lines, m.panelTop(len(m.commandOutput)))
-		for _, line := range m.commandBody() {
+	if m.mode == modeReading {
+		lines = append(lines, m.panelTop(len(m.reading)))
+		for _, line := range m.readingBody() {
 			lines = append(lines, m.framed(line))
 		}
 		lines = append(lines, m.panelBottom())
@@ -579,7 +579,7 @@ func (m Model) footer() string {
 		return truncate(m.typePrompt(), m.width)
 	case modeWizard:
 		return truncate(m.wizardPrompt(), m.width)
-	case modeOutput:
+	case modeReading:
 		return faint.Render("   any key closes, j and k scroll")
 	case modeBrowse:
 		return m.positionRow()
@@ -827,7 +827,7 @@ func (m Model) systemBlock() []string {
 // Nothing is drawn over the help or over a command's output: both take the panel from the rows, and
 // a total about a listing that is not on screen is a line about nothing.
 func (m Model) summaryLine() string {
-	if m.mode == modeHelp || m.mode == modeOutput {
+	if m.mode == modeHelp || m.mode == modeReading {
 		return ""
 	}
 	return m.summary.line

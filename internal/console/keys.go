@@ -55,8 +55,8 @@ func (m Model) routeKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.updateTypeKey(msg)
 	case modeWizard:
 		return m.updateWizardKey(msg)
-	case modeOutput:
-		return m.updateOutputKey(msg)
+	case modeReading:
+		return m.updateReadingKey(msg)
 	case modeHelp:
 		// Moving scrolls it, because it is taller than a short window. Any other key closes it, and
 		// nothing in here acts on anything, so there is nothing to get wrong.
@@ -374,6 +374,9 @@ func (m Model) perform(action Action, row Row) (Model, tea.Cmd) {
 		if next, cmd, opened := m.openConversationFor(row); opened {
 			return next, cmd
 		}
+	}
+	if action.Reads != nil {
+		return m.showReading(m.active.One()+" "+row.Typed(), action.Reads(row)), nil
 	}
 	if action.Shell != nil {
 		return m, m.shellCmd(action, row)
