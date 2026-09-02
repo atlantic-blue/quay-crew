@@ -161,8 +161,8 @@ func Asked(one *Job) string {
 			said = append(said, ServesAPerson(one.Product))
 		}
 		said = append(said, one.Brief)
-		if one.Repository != "" {
-			said = append(said, EndsInAPullRequest(one.Repository))
+		if ending := EndsOnItsBranch(one); ending != "" {
+			said = append(said, ending)
 		}
 		if one.PlanApproved {
 			said = append(said, FollowThePlan(one.Plan))
@@ -191,8 +191,8 @@ func Asked(one *Job) string {
 			said = append(said, asked)
 		}
 		said = append(said, one.Brief)
-		if one.Repository != "" {
-			said = append(said, EndsInAPullRequest(one.Repository))
+		if ending := EndsOnItsBranch(one); ending != "" {
+			said = append(said, ending)
 		}
 		// Last, because it is the system's line about how the job is done rather than part of what it is.
 		// It is here rather than in a brief because a brief that forgets it produces a job that can only
@@ -216,11 +216,22 @@ func Asked(one *Job) string {
 // AskedForThePullRequest is what the system sends a session that answered without one. It is the
 // second half of the refusal: the job is not landed, and the session that did the work is asked for
 // the one thing missing.
-func AskedForThePullRequest(repository string) string {
+//
+// A job that continues somebody else's pull request is asked for that one rather than for a new one.
+// Asking it to open a pull request is how one requirement's work ends up in two of them, and this
+// ask is the moment a session is most likely to do as it is told.
+func AskedForThePullRequest(one *Job) string {
+	if one.Branch != "" && one.Building {
+		return fmt.Sprintf("This job works in %s, on the branch %s, and its answer named no pull request "+
+			"against it, so nobody can tell where the work went. The pull request that branch lands in is "+
+			"already open: push your commits to %s and answer with its address. Do not open a second one. "+
+			"If you cannot push, say what stopped you. This answer ends the job, so state its outcome in "+
+			"it as well. %s", one.Repository, one.Branch, one.Branch, EndsWithAnOutcome())
+	}
 	return fmt.Sprintf("This job works in %s and its answer named no pull request against it, so the work is "+
 		"nowhere anybody can read it. Push your branch, open the pull request, and answer with its "+
 		"address. Do not merge it. If you cannot push, say what stopped you. This answer ends the job, "+
-		"so state its outcome in it as well. %s", repository, EndsWithAnOutcome())
+		"so state its outcome in it as well. %s", one.Repository, EndsWithAnOutcome())
 }
 
 // NoPullRequest is why a job that names a repository stopped without one, and where its work is.

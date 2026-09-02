@@ -147,10 +147,37 @@ func FakeTestReport(asked string) string {
 	if found := whichRequirement.FindStringSubmatch(asked); found != nil {
 		requirement, _ = strconv.Atoi(found[1])
 	}
-	return fmt.Sprintf("I wrote the tests for requirement %d and ran the suite.\n\n"+
-		"Requirement: %d\nRan: 12\nFailing 1: TestRequirement%dFailsUntilSomethingBuildsIt",
-		requirement, requirement, requirement)
+	return namingWhereTheWorkWent(fmt.Sprintf(
+		"I wrote the tests for requirement %d and ran the suite.\n\n"+
+			"Requirement: %d\nRan: 12\nFailing 1: TestRequirement%dFailsUntilSomethingBuildsIt",
+		requirement, requirement, requirement), asked, requirement)
 }
+
+// namingWhereTheWorkWent ends a report the way a session that read its task ends one: a task that
+// says the job works in a repository says the answer has to name the pull request the work went to,
+// and a job whose answer names none does not land.
+//
+// A task that already names the pull request its work lands in gets that one back. That is the build
+// worker, whose tests are open in a pull request somebody else opened, and a double that opened a
+// second one would be doing what this stage exists to stop.
+func namingWhereTheWorkWent(reply, asked string, number int) string {
+	if found := aPullRequestNamed.FindString(asked); found != "" {
+		return reply + "\n\nPushed to the branch, so the work is in " + found
+	}
+	if found := theRepositoryNamed.FindStringSubmatch(asked); found != nil {
+		return reply + fmt.Sprintf("\n\nPushed the branch and opened https://github.com/%s/pull/%d",
+			found[1], number)
+	}
+	return reply
+}
+
+// theRepositoryNamed is the repository a task says the job works in, and aPullRequestNamed is a pull
+// request address a task carries. The system writes both lines, so the double reads what it was
+// given rather than being told the address by whoever wrote the scenario.
+var (
+	theRepositoryNamed = regexp.MustCompile(`(?im)^This job works in ([^\s,]+)`)
+	aPullRequestNamed  = regexp.MustCompile(`https?://[^\s]+/pull/[0-9]+`)
+)
 
 // whichRequirement finds the requirement a task was handed, which the ask states on a line of its
 // own.
@@ -185,10 +212,11 @@ func FakeBuildReport(asked string) string {
 	if len(passing) == 0 {
 		passing = []string{fmt.Sprintf("Passing 1: TestVertical%dPasses", vertical)}
 	}
-	return fmt.Sprintf("I built vertical %d and ran the suite.\n\nVertical: %d\nRan: 14\nRed: 0\n%s\n"+
-		"Changed 1: internal/vertical%d.go\nPicture: vertical%d.png\n"+
-		"Taken: the page at http://localhost:3000, drawn with krewe render while the server was up",
-		vertical, vertical, strings.Join(passing, "\n"), vertical, vertical)
+	return namingWhereTheWorkWent(fmt.Sprintf(
+		"I built vertical %d and ran the suite.\n\nVertical: %d\nRan: 14\nRed: 0\n%s\n"+
+			"Changed 1: internal/vertical%d.go\nPicture: vertical%d.png\n"+
+			"Taken: the page at http://localhost:3000, drawn with krewe render while the server was up",
+		vertical, vertical, strings.Join(passing, "\n"), vertical, vertical), asked, vertical)
 }
 
 // whichVertical finds the vertical a task was handed, which the ask states on a line of its own.

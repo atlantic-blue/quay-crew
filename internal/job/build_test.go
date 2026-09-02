@@ -76,7 +76,7 @@ func TestAJobOwesABuildOnlyOnceItsPlanIsApprovedAndItsSuiteIsRed(t *testing.T) {
 func TestOneWorkerPerVerticalAndEachHoldsItsOwn(t *testing.T) {
 	one := buildingJob()
 	wanted := job.RequirementsOf(one)
-	workers := job.BuildWorkers(one, wanted, job.FailuresOn(one.Tests))
+	workers := job.BuildWorkers(one, wanted, job.FailuresOn(one.Tests), nil)
 	if len(workers) != 2 {
 		t.Fatalf("a list of 2 verticals made %d workers", len(workers))
 	}
@@ -259,7 +259,7 @@ func TestTheStageIsNotDoneUntilEveryVerticalIsGreen(t *testing.T) {
 func TestAWorkerThatReportedOnSomebodyElsesVerticalIsRefused(t *testing.T) {
 	one := buildingJob()
 	wanted := job.RequirementsOf(one)
-	worker := job.BuildWorkers(one, wanted[1:], job.FailuresOn(one.Tests))[0]
+	worker := job.BuildWorkers(one, wanted[1:], job.FailuresOn(one.Tests), nil)[0]
 	worker.Phase, worker.Answer = job.PhaseDone, aBuildReport(1, theFailures[1])
 
 	_, why := job.BuiltBy([]*job.Job{worker}, wanted[1], job.FailuresOn(one.Tests)[2])
@@ -308,7 +308,7 @@ func TestTheDoubleAnswersABuildReportTheSystemCanRead(t *testing.T) {
 	}
 	one := buildingJob()
 	wanted := job.RequirementsOf(one)
-	worker := job.BuildWorkers(one, wanted[1:], job.FailuresOn(one.Tests))[0]
+	worker := job.BuildWorkers(one, wanted[1:], job.FailuresOn(one.Tests), nil)[0]
 
 	report, err := job.ReadBuildReport(model.FakeBuildReport(worker.Brief))
 	if err != nil {
@@ -635,7 +635,7 @@ func TestAVerticalWhoseWorkerDiedStopsTheJobForAPerson(t *testing.T) {
 // worker that read that as owing its own reading, list, tests and build would go round for ever.
 func TestAWorkerOfTheBuildNeverFansOutItself(t *testing.T) {
 	one := buildingJob()
-	worker := job.BuildWorkers(one, job.RequirementsOf(one)[:1], job.FailuresOn(one.Tests))[0]
+	worker := job.BuildWorkers(one, job.RequirementsOf(one)[:1], job.FailuresOn(one.Tests), nil)[0]
 	if job.WaitingForItsBuild(worker) {
 		t.Fatal("a build worker owes a build of its own")
 	}

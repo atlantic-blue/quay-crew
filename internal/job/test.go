@@ -111,6 +111,12 @@ func WriteFailingTests(one *Job, wanted Requirement) string {
 		"exists to stop.")
 	said = append(said, "Write the tests for this requirement only. Another worker is writing the "+
 		"tests for each of the others at the same time, and it holds that requirement.")
+	// Where the work goes, and it is the whole difference between tests that hold a requirement and
+	// tests that die with the sandbox. Only a job that works in a repository has anywhere to put them.
+	if one.Repository != "" {
+		branch := BranchForRequirement(one.ID, wanted)
+		said = append(said, CutTheBranch(branch), AnOpenRedPullRequest(branch))
+	}
 	said = append(said, theShapeOfATestReport(wanted))
 	return strings.Join(said, "\n\n")
 }
@@ -346,10 +352,21 @@ func TestWorkers(one *Job, wanted []Requirement) []*Job {
 			Title: TestsFor(requirement), Brief: WriteFailingTests(one, requirement),
 			Mode: one.Mode, Repository: one.Repository, Product: one.Product, Request: one.Request,
 			Claim: ClaimOnRequirement(one.ID, requirement), Ungated: true,
+			Branch:  branchOn(one, requirement),
 			TraceID: one.TraceID, ParentSpanID: one.ParentSpanID,
 		})
 	}
 	return workers
+}
+
+// branchOn is the branch one requirement's work lives on, and nothing where the job works in no
+// repository. A job with nowhere to push has no branch to name, and a brief naming one would send a
+// worker looking for a remote that is not there.
+func branchOn(one *Job, requirement Requirement) string {
+	if one.Repository == "" {
+		return ""
+	}
+	return BranchForRequirement(one.ID, requirement)
 }
 
 // ReportFrom is the report the worker holding one requirement answered with, and the refusal where
@@ -371,6 +388,17 @@ func ReportFrom(workers []*Job, requirement Requirement) (TestReport, string) {
 	if worker.Answer == "" {
 		return TestReport{}, fmt.Sprintf("requirement %d, %q: the worker holding it %s and said nothing, %s",
 			requirement.Number, requirement.Text, worker.Phase, oneLine(worker.Reason))
+	}
+	// A worker that pushed nothing is a failed worker rather than a quiet pass. Its report can be
+	// perfect and the tests it describes are in a sandbox that has gone, so nothing holds this
+	// requirement and the worker that builds it has nothing to read. What says the tests reached a
+	// branch is the pull request the system read off the answer itself, rather than the worker's word
+	// about its own push.
+	if worker.Repository != "" && worker.PullRequest == "" {
+		return TestReport{}, fmt.Sprintf("requirement %d, %q: the worker holding it opened no pull "+
+			"request against %s, so its tests reached no branch and went with the sandbox that wrote "+
+			"them. Nothing can build against them", requirement.Number, requirement.Text,
+			worker.Repository)
 	}
 	report, err := ReadTestReport(worker.Answer)
 	if err != nil {
