@@ -67,12 +67,13 @@ var (
 // is not a question: the whole record is already a stop, and a session that spends one of its five
 // asking for permission has asked a person nothing.
 //
-// Narrow on purpose. It matches a request to start rather than the word itself, so "which environment
-// does the deploy proceed against" is a question and "shall I proceed" is not.
+// Narrow on purpose, and narrow in both directions. It matches a request to start rather than the
+// word itself, so "which environment does the deploy proceed against" is a question and "shall I
+// proceed" is not. It leaves "do you want me to include the panel" alone: that reads as permission
+// and it is a question about scope, and a refusal that catches those costs a person the answer.
 var askingToProceed = regexp.MustCompile(
 	`(?i)(shall|should|can|may|ok|okay)[ \t]+(i|we)[ \t]+(proceed|start|begin|go ahead|carry on)|` +
-		`(ok|okay|fine|happy)[ \t]+(to|for)[ \t]+(proceed|me to start|us to start)|` +
-		`(do you want me to|would you like me to|shall i go ahead)`)
+		`(ok|okay|fine|happy)[ \t]+(to|for)[ \t]+(proceed|me to start|us to start)`)
 
 // IdeationQuestion is one thing the machine cannot answer for itself, and the number an answer
 // accounts for it by.

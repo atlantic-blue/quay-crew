@@ -111,13 +111,20 @@ func TestAReplyThatIsNotAReadingIsRefusedAndSaysWhy(t *testing.T) {
 	}
 }
 
-// A question that asks about the work is a question, even where the word looks like a request for
-// permission. A check that refused both would cost the person the questions worth asking.
+// A question that asks about the work is a question, even where the words look like a request for
+// permission. A check that refused both would cost the person the questions worth asking, so it is
+// narrow in both directions: it catches a request to start and leaves a question about scope alone.
 func TestAQuestionAboutTheWorkIsNotARequestToGoOn(t *testing.T) {
-	asked := "Understood: a deploy\nNot: a rollback\nConfidence: sure\n" +
-		"Question 1: which environment should the deploy proceed against"
-	if _, err := job.ReadIdeation(asked); err != nil {
-		t.Fatalf("a question about the work was refused: %v", err)
+	for _, asked := range []string{
+		"which environment should the deploy proceed against",
+		"do you want me to include the briefing panel, or the command line alone",
+	} {
+		t.Run(asked, func(t *testing.T) {
+			if _, err := job.ReadIdeation("Understood: a deploy\nNot: a rollback\n" +
+				"Confidence: sure\nQuestion 1: " + asked); err != nil {
+				t.Fatalf("a question about the work was refused: %v", err)
+			}
+		})
 	}
 }
 
