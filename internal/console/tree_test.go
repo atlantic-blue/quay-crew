@@ -197,7 +197,7 @@ func TestTheConsoleOpensAtTheTopAndGoesDownFourLevelsAndBackUp(t *testing.T) {
 
 	// Level four. The running work: what the job's session was asked, and what came back.
 	model = walk(t, model, enter())
-	if model.active.Name != "tasks" {
+	if model.active.Name != "exec" {
 		t.Fatalf("enter on a job opens %q, want the work running under it", model.active.Name)
 	}
 	if model.parent != "4444444444444444dddddddd" {
@@ -314,7 +314,7 @@ func TestAJobWithNoSessionYetRefusesTheLastLevelAndSaysWhy(t *testing.T) {
 // machine live there. Both act on the session the level is scoped to.
 func TestTheRunningWorkOpensTheConversationAndAShell(t *testing.T) {
 	client := aSystemWithOneOfEverything()
-	work := Tasks(client)
+	work := Exec(client)
 
 	open, found := actionNamed(work, "Open")
 	if !found {
@@ -452,7 +452,7 @@ func TestEveryLevelFitsAWindowTooNarrowForItsWidestRow(t *testing.T) {
 	model.width, model.height = 40, 20
 	model = settle(t, model, listCmd(model.active, model.parent))
 
-	for _, level := range []string{"workspaces", "projects", "jobs", "tasks"} {
+	for _, level := range []string{"workspaces", "projects", "jobs", "exec"} {
 		if model.active.Name != level {
 			t.Fatalf("the walk is on %q, want %q", model.active.Name, level)
 		}
@@ -461,7 +461,7 @@ func TestEveryLevelFitsAWindowTooNarrowForItsWidestRow(t *testing.T) {
 				t.Fatalf("on %s a line is %d wide in a window of %d: %q", level, width, model.width, line)
 			}
 		}
-		if level != "tasks" {
+		if level != "exec" {
 			model = walk(t, model, enter())
 		}
 	}

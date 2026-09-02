@@ -598,8 +598,14 @@ func (m Model) confirmPrompt() string {
 // typePrompt draws the line being typed, naming what it is about so a name is typed onto a session
 // rather than into the console.
 func (m Model) typePrompt() string {
+	// What an empty line does is the key's own, so a key that refuses one does not offer to clear
+	// something. Two keys type into this line now, and they disagree about exactly that.
+	hint := "  enter accepts, esc cancels"
+	if means := m.typing.action.EmptyMeans; means != "" {
+		hint = "  enter accepts, " + means + ", esc cancels"
+	}
 	return prompt.Render(" "+m.typing.action.Asks+" ") + m.typing.row.Name() + "  " +
-		m.input + prompt.Render("_") + faint.Render("  enter names it, empty clears it, esc cancels")
+		m.input + prompt.Render("_") + faint.Render(hint)
 }
 
 // choosePrompt draws what a key offers, with the one under the cursor marked, on the line the command

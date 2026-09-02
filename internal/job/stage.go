@@ -1,6 +1,10 @@
 package job
 
-import "fmt"
+import (
+	"fmt"
+
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+)
 
 // The four stages a job moves through, and what a reader of one job is told about them.
 //
@@ -206,4 +210,21 @@ func (s Stage) Where() string {
 		return "no stage"
 	}
 	return fmt.Sprintf("stage %d of %d: %s", s.Number, len(Stages), s.Name)
+}
+
+// StageOfWire is the stage of a job as it arrives over the wire, which is the shape every surface
+// outside this system holds one in: the command line, the console and the web page all read a
+// message rather than a row.
+//
+// The reading lives in the package that decides it, so no two surfaces can say different things
+// about the same job. Every field it takes is a fact the row already carries; nothing here is a
+// second copy of the stage itself.
+func StageOfWire(one *quaycrewv1.Job) Stage {
+	return StageOf(&Job{
+		Product: one.GetProduct(), Parent: one.GetParent(),
+		IdeationAnswer: one.GetIdeationAnswer(),
+		Design:         one.GetDesign(), DesignAccepted: one.GetDesignAccepted(),
+		Tests: one.GetTests(), Build: one.GetBuild(), Accepted: one.GetAccepted(),
+		Plan: one.GetPlan(), PlanApproved: one.GetPlanApproved(),
+	})
 }

@@ -319,12 +319,12 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		}
 		if where.where == "" {
 			fmt.Fprintf(out, "%-10s %-24s %-2d %-8s %-9s %-9s %s%s\n", display.ShortID(one.GetId()),
-				addresses[one.GetProject()], one.GetDepth(), phaseOf(one), stageOf(one).Says(),
+				addresses[one.GetProject()], one.GetDepth(), phaseOf(one), job.StageOfWire(one).Says(),
 				outcomeOf(one), claimColumn(one, claiming), truncateLine(one.GetTitle()))
 			continue
 		}
 		fmt.Fprintf(out, "%-10s %-2d %-8s %-9s %-9s %s%s\n",
-			display.ShortID(one.GetId()), one.GetDepth(), phaseOf(one), stageOf(one).Says(),
+			display.ShortID(one.GetId()), one.GetDepth(), phaseOf(one), job.StageOfWire(one).Says(),
 			outcomeOf(one), claimColumn(one, claiming),
 			truncateLine(one.GetTitle()))
 	}
@@ -1200,18 +1200,6 @@ func runJobSettle(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	return nil
 }
 
-// stageOf is a job as the stages read it, off the wire. The reading lives in the package that
-// decides it, so the tool and the system cannot say two different things about the same row.
-func stageOf(one *quaycrewv1.Job) job.Stage {
-	return job.StageOf(&job.Job{
-		Product: one.GetProduct(), Parent: one.GetParent(),
-		IdeationAnswer: one.GetIdeationAnswer(),
-		Design:         one.GetDesign(), DesignAccepted: one.GetDesignAccepted(),
-		Tests: one.GetTests(), Build: one.GetBuild(), Accepted: one.GetAccepted(),
-		Plan: one.GetPlan(), PlanApproved: one.GetPlanApproved(),
-	})
-}
-
 // sayWhichStage says which of the four stages this job is in, what closed the stage before it, and
 // what opens the next one.
 //
@@ -1219,7 +1207,7 @@ func stageOf(one *quaycrewv1.Job) job.Stage {
 // its plan, a job whose verticals are being built in a session each, and a job waiting for somebody
 // to accept what arrived, and a reader told only "stage 4 of 4: build" cannot tell those apart.
 func sayWhichStage(out io.Writer, one *quaycrewv1.Job) {
-	stage := stageOf(one)
+	stage := job.StageOfWire(one)
 	if stage.Outside != "" {
 		fmt.Fprintf(out, "no stage, phase %s: %s\n", one.GetPhase(), stage.Outside)
 		return

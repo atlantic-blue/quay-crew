@@ -2086,7 +2086,7 @@ Nothing measures how long the task took. `quay-crew#333` is that gap.
 **What a person opens.**
 
 - *Where is this now.* `krewe sessions` for the status, `krewe task list <session>` for the prompt and
-  whether it is still running. Both exist. The console's `sessions` and `tasks` views show the same
+  whether it is still running. Both exist. The console's `sessions` and `exec` views show the same
   thing.
 - *Why did it stop.* `krewe task list <session>` prints `failed:` and the reason. Exists.
 - *What did it cost.* Grafana, Prometheus data source, `sum by (workspace) (quaycrew_cost_usd_total)`.

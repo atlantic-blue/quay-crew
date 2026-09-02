@@ -137,7 +137,7 @@ func TestTheWayBackWorksFromAPlaceTheConsoleResumedInto(t *testing.T) {
 	}
 
 	resumed := openedRemembering(t, client, held, held.where)
-	screenSays(t, resumed, "<tasks>")
+	screenSays(t, resumed, "<exec>")
 	for _, want := range []string{"acme/house-bills", "acme", ""} {
 		resumed = step(t, resumed, escape())
 		if got := resumed.Position(); got != want {

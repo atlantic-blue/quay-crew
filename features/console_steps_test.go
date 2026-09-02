@@ -807,8 +807,9 @@ func rowNamed(rows []console.Row, name string) (console.Row, bool) {
 	return console.Row{}, false
 }
 
-// initializeTasksViewSteps registers the steps for the console's history view. They live here rather
-// than with the other tasks steps because they drive the console's own reducer.
+// initializeTasksViewSteps registers the steps for the console's exec view, which was called the
+// tasks view. They live here rather than with the other task steps because they drive the console's
+// own reducer.
 func initializeTasksViewSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the operator asks for the selected session's history$`, func(ctx context.Context) error {
 		return askForHistory(ctx, consoleFrom(ctx))
@@ -824,9 +825,9 @@ func initializeTasksViewSteps(sc *godog.ScenarioContext) {
 		return askForHistory(ctx, c)
 	})
 
-	sc.Step(`^the console is showing tasks$`, func(ctx context.Context) error {
-		if got := consoleFrom(ctx).active.Name; got != "tasks" {
-			return fmt.Errorf("the console is showing %q, want tasks", got)
+	sc.Step(`^the console is showing what the session ran$`, func(ctx context.Context) error {
+		if got := consoleFrom(ctx).active.Name; got != "exec" {
+			return fmt.Errorf("the console is showing %q, want exec", got)
 		}
 		return nil
 	})
