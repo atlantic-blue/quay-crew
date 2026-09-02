@@ -17,3 +17,12 @@ would give the third kind a true age, and it is a schema change nobody has asked
 Two readings of what a job waits on now exist, one off a row and one off the record a caller holds. A
 table test holds them to the same word for the same job, because a surface that decides the kind of
 wait for itself is how two surfaces come to disagree about one job.
+
+The scenario that proves this held a race, and it failed about one run in four. It let the task that
+put the question sit in the model double while the answer started a second task, then made "the next
+task" fail. The double fails whichever task reaches it first, so the failure landed on the task the
+answer had already superseded. That failure is discarded, the second task succeeds, and the job runs
+to done with nobody waiting on it and no wait to read. The scenario now lets the first task land
+before the answer starts the second, so one task is in flight when the failure is armed. The model
+double also tells a scenario about a second held task, which a `sync.Once` closed over the first one
+only.

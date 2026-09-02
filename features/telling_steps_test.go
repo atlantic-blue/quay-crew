@@ -251,8 +251,23 @@ func initializeTellingSteps(sc *godog.ScenarioContext) {
 		}); err != nil {
 			return err
 		}
+		// The task that put the question is let go and waited for before the answer starts another
+		// one. Two tasks in the model double at once is what makes the step below a race: it fails
+		// "the next task", and the next task to reach the double is whichever of the two the runtime
+		// wakes first. The one that asked belongs to an attempt the answer has already superseded, so
+		// its failure is discarded and the job runs to done with nobody waiting on it.
+		if w.release != nil {
+			w.release()
+			w.release = nil
+		}
+		if err := w.settled(ctx); err != nil {
+			return err
+		}
+		// The work the answer starts, held, so the step below decides what it does rather than racing
+		// it to the finish.
+		w.release = w.runner.hold()
 		w.server.TickJob(ctx)
-		return nil
+		return w.runner.waitForTask()
 	})
 
 	sc.Step(`^that job fails and a surface names it$`, func(ctx context.Context) error {

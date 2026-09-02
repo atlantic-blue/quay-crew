@@ -101,7 +101,6 @@ type recordingRunner struct {
 	// started is closed when the first task begins, so a scenario can know a task is genuinely under
 	// way rather than infer it from how long a step took.
 	started chan struct{}
-	once    sync.Once
 	// usage, cost and usageReported are what each task reports having spent. The zero value reports
 	// nothing, which is what a backend that does not say looks like.
 	usage         sandbox.Usage
@@ -268,12 +267,22 @@ var _ model.Runner = (*recordingRunner)(nil)
 // about stopping a task would hang against it while the real system stopped the task at once.
 func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.Request) (model.Response, error) {
 	r.mu.Lock()
-	takes, gate, started, onTask, duringTask := r.takes, r.gate, r.started, r.onTask, r.duringTask
+	takes, gate, onTask, duringTask := r.takes, r.gate, r.onTask, r.duringTask
 	// Recorded on arrival rather than on the way out. A scenario about what is true *while* a task
 	// runs, which is what attaching to a running session is, cannot read a task that is only written
 	// down once it is over.
 	r.requests = append(r.requests, req)
 	asked := len(r.requests)
+	// Closed here rather than by a sync.Once, so a scenario that holds a second time is told about
+	// the second task too. A once fires for the first task of the run and never again, which leaves
+	// a later hold waiting ten seconds for a task that already arrived.
+	if r.started != nil {
+		select {
+		case <-r.started:
+		default:
+			close(r.started)
+		}
+	}
 	r.mu.Unlock()
 	// Outside the lock: what the model does may ask the system something.
 	if onTask != nil {
@@ -281,9 +290,6 @@ func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.
 	}
 	if duringTask != nil {
 		duringTask(req)
-	}
-	if started != nil {
-		r.once.Do(func() { close(started) })
 	}
 	if gate != nil {
 		select {
