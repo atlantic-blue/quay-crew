@@ -81,7 +81,7 @@ func BuildingVertical(wanted Requirement) string {
 // little of each and the fan out buys nothing. It is given the names of the failing tests, because
 // those names are what the stage reads its answer against: a worker that does not know which tests it
 // owns cannot report on them.
-func BuildTheVertical(one *Job, wanted Requirement, failing []string) string {
+func BuildTheVertical(one *Job, wanted Requirement, failing []string, opened Opened) string {
 	said := []string{
 		fmt.Sprintf("Vertical %d of the list a person accepted for this job. %s",
 			wanted.Number, TheBuildAsk),
@@ -95,14 +95,16 @@ func BuildTheVertical(one *Job, wanted Requirement, failing []string) string {
 		said = append(said, fmt.Sprintf("These tests fail now, and they are yours to turn green:\n%s",
 			"- "+strings.Join(failing, "\n- ")))
 	}
+	// Where those tests are. A worker told to read tests it never fetched reads nothing, and from
+	// inside the session a test that is absent and a test that says nothing look the same.
+	if opened.Branch != "" {
+		said = append(said, ContinueOnTheBranch(opened))
+	}
 	said = append(said, "Read the tests as much as you need to. You may not change one. A build that "+
 		"changes the test makes the suite agree with the code, and the suite is the only thing holding "+
 		"the requirement, so the system refuses the write rather than trusting this sentence. If you "+
 		"believe a test is wrong, say so in your answer, name the file and the assertion, and say what "+
 		"it should assert instead. A person decides that.")
-	if branch := TestBranch(one); branch != "" {
-		said = append(said, TheTestsAreOnABranch(branch))
-	}
 	said = append(said, "Build this vertical only. Another worker is building each of the others at "+
 		"the same time, and it holds that vertical. The whole suite is red until all of them land, so "+
 		"judge yourself on your own tests rather than on the suite.")
@@ -467,16 +469,20 @@ func WaitingForItsBuild(one *Job) bool {
 // red for every vertical that has not landed yet, so it would refuse the first worker home for work
 // the others have not done. What checks a build worker instead is this stage: its own tests, named by
 // the stage that wrote them, have to pass.
-func BuildWorkers(one *Job, wanted []Requirement, failing map[int][]string) []*Job {
+func BuildWorkers(one *Job, wanted []Requirement, failing map[int][]string,
+	opened map[int]Opened) []*Job {
 	var workers []*Job
 	for _, vertical := range wanted {
 		workers = append(workers, &Job{
 			ID: newRowID(), Workspace: one.Workspace, Project: one.Project,
 			Parent: one.ID, Depth: one.Depth + 1, Version: 1, Phase: PhasePending,
 			Title: BuildingVertical(vertical),
-			Brief: BuildTheVertical(one, vertical, failing[vertical.Number]),
+			Brief: BuildTheVertical(one, vertical, failing[vertical.Number], opened[vertical.Number]),
 			Mode:  one.Mode, Repository: one.Repository, Product: one.Product, Request: one.Request,
 			Claim: ClaimOnBuild(one.ID, vertical), Ungated: true, Building: true,
+			// The branch the worker that wrote this vertical's tests left them on, so this worker lands
+			// its implementation in the same pull request rather than opening a second one.
+			Branch:  opened[vertical.Number].Branch,
 			TraceID: one.TraceID, ParentSpanID: one.ParentSpanID,
 		})
 	}
@@ -535,6 +541,15 @@ func (c *Controller) buildIt(ctx context.Context, one *Job) {
 			"job", one.ID, "error", err)
 		return
 	}
+	// What the stage before this one left on a branch for each vertical. It is read off those workers'
+	// rows rather than out of the record this job keeps, because the record is the system's rendering
+	// of the runs and a second copy of the branch could only disagree with the row it came from.
+	opened, err := c.openedFor(ctx, one, wanted)
+	if err != nil {
+		c.logger.WarnContext(ctx, "could not read the branches this job's failing tests are on",
+			"job", one.ID, "error", err)
+		return
+	}
 
 	built, running, missing := 0, 0, 0
 	reports := map[int]BuildReport{}
@@ -564,7 +579,7 @@ func (c *Controller) buildIt(ctx context.Context, one *Job) {
 		// carry on, and otherwise it is what that person is asked about.
 		if len(theirs) < BuildAttempts && (len(theirs) == 0 || one.Told != "") {
 			missing++
-			c.declareTheBuilder(ctx, one, vertical, failing[vertical.Number])
+			c.declareTheBuilder(ctx, one, vertical, failing[vertical.Number], opened[vertical.Number])
 			continue
 		}
 		refused = append(refused, why)
@@ -623,6 +638,26 @@ func (c *Controller) buildersOn(ctx context.Context, one *Job, wanted []Requirem
 	return workers, nil
 }
 
+// openedFor is the branch and the pull request the test stage left for each vertical, by vertical
+// number.
+//
+// It reads the same rows the test stage read, by the claim that stage's workers hold, because that
+// claim is what says which requirement a worker wrote for. A vertical whose test worker left nothing
+// reads as nothing, and its build worker is then briefed the way every build worker was before a
+// requirement had a branch: on a checkout of its own.
+func (c *Controller) openedFor(ctx context.Context, one *Job, wanted []Requirement) (
+	map[int]Opened, error) {
+	workers, err := c.workersOn(ctx, one, wanted)
+	if err != nil {
+		return nil, err
+	}
+	opened := map[int]Opened{}
+	for _, requirement := range wanted {
+		opened[requirement.Number] = OpenedFor(workers[ClaimOnRequirement(one.ID, requirement)])
+	}
+	return opened, nil
+}
+
 // BuiltBy is the report the worker holding one vertical answered with, and the refusal where no worker
 // of that vertical answered anything the system can read.
 //
@@ -671,8 +706,9 @@ func BuiltBy(workers []*Job, vertical Requirement, failing []string) (BuildRepor
 // worker a moment ago, and two workers building one vertical is exactly what the claim exists to stop.
 // The row waits either way, and the next tick reads the worker that other controller declared.
 func (c *Controller) declareTheBuilder(ctx context.Context, one *Job, vertical Requirement,
-	failing []string) {
-	worker := BuildWorkers(one, []Requirement{vertical}, map[int][]string{vertical.Number: failing})[0]
+	failing []string, opened Opened) {
+	worker := BuildWorkers(one, []Requirement{vertical}, map[int][]string{vertical.Number: failing},
+		map[int]Opened{vertical.Number: opened})[0]
 	record := &Event{
 		ID: newRowID(), Job: worker.ID, Kind: EventDeclared, Workspace: worker.Workspace,
 		Project: worker.Project, Parent: worker.Parent, Depth: worker.Depth,

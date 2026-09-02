@@ -322,7 +322,7 @@ func TestTheQuestionCarriesThePicturesAndWhereToOpenThem(t *testing.T) {
 // worker asked for a picture with no way to make one answers with a sentence instead.
 func TestABuildWorkerIsToldHowToShowItsVerticalWorking(t *testing.T) {
 	one := buildingJob()
-	worker := job.BuildWorkers(one, job.RequirementsOf(one)[:1], job.FailuresOn(one.Tests))[0]
+	worker := job.BuildWorkers(one, job.RequirementsOf(one)[:1], job.FailuresOn(one.Tests), nil)[0]
 	for _, phrase := range []string{
 		"it has to be a picture", "Not a description of it working",
 		"krewe render", "tmux capture-pane", "/home/agent/shared", "Then label it",

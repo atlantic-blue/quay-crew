@@ -3,6 +3,7 @@ package job_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -92,61 +93,98 @@ func (f *aFanOut) sessionOf(t *testing.T, worker *job.Job) string {
 	return session
 }
 
-// theTestReport is what a worker answers with, naming a pull request because a job in a repository
-// is asked for one and this test is not about that rule.
+// theTestReport is what a worker answers with, naming the pull request it opened on its own
+// requirement's branch. A job in a repository is asked for one, and each requirement has one of its
+// own, so the address carries the number.
 func theTestReport(requirement int) string {
 	return "I wrote the tests and ran the suite.\n\n" +
 		"Requirement: " + itoa(requirement) + "\nRan: 12\n" +
 		"Failing 1: TestRequirement" + itoa(requirement) + "FailsUntilSomethingBuildsIt\n\n" +
-		"https://github.com/atlantic-blue/quay-krewe/pull/700"
+		"https://github.com/atlantic-blue/quay-krewe/pull/70" + itoa(requirement)
+}
+
+// theBranchOf is the branch one requirement's work lives on, read the way the system names it.
+func theBranchOf(t *testing.T, fan *aFanOut, requirement int) string {
+	t.Helper()
+	one := fan.kept.get(fan.job.ID)
+	for _, wanted := range job.RequirementsOf(one) {
+		if wanted.Number == requirement {
+			return job.BranchFor(one, wanted)
+		}
+	}
+	t.Fatalf("this job has no requirement %d", requirement)
+	return ""
 }
 
 // The whole road, and the fault this answers. Two workers write their tests in sandboxes of their
-// own, and the worker that builds afterwards has both files in front of it.
+// own, and the worker that builds each requirement has that requirement's file in front of it.
 func TestTheTestsTwoWorkersWroteAreInTheBuildWorkersCheckout(t *testing.T) {
 	fan := inTheTestStage(t)
 	ctx := context.Background()
 
+	const theBasketTest = "func TestABasketHoldsWhatWasPutInIt(t *testing.T) { t.Fatal(\"nothing builds this yet\") }"
+	const theCheckoutTest = "func TestCheckoutRefusesAnEmptyBasket(t *testing.T) { t.Fatal(\"nothing builds this yet\") }"
 	workers := fan.theTestWorkers(t, ctx)
-	fan.writesAndAnswers(t, workers[0], 1, "basket_test.go",
-		"func TestABasketHoldsWhatWasPutInIt(t *testing.T) { t.Fatal(\"nothing builds this yet\") }")
-	fan.writesAndAnswers(t, workers[1], 2, "checkout_test.go",
-		"func TestCheckoutRefusesAnEmptyBasket(t *testing.T) { t.Fatal(\"nothing builds this yet\") }")
+	fan.writesAndAnswers(t, workers[0], 1, "basket_test.go", theBasketTest)
+	fan.writesAndAnswers(t, workers[1], 2, "checkout_test.go", theCheckoutTest)
 	fan.controller.Tick(ctx)
 
-	// The stage closed, so the record is on the row and it says where the tests are.
+	// The stage closed, so the record is on the row and it says where each requirement's tests are.
 	got := fan.kept.get(fan.job.ID)
 	if got.Tests == "" {
 		t.Fatalf("the workers answered and the stage did not close: %s", got.Reason)
 	}
-	branch := job.TestBranch(got)
-	if !strings.Contains(got.Tests, "Branch: "+branch) {
-		t.Fatalf("the record does not say where the tests are:\n%s", got.Tests)
+	for _, requirement := range []int{1, 2} {
+		line := fmt.Sprintf("Branch %d: %s", requirement, theBranchOf(t, fan, requirement))
+		if !strings.Contains(got.Tests, line) {
+			t.Fatalf("the record does not say where requirement %d's tests are:\n%s",
+				requirement, got.Tests)
+		}
 	}
 
-	// The build stage fans out, and its worker is told the branch.
+	// The build stage fans out, and each worker is on the branch of the requirement it holds.
 	fan.intoTheBuildStage(t, ctx)
 	builders := theBuildersOf(t, fan)
 	if len(builders) != 2 {
 		t.Fatalf("the build stage declared %d workers for 2 verticals", len(builders))
 	}
-	if !strings.Contains(builders[0].Brief, branch) {
-		t.Fatalf("the build worker's brief does not name the branch its tests are on:\n%s",
-			builders[0].Brief)
-	}
 
-	// And the assertion the whole change is for: the files are in the checkout that worker gets, read
-	// out of a clone of the branch the way the brief tells it to take one.
-	checkout := theCheckoutOf(t, fan.remote, branch)
-	for name, body := range map[string]string{
-		"basket_test.go":   "func TestABasketHoldsWhatWasPutInIt(t *testing.T) { t.Fatal(\"nothing builds this yet\") }",
-		"checkout_test.go": "func TestCheckoutRefusesAnEmptyBasket(t *testing.T) { t.Fatal(\"nothing builds this yet\") }",
-	} {
-		if checkout[name] != body {
-			t.Fatalf("the build worker's checkout holds %q for %s, want the test the worker wrote:\n%v",
-				checkout[name], name, checkout)
+	// And the assertion the whole change is for: each build worker's checkout holds the test file the
+	// worker before it wrote, read out of a clone of that branch the way the brief tells it to take
+	// one.
+	wanted := map[int]string{1: "basket_test.go", 2: "checkout_test.go"}
+	bodies := map[int]string{1: theBasketTest, 2: theCheckoutTest}
+	for _, builder := range builders {
+		requirement := theVerticalOf(t, fan, builder)
+		branch := theBranchOf(t, fan, requirement)
+		if builder.Branch != branch {
+			t.Fatalf("the worker building vertical %d is on %q, and its tests are on %q",
+				requirement, builder.Branch, branch)
+		}
+		if !strings.Contains(builder.Brief, "git switch "+branch) {
+			t.Fatalf("the worker building vertical %d is not told to check its tests out:\n%s",
+				requirement, builder.Brief)
+		}
+		checkout := theCheckoutOf(t, fan.remote, branch)
+		if checkout[wanted[requirement]] != bodies[requirement] {
+			t.Fatalf("the checkout of the worker building vertical %d holds %q for %s, want the test "+
+				"the worker before it wrote:\n%v", requirement, checkout[wanted[requirement]],
+				wanted[requirement], checkout)
 		}
 	}
+}
+
+// theVerticalOf is the vertical one build worker holds, by the claim it was declared with.
+func theVerticalOf(t *testing.T, fan *aFanOut, builder *job.Job) int {
+	t.Helper()
+	one := fan.kept.get(fan.job.ID)
+	for _, vertical := range job.RequirementsOf(one) {
+		if builder.Claim == job.ClaimOnBuild(one.ID, vertical) {
+			return vertical.Number
+		}
+	}
+	t.Fatalf("the worker %q holds no vertical of this job", builder.Title)
+	return 0
 }
 
 // A worker that wrote no file. Its report reads exactly like the others, and nothing it was asked to
@@ -170,14 +208,14 @@ func TestAWorkerWhoseTestsReachedNoBranchStopsTheStageForAPerson(t *testing.T) {
 	if got.Phase != job.PhaseAsking {
 		t.Fatalf("the job is %q, want asking: %s", got.Phase, got.Reason)
 	}
-	for _, want := range []string{"requirement 2", job.TestBranch(got), "committed nothing"} {
+	for _, want := range []string{"requirement 2", theBranchOf(t, fan, 2), "committed nothing"} {
 		if !strings.Contains(got.Question, want) {
 			t.Fatalf("the question does not say %q:\n%s", want, got.Question)
 		}
 	}
 	// And the work of the worker that did write is on the branch either way, so nothing is lost by
 	// the stage stopping here.
-	if held := theCheckoutOf(t, fan.remote, job.TestBranch(got)); held["basket_test.go"] == "" {
+	if held := theCheckoutOf(t, fan.remote, theBranchOf(t, fan, 1)); held["basket_test.go"] == "" {
 		t.Fatalf("the branch lost the tests the first worker wrote: %v", held)
 	}
 }
@@ -226,7 +264,7 @@ func TestAJobWithNoRepositoryIsNotHeldToABranch(t *testing.T) {
 	if got.Tests == "" {
 		t.Fatalf("a job with no repository was refused for a branch it could never have: %s", got.Reason)
 	}
-	if strings.Contains(got.Tests, "Branch:") {
+	if strings.Contains(got.Tests, "Branch ") {
 		t.Fatalf("the record names a branch for a job with no remote:\n%s", got.Tests)
 	}
 }
@@ -243,7 +281,7 @@ func TestTheBuildWorkerHoldsTheTestsItMayNotChange(t *testing.T) {
 	fan.writesAndAnswers(t, workers[1], 2, "checkout_test.go", "func TestCheckoutRefuses(t *testing.T) {}")
 	fan.intoTheBuildStage(t, ctx)
 
-	branch := job.TestBranch(fan.kept.get(fan.job.ID))
+	branch := theBranchOf(t, fan, 1)
 	for name := range theCheckoutOf(t, fan.remote, branch) {
 		if name == "README.md" {
 			continue

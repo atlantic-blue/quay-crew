@@ -8967,6 +8967,14 @@ type Job struct {
 	// it on a worker the build stage declares and on nothing else, and a session it is set on is refused
 	// a write to a test by the test gate.
 	Building bool `protobuf:"varint,68,opt,name=building,proto3" json:"building,omitempty"`
+	// branch is where this job's work lives, named by the system rather than chosen by the session. The
+	// worker that writes one requirement's tests cuts it and opens the pull request from it, and the
+	// worker that builds the same requirement fetches it and turns those tests green in the same pull
+	// request, so each requirement has one branch and one pull request.
+	//
+	// Empty is a job that works wherever its session puts it, which is every job that names no
+	// repository.
+	Branch string `protobuf:"bytes,70,opt,name=branch,proto3" json:"branch,omitempty"`
 	// accepted says a person looked at a picture of what this job built and said the value arrived. It
 	// is the only road into done for a job whose verticals are built: the three checks the build stage
 	// makes are the machine reading its own work, and the fourth is somebody looking at the thing.
@@ -9428,6 +9436,13 @@ func (x *Job) GetBuilding() bool {
 		return x.Building
 	}
 	return false
+}
+
+func (x *Job) GetBranch() string {
+	if x != nil {
+		return x.Branch
+	}
+	return ""
 }
 
 func (x *Job) GetAccepted() bool {
@@ -12974,7 +12989,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xaa\x13\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xc2\x13\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -13033,7 +13048,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x0fdesign_accepted\x18A \x01(\bR\x0edesignAccepted\x12\x14\n" +
 	"\x05tests\x18B \x01(\tR\x05tests\x12\x14\n" +
 	"\x05build\x18C \x01(\tR\x05build\x12\x1a\n" +
-	"\bbuilding\x18D \x01(\bR\bbuilding\x12\x1a\n" +
+	"\bbuilding\x18D \x01(\bR\bbuilding\x12\x16\n" +
+	"\x06branch\x18F \x01(\tR\x06branch\x12\x1a\n" +
 	"\baccepted\x18E \x01(\bR\baccepted\x12\x1e\n" +
 	"\n" +
 	"escalation\x18) \x01(\tR\n" +

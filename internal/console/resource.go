@@ -167,6 +167,10 @@ type Action struct {
 	// the conversation the operator is talking to becomes the one they pointed at. A console with
 	// nothing beside it has only its own screen to give, and Shell is what it hands over.
 	Conversation bool
+	// Reads is the whole of what the row under the cursor is, put over the rows to be read. A task is
+	// the case: its asked column holds 34 characters, so the row is a fragment of a sentence and the
+	// rest of it used to be at the command line.
+	Reads func(row Row) string
 	// Folds says this key opens and closes the rows drawn under the selected one, rather than doing
 	// anything to the system. It is the way onto a part: the listing holds the work a person
 	// declared, and this is how the parts of one job are read without the other jobs losing theirs.

@@ -97,4 +97,4 @@ Feature: The requirements a person accepted become failing tests before anything
     Given a job in a repository whose list of 2 verticals a person accepted
     When the controller ticks
     Then a worker is writing the tests for each requirement, and the job itself has no session
-    And each worker is told to commit its tests to the branch this job's tests live on
+    And each worker is told to commit its tests to the branch its requirement's tests live on
