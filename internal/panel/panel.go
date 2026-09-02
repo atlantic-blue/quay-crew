@@ -50,6 +50,38 @@ type Terminal struct {
 	// client is switched to the panel instead. Without this the panel was built correctly, left
 	// running, and never appeared.
 	InsideTmux bool
+	// LostAHalf says the open panel is down to one pane. Leaving the conversation closes the pane it
+	// was in, and quitting the console closes the other, so a panel is very often half of one by the
+	// time it is opened again. Opening the system then came back to that half and left it there,
+	// which is the state nobody can get out of: the console cannot open a conversation it has no
+	// room for, and the conversation has no console to go back to.
+	LostAHalf bool
+}
+
+// Runner runs one tmux invocation and answers with what it said. This package builds commands and
+// runs nothing itself, so the one question that needs an answer back is handed the way to ask it.
+type Runner func(argv []string) (string, error)
+
+// Whole says whether the panel that is already open still has both halves. Two panes is the whole
+// question: the panel builds exactly two, so anything less is a half of one.
+//
+// A panel that cannot be counted is whole. tmux failing to answer is not evidence that a half is
+// missing, and rebuilding on it would take a working panel away.
+func Whole(l Layout, run Runner) bool {
+	listing, err := run(Opened(l.Window()))
+	if err != nil {
+		return true
+	}
+	return len(strings.Fields(listing)) >= 2
+}
+
+// Window is the panel's window, which is what tmux is asked about when the panes are counted.
+func (l Layout) Window() string {
+	session := l.Session
+	if session == "" {
+		session = SessionName
+	}
+	return session + ":" + WindowName
 }
 
 // Commands is every tmux invocation needed to put the panel on the screen, in order.
@@ -61,13 +93,13 @@ func (l Layout) Commands(term Terminal) ([][]string, error) {
 	if session == "" {
 		session = SessionName
 	}
-	if term.AlreadyOpen && !term.Stale {
+	if term.AlreadyOpen && !term.Stale && !term.LostAHalf {
 		return [][]string{show(term, session)}, nil
 	}
 
 	target := session + ":" + WindowName
 	built := make([][]string, 0, 8)
-	if term.Stale {
+	if term.AlreadyOpen && (term.Stale || term.LostAHalf) {
 		// The old one goes, or new-session reattaches to it and nothing changes. Killing a panel is
 		// safe: a conversation lives in its sandbox and its store, not in the pane looking at it.
 		built = append(built, []string{"tmux", "kill-session", "-t", session})
