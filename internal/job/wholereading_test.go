@@ -136,3 +136,49 @@ func TestAJobWhoseReadingWasLongMovesToTheNextStage(t *testing.T) {
 		t.Fatalf("the task after the answer is %q, want the ask for the list", plane.lastText())
 	}
 }
+
+// aVeryLongReading is the same reading with a paragraph of 4,000 bytes in it, which is longer than
+// the whole record was ever allowed to be and longer than the question a person is asked.
+//
+// "At any length" is the requirement, so 859 bytes is the case that happened and this is the case
+// that says the number is not the point. Where a surface is narrow the text is cut for that surface
+// and says so; what the row keeps is whole.
+func aVeryLongReading() string {
+	long := strings.Repeat("the session read the repository and it had a great deal to say. ", 70)
+	return "Understood: " + long + theEndOfTheParagraph + "\n" +
+		"Not: a shorter reading\n" +
+		"Confidence: sure of the shape\n" +
+		"Question 1: which surface does a person read this on"
+}
+
+// Nothing refuses it and nothing stops the job, whatever the length.
+func TestAReadingLongerThanAnyOfTheCeilingsStillReachesAPerson(t *testing.T) {
+	controller, kept, plane := aController(t)
+	one := kept.add(readingJob())
+	ctx := context.Background()
+	reading := aVeryLongReading()
+	// Longer than the 3,000 bytes the whole record was held to, and longer than the 4,096 a question
+	// is held to, so no ceiling in the way of this is the one being read.
+	if len(reading) <= 4096 {
+		t.Fatalf("the reading under test is %d bytes, want more than 4,096", len(reading))
+	}
+
+	controller.Tick(ctx)
+	plane.lands(reading)
+	controller.Tick(ctx)
+
+	got := kept.get(one.ID)
+	if got.Phase == job.PhaseStopped {
+		t.Fatalf("a job stopped for the length of its reading: %s", got.Reason)
+	}
+	if got.Phase != job.PhaseAsking {
+		t.Fatalf("the job is %q, want asking: %s", got.Phase, got.Reason)
+	}
+	if !strings.Contains(got.Ideation, theEndOfTheParagraph) {
+		t.Fatalf("the reading on the row is %d bytes and the end of what the session wrote is not "+
+			"in it", len(got.Ideation))
+	}
+	if plane.sent() != 1 {
+		t.Fatalf("the system was asked to run %d tasks, want 1", plane.sent())
+	}
+}
