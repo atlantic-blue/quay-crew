@@ -64,6 +64,10 @@ type Store interface {
 	// GetJob reads one job back. The engine reads the job carrying a run to write a
 	// record against it, because a record has to agree with the row it describes.
 	GetJob(ctx context.Context, id string) (*job.Job, error)
+	// CarryJobQuestions writes what a reading of a plan could not settle onto the plan it read, and
+	// hands the rows still open down onto the reading that comes next. It is the engine's call: a
+	// session writes on its own job only, and these rows have to cross from one reading to another.
+	CarryJobQuestions(ctx context.Context, id string, rows []job.Question) (*job.Job, error)
 	// ReplaceJobProduct writes the one sentence a job serves over what it carried. The engine calls
 	// it when the operator answers the question at the first usable path with a sentence of their
 	// own, and it is the whole of what "the work continues from it" means: every step declared after
@@ -452,6 +456,10 @@ func (e *Engine) advance(ctx context.Context, graph Graph, run Run, at where, ev
 			next.Reason = fmt.Sprintf("stopped at %s, which the system refused: %s", dispatch.Node, oneLine(err.Error()))
 			dispatch = nil
 		} else {
+			// The rows the plan still holds open travel onto the reading that is about to be declared, in
+			// the same write as the job, so the reader can settle one by its number rather than only read
+			// it in its brief.
+			e.handDown(ctx, at.carrier, declared)
 			written.Declared, written.Records = declared, append(written.Records, record)
 			next.Status = StatusWorking
 		}
@@ -598,6 +606,11 @@ func (e *Engine) Worked(ctx context.Context, run Run, step *job.Job) (Run, error
 	// change: the container belongs to the job, the job is over, and a run that then asks
 	// a person holds nothing while it waits.
 	e.archiveSession(ctx, step.Session)
+
+	// What this reading could not settle goes onto the plan it read, and the rows still open go into
+	// the run's state. Both happen before the movement, because the next node is rendered from that
+	// state: a reader handed the list a step late is a reader answering the reading before last.
+	e.carryUp(ctx, &run, step)
 
 	run.Status = StatusRunning
 	return e.advance(ctx, graph, run, where{carrier: step.Parent, answers: step.ID}, Event{

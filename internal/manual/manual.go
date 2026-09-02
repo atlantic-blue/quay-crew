@@ -124,6 +124,12 @@ commands:
                                           it. If the job dies part way, what is on that record is
                                           where it carries on from, and what is not on it is done a
                                           second time
+  job question "<what you could not      write down one thing this reading of the plan could not
+    settle>"                              settle. The reading after yours is handed the row and may
+                                          answer it, and what no reading settles is what a person is
+                                          asked. Three rows to one reading
+  job settle <number> "<what settles     answer a row an earlier reading left open, by the number
+    it>"                                  you were handed. A settled row does not reach a person
   job handoff "<what is left>"            hand the rest of the job you are running to a fresh
     ["<what you tried>"]                  session, which is what the system asks you for when your
                                           context window reaches this workspace's ceiling. The next

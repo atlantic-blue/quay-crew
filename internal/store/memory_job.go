@@ -69,6 +69,14 @@ func (m *Memory) writeJob(declared *job.Job) error {
 		kept.UpdatedAt = kept.CreatedAt
 	}
 	m.jobs[declared.ID] = &kept
+	// The rows a reading was handed travel with the job that reads them, so they are written where the
+	// Postgres store writes them: in the same movement as the job itself.
+	if len(declared.Questions) > 0 {
+		if m.jobQuestions == nil {
+			m.jobQuestions = map[string][]job.Question{}
+		}
+		m.jobQuestions[declared.ID] = append([]job.Question(nil), declared.Questions...)
+	}
 	return nil
 }
 
