@@ -68,6 +68,9 @@ func openPanel(layout panel.Layout, out io.Writer) error {
 		// An open panel built by a different build is torn down and made again. Its panes are running
 		// the old binary, so reattaching to it shows yesterday's tool however many times you upgrade.
 		Stale: open && builtBy(layout) != version,
+		// A panel down to one pane is built again rather than shown, so opening the system is the way
+		// back from having left the conversation or quit the console.
+		LostAHalf: open && !panel.Whole(layout, tmuxSays),
 		// tmux sets this for everything it runs, so it is how a program knows it is already inside
 		// one. From in there the panel is switched to rather than attached, because tmux refuses a
 		// second client on a terminal that already has one.
@@ -195,6 +198,13 @@ func runBareConsole(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 		Workspace: current.Workspace,
 		Project:   current.Project,
 	}, conversationBeside(ctx, client), endConversationBeside(ctx, client), remembering())
+}
+
+// tmuxSays runs one tmux invocation and answers with what it said, which is how the layout asks how
+// many panes the panel it already built still has.
+func tmuxSays(argv []string) (string, error) {
+	out, err := exec.Command(argv[0], argv[1:]...).Output()
+	return string(out), err
 }
 
 // builtBy is the build that made the panel that is already open, and empty when it did not say, which

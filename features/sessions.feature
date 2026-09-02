@@ -466,6 +466,23 @@ Feature: Sessions run in isolated sandboxes
     When a conversation that says why and exits is put beside the console
     Then the pane is gone, and the reason with it
 
+# Leaving the conversation closes the pane it was in, and quitting the console closes the other, so
+  # a panel is very often half of one by the time somebody opens the system again. Opening it used to
+  # come back to that half and leave it there: the console had no room to open a conversation, and a
+  # conversation on its own had no console to go back to.
+  Scenario: Opening the system rebuilds a panel that lost a half
+    Given a panel with a console and a conversation
+    When the conversation is closed the way leaving it closes it
+    And the operator opens the system again
+    Then the panel has a console and a conversation again
+
+  # And the panel that is whole is left exactly as it is, or every open would take the conversation
+  # away and put a fresh one back, which is the fault above with the halves the other way round.
+  Scenario: Opening the system again leaves a whole panel alone
+    Given a panel with a console and a conversation
+    When the operator opens the system again
+    Then the conversation is the one that was already there
+
   Scenario: The panel refuses rather than opening half of one
     When the operator opens the panel
     Then the panel says there is no conversation to put beside the console

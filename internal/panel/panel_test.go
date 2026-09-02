@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -406,5 +407,70 @@ func TestSelectingTheConsoleDoesNotBounceTheKeyboardOut(t *testing.T) {
 	}
 	if strings.Contains(got, "pane_index") {
 		t.Fatalf("the panel still decides anything by pane index:\n%s", got)
+	}
+}
+
+// TestAPanelDownToOnePaneIsBuiltAgain. Leaving the conversation closes the pane it was in, so the
+// panel is a single console by the time the operator opens the system again, and opening it used to
+// come back to that single console for ever.
+func TestAPanelDownToOnePaneIsBuiltAgain(t *testing.T) {
+	commands, err := Layout{
+		Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
+	}.Commands(Terminal{AlreadyOpen: true, LostAHalf: true})
+	if err != nil {
+		t.Fatalf("Commands: %v", err)
+	}
+	got := lines(commands)
+
+	for _, want := range []string{"kill-session", "split-window", "krewe attach s1"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("opening a panel that lost a half does not %q:\n%s", want, got)
+		}
+	}
+}
+
+// And a panel with both halves is shown rather than built, or every open would take the conversation
+// away and put a fresh one in its place.
+func TestAWholePanelIsShownRatherThanBuiltAgain(t *testing.T) {
+	commands, err := Layout{
+		Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
+	}.Commands(Terminal{AlreadyOpen: true})
+	if err != nil {
+		t.Fatalf("Commands: %v", err)
+	}
+	got := lines(commands)
+
+	if strings.Contains(got, "kill-session") || strings.Contains(got, "split-window") {
+		t.Fatalf("opening a whole panel builds it again:\n%s", got)
+	}
+}
+
+// Whole is asked of tmux rather than remembered, and a tmux that cannot answer is not evidence that
+// a half is missing: rebuilding on that would take a working panel away from somebody.
+func TestWhetherThePanelStillHasBothHalves(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		listing string
+		failed  error
+		want    bool
+	}{
+		{name: "a console and a conversation", listing: "%0\n%1\n", want: true},
+		{name: "a console on its own", listing: "%0\n", want: false},
+		{name: "nothing at all", listing: "", want: false},
+		{name: "tmux did not answer", failed: fmt.Errorf("no server running"), want: true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			asked := ""
+			got := Whole(Layout{Session: "krewe-panel"}, func(argv []string) (string, error) {
+				asked = strings.Join(argv, " ")
+				return c.listing, c.failed
+			})
+			if got != c.want {
+				t.Fatalf("with %q tmux said %q, want %v", c.name, c.listing, c.want)
+			}
+			if !strings.Contains(asked, "krewe-panel:panel") {
+				t.Fatalf("the panel asked tmux %q, want it to ask about its own window", asked)
+			}
+		})
 	}
 }
