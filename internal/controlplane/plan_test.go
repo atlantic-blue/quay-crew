@@ -66,6 +66,16 @@ func aPlannedJob(t *testing.T, reply string) planning {
 	}
 	server.TickJob(ctx)
 	system.landed(t)
+	// Then the list of what it would build, which a person accepts, because a job whose list nobody
+	// accepted never reaches the plan either. The double answers a list to the task that asks for one.
+	server.TickJob(ctx)
+	if _, err := server.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{
+		Id: system.job.GetId(), Answer: "yes",
+	}); err != nil {
+		t.Fatalf("AnswerJob: %v", err)
+	}
+	server.TickJob(ctx)
+	system.landed(t)
 	server.TickJob(ctx)
 	return system
 }
@@ -127,10 +137,11 @@ func TestAPlannedJobStopsForAPersonBeforeItBuildsAnything(t *testing.T) {
 			t.Fatalf("the question is %q, want it to say %q", got.GetQuestion(), phrase)
 		}
 	}
-	// Two tasks, which is what the pair of gates costs: one to say what it understood and one to write
-	// the plan from what the person answered. The same answer after everything is built costs the job.
-	if sent := tasksOf(t, system.server, got.GetId()); len(sent) != 2 {
-		t.Fatalf("the session ran %d tasks before the plan was approved, want 2", len(sent))
+	// Three tasks, which is what the three gates cost: one to say what it understood, one to list what
+	// it would build, and one to write the plan from both. The same answer after everything is built
+	// costs the job.
+	if sent := tasksOf(t, system.server, got.GetId()); len(sent) != 3 {
+		t.Fatalf("the session ran %d tasks before the plan was approved, want 3", len(sent))
 	}
 }
 

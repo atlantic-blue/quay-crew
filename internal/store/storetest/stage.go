@@ -88,15 +88,51 @@ func runJobStageConformance(t *testing.T, newDataset func(t *testing.T) Opener) 
 			t.Fatalf("a job whose reading a person answered reads as stage %q: the answer reads back "+
 				"as %q, which is the column this suite exists to catch", stage.Name, answered.IdeationAnswer)
 		}
+		if !stage.Built || stage.Unbuilt != "" {
+			t.Fatalf("design reads as unbuilt, saying %q, and the job is asked for its list there",
+				stage.Unbuilt)
+		}
+	})
+
+	t.Run("an accepted list moves the job to test, out of the store", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := waitingToAcceptTheList(t, s, workspace, project)
+
+		asking, err := s.GetJob(ctx, id)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		// Asking and still in design, which is the pair again: the phase says the system is waiting and
+		// the stage says what it is waiting for.
+		if asking.Phase != job.PhaseAsking || job.StageOf(asking).Name != job.StageDesign {
+			t.Fatalf("a job waiting for its list to be accepted is %q in stage %q",
+				asking.Phase, job.StageOf(asking).Name)
+		}
+
+		if _, err := s.AcceptJobDesign(ctx, id, toldEvent(id, workspace, project)); err != nil {
+			t.Fatalf("AcceptJobDesign: %v", err)
+		}
+		accepted, err := s.GetJob(ctx, id)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		stage := job.StageOf(accepted)
+		if stage.Name != job.StageTest {
+			t.Fatalf("a job whose list a person accepted reads as stage %q: the acceptance reads back "+
+				"as %t, which is the column this suite exists to catch",
+				stage.Name, accepted.DesignAccepted)
+		}
 		if stage.Built {
-			t.Fatalf("design reads as built, and design is a later slice")
+			t.Fatalf("test reads as built, and test is a later slice")
 		}
 		if stage.Unbuilt == "" {
-			t.Fatalf("a job in design says nothing about design not being built")
+			t.Fatalf("a job in test says nothing about test not being built")
 		}
-		// And it says what the job is doing instead, truthfully. This job answered its reading a
-		// moment ago and has written no plan, so a line about carrying on under an approved plan
-		// would describe a state no job is in yet.
+		// And it says what the job is doing instead, truthfully. This job accepted its list a moment
+		// ago and has written no plan, so a line about carrying on under an approved plan would
+		// describe a state no job is in yet.
 		if strings.Contains(stage.Unbuilt, "a person approved") {
 			t.Fatalf("a job with no plan is told %q", stage.Unbuilt)
 		}

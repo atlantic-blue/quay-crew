@@ -143,6 +143,17 @@ type Job struct {
 	Ideation       string
 	IdeationAnswer string
 
+	// Design is the list of verticals the crew said it would build, each one a thing a person can be
+	// shown working, and DesignAccepted says whether a person accepted the list. It sits between the
+	// reading above and the plan below: the reading says what the work is, the list says what a person
+	// gets and in what order, and the plan says the steps. See design.go.
+	//
+	// There is a flag beside this one and none beside the reading, and the answer is the difference.
+	// An acceptance is one word, so a list a person sent back for a rewrite carries the same text as a
+	// list nobody has answered yet, and only the flag tells those two apart.
+	Design         string
+	DesignAccepted bool
+
 	// Steers is how many times the operator had to say something this job should have known, counted
 	// on the job the steer landed on and on every job above it. On the job at the top it is the score
 	// of the whole tree, which is the number the acceptance job exists to move. See steer.go.

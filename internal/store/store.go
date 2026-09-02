@@ -442,6 +442,16 @@ type Store interface {
 	ProposeJobIdeation(ctx context.Context, id, understood, question string,
 		event *job.Event) (*job.Job, error)
 	AnswerJobIdeation(ctx context.Context, id, answer string, event *job.Event) (*job.Job, error)
+	// ProposeJobDesign and AcceptJobDesign are the same pair one stage later: the first writes the list
+	// of verticals the crew said it would build and puts it to a person, and the second records that a
+	// person accepted the list and puts the job back to pending so it plans against it.
+	//
+	// This one has an acceptance rather than an answer, which is the plan's shape and not the reading's.
+	// An answer that is not the acceptance takes the ordinary AnswerJob road, because it is a correction
+	// the session writes the next list from.
+	ProposeJobDesign(ctx context.Context, id, design, question string,
+		event *job.Event) (*job.Job, error)
+	AcceptJobDesign(ctx context.Context, id string, event *job.Event) (*job.Job, error)
 	// RecordJobStep writes down one thing the session doing a running job finished. The same words
 	// twice leave one step, because the record is the set of what is finished rather than a log of
 	// what was said, and a session continuing a job says again what it said before.

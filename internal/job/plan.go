@@ -69,13 +69,17 @@ func Planned(one *Job) bool {
 
 // WaitingForItsPlan says whether this job still owes a person a plan they approved.
 //
-// A job that has not said what it understood is not waiting for its plan yet. Ideation stands in
-// front of this gate and is held by the same person, so the order is what it understood, then the
-// plan written from what the person answered, then the work. A session asked to plan before anybody
-// had agreed with its reading would be marking its own reading, which is the gap the two gates
-// together close.
+// Two gates stand in front of this one and the same person holds all three. The order is what it
+// understood, then the list of what it would build, then the plan written from both, then the work.
+// A session asked to plan before anybody had agreed with its reading would be marking its own
+// reading, and a session asked to plan before anybody had accepted the list would be planning steps
+// towards deliverables nobody had chosen.
+//
+// A job holding a plan is past the design gate whether or not it went through one, which is what
+// carries a row written before the list existed: it is already at this gate, and sending it back to
+// design would take work a person had agreed to back to the beginning.
 func WaitingForItsPlan(one *Job) bool {
-	return Planned(one) && Ideated(one) && !one.PlanApproved
+	return Planned(one) && Ideated(one) && pastItsDesign(one) && !one.PlanApproved
 }
 
 // Step of a plan: what the crew says it will do, and the number a recorded step accounts for it by.
@@ -221,6 +225,12 @@ func WriteThePlan(one *Job) string {
 	if understood := WhatWeUnderstand(one); understood != "" {
 		said = append(said, understood)
 	}
+	// And the list a person accepted, under the reading they answered. The plan is the steps towards
+	// those deliverables, in that order, so a plan written without the list would be the crew choosing
+	// the deliverables a second time after somebody had already chosen them.
+	if building := WhatWeWouldBuild(one); building != "" {
+		said = append(said, building)
+	}
 	return strings.Join(append(said, theShapeOfAPlan()), "\n\n")
 }
 
@@ -247,6 +257,9 @@ func WriteThePlanAgain(one *Job) string {
 	// a session rewriting a plan from one correction is the session most likely to drop the rest.
 	if understood := WhatWeUnderstand(one); understood != "" {
 		said += "\n\n" + understood
+	}
+	if building := WhatWeWouldBuild(one); building != "" {
+		said += "\n\n" + building
 	}
 	return said + "\n\n" + theShapeOfAPlan()
 }

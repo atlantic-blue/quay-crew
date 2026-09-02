@@ -38,10 +38,9 @@ func TestJobShowSaysTheStageAndWhatClosesAndOpensIt(t *testing.T) {
 	}
 }
 
-// The stage after the answer, and the truth about it. Design is a later slice, and what the job is
-// doing instead is read off its own plan columns: a job that has just answered its reading has no
-// plan, so it is not carrying on under one.
-func TestJobShowSaysWhenTheStageItIsInIsNotBuilt(t *testing.T) {
+// The stage after the answer. Design is built, so the reading says what opens the stage after it and
+// says nothing about a stage that does not work.
+func TestJobShowSaysTheStageTheAnswerOpened(t *testing.T) {
 	client, _, id := aJobWaitingToBeAnswered(t)
 
 	mustRun(t, client, "job", "answer", id, "the surface is the command line, nothing else changes")
@@ -50,10 +49,35 @@ func TestJobShowSaysWhenTheStageItIsInIsNotBuilt(t *testing.T) {
 	for _, want := range []string{
 		"stage 2 of 4: design",
 		"ideation closed on your answer to what it understood",
-		"nothing opens test yet, it is a later slice",
-		// The truth about this job at this moment: it answered its reading and has written no plan,
+		"test opens on your acceptance of the list it would build",
+	} {
+		if !strings.Contains(shown, want) {
+			t.Errorf("krewe job show does not say %q: %q", want, shown)
+		}
+	}
+	// The way off the old reading: design used to be a name with nothing behind it, and a job standing
+	// in it was told so on this surface.
+	if strings.Contains(shown, "design is not built yet") {
+		t.Errorf("a job in design is told design does not work: %q", shown)
+	}
+}
+
+// The stage after the list, and the truth about it. Test is a later slice, and what the job is doing
+// instead is read off its own plan columns: a job whose list was just accepted has no plan, so it is
+// not carrying on under one.
+func TestJobShowSaysWhenTheStageItIsInIsNotBuilt(t *testing.T) {
+	one := aJobWaitingToAcceptItsList(t)
+
+	mustRun(t, one.client, "job", "answer", one.id, "yes")
+
+	shown := mustRun(t, one.client, "job", "show", one.id)
+	for _, want := range []string{
+		"stage 3 of 4: test",
+		"design closed on your acceptance of the list it would build",
+		"nothing opens build yet, it is a later slice",
+		// The truth about this job at this moment: its list was accepted and it has written no plan,
 		// so nothing has been approved and nothing is being carried on with.
-		"design is not built yet, so this job writes its plan next, and a person approves it before " +
+		"test is not built yet, so this job writes its plan next, and a person approves it before " +
 			"any work starts",
 	} {
 		if !strings.Contains(shown, want) {

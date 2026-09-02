@@ -32,12 +32,14 @@ Feature: A person approves the plan before any work starts
   Scenario: A job that states the sentence is asked for its plan and for no work
     Given a job that says a person "pastes a link and gets the text back"
     And a person answered what that job understood
+    And a person accepted the list it would build
     When the controller ticks
     Then the session is asked for a plan and told to do no work
 
   Scenario: The plan lands on the row and the job stops for a person
     Given a job that says a person "pastes a link and gets the text back"
     And a person answered what that job understood
+    And a person accepted the list it would build
     And the session will answer with a plan of 2 steps
     When the controller ticks
     And the task the controller sent lands
@@ -45,7 +47,7 @@ Feature: A person approves the plan before any work starts
     Then the job is asking, and the row carries the plan it wrote
     And the question names the sentence and the plan
     And the plan is not approved yet
-    And the system was asked to run 2 tasks
+    And the system was asked to run 3 tasks
 
   # The whole point of an answer of no. It costs one task, and the same answer after everything is
   # built costs the job.

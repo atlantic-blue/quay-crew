@@ -194,6 +194,9 @@ type Store interface {
 	// person, in one movement, for the reason above: a job asking with no record on it is a question
 	// about nothing.
 	ProposeJobIdeation(ctx context.Context, id, understood, question string, event *Event) (*Job, error)
+	// ProposeJobDesign writes the list of verticals the crew said it would build and puts it to a
+	// person, in one movement, so a reader never finds a job asking with no list on it.
+	ProposeJobDesign(ctx context.Context, id, design, question string, event *Event) (*Job, error)
 	// AskJob puts a question to a person and stops the job there. It applies only to a running job.
 	//
 	// The controller reaches for it where a session answered that a person has to decide, so that job
@@ -976,6 +979,16 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 				PhaseStopped, NoUnderstandingToAnswer(why), EventStopped
 		}
 	}
+	// Then the list of what it would build, between the reading and the plan, and the same shape as
+	// both: nothing is landed, the list goes on the row, and it goes to a person to accept.
+	if kind == EventAnswered && WaitingForItsDesign(whole) {
+		if put, why := c.proposeWhatItWouldBuild(ctx, whole, tasks, landing.Answer); put {
+			return
+		} else if why != "" {
+			landing.Phase, landing.Reason, kind =
+				PhaseStopped, NoListToAccept(why), EventStopped
+		}
+	}
 	if kind == EventAnswered && WaitingForItsPlan(whole) {
 		if put, why := c.proposeThePlan(ctx, whole, tasks, landing.Answer); put {
 			return
@@ -1196,6 +1209,55 @@ func (c *Controller) proposeWhatItUnderstood(ctx context.Context, one *Job, task
 	if _, err := c.store.ProposeJobIdeation(ctx, one.ID, kept, question, record); err != nil {
 		if !errors.Is(err, ErrNotRunning) {
 			c.logger.WarnContext(ctx, "could not put what a job understood to a person",
+				"job", one.ID, "error", err)
+		}
+		// Nothing is landed either way. The row moved under this controller, or the write did not
+		// apply, and a later tick reads the record again and does the same arithmetic.
+		return true, ""
+	}
+	c.exported(ctx, record)
+	return true, ""
+}
+
+// proposeWhatItWouldBuild reads the list of verticals out of the session's answer and puts it to a
+// person, and says what it did.
+//
+// The same shape as the two gates around it, on purpose: one ask, one second ask carrying the
+// refusal, then a stop. A third mechanism here would be a third way for a job to wait for a person,
+// and the three would drift.
+//
+// A list the system refuses is a list it never puts to a person. The refusal names the line and the
+// word it was refused for, so the second ask is worth the task it costs.
+func (c *Controller) proposeWhatItWouldBuild(ctx context.Context, one *Job, tasks []*quaycrewv1.Task,
+	answer string) (put bool, why string) {
+	design, err := ReadDesign(answer)
+	if err != nil {
+		if AskedForTheListAgain(tasks[len(tasks)-1].GetPrompt()) {
+			return false, oneLine(err.Error())
+		}
+		if _, sent := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+			Project: one.Project, Handle: ConversationFor(one),
+			Text:           AskedForAListTheSystemCanRead(err.Error()),
+			PermissionMode: one.Mode, Detach: true, Role: RoleNow(one), Job: one.ID,
+		}); sent != nil {
+			// A system that cannot ask again stops the job with the reason, rather than holding a row
+			// open waiting for a task nobody sent.
+			c.logger.WarnContext(ctx, "could not ask a session again what it would build",
+				"job", one.ID, "session", one.Session, "error", sent)
+			return false, oneLine(err.Error())
+		}
+		// The hold moves on, because the job is still this controller's and a task is in flight again.
+		c.renew(ctx, one)
+		return true, ""
+	}
+
+	ctx = telemetry.Under(ctx, one.TraceID, one.ParentSpanID)
+	kept := DesignText(design)
+	question := AskingWhetherThisIsTheList(one.Product, kept)
+	record := c.event(ctx, one, EventAsked, question)
+	if _, err := c.store.ProposeJobDesign(ctx, one.ID, kept, question, record); err != nil {
+		if !errors.Is(err, ErrNotRunning) {
+			c.logger.WarnContext(ctx, "could not put what a job would build to a person",
 				"job", one.ID, "error", err)
 		}
 		// Nothing is landed either way. The row moved under this controller, or the write did not

@@ -5,7 +5,7 @@ Feature: A job says what it understood, and a person answers, before it plans
   asked what the sentence meant, so the plan was the session marking its own reading. A misreading
   passes that gate whole, because the steps agree with the misreading all the way down.
 
-  So before it writes a plan, the session says what it understands the work to be and what the work
+  So before it says what it would build, the session says what it understands the work to be and what the work
   is not, lists what it does not know, and marks each footing as something it was told or something
   it filled in itself. Those two read the same on a row today and they are not the same thing. It
   says how sure it is in its own words, and nothing is compared against that: the person is the gate,
@@ -15,7 +15,7 @@ Feature: A job says what it understood, and a person answers, before it plans
   Nothing but an answer moves it.
 
   The answer is content rather than consent. A plan is approved by one word; this is answered in
-  prose, the prose is kept whole, and the plan is then written from it. An answer that leaves a
+  prose, the prose is kept whole, and the list of what the job would build is then written from it. An answer that leaves a
   question alone leaves that question unknown rather than taken as agreed, and what the session
   assumed stays marked as an assumption all the way through.
 
@@ -40,14 +40,14 @@ Feature: A job says what it understood, and a person answers, before it plans
     And no plan was written
     And the system was asked to run 1 task
 
-  # The whole point of the stage. What a person writes is kept as they wrote it, and the plan is
-  # written from those words rather than from the brief a second time.
-  Scenario: The answer is kept whole and the plan is written from it
+  # The whole point of the stage. What a person writes is kept as they wrote it, and the stage after
+  # it works from those words rather than from the brief a second time.
+  Scenario: The answer is kept whole and what it would build is written from it
     Given a job waiting for a person to answer what it understood
     When the operator answers the job with "1: on the command line first, the panel can come later"
     And the controller ticks again
     Then the row carries that answer, word for word
-    And the session is asked for a plan carrying that answer and what it assumed
+    And the session is asked what it would build, carrying that answer and what it assumed
 
   # A person who writes yes has said nothing about the work. Reading that silence as agreement is
   # the failure this stage exists for.

@@ -65,7 +65,23 @@ func initializeStageSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the reading does not say the stage is unbuilt$`, func(ctx context.Context) error {
 		if out := toolFrom(ctx).stdout; strings.Contains(out, "is not built yet") {
-			return fmt.Errorf("a job in ideation is told a stage is not built: %s", out)
+			return fmt.Errorf("a job in a stage that works is told a stage is not built: %s", out)
+		}
+		return nil
+	})
+
+	sc.Step(`^the reading says accepting the list opens the next stage$`, func(ctx context.Context) error {
+		const want = "test opens on your acceptance of the list it would build"
+		if out := toolFrom(ctx).stdout; !strings.Contains(out, want) {
+			return fmt.Errorf("the reading does not say %q: %s", want, out)
+		}
+		return nil
+	})
+
+	sc.Step(`^the reading says the acceptance closed design$`, func(ctx context.Context) error {
+		const want = "design closed on your acceptance of the list it would build"
+		if out := toolFrom(ctx).stdout; !strings.Contains(out, want) {
+			return fmt.Errorf("the reading does not say %q: %s", want, out)
 		}
 		return nil
 	})

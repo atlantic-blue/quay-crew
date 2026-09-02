@@ -310,6 +310,63 @@ func (m *Memory) AnswerJobIdeation(_ context.Context, id, answer string,
 	return &kept, nil
 }
 
+// ProposeJobDesign writes the list of verticals the crew said it would build and puts it to a person,
+// in one movement.
+//
+// The same shape as the reading before it and the plan after it: only from running, because a job
+// nothing is running has nobody to write a list, and the hold goes with it because nothing comes back
+// until a person answers.
+func (m *Memory) ProposeJobDesign(_ context.Context, id, design, question string,
+	event *job.Event) (*job.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != job.PhaseRunning {
+		return nil, job.ErrNotRunning
+	}
+	found.Phase, found.Design, found.Question, found.Told =
+		job.PhaseAsking, design, question, ""
+	asked := time.Now().UTC()
+	found.AskedAt, found.RaisedAt = &asked, nil
+	found.Resuming = ""
+	found.LeaseOwner, found.LeaseUntil = "", nil
+	found.UpdatedAt = time.Now().UTC()
+	if err := m.appendJobEvent(event); err != nil {
+		return nil, err
+	}
+	kept := cloneJob(*found)
+	return &kept, nil
+}
+
+// AcceptJobDesign records that a person accepted the list and puts the job back to pending, so the
+// job plans against it.
+//
+// Only from asking and only where nothing is accepted yet, in the same movement, so an acceptance
+// that arrives twice leaves one acceptance and one task. What it was told is cleared for the reason
+// an approval clears it: an acceptance is not an instruction to anybody, so what the session is given
+// next is the list rather than the word.
+func (m *Memory) AcceptJobDesign(_ context.Context, id string, event *job.Event) (*job.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != job.PhaseAsking || found.DesignAccepted {
+		return nil, job.ErrNotAsking
+	}
+	found.Phase, found.Told, found.DesignAccepted = job.PhasePending, "", true
+	found.StartedAt, found.UpdatedAt = nil, time.Now().UTC()
+	if err := m.appendJobEvent(event); err != nil {
+		return nil, err
+	}
+	kept := cloneJob(*found)
+	return &kept, nil
+}
+
 // ApproveJobPlan records that a person approved the plan and puts the job back to pending, so a
 // controller starts the work against it.
 //

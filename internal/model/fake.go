@@ -103,6 +103,26 @@ const FakeUnderstanding = "Understood: the work the brief describes, for the per
 	"Confidence: fairly sure of the shape, and least sure of the surface\n" +
 	"Question 1: which surface does a person read this on"
 
+// DesignAsk is the phrase a task carries when it asks a session what it would build, and DesignMarker
+// opens the first line of the list that comes back. Both are spelled here for the reason the two
+// above are: internal/job imports this package, so a double cannot import what imports it, and
+// internal/job holds them together in a test.
+const (
+	DesignAsk = "list the verticals you would build"
+	// The shown line rather than the first line, because a vertical the person put on the list opens
+	// with Yours rather than with Vertical, and both are lists.
+	DesignMarker = "Shown 1:"
+)
+
+// FakeDesign is what this double says when it is asked what it would build.
+//
+// Two verticals, each naming the person it serves, because the reader refuses a list that names only
+// the work a system does for itself. A test about a list that is refused writes the list it means.
+const FakeDesign = "Vertical 1: a person pastes a link on the command line and gets the text back\n" +
+	"Shown 1: the transcript prints in the terminal for a link the person chooses\n" +
+	"Vertical 2: a person opens the same transcript in a browser and sends the address to somebody\n" +
+	"Shown 2: the page renders that transcript at an address the person can share"
+
 // answer is what the double says, which follows the task it was handed the way a model does.
 //
 // A task that asks for an outcome gets one. Every job says so beside its brief, so a double that
@@ -116,6 +136,9 @@ func (f *FakeRunner) answer(req Request) string {
 	// A task that asks what the session understood gets an understanding rather than whatever this
 	// double was going to say next, for the reason the outcome line exists: the double follows the
 	// task it was handed.
+	if strings.Contains(req.Text, DesignAsk) && !strings.Contains(f.Reply, DesignMarker) {
+		return FakeDesign
+	}
 	if strings.Contains(req.Text, UnderstandingAsk) && !strings.Contains(f.Reply, UnderstandingMarker) {
 		return FakeUnderstanding
 	}

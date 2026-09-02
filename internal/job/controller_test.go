@@ -425,6 +425,32 @@ func (r *rows) answerReading(id, answer string) {
 	one.StartedAt = nil
 }
 
+// acceptTheList is a person accepting what the job said it would build, the way AcceptJobDesign
+// writes it: the flag goes on, what it was told is cleared, and the row goes back to pending.
+func (r *rows) acceptTheList(id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return
+	}
+	one.DesignAccepted, one.Told, one.Phase = true, "", job.PhasePending
+	one.StartedAt = nil
+}
+
+// sendTheListBack is a person saying what is wrong with the list instead of accepting it, which is
+// the ordinary answer road: the row goes back to pending carrying what they said.
+func (r *rows) sendTheListBack(id, said string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return
+	}
+	one.Told, one.Phase = said, job.PhasePending
+	one.StartedAt = nil
+}
+
 // recordStep is the session saying it finished something, the way krewe job step writes it.
 func (r *rows) recordStep(id, summary string) {
 	r.mu.Lock()
@@ -753,6 +779,30 @@ func (r *rows) ProposeJobIdeation(_ context.Context, id, understood, question st
 	}
 	one.Phase, one.Ideation, one.Question, one.Told =
 		job.PhaseAsking, understood, question, ""
+	one.Resuming = ""
+	one.LeaseOwner, one.LeaseUntil = "", nil
+	one.UpdatedAt = time.Now().UTC()
+	r.record(id, []*job.Event{event})
+	kept := *one
+	return &kept, nil
+}
+
+// ProposeJobDesign refuses what the real store refuses, for the reason the reading above gives: a job
+// nothing is running has nobody to write a list, and a double looser than the engine manufactures a
+// green run.
+func (r *rows) ProposeJobDesign(_ context.Context, id, design, question string,
+	event *job.Event) (*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such job")
+	}
+	if one.Phase != job.PhaseRunning {
+		return nil, job.ErrNotRunning
+	}
+	one.Phase, one.Design, one.Question, one.Told =
+		job.PhaseAsking, design, question, ""
 	one.Resuming = ""
 	one.LeaseOwner, one.LeaseUntil = "", nil
 	one.UpdatedAt = time.Now().UTC()

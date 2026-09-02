@@ -106,6 +106,23 @@ func (s *Server) AnswerJob(ctx context.Context, req *quaycrewv1.AnswerJobRequest
 		s.ExportJob(ctx, told)
 		return &quaycrewv1.AnswerJobResponse{Job: asJob(understood)}, nil
 	}
+	// Whether the list of verticals the crew proposed is the list a person wants built. This one is
+	// answered by a word, the way the plan below it is: the acceptance starts the planning, and
+	// anything else takes the ordinary road below, so the session writes the list again from what the
+	// person said. A person who says what is wrong writes no list.
+	if job.WaitingForItsDesign(found) && found.Design != "" && job.AcceptsTheList(answer) {
+		accepted, err := s.store.AcceptJobDesign(ctx, found.ID, told)
+		if err != nil {
+			if errors.Is(err, job.ErrNotAsking) {
+				return nil, status.Errorf(codes.FailedPrecondition,
+					"job %s is %s, so there is no list of its waiting to be accepted: "+
+						"krewe job list --phase asking says which are waiting", found.ID, found.Phase)
+			}
+			return nil, storeError(err, "accept")
+		}
+		s.ExportJob(ctx, told)
+		return &quaycrewv1.AnswerJobResponse{Job: asJob(accepted)}, nil
+	}
 	// The one question the system itself put, rather than the session: whether the plan the crew wrote
 	// serves the sentence the job states. An answer of yes starts the work against that plan. Anything
 	// else is the correction, and it takes the ordinary road below: the job goes back to pending with
