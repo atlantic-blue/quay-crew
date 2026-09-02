@@ -196,6 +196,15 @@ commands:
                                           directory on the machine; with one it prints that file, so
                                           it pipes. It never enters the container, so it answers for
                                           a session whose sandbox has gone
+  where [<address>]                       the directory an address is kept in on this machine, so you
+                                          can put a file in it by hand. A workspace address answers
+                                          with its shared folder, which every session in it reads, and
+                                          a session address answers with that session's own working
+                                          directory. The path is on the first line and nothing shares
+                                          it, so cd "$(krewe where me)" works. Under it is where a
+                                          session sees the same directory, which is what to call the
+                                          file once it is in there. It starts nothing and reads no
+                                          container, so it answers when every sandbox is down
   answer <session> [--all]                 what a session came back with, and nothing else, so a
                                           caller can pipe it. The most recent answer, or with --all
                                           every one of them, oldest first

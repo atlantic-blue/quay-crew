@@ -437,7 +437,7 @@ Feature: Sessions run in isolated sandboxes
     Then the panel puts the console in one half and that conversation in the other
     And each half is 50% of the width
     And the console has the keyboard
-    And the header spans the whole width above both halves
+    And nothing is drawn above either half
 
   Scenario: The panel opens the conversation you were last in
     Given a session started by dispatching "the older one"

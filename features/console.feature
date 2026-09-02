@@ -301,47 +301,40 @@ Feature: The operator sees the system from the console
     Then the console is asking nothing
     And the console lists what the wizard made
 
-  # The header is the wordmark, which build this is, and how to reach everything else. It carried the
-  # system's description and this view's keys until there was no room left for the wordmark, which is
-  # what the operator noticed: "the krewe logo dissapears because there is too much text, lets leave
-  # only: the logo + version, and help".
+  # The header was three rows across the top of the window: a wordmark in block letters, one version
+  # string and one memory figure. It is one footer row now, under the list, and the rows it took are
+  # rows of the listing. See issue 608.
   #
   # These drive the console's own reducer against the real control plane, so what is asserted is what
   # the operator would be looking at.
-  Scenario: The header keeps the wordmark, the build and the way to everything else
+  Scenario: The footer says where you are, how to leave, and what this build is
+    When the operator drills into a workspace
+    Then the footer says where the operator is standing
+    And the footer says how to go back
+    And the footer says which build this is
+    And the footer says how to reach everything else
+    And the footer names the product
+
+  # The rows the header took are the list's now, and a wordmark drawn anywhere would take them back.
+  Scenario: Nothing draws a header any more
     When the operator looks at the console
-    Then the header shows the wordmark
-    And the header says which build this is
-    And the header says how to reach everything else
-    And the header does not carry what the help panel carries
+    Then no wordmark is drawn anywhere on the screen
+    And the console draws one row under the list
 
-  # Half the width is what a conversation opened beside the console leaves it, and the wordmark going
-  # missing there is the whole reason the rest moved out.
-  Scenario: The wordmark survives a conversation beside the console
-    When the operator opens the console with a conversation beside it
-    Then the header shows the wordmark
-
-  # The mark spells the command a person types, which is krewe. It spelled the product's first word,
-  # beside a command that spelled the other half of the name.
-  #
-  # Five letters cost seven columns more than four: 43 rather than 36, both measured against this
-  # tree. What that costs is the narrowest console it is drawn in, and that depends on what else is on
-  # the header line: 77 columns beside the build alone, and 80 beside a status block that also names
-  # the address and the workspace. Under it the header keeps the build and the way to help, and the
-  # mark gives way rather than being drawn over the top of them. A conversation beside the console
-  # leaves 84, which is the case above and is the one that matters.
-  Scenario Outline: The wordmark is drawn where there is room, and gives way where there is not
+  # A footer is one row, so it cannot wrap. Something has to give, and it is never the half that says
+  # where you are: a person who cannot see that has to guess, while a person who cannot see the build
+  # reads it in the help panel. The order the right half gives way in is a table test in
+  # internal/console, which can fix the build string these widths depend on.
+  Scenario Outline: The footer gives up the right half before the left, narrowest first
     When the operator looks at the console <columns> columns wide
-    Then the wordmark <is drawn or not>
-    And the header says which build this is
+    Then the footer still says where the operator is standing
+    And the footer carries <what is left>
 
     Examples:
-      | columns | is drawn or not |
-      | 120     | is on screen    |
-      | 84      | is on screen    |
-      | 77      | is on screen    |
-      | 76      | is not drawn    |
-      | 60      | is not drawn    |
+      | columns | what is left                    |
+      | 120     | the build, help and the product |
+      | 84      | the build, help and the product |
+      | 10      | nothing on the right            |
 
   Scenario: The help panel carries everything the header dropped
     When the operator looks at the console and asks for help

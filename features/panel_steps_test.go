@@ -62,7 +62,6 @@ func initializePanelSteps(sc *godog.ScenarioContext) {
 			return nil
 		}
 		p.commands, p.err = panel.Layout{
-			Header: []string{"krewe", "header"}, HeaderRows: 10,
 			Left:  []string{"krewe", "console"},
 			Right: []string{"krewe", "attach", newest},
 		}.Commands(panel.Terminal{})
@@ -79,8 +78,8 @@ func initializePanelSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		got := p.line()
-		if strings.Count(got, "split-window") != 2 {
-			return fmt.Errorf("the panel is not a header over two halves:\n%s", got)
+		if strings.Count(got, "split-window") != 1 {
+			return fmt.Errorf("the panel is not two halves:\n%s", got)
 		}
 		if !strings.Contains(got, "attach "+current.sessionID) {
 			return fmt.Errorf("the panel does not open the session the control plane made:\n%s", got)
@@ -103,30 +102,26 @@ func initializePanelSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the console has the keyboard$`, func(ctx context.Context) error {
 		got := panelFrom(ctx).line()
-		if !strings.Contains(got, "select-pane") || !strings.Contains(got, ".1") {
+		if !strings.Contains(got, "select-pane") || !strings.Contains(got, ".0") {
 			return fmt.Errorf("the panel does not put the keyboard in the console:\n%s", got)
 		}
 		return nil
 	})
 
-	// The header is a pane of its own above the two halves, because a tmux pane is a rectangle and one
-	// reaching across both cannot belong to either.
-	sc.Step(`^the header spans the whole width above both halves$`, func(ctx context.Context) error {
+	// The header was a pane of its own above the two halves. It is gone, and the rows it took are the
+	// console.s: a third pane would quietly take them back.
+	sc.Step(`^nothing is drawn above either half$`, func(ctx context.Context) error {
 		got := panelFrom(ctx).line()
-		splits := make([]string, 0, 2)
-		for _, line := range strings.Split(got, "\n") {
-			if strings.Contains(line, "split-window") {
-				splits = append(splits, line)
+		if strings.Count(got, "split-window") != 1 {
+			return fmt.Errorf("the panel is not two panes:\n%s", got)
+		}
+		if strings.Contains(got, "split-window -v") {
+			return fmt.Errorf("the window is still cut top and bottom:\n%s", got)
+		}
+		for _, gone := range []string{"krewe header", "resize-pane", "after-select-pane"} {
+			if strings.Contains(got, gone) {
+				return fmt.Errorf("the panel still runs %q, which was the header pane.s:\n%s", gone, got)
 			}
-		}
-		if len(splits) != 2 {
-			return fmt.Errorf("want a full width cut then a side by side one:\n%s", got)
-		}
-		if !strings.Contains(splits[0], " -v ") {
-			return fmt.Errorf("the header does not span both halves:\n%s", splits[0])
-		}
-		if !strings.Contains(got, "resize-pane") {
-			return fmt.Errorf("the header is not given its own rows:\n%s", got)
 		}
 		return nil
 	})

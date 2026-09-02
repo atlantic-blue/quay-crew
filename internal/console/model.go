@@ -87,6 +87,12 @@ type crumbEntry struct {
 	parent   string
 	selected int
 	into     string
+	// row is the identifier of what was drilled into, so a place written down can be walked back and
+	// the level it names checked for still being there.
+	row string
+	// typed is what a person would type for that row, which is what the position line is built from.
+	// It is the name for a workspace and a project, and the shortened identifier for a job.
+	typed string
 }
 
 // Info is what the system on the other end of the connection is running. The console shows it so the
@@ -245,12 +251,12 @@ type Model struct {
 	// later cannot reopen it over whatever the operator is doing.
 	offeredSetup bool
 	client       quaycrewv1.ControlPlaneServiceClient
-	// headless leaves the header to the pane above, which draws it across both halves. Drawing it
-	// here as well would show it twice and cost the list the rows.
-	headless bool
-	// publish says which view the console moved to, so the header drawn in that pane names this
-	// view's keys rather than the keys of whichever view it was started on.
-	publish func(view string) error
+	// places is where the console keeps where it was standing, so the next run opens there. Both
+	// halves may be nil, and it then opens at the top every time.
+	places PlaceStore
+	// resuming is a remembered place waiting to be walked back down on the way up. Empty is a console
+	// that was given nothing to resume to.
+	resuming Place
 	// helpTop is how far the help panel is scrolled. Everything the header used to carry is in there,
 	// so on a short window it is taller than the room it has.
 	helpTop int
@@ -285,20 +291,6 @@ func (m Model) Selected() (Row, bool) { return m.selectedRowValue() }
 // Listed is the rows on screen, after the filter and in the order they are drawn, which is what a
 // scenario counts and what it reads a position out of.
 func (m Model) Listed() []Row { return m.visibleRows() }
-
-// WithoutHeader leaves the header to the pane above.
-func (m Model) WithoutHeader() Model {
-	m.headless = true
-	return m
-}
-
-// WithViewPublisher tells the console where to say which view it is on, so a header drawn in another
-// pane can name this view's keys. Without it those hints would be the ones for whichever view the
-// console opened on, and would go quietly wrong the moment anybody drilled in.
-func (m Model) WithViewPublisher(publish func(view string) error) Model {
-	m.publish = publish
-	return m
-}
 
 // Freshen tells the console how to end the conversation beside it, which is what the key for a new
 // one does before opening it again.
@@ -343,20 +335,23 @@ func New(registry *Registry, start string, source InfoSource) (Model, error) {
 
 // Init loads the opening view, asks what it is connected to, and starts the refresh clock.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(listCmd(m.active, m.parent), infoCmd(m.source), m.publishCmd(), tickCmd())
+	return tea.Batch(m.Opening(), tickCmd())
 }
 
-// publishCmd says which view the console is on, and does nothing when nobody asked.
-func (m Model) publishCmd() tea.Cmd {
-	if m.publish == nil {
-		return nil
+// Opening is everything the console does on the way up except start the refresh clock: load the view,
+// ask what it is connected to, and walk back down to wherever it was left.
+//
+// It is separate from Init because the clock is the one part nothing else wants. A test or a scenario
+// that ran Init would wait for a tick to prove something about the first frame.
+//
+// A console with somewhere to resume to loads the top anyway, so the first frame is a listing rather
+// than an empty panel while the levels are walked back down.
+func (m Model) Opening() tea.Cmd {
+	opening := tea.Batch(listCmd(m.active, m.parent), infoCmd(m.source))
+	if m.resuming.Empty() {
+		return opening
 	}
-	publish, view := m.publish, m.active.Name
-	return func() tea.Msg {
-		// A header that cannot be told where we are is not a reason to stop showing the system.
-		_ = publish(view)
-		return nil
-	}
+	return tea.Batch(opening, resumeCmd(m.registry, m.resuming))
 }
 
 // Update advances the console. It performs no input or output of its own: anything that talks to the
@@ -424,6 +419,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mode, m.making = modeBrowse, wizard{}
 		}
 		return m, listCmd(m.active, m.parent)
+	case resumedMsg:
+		return m.applyResumed(msg)
 	case infoMsg:
 		m.info = msg.info
 		return m, nil
@@ -450,14 +447,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.conversation, m.err = msg.pane, nil
 		return m, nil
 	case tea.KeyMsg:
-		// The view can change under a key, and whoever draws the header needs to hear about it.
-		before := m.active.Name
+		// Where the operator is standing can change without the view changing, which is drilling from
+		// one workspace into another.s projects, so the whole place is compared rather than the view.
+		standing := m.place()
 		// A key is the operator saying they read the last refusal, so it stops being held here rather
 		// than in each handler. The handlers that set an error set it after this line.
 		m.held = false
 		next, cmd := m.updateKey(msg)
-		if next.active.Name != before {
-			return next, tea.Batch(cmd, next.publishCmd())
+		if !next.place().Same(standing) {
+			return next, tea.Batch(cmd, next.rememberCmd())
 		}
 		return next, cmd
 	default:
@@ -563,13 +561,10 @@ func (m Model) selectedRowValue() (Row, bool) {
 	return visible[m.selected], true
 }
 
-// bodyHeight is the window less the header block, the frame, the column header and the footer.
-//
-// The whole block, not the status inside it: the key hints sit beside the status and either can be
-// the taller, so measuring the status alone draws a view taller than the window and the top scrolls
-// away.
+// bodyHeight is the window less the five rows that are not rows of the listing: the panel.s top edge,
+// the column header, its bottom edge, the hairline and the footer under it.
 func (m Model) bodyHeight() int {
-	body := m.height - len(m.headerLines()) - 4
+	body := m.height - 5
 	if m.err != nil {
 		body--
 	}

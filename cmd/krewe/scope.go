@@ -22,6 +22,14 @@ type scope struct {
 	// wider is the sentence that says how to look further, and is empty on a listing that already
 	// read everything it can reach.
 	wider string
+	// directories is the sentence that says how to get from a row to the directory it is kept in. A
+	// listing is where somebody looks when they are holding a file and do not know where to put it,
+	// and until this line was here the answer was not on any screen in the system.
+	//
+	// A sentence rather than a column. A path is around a hundred characters and `krewe sessions`
+	// already carries thirteen columns, so a column of them makes every row wrap and the listing
+	// stops being readable at all.
+	directories string
 }
 
 // systemWide is the scope of a listing that read every workspace.
@@ -30,6 +38,13 @@ func systemWide(what string) scope { return scope{what: what} }
 // narrowedTo is the scope of a listing that read one address, against the command that widens it.
 func narrowedTo(what, where, wider string) scope {
 	return scope{what: what, where: strings.TrimSpace(where), wider: wider}
+}
+
+// locatable marks a listing whose rows are kept in a directory somebody may want to put a file in,
+// and says how to reach it. Only the three that name a workspace, a project or a session take it.
+func (s scope) locatable(advice string) scope {
+	s.directories = advice
+	return s
 }
 
 // nothing says an empty listing, which is the case the operator cannot read at all: "no jobs" from
@@ -49,6 +64,7 @@ func (s scope) nothing(out io.Writer) {
 func (s scope) counted(out io.Writer, rows int) {
 	if s.where == "" {
 		fmt.Fprintf(out, "\n%s in this system\n", plural(rows, s.what))
+		s.locations(out)
 		return
 	}
 	fmt.Fprintf(out, "\n%s in %s", plural(rows, s.what), s.where)
@@ -56,6 +72,15 @@ func (s scope) counted(out io.Writer, rows int) {
 		fmt.Fprintf(out, ". %s", s.wider)
 	}
 	fmt.Fprintln(out)
+	s.locations(out)
+}
+
+// locations is the line under a listing that says how to reach the directory a row is kept in.
+func (s scope) locations(out io.Writer) {
+	if s.directories == "" {
+		return
+	}
+	fmt.Fprintf(out, "%s\n", s.directories)
 }
 
 // plural counts a noun: one job, two jobs.
