@@ -630,6 +630,13 @@ ceiling; `asked_by`, the role that wrote it; `asked_in`, the job whose session w
 presented, and no role grants or withholds either, because a reader that could be stopped from saying
 what it could not settle would read the plan and report nothing.
 
+**The plan reaches every reading as `{{plan}}`.** A step is a new session with an empty working
+directory, and a plan is a column on a row rather than a file, so a reading has no way to reach one on
+its own: the run carries it and each prompt renders it. The run opens holding the plan of the job it
+hangs under, which is the job whose session started the reading, and a run started with a plan in its
+state keeps that one. A run under nothing renders the template as typed, so a lens handed no plan can
+say it was handed none rather than reporting on nothing.
+
 **A question is not a claim.** A claim is something the plan takes to be true and it carries a check.
 A question is a hole where nobody holds a claim at all. Folding the two together would make one status
 column carry two vocabularies.

@@ -515,6 +515,14 @@ const OutcomeKey = "result.outcome"
 // choice node written against it keeps working.
 const ReplyKeyPrefix = "reply."
 
+// PlanKey is where a run holds the plan its readings read.
+//
+// A step is a new session with an empty working directory, and a plan lives on a row rather than in
+// a file, so a reading has no way to reach one on its own. The run carries it and every reading is
+// handed it by rendering {{plan}} into the prompt. It opens from the job the run hangs under, and a
+// run started with a plan in its state keeps that one.
+const PlanKey = "plan"
+
 // QuestionsKey is where a run holds the rows no reading has settled, one line each, as the next
 // reader and the person at the end are handed them. Empty when every row is settled, which is what a
 // choice node reads to decide whether anybody has to be asked at all.
