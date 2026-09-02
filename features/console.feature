@@ -188,6 +188,20 @@ Feature: The operator sees the system from the console
     When the operator opens the console on sessions
     Then enter on a session still opens its conversation rather than its history
 
+  # The asked column holds 34 characters, so a task row shows a fragment of a sentence. Every row used
+  # to open the same shell, so a reader could not open the task they were looking at. Enter opens the
+  # task under the cursor now, and the conversation keeps the key it already answered to.
+  Scenario: Enter opens the task under the cursor
+    Given a session started by dispatching "read the electricity bill"
+    And the operator dispatches "pay the water bill before the fourteenth of the month" to the same session
+    When the operator is at the console on the "sessions" view
+    And the operator presses "t" in the console
+    And the operator presses "j" in the console
+    And the operator presses "enter" in the console
+    Then the console screen says "pay the water bill before the fourteenth of the month"
+    And the console screen does not say "read the electricity bill"
+    And the console handed the terminal to nothing
+
   # The wizard makes one thing. It shipped able to make only a whole new system, because the workspace
   # and the project questions were both required on the way to anything else, so adding a project to a
   # workspace that already existed meant dropping to the command line and knowing what to type.
