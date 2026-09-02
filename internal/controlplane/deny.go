@@ -89,8 +89,14 @@ func DeniedToJob(fullMethod string, request any, grant auth.Grant) error {
 	// given no new task, and writing down what it leaves behind is the only way out of that: a role
 	// that could withhold it would leave the session with nothing to do but carry on badly, which is
 	// the failure the ceiling exists to end.
+	// Writing down what a reading could not settle is the fourth, and settling somebody else's row is
+	// the fifth. Both are about the job the session is itself reading, over the credential bound to it.
+	// A role that could withhold either would leave a reader that reads the plan and reports nothing,
+	// which is the hole several lenses exist to close.
 	if fullMethod == quaycrewv1.ControlPlaneService_AskJob_FullMethodName ||
 		fullMethod == quaycrewv1.ControlPlaneService_RecordJobStep_FullMethodName ||
+		fullMethod == quaycrewv1.ControlPlaneService_RecordJobQuestion_FullMethodName ||
+		fullMethod == quaycrewv1.ControlPlaneService_SettleJobQuestion_FullMethodName ||
 		fullMethod == quaycrewv1.ControlPlaneService_RecordJobHandoff_FullMethodName {
 		return nil
 	}

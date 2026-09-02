@@ -550,6 +550,72 @@ the approved plan set it going on. And a plan a person approves without reading 
 approves itself, which no system can prevent and the ceiling is the only defence against.
 
 
+### The readings of a plan, and the questions no lens could settle
+
+One reading finds what that reading looks for. The plan above is written by one session and read by
+one role, so the design of the transcript page named the address shape, `/videos?id=<video id>`, and
+nobody asked what a person types into it. A test writer asks that first, because an example needs an
+input and an output. This system holds seventeen roles and the plan was read by one of them.
+
+The discipline is example mapping, run by three amigos: several people with different jobs write
+concrete examples for one rule, and the questions nobody can answer become explicit. That is what
+this adds, and it adds no noun a person meets: a job carries question rows, and a graph an operator
+imports decides which lenses read.
+
+**`questions`, rows on the job.** Each carries `text`, the question in one line, held to the title's
+ceiling; `asked_by`, the role that wrote it; `asked_in`, the job whose session wrote it; `status`,
+`open` or `settled`; and the answer and the role that settled it. A session writes one with
+`krewe job question "..."` and settles one with `krewe job settle <number> "..."`. Both are
+`krewe job step` in every respect but the noun: the job comes from the credential the session
+presented, and no role grants or withholds either, because a reader that could be stopped from saying
+what it could not settle would read the plan and report nothing.
+
+**A question is not a claim.** A claim is something the plan takes to be true and it carries a check.
+A question is a hole where nobody holds a claim at all. Folding the two together would make one status
+column carry two vocabularies.
+
+**The rows travel and the readings do not.** The engine writes what a reading could not settle up onto
+the job carrying the run, which is where the plan is, and hands the rows that are still open down onto
+the reading that comes next. The next reader gets the rows and never the earlier reader's answer. It
+therefore cannot be led by that reading, and it also cannot use it, which is the trade example mapping
+already makes: the questions are public and the reasoning behind them is not.
+
+**Only a row every lens left open reaches a person.** The graph ends in one ask node rendering
+`{{questions.open}}`, and a run whose rows are all settled walks past it to the work. A gate that put
+every question every reader raised is a gate a person stops reading.
+
+Four bounds keep it that way, and the third is the one that does the work. A reading writes at most
+three rows, `job.QuestionRowCount`, which is chosen and not measured; what replaces it is the count of
+rows per reading over the first month of real readings. A row repeating one already on the job is
+refused by the content word measure, which does not catch a rename. A later reading settles what its
+own lens can, so the count falls between readings, and that count is what says the readings are
+different readings rather than one lens run three times. And a reading that settled everything asks
+nobody, which is a result rather than a failure.
+
+**A dispatch reply lands under `reply.<node>`** beside the `session.<node>` key that was already per
+node. A run kept one `result.reply`, so a second reading took the first one's place and the run held
+one of two readings. `result.reply` is unchanged, so every graph written against it keeps working.
+
+```mermaid
+flowchart TD
+    PLAN["one plan, one sentence"] --> R1["plan-critic reads it,<br/>in its own session"]
+    R1 --> ROWS["what it could not settle,<br/>as rows on the plan"]
+    ROWS --> R2["architect is handed the open rows,<br/>and none of the reading behind them"]
+    R2 --> R3["test-writer is handed<br/>what is still open"]
+    R3 --> LEFT{"any row still open?"}
+    LEFT -->|"none"| WORK["the work starts"]
+    LEFT -->|"one to three"| ASK["one question,<br/>carrying the open rows only"]
+    ASK --> WORK
+```
+
+**What it does not do.** It makes no reading write a row: a prompt that says to ask what a person
+types is still a prompt. It catches no hole nobody named, and no rename, so two readers naming one
+hole in different words write two rows. And three readings cost three sessions where one cost one, so
+a reading where nothing is settled is three sessions with one lens and the number to watch is rows
+settled by a later reading against rows written.
+
+
+
 **`claim`, text, optional, default empty.** The piece of work this job is doing: an issue, a branch,
 or a name two people would both use for the same thing. Empty claims nothing. It is held to the
 title's ceiling, and it is stored lowercased with any run of space inside it taken down to one,

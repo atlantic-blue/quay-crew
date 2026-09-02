@@ -115,6 +115,10 @@ func (m *Memory) jobWithSteps(from job.Job) *job.Job {
 	if len(kept.Handoffs) == 0 {
 		kept.Handoffs = nil
 	}
+	kept.Questions = append([]job.Question(nil), m.jobQuestions[from.ID]...)
+	if len(kept.Questions) == 0 {
+		kept.Questions = nil
+	}
 	kept.Attempted = append([]job.Attempt(nil), m.jobAttempts[from.ID]...)
 	if len(kept.Attempted) == 0 {
 		kept.Attempted = nil

@@ -505,6 +505,21 @@ func usableExpectFile(node, path string) error {
 // keys because two readings of one sentence give two answers.
 const OutcomeKey = "result.outcome"
 
+// ReplyKeyPrefix is where a run remembers what each step replied, one key per node, beside the
+// session key that is already per node.
+//
+// A run keeps one result.reply, so a second step overwrites the first and a graph that reads several
+// steps can only ever read the last one. That is one key too few for a plan read by several roles:
+// the readings are already independent, each in its own session, and the run could hold only one of
+// them. This key is added and result.reply is left exactly as it was, so every graph and every
+// choice node written against it keeps working.
+const ReplyKeyPrefix = "reply."
+
+// QuestionsKey is where a run holds the rows no reading has settled, one line each, as the next
+// reader and the person at the end are handed them. Empty when every row is settled, which is what a
+// choice node reads to decide whether anybody has to be asked at all.
+const QuestionsKey = "questions.open"
+
 // usableOutcome refuses a choice that waits for an outcome the system never hands out.
 //
 // Held at import, while the author is looking, for the reason every other rule here is: a condition
