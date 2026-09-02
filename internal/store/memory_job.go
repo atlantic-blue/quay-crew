@@ -264,6 +264,11 @@ func (m *Memory) ProposeJobIdeation(_ context.Context, id, understood, question 
 	}
 	found.Phase, found.Ideation, found.Question, found.Told =
 		job.PhaseAsking, understood, question, ""
+	// An ideation question stops the work for a person exactly as the plan gate does, so the wait is
+	// stamped the same way. A stage that moved to asking without this leaves the telling a raise with
+	// no question to measure it from.
+	asked := time.Now().UTC()
+	found.AskedAt, found.RaisedAt = &asked, nil
 	found.Resuming = ""
 	found.LeaseOwner, found.LeaseUntil = "", nil
 	found.UpdatedAt = time.Now().UTC()

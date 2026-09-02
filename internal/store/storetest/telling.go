@@ -202,6 +202,56 @@ func runJobTellingConformance(t *testing.T, newDataset func(t *testing.T) Opener
 			t.Fatalf("the wait reads back as %d seconds, %s", held.WaitingSeconds, held.Waiting())
 		}
 	})
+
+	// Every stage that stops for a person stamps the same moment. The ideation gate arrived from one
+	// branch and these two columns from another, so nothing held the two together: an ideation
+	// question that moved to asking without the stamp reads as a wait nobody can measure, and the
+	// gap the telling is judged on is unreadable for it.
+	t.Run("a question about what the job understood is a wait like any other", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := waitingToBeAnswered(t, s, workspace, project,
+			"the work is the transcript page, and it is not the search over it",
+			"is the page read by a person or by a job?")
+
+		asked, err := s.GetJob(ctx, id)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		if asked.AskedAt == nil {
+			t.Fatalf("a job asking what it understood carries no moment, so no gap can be measured")
+		}
+		if asked.RaisedAt != nil {
+			t.Fatalf("a job nobody has been told about was raised at %s", asked.RaisedAt)
+		}
+		why, want, waiting := job.Waits(asked)
+		if !waiting || why != job.WaitingAsking {
+			t.Fatalf("an ideation question does not read as a wait: %s, %v", why, waiting)
+		}
+		if want != "is the page read by a person or by a job?" {
+			t.Fatalf("the telling carries %q rather than the question it asked", want)
+		}
+
+		written, err := s.RaiseJob(ctx, id, raisedEvent(id, workspace, project, "console"))
+		if err != nil {
+			t.Fatalf("RaiseJob: %v", err)
+		}
+		if !written {
+			t.Fatalf("the first surface to name this ideation question did not record the telling")
+		}
+		told, err := s.GetJob(ctx, id)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		if told.RaisedAt == nil || told.AskedAt == nil {
+			t.Fatalf("the two moments do not read back: asked %v, told %v", told.AskedAt, told.RaisedAt)
+		}
+		if told.RaisedAt.Before(*told.AskedAt) {
+			t.Fatalf("the telling reads as older than the question: asked %s, told %s",
+				told.AskedAt, told.RaisedAt)
+		}
+	})
 }
 
 func raisedEvent(id, workspace, project, surface string) *job.Event {

@@ -346,7 +346,7 @@ func (p *Postgres) ProposeJobIdeation(ctx context.Context, id, understood, quest
 	event *job.Event) (*job.Job, error) {
 	return p.moveJob(ctx, id, "propose job ideation", job.ErrNotRunning, []*job.Event{event}, `
 		update jobs set phase = $2, ideation = $3, question = $4, told = '', resuming = '',
-			lease_owner = '', lease_until = null, updated_at = now()
+			lease_owner = '', lease_until = null, updated_at = now(), asked_at = now(), raised_at = null
 		where id = $1 and phase = $5`,
 		job.PhaseAsking, understood, question, job.PhaseRunning)
 }

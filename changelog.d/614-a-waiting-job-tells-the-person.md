@@ -29,3 +29,7 @@ moments and the gap between them, which is the time somebody spent not knowing.
 Nothing leaves this machine. No phone, no chat, no mail: reaching a device off it needs a credential
 the crew does not have, and that decision is recorded in `docs/ARCHITECTURE.md` under 31 August 2026.
 So a person with no surface open is still told nothing, and the chat channels are what close that.
+
+The ideation gate stamps the wait the same way. A question about what a job understood is one of the
+three kinds of wait, so the two moments go on the row there as they do at the ask and at the plan.
+Both stores are held to it by the shared conformance suite.
