@@ -3,6 +3,7 @@ package storetest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -162,7 +163,7 @@ func runJobBuildConformance(t *testing.T, newDataset func(t *testing.T) Opener) 
 		}
 		wanted := job.RequirementsOf(kept)
 		failing := job.FailuresOn(kept.Tests)
-		workers := job.BuildWorkers(kept, wanted, failing)
+		workers := job.BuildWorkers(kept, wanted, failing, theOpenedBranches(kept, wanted))
 		if len(workers) != 2 {
 			t.Fatalf("the fan out made %d workers for 2 verticals", len(workers))
 		}
@@ -174,7 +175,7 @@ func runJobBuildConformance(t *testing.T, newDataset func(t *testing.T) Opener) 
 
 		// A second worker for a vertical one already holds is refused, by the claim rather than by
 		// anything the fan out remembers.
-		second := job.BuildWorkers(kept, wanted[:1], failing)[0]
+		second := job.BuildWorkers(kept, wanted[:1], failing, theOpenedBranches(kept, wanted))[0]
 		err = s.CreateJob(ctx, second, declaredEvent(second))
 		var taken *job.Held
 		if !errors.As(err, &taken) {
@@ -193,6 +194,13 @@ func runJobBuildConformance(t *testing.T, newDataset func(t *testing.T) Opener) 
 		if !stored.Building {
 			t.Fatalf("the worker reads back outside the boundary, which is the column this suite " +
 				"exists to catch")
+		}
+		// And the branch its tests are on, for the same reason. A branch written and never selected
+		// sends the build worker to a checkout with none of its tests in it, and every test that uses
+		// the in memory store passes while it happens.
+		if stored.Branch != job.BranchForRequirement(id, wanted[0]) {
+			t.Fatalf("the worker reads back on the branch %q, and its tests are on %q",
+				stored.Branch, job.BranchForRequirement(id, wanted[0]))
 		}
 
 		// And the fan out reads its workers back whole. The answer is what it came for, and a listing
@@ -266,6 +274,21 @@ func waitingToBuild(t *testing.T, s store.Store, workspace, project string) stri
 		t.Fatalf("ApproveJobPlan: %v", err)
 	}
 	return id
+}
+
+// theOpenedBranches is what the stage before this one left for each vertical: the branch its failing
+// tests are on, and the pull request they are open in. The controller reads these off the rows of
+// the workers that wrote the tests, and this stands in for that reading.
+func theOpenedBranches(one *job.Job, wanted []job.Requirement) map[int]job.Opened {
+	opened := map[int]job.Opened{}
+	for _, requirement := range wanted {
+		opened[requirement.Number] = job.Opened{
+			Branch: job.BranchForRequirement(one.ID, requirement),
+			PullRequest: fmt.Sprintf("https://github.com/atlantic-blue/quay-krewe/pull/%d",
+				requirement.Number),
+		}
+	}
+	return opened
 }
 
 // builtEvent is the record that lands with a job's verticals being built.

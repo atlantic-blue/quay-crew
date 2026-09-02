@@ -1232,7 +1232,7 @@ func (c *Controller) askForThePullRequest(ctx context.Context, one *Job, asked i
 		return false
 	}
 	if _, err := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-		Project: one.Project, Handle: ConversationFor(one), Text: AskedForThePullRequest(one.Repository),
+		Project: one.Project, Handle: ConversationFor(one), Text: AskedForThePullRequest(one),
 		PermissionMode: one.Mode, Detach: true, Role: RoleNow(one), Job: one.ID,
 	}); err != nil {
 		// A system that cannot ask again lands the job below with the reason, rather than holding a row

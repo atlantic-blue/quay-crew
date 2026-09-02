@@ -45,23 +45,29 @@ func initializeTestStageSteps(sc *godog.ScenarioContext) {
 		})
 
 	// Where the tests have to end up. The worker writes them in a sandbox of its own, so a worker
-	// that never commits them writes tests nobody in the next stage can open.
-	sc.Step(`^each worker is told to commit its tests to the branch this job's tests live on$`,
+	// that never commits them writes tests nobody in the next stage can open. The branch belongs to
+	// the requirement, so each worker is told its own and no other worker's.
+	sc.Step(`^each worker is told to commit its tests to the branch its requirement's tests live on$`,
 		func(ctx context.Context) error {
 			one, err := readJob(ctx, 0)
 			if err != nil {
 				return err
 			}
-			branch := job.TestBranch(jobAsKept(one))
-			if branch == "" {
-				return fmt.Errorf("this job names no branch for its tests, so they go nowhere")
-			}
 			workers, err := theWorkers(ctx)
 			if err != nil {
 				return err
 			}
+			held := map[string]string{}
+			for _, requirement := range job.RequirementsOf(jobAsKept(one)) {
+				held[job.ClaimOnRequirement(one.GetId(), requirement)] = job.BranchFor(jobAsKept(one), requirement)
+			}
 			for _, worker := range workers {
-				for _, needed := range []string{branch, "Commit every test file"} {
+				branch := held[worker.GetClaim()]
+				if branch == "" {
+					return fmt.Errorf("the worker holding %q names no branch for its tests, so they go "+
+						"nowhere", worker.GetClaim())
+				}
+				for _, needed := range []string{branch, "commit every file you write"} {
 					if !strings.Contains(worker.GetBrief(), needed) {
 						return fmt.Errorf("the worker holding %q is not told %q, so its tests stay in its "+
 							"own sandbox:\n%s", worker.GetClaim(), needed, worker.GetBrief())

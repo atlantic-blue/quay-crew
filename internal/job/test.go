@@ -118,8 +118,10 @@ func WriteFailingTests(one *Job, wanted Requirement) string {
 		"exists to stop.")
 	said = append(said, "Write the tests for this requirement only. Another worker is writing the "+
 		"tests for each of the others at the same time, and it holds that requirement.")
-	if branch := TestBranch(one); branch != "" {
-		said = append(said, TheTestsGoOnABranch(branch))
+	// Where the work goes, and it is the whole difference between tests that hold a requirement and
+	// tests that die with the sandbox. Only a job that works in a repository has anywhere to put them.
+	if branch := BranchFor(one, wanted); branch != "" {
+		said = append(said, CutTheBranch(branch), AnOpenRedPullRequest(branch))
 	}
 	said = append(said, theShapeOfATestReport(wanted))
 	return strings.Join(said, "\n\n")
@@ -264,23 +266,23 @@ func TestsRed(wanted []Requirement, reports map[int]TestReport) error {
 // requirement any one of these tests holds. That provenance is the claim's rather than the test
 // name's: the worker that wrote this failure held the claim on that requirement and no other worker
 // could take it.
-func TestsText(wanted []Requirement, reports map[int]TestReport, branch string) string {
+func TestsText(one *Job, wanted []Requirement, reports map[int]TestReport) string {
 	var lines []string
-	// The branch first, because it is the one line about where the tests are rather than about what
-	// they say. A reader of the record can then open them, and so can the person reading it in a
-	// terminal, without knowing how the system names a branch.
-	if branch != "" {
-		lines = append(lines, "Branch: "+branch)
-	}
-	for _, one := range wanted {
-		report, held := reports[one.Number]
+	for _, requirement := range wanted {
+		report, held := reports[requirement.Number]
 		if !held {
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("Requirement %d: %s", one.Number, one.Text),
-			fmt.Sprintf("Ran %d: %d", one.Number, report.Ran))
+		lines = append(lines, fmt.Sprintf("Requirement %d: %s", requirement.Number, requirement.Text))
+		// The branch under the requirement it carries, because that is where a reader of the record
+		// opens these tests and where the worker that builds this requirement checks them out. One
+		// branch line for the job would name a place none of these tests are.
+		if branch := BranchFor(one, requirement); branch != "" {
+			lines = append(lines, fmt.Sprintf("Branch %d: %s", requirement.Number, branch))
+		}
+		lines = append(lines, fmt.Sprintf("Ran %d: %d", requirement.Number, report.Ran))
 		for _, failing := range report.Failing {
-			lines = append(lines, fmt.Sprintf("Fails %d: %s", one.Number, failing))
+			lines = append(lines, fmt.Sprintf("Fails %d: %s", requirement.Number, failing))
 		}
 	}
 	return strings.Join(lines, "\n")
@@ -362,10 +364,21 @@ func TestWorkers(one *Job, wanted []Requirement) []*Job {
 			Title: TestsFor(requirement), Brief: WriteFailingTests(one, requirement),
 			Mode: one.Mode, Repository: one.Repository, Product: one.Product, Request: one.Request,
 			Claim: ClaimOnRequirement(one.ID, requirement), Ungated: true,
+			Branch:  branchOn(one, requirement),
 			TraceID: one.TraceID, ParentSpanID: one.ParentSpanID,
 		})
 	}
 	return workers
+}
+
+// branchOn is the branch one requirement's work lives on, and nothing where the job works in no
+// repository. A job with nowhere to push has no branch to name, and a brief naming one would send a
+// worker looking for a remote that is not there.
+func branchOn(one *Job, requirement Requirement) string {
+	if one.Repository == "" {
+		return ""
+	}
+	return BranchForRequirement(one.ID, requirement)
 }
 
 // ReportFrom is the report the worker holding one requirement answered with, and the refusal where
@@ -387,6 +400,17 @@ func ReportFrom(workers []*Job, requirement Requirement) (TestReport, string) {
 	if worker.Answer == "" {
 		return TestReport{}, fmt.Sprintf("requirement %d, %q: the worker holding it %s and said nothing, %s",
 			requirement.Number, requirement.Text, worker.Phase, oneLine(worker.Reason))
+	}
+	// A worker that pushed nothing is a failed worker rather than a quiet pass. Its report can be
+	// perfect and the tests it describes are in a sandbox that has gone, so nothing holds this
+	// requirement and the worker that builds it has nothing to read. What says the tests reached a
+	// branch is the pull request the system read off the answer itself, rather than the worker's word
+	// about its own push.
+	if worker.Repository != "" && worker.PullRequest == "" {
+		return TestReport{}, fmt.Sprintf("requirement %d, %q: the worker holding it opened no pull "+
+			"request against %s, so its tests reached no branch and went with the sandbox that wrote "+
+			"them. Nothing can build against them", requirement.Number, requirement.Text,
+			worker.Repository)
 	}
 	report, err := ReadTestReport(worker.Answer)
 	if err != nil {
@@ -481,7 +505,7 @@ func (c *Controller) writeTheTests(ctx context.Context, one *Job) {
 	}
 
 	record := c.event(ctx, one, EventTested, WrittenTheTests(wanted, reports))
-	if _, err := c.store.RecordJobTests(ctx, one.ID, TestsText(wanted, reports, TestBranch(one)), record); err != nil {
+	if _, err := c.store.RecordJobTests(ctx, one.ID, TestsText(one, wanted, reports), record); err != nil {
 		if !errors.Is(err, ErrNotPending) {
 			c.logger.WarnContext(ctx, "could not record the failing tests a job's requirements became",
 				"job", one.ID, "error", err)
@@ -505,7 +529,7 @@ func (c *Controller) writeTheTests(ctx context.Context, one *Job) {
 // the thing that knows which of them the record stands on.
 func (c *Controller) delivered(ctx context.Context, one *Job, workers []*Job,
 	requirement Requirement) string {
-	branch := TestBranch(one)
+	branch := BranchFor(one, requirement)
 	if branch == "" || len(workers) == 0 {
 		return ""
 	}

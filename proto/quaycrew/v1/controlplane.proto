@@ -1516,6 +1516,14 @@ message Job {
   // it on a worker the build stage declares and on nothing else, and a session it is set on is refused
   // a write to a test by the test gate.
   bool building = 68;
+  // branch is where this job's work lives, named by the system rather than chosen by the session. The
+  // worker that writes one requirement's tests cuts it and opens the pull request from it, and the
+  // worker that builds the same requirement fetches it and turns those tests green in the same pull
+  // request, so each requirement has one branch and one pull request.
+  //
+  // Empty is a job that works wherever its session puts it, which is every job that names no
+  // repository.
+  string branch = 70;
   // accepted says a person looked at a picture of what this job built and said the value arrived. It
   // is the only road into done for a job whose verticals are built: the three checks the build stage
   // makes are the machine reading its own work, and the fourth is somebody looking at the thing.
