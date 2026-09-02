@@ -555,3 +555,23 @@ func WrittenTheTests(wanted []Requirement, reports map[int]TestReport) string {
 	return fmt.Sprintf("%d requirements became %d failing tests, each written by a worker that holds "+
 		"that requirement and nothing else", len(wanted), failing)
 }
+
+// FailuresOn is the tests that fail, by the requirement each one was written for, read off a kept
+// record.
+//
+// The build stage reads this. It is what turns a worker's word about its own run into something the
+// system can check: the names were written by the worker that held the requirement, before anything
+// was built, so a build that claims a vertical is green has to name them.
+func FailuresOn(kept string) map[int][]string {
+	failing := map[int][]string{}
+	for _, found := range reportLine.FindAllStringSubmatch(kept, -1) {
+		number, err := strconv.Atoi(found[2])
+		if err != nil || strings.ToLower(found[1]) != "fails" {
+			continue
+		}
+		if text := TidySentence(found[3]); text != "" {
+			failing[number] = append(failing[number], text)
+		}
+	}
+	return failing
+}

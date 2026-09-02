@@ -1,0 +1,12 @@
+name: test-gate
+version: 1
+summary: Refuses a session that is building against failing tests when it changes a test, because a build that edits the test proves nothing.
+events:
+  - on: PreToolUse
+    matcher: Write|Edit|MultiEdit|NotebookEdit
+    entry: bin/hook
+    timeoutSeconds: 5
+  - on: PreToolUse
+    matcher: Bash
+    entry: bin/hook
+    timeoutSeconds: 5

@@ -10,10 +10,10 @@ Feature: A job says which of the four stages it is in
   it asks a person before it plans. Design is how the work comes alive as verticals. Test turns the
   requirements into failing tests. Build implements until those tests pass.
 
-  Build is the one that is not written yet. A job that reached it reads as being in build, and the
-  reading says build is not built yet, so nobody takes a named stage for a stage that works. It also
-  says what that job is doing instead, which is a fact about the job and not about the stage: the
-  moment the suite goes red there is no plan at all.
+  All four are written. The reading also says where the job stands inside the stage it is in, which is
+  a fact about the job and not about the stage: the last stage holds a job writing its plan, a job
+  whose verticals are being built in a session each, and a job waiting for somebody to accept what
+  arrived, and those three are days apart.
 
   There is no command that sets a stage. The stage follows from what the job has done, and it is read
   off the row rather than written on it: every boundary is already a fact the row carries, and a
@@ -58,21 +58,21 @@ Feature: A job says which of the four stages it is in
     And the reading says a failing test for every requirement opens the next stage
     And the reading does not say the stage is unbuilt
 
-  Scenario: A red suite closes test, and build says it is not built
+  Scenario: A red suite closes test, and the job stands in build writing its plan
     Given a job whose list of 2 verticals a person accepted
     And its requirements became failing tests
     When the caller reads that job back through the tool
     Then the reading says the job is in the "build" stage
-    And the reading says the stage is not built yet
+    And the reading does not say the stage is unbuilt
     And the reading says the job writes its plan next
     And the reading does not claim a plan nobody approved
 
   # A job whose plan a person approved is doing something different, and the same line has to say so
   # rather than saying one thing for the whole stage.
-  Scenario: A job working to an approved plan is told it is carrying on under it
+  Scenario: A job whose plan was approved is told its verticals are being built
     Given a job whose plan was approved
     When the caller reads that job back through the tool
-    Then the reading says the job carries on under the plan a person approved
+    Then the reading says one session for each vertical is building, and none can change a test
 
   # The whole reason the listing carries the column: a job stuck at the beginning and a job stuck
   # further on read differently at a glance.

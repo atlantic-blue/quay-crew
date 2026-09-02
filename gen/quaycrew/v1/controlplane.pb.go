@@ -8956,6 +8956,17 @@ type Job struct {
 	// requirement, which the system reads rather than a person, so the record being there is the fact.
 	// It is not tested, which is the settle gate over finished work.
 	Tests string `protobuf:"bytes,66,opt,name=tests,proto3" json:"tests,omitempty"`
+	// build is the record of what the verticals became: one line per vertical, the number of tests the
+	// run covering it executed, one line for each test that passes now, and one line for each file that
+	// was written to make them pass, all written under the vertical they came from.
+	//
+	// No flag beside it either. The record lands only when every vertical is green, and the job is
+	// stopped for a person to accept it in the same write, so the record being there is the fact.
+	Build string `protobuf:"bytes,67,opt,name=build,proto3" json:"build,omitempty"`
+	// building says this job builds against tests it did not write and may not change. The system sets
+	// it on a worker the build stage declares and on nothing else, and a session it is set on is refused
+	// a write to a test by the test gate.
+	Building bool `protobuf:"varint,68,opt,name=building,proto3" json:"building,omitempty"`
 	// escalation is what this job does when it goes in circles, as it was declared: "ask", or
 	// "role:<name>". Empty is asking.
 	Escalation string `protobuf:"bytes,41,opt,name=escalation,proto3" json:"escalation,omitempty"`
@@ -9395,6 +9406,20 @@ func (x *Job) GetTests() string {
 		return x.Tests
 	}
 	return ""
+}
+
+func (x *Job) GetBuild() string {
+	if x != nil {
+		return x.Build
+	}
+	return ""
+}
+
+func (x *Job) GetBuilding() bool {
+	if x != nil {
+		return x.Building
+	}
+	return false
 }
 
 func (x *Job) GetEscalation() string {
@@ -12934,7 +12959,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xdc\x12\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\x8e\x13\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -12991,7 +13016,9 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x0fideation_answer\x18= \x01(\tR\x0eideationAnswer\x12\x16\n" +
 	"\x06design\x18@ \x01(\tR\x06design\x12'\n" +
 	"\x0fdesign_accepted\x18A \x01(\bR\x0edesignAccepted\x12\x14\n" +
-	"\x05tests\x18B \x01(\tR\x05tests\x12\x1e\n" +
+	"\x05tests\x18B \x01(\tR\x05tests\x12\x14\n" +
+	"\x05build\x18C \x01(\tR\x05build\x12\x1a\n" +
+	"\bbuilding\x18D \x01(\bR\bbuilding\x12\x1e\n" +
 	"\n" +
 	"escalation\x18) \x01(\tR\n" +
 	"escalation\x125\n" +

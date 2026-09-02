@@ -24,12 +24,18 @@ import (
 // store that missed one of them in jobColumns or in scanJob would leave every surface reading a job
 // in the wrong stage while the whole unit tier stayed green.
 func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	// Four stages, each of them several passes of the controller against a real engine, so the whole
+	// walk needs more room than one stage does.
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
 	durable := aRealStore(t, ctx)
+	// The double is held rather than made inline, because what it says has to change once: a session
+	// asked for a plan and answering anything else is asked again and then stopped, which is the plan
+	// gate working rather than this test failing.
+	runner := &model.FakeRunner{Reply: "i said what i understood"}
 	server := controlplane.NewServer(controlplane.Config{
-		Store: durable, Runner: &model.FakeRunner{Reply: "i said what i understood"},
+		Store: durable, Runner: runner,
 		Provider: &sandbox.FakeProvider{}, Secrets: secrets.NewMemory(),
 	})
 	client := servedOver(t, server)
@@ -93,8 +99,8 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 	if moved.Closed != "ideation closed on your answer to what it understood" {
 		t.Fatalf("it says ideation was closed by %q", moved.Closed)
 	}
-	if !moved.Built || moved.Unbuilt != "" {
-		t.Fatalf("design reads as unbuilt, saying %q", moved.Unbuilt)
+	if !moved.Built || moved.Doing != "" {
+		t.Fatalf("design reads as unbuilt, or says where a job stands in it: %q", moved.Doing)
 	}
 
 	// Then the list, and the same trap one stage further on: the acceptance is a column too, and a
@@ -116,8 +122,8 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 	if accepted.Closed != "design closed on your acceptance of the list it would build" {
 		t.Fatalf("it says design was closed by %q", accepted.Closed)
 	}
-	if !accepted.Built || accepted.Unbuilt != "" {
-		t.Fatalf("test reads as unbuilt, saying %q", accepted.Unbuilt)
+	if !accepted.Built || accepted.Doing != "" {
+		t.Fatalf("test reads as unbuilt, or says where a job stands in it: %q", accepted.Doing)
 	}
 
 	// Then the failing tests those requirements become, and the same trap once more: the record is a
@@ -131,13 +137,13 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 	if red.Closed != "test closed on a failing test for every requirement on that list" {
 		t.Fatalf("it says test was closed by %q", red.Closed)
 	}
-	if red.Built || red.Unbuilt == "" {
-		t.Fatalf("build reads as built, and build is a later slice")
+	if !red.Built {
+		t.Fatalf("build reads as a stage that is not built, and it is built")
 	}
-	// And what it says the job is doing instead is true of this job: its suite went red a moment ago,
-	// so it has no plan, and nobody has approved anything.
-	if !strings.Contains(red.Unbuilt, "writes its plan next") {
-		t.Fatalf("a job with no plan is told %q", red.Unbuilt)
+	// And what it says the job is doing is true of this job: its suite went red a moment ago, so it has
+	// no plan, and nobody has approved anything.
+	if !strings.Contains(red.Doing, "writes the plan") {
+		t.Fatalf("a job with no plan is told %q", red.Doing)
 	}
 	// The record itself crosses the wire whole, with every failure under the requirement it came from.
 	kept := readJob(t, ctx, client, id)
@@ -146,6 +152,93 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 		t.Fatalf("the record off the wire covers %d requirements with %d failing tests: %q",
 			requirements, failing, kept.GetTests())
 	}
+
+	// Then the plan those tests are turned green by, which a person approves before anything is built.
+	// The double says a plan from here on, because a session asked for one and answering anything else
+	// is asked again and then stopped.
+	runner.Reply = "Step 1: build the vertical on the command line\nStep 2: build the one in a browser"
+	tickUntilThePhase(t, ctx, server, client, id, job.PhaseAsking)
+	if planned := readJob(t, ctx, client, id); planned.GetPlan() == "" {
+		t.Fatalf("the job is asking and carries no plan, so there is nothing to approve")
+	}
+	if _, err := client.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{Id: id, Answer: "yes"}); err != nil {
+		t.Fatalf("AnswerJob: %v", err)
+	}
+
+	// And the build, which is the last stage: one worker for each vertical, all at once, none of them
+	// able to change a test. The same trap once more, and it is the one the whole slice turns on: the
+	// record is a column of its own, and one written and never selected would fan the same verticals
+	// out again on every tick while every unit test stayed green.
+	tickUntilTheBuild(t, ctx, server, client, id)
+	built := stageOnTheWire(t, ctx, client, id)
+	if built.Name != job.StageBuild {
+		t.Fatalf("a built job reads off the wire as stage %q, want build", built.Name)
+	}
+	if !strings.Contains(built.Doing, "waits for you to accept") {
+		t.Fatalf("a built job is told %q", built.Doing)
+	}
+
+	// It holds for a person rather than calling itself done, and the question names what they are
+	// being asked to look at.
+	whole := readJob(t, ctx, client, id)
+	if whole.GetPhase() != job.PhaseAsking {
+		t.Fatalf("a built job is %q, want asking so a person accepts it", whole.GetPhase())
+	}
+	if !strings.Contains(whole.GetQuestion(), "say whether the value arrived") {
+		t.Fatalf("the question a built job asks is %q", whole.GetQuestion())
+	}
+	verticals, passing := job.BuiltOn(whole.GetBuild())
+	if verticals == 0 || passing < verticals {
+		t.Fatalf("the record off the wire covers %d verticals with %d passing tests: %q",
+			verticals, passing, whole.GetBuild())
+	}
+
+	// And every worker of that fan out reads back under the boundary, which is what the dispatch reads
+	// to tell the session's runtime. A flag written and never selected would build under no gate at
+	// all, and the suite would agree with whatever the build wrote.
+	workers, listErr := client.ListJobs(ctx,
+		&quaycrewv1.ListJobsRequest{Project: project.GetProject().GetId()})
+	if listErr != nil {
+		t.Fatalf("ListJobs: %v", listErr)
+	}
+	builders := 0
+	for _, one := range workers.GetJobs() {
+		if one.GetParent() != id || !strings.HasPrefix(one.GetTitle(), "build vertical") {
+			continue
+		}
+		builders++
+		if !one.GetBuilding() {
+			t.Fatalf("worker %q reads back outside the boundary", one.GetTitle())
+		}
+	}
+	if builders != verticals {
+		t.Fatalf("%d workers built %d verticals", builders, verticals)
+	}
+}
+
+// tickUntilTheBuild drives the controller until every vertical of the accepted list is built and the
+// record is on the row.
+//
+// The stage runs one job for each vertical, and each of those is started, dispatched and landed on
+// its own passes, so the number of ticks it takes is the machine's to decide rather than this test's.
+func tickUntilTheBuild(t *testing.T, ctx context.Context, server *controlplane.Server,
+	client quaycrewv1.ControlPlaneServiceClient, id string) {
+	t.Helper()
+	deadline := time.Now().Add(120 * time.Second)
+	for time.Now().Before(deadline) {
+		server.TickJob(ctx)
+		one := readJob(t, ctx, client, id)
+		if one.GetBuild() != "" {
+			return
+		}
+		// Asking with no record is the stage stopping for a person, which is a failure of this run
+		// rather than the hold it ends on: the hold carries the record.
+		if one.GetPhase() == job.PhaseAsking {
+			t.Fatalf("the job stopped in the build stage: %s", one.GetQuestion())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("job %s never built its verticals", id)
 }
 
 // tickUntilTheTests drives the controller until every requirement of the accepted list has a failing
@@ -180,8 +273,8 @@ func stageOnTheWire(t *testing.T, ctx context.Context,
 		Product: one.GetProduct(), Parent: one.GetParent(),
 		IdeationAnswer: one.GetIdeationAnswer(),
 		Design:         one.GetDesign(), DesignAccepted: one.GetDesignAccepted(),
-		Tests: one.GetTests(),
-		Plan:  one.GetPlan(), PlanApproved: one.GetPlanApproved(),
+		Tests: one.GetTests(), Build: one.GetBuild(),
+		Plan: one.GetPlan(), PlanApproved: one.GetPlanApproved(),
 	})
 }
 

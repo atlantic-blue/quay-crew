@@ -75,7 +75,7 @@ func TestAJobRowCarriesTheWholeStoryOfOneJob(t *testing.T) {
 		one.Session, one.Attempts = "2222222222222222bbbbbbbb", 1
 	})
 
-	got := jobRow(running)
+	got := jobRow(running, 0)
 
 	// The identifiers stay whole: stopping the job and descending into what it did both use them.
 	if got.ID != running.GetId() {
@@ -107,7 +107,7 @@ func TestAJobRowCarriesTheWholeStoryOfOneJob(t *testing.T) {
 // A pending job has no session, which is the normal state rather than a fault. An empty cell reads as
 // something missing, so the row says which it is.
 func TestAJobWithNoSessionYetSaysSoRatherThanLeavingTheCellEmpty(t *testing.T) {
-	got := jobRow(aJob("1111111111111111aaaaaaaa", job.PhasePending, nil))
+	got := jobRow(aJob("1111111111111111aaaaaaaa", job.PhasePending, nil), 0)
 
 	if got.Parent != "" {
 		t.Fatalf("a pending job carries %q as its session, want none", got.Parent)
@@ -125,7 +125,7 @@ func TestAJobWithNoSessionYetSaysSoRatherThanLeavingTheCellEmpty(t *testing.T) {
 func TestAFailedJobIsMarkedForAttention(t *testing.T) {
 	got := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseFailed, func(one *quaycrewv1.Job) {
 		one.Session, one.Attempts = "2222222222222222bbbbbbbb", 3
-	}))
+	}), 0)
 
 	if got.State != StateFailed {
 		t.Fatalf("a failed job is drawn as %v, want failed", got.State)
@@ -185,7 +185,7 @@ func TestStoppingAJobAsksFirstAndUsesTheWholeIdentifier(t *testing.T) {
 		t.Fatalf("Stop answers to %v, want the keys the sessions view already stops on", action.Keys())
 	}
 
-	row := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseRunning, nil))
+	row := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseRunning, nil), 0)
 	if err := action.Run(context.Background(), row); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestEnterOnAJobOpensWhatItDid(t *testing.T) {
 		}},
 	}
 	model := newTestModel(t, Jobs(client), Tasks(client))
-	model, _ = update(t, model, rowsFor(model, jobRow(client.jobs[0])))
+	model, _ = update(t, model, rowsFor(model, jobRow(client.jobs[0], 0)))
 
 	model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
@@ -276,7 +276,7 @@ func TestEnterOnAJobOpensWhatItDid(t *testing.T) {
 func TestEnterOnAJobWithNoSessionYetSaysWhy(t *testing.T) {
 	client := &jobClient{jobs: []*quaycrewv1.Job{aJob("1111111111111111aaaaaaaa", job.PhasePending, nil)}}
 	model := newTestModel(t, Jobs(client), Tasks(client))
-	model, _ = update(t, model, rowsFor(model, jobRow(client.jobs[0])))
+	model, _ = update(t, model, rowsFor(model, jobRow(client.jobs[0], 0)))
 
 	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
@@ -323,13 +323,13 @@ func actionNamed(resource Resource, label string) (Action, bool) {
 func TestTheOutcomeCellSaysWhatTheJobEndedOn(t *testing.T) {
 	done := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseDone, func(one *quaycrewv1.Job) {
 		one.Outcome = job.OutcomeBlocked
-	}))
+	}), 0)
 	if done.Cells[outcomeColumn] != job.OutcomeBlocked {
 		t.Fatalf("the outcome cell says %q, want %q", done.Cells[outcomeColumn], job.OutcomeBlocked)
 	}
 	// A job that has not ended on a word says so rather than leaving a hole in the row. The literal
 	// rather than the constant, because a case reading the constant passes against it emptied out.
-	running := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseRunning, nil))
+	running := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseRunning, nil), 0)
 	if running.Cells[outcomeColumn] != "-" {
 		t.Fatalf(`the outcome cell of a running job says %q, want "-"`, running.Cells[outcomeColumn])
 	}
@@ -357,5 +357,43 @@ func TestEveryOutcomeIsColouredOrLeftAlone(t *testing.T) {
 		}[known]; !answered {
 			t.Fatalf("the console says nothing about the outcome %q", known)
 		}
+	}
+}
+
+// A job whose workers are running has no session of its own and is not idle. The build stage runs one
+// worker for each vertical, all at once, and the row that declared them waits, so a cell reading
+// "not yet" would say nothing is happening while three sessions build.
+func TestAJobWhoseWorkersAreRunningSaysHowManyAreAtWork(t *testing.T) {
+	parent := aJob("1111111111111111aaaaaaaa", job.PhasePending, nil)
+	building := func(id, phase string) *quaycrewv1.Job {
+		return aJob(id, phase, func(one *quaycrewv1.Job) {
+			one.Parent = parent.GetId()
+			one.Title = "build vertical 1: a person pastes a link"
+			one.Session = id
+		})
+	}
+	listed := []*quaycrewv1.Job{
+		parent,
+		building("2222222222222222bbbbbbbb", job.PhaseRunning),
+		building("3333333333333333cccccccc", job.PhaseRunning),
+		// The worker that finished is not at work any more, so it is not counted. A count that included
+		// it would say two sessions are building after both have landed.
+		building("4444444444444444dddddddd", job.PhaseDone),
+	}
+
+	working := sessionsUnder(listed)
+	got := jobRow(parent, working[parent.GetId()])
+
+	if got.Cells[5] != "2 working" {
+		t.Fatalf(`the session cell of a job with two live workers says %q, want "2 working"`, got.Cells[5])
+	}
+	// The worker's own row still says the conversation it runs in, because that is what descending
+	// into it uses.
+	if worker := jobRow(listed[1], working[listed[1].GetId()]); worker.Cells[5] == "2 working" {
+		t.Fatalf("a worker's own row says %q, want the conversation it runs in", worker.Cells[5])
+	}
+	// And a job with no workers at all still says it has no session yet rather than counting nothing.
+	if alone := jobRow(parent, 0); alone.Cells[5] != "not yet" {
+		t.Fatalf(`a job with no workers says %q, want "not yet"`, alone.Cells[5])
 	}
 }

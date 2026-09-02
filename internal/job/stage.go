@@ -29,12 +29,19 @@ const (
 // Stages are the four, in the order a job passes through them.
 var Stages = []string{StageIdeation, StageDesign, StageTest, StageBuild}
 
-// StageBuilt says whether a stage is built yet.
+// StageBuilt says whether a stage is built yet. All four are.
 //
-// Ideation, design and test are. A reader of a job in build has to be told that build is not, because
-// a stage that is named and does nothing reads exactly like a stage that works, and the second
-// reading is a lie the job itself tells.
-func StageBuilt(stage string) bool { return stage != StageBuild }
+// It stays because a reader of a job asks the question, and because the day a fifth stage is named
+// before it works, a named stage that does nothing has to read differently from one that works: the
+// second reading is a lie the job itself tells.
+func StageBuilt(stage string) bool {
+	for _, one := range Stages {
+		if one == stage {
+			return true
+		}
+	}
+	return false
+}
 
 // StageOpenedBy is what moves a job into this stage, as a phrase a sentence is built round. It is
 // empty where nothing moves a job there yet, which is every stage after test, and empty for ideation,
@@ -66,11 +73,12 @@ type Stage struct {
 	Opens string
 	// Outside is why this job runs no stages at all, and empty on a job that does.
 	Outside string
-	// Unbuilt is what a reader of a job in a stage that is not built is told, and empty where the
-	// stage works. It names what the job is doing instead, which is a fact about that job rather than
-	// about the stage: a job that has just left ideation has no plan at all, and one further on is
-	// working to a plan a person approved.
-	Unbuilt string
+	// Doing is where the job stands inside the stage it is in, and empty where the stage has one
+	// standing only. It is a fact about that job rather than about the stage, which is why it is here
+	// rather than in the stage's own sentences: the build stage holds a job writing its plan, a job
+	// whose verticals are being built in a session each, and a job waiting for somebody to accept what
+	// arrived, and those three read the same off the stage alone.
+	Doing string
 }
 
 // StageOf is the stage a job is in, read off what the job has done.
@@ -117,33 +125,39 @@ func StageOf(one *Job) Stage {
 	if WaitingForItsTests(one) {
 		return stageStanding(StageTest, accepted)
 	}
-	// Past the tests, so the next stage is build, and build is not built. A row that never went through
-	// the test stage says so rather than claiming a red suite nobody ran.
+	// Past the tests, so the stage is build, which is the last one. A row that never went through the
+	// test stage says so rather than claiming a red suite nobody ran.
 	red := StageOpenedBy(StageBuild)
 	if !TestsWritten(one) {
 		red = "the plan itself, because this job is older than the test stage"
 	}
 	build := stageStanding(StageBuild, red)
-	build.Unbuilt = whatItDoesWhileBuildIsNotBuilt(one)
+	build.Doing = whereItStandsInTheBuild(one)
 	return build
 }
 
-// whatItDoesWhileBuildIsNotBuilt is what a job past its failing tests is actually doing.
+// whereItStandsInTheBuild is what a job in the last stage is actually doing.
 //
-// The moment the suite is red there is no plan, and a job that said it was carrying on under a plan a
-// person approved would be describing a state no job is in yet: the plan is written next, and a
-// person approves it before any work starts. So this reads the two plan columns rather than the
-// stage, for the reason the stage itself is read off the row: what a reader is told has to be true of
-// the job in front of them.
-func whatItDoesWhileBuildIsNotBuilt(one *Job) string {
-	const notBuilt = "build is not built yet, so this job "
+// Four standings, and they are days apart. The moment the suite is red there is no plan, so a job
+// that said it was building would be describing a state it is not in: the plan is written first, and
+// a person approves it before any building starts. Once they have, the row itself does nothing and
+// one session for each vertical does the work. Once every vertical is green, the job holds and the
+// only thing that moves it is a person.
+//
+// It reads the columns rather than the stage, for the reason the stage itself is read off the row:
+// what a reader is told has to be true of the job in front of them.
+func whereItStandsInTheBuild(one *Job) string {
 	switch {
+	case Built(one):
+		return "every vertical is built and its tests pass, and it waits for you to accept what arrived"
 	case one.PlanApproved:
-		return notBuilt + "carries on under the plan a person approved"
+		return "one session for each vertical is building against those tests, and none of them can " +
+			"change a test"
 	case one.Plan != "":
-		return notBuilt + "holds a plan nobody has approved yet"
+		return "it holds a plan nobody has approved yet, and nothing is built until somebody does"
 	default:
-		return notBuilt + "writes its plan next, and a person approves it before any work starts"
+		return "it writes the plan that turns those tests green next, and a person approves it before " +
+			"any building starts"
 	}
 }
 

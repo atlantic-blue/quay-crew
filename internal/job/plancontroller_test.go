@@ -33,6 +33,21 @@ func plannedJob() *job.Job {
 	return one
 }
 
+// builtJob is the same job past the build stage: its verticals are built and a person accepted what
+// arrived.
+//
+// The three cases below are about what a session does with an approved plan, and between the approval
+// and that session stands the fan out: a job that owes a build gets no session of its own, because
+// one worker for each vertical does that work. The build stage has its own tests beside these, so
+// these carry the record it writes rather than driving it.
+func builtJob() *job.Job {
+	one := plannedJob()
+	one.Build = "Vertical 1: a person pastes a link on the command line and gets the text back\n" +
+		"Ran 1: 14\nPasses 1: TestPastingALinkPrintsTheTranscript\n" +
+		"Changed 1: internal/transcript/paste.go"
+	return one
+}
+
 // theRedSuite is the record of the requirements on that list becoming failing tests, as the system
 // keeps it.
 const theRedSuite = "Requirement 1: a person pastes a link on the command line and gets the text back\n" +
@@ -149,7 +164,7 @@ func TestASessionWithNoPlanIsAskedTwiceAndThenTheJobStops(t *testing.T) {
 // that makes the work accountable to the plan.
 func TestOnceApprovedTheWorkCarriesThePlan(t *testing.T) {
 	controller, kept, plane := aController(t)
-	one := kept.add(plannedJob())
+	one := kept.add(builtJob())
 	ctx := context.Background()
 
 	controller.Tick(ctx)
@@ -180,7 +195,7 @@ func TestOnceApprovedTheWorkCarriesThePlan(t *testing.T) {
 // names it.
 func TestAPlanApprovedAndThenNotFollowedStopsTheJob(t *testing.T) {
 	controller, kept, plane := aController(t)
-	one := kept.add(plannedJob())
+	one := kept.add(builtJob())
 	ctx := context.Background()
 
 	controller.Tick(ctx)
@@ -214,7 +229,7 @@ func TestAPlanApprovedAndThenNotFollowedStopsTheJob(t *testing.T) {
 // for every step of the plan finishes, with no reason and nothing said.
 func TestAPlanApprovedAndFollowedFinishesInSilence(t *testing.T) {
 	controller, kept, plane := aController(t)
-	one := kept.add(plannedJob())
+	one := kept.add(builtJob())
 	ctx := context.Background()
 
 	controller.Tick(ctx)

@@ -88,9 +88,8 @@ func runJobStageConformance(t *testing.T, newDataset func(t *testing.T) Opener) 
 			t.Fatalf("a job whose reading a person answered reads as stage %q: the answer reads back "+
 				"as %q, which is the column this suite exists to catch", stage.Name, answered.IdeationAnswer)
 		}
-		if !stage.Built || stage.Unbuilt != "" {
-			t.Fatalf("design reads as unbuilt, saying %q, and the job is asked for its list there",
-				stage.Unbuilt)
+		if !stage.Built {
+			t.Fatalf("design reads as a stage that is not built, and the job is asked for its list there")
 		}
 	})
 
@@ -124,9 +123,8 @@ func runJobStageConformance(t *testing.T, newDataset func(t *testing.T) Opener) 
 				"as %t, which is the column this suite exists to catch",
 				stage.Name, accepted.DesignAccepted)
 		}
-		if !stage.Built || stage.Unbuilt != "" {
-			t.Fatalf("test reads as unbuilt, saying %q, and the job writes its failing tests there",
-				stage.Unbuilt)
+		if !stage.Built {
+			t.Fatalf("test reads as a stage that is not built, and the job writes its failing tests there")
 		}
 
 		// And the record of those failing tests moves it on again, to the stage nobody has written.
@@ -143,14 +141,13 @@ func runJobStageConformance(t *testing.T, newDataset func(t *testing.T) Opener) 
 			t.Fatalf("a job whose suite is red reads as stage %q: the record reads back as %q, which is "+
 				"the column this suite exists to catch", stage.Name, red.Tests)
 		}
-		if stage.Built || stage.Unbuilt == "" {
-			t.Fatalf("build reads as built, and build is a later slice")
+		if !stage.Built || stage.Doing == "" {
+			t.Fatalf("build reads as a stage that is not built, saying %q", stage.Doing)
 		}
-		// And it says what the job is doing instead, truthfully. This job went red a moment ago and has
-		// written no plan, so a line about carrying on under an approved plan would describe a state no
-		// job is in yet.
-		if strings.Contains(stage.Unbuilt, "a person approved") {
-			t.Fatalf("a job with no plan is told %q", stage.Unbuilt)
+		// And it says where the job stands inside that stage, truthfully. This job went red a moment ago
+		// and has written no plan, so a line about building would describe a state it is not in yet.
+		if !strings.Contains(stage.Doing, "writes the plan") {
+			t.Fatalf("a job with no plan is told %q", stage.Doing)
 		}
 	})
 

@@ -156,6 +156,45 @@ func FakeTestReport(asked string) string {
 // own.
 var whichRequirement = regexp.MustCompile(`(?im)^Requirement:?[ \t]+(\d+)`)
 
+// BuildAsk is the phrase a task carries when it asks a session to build one vertical against its
+// failing tests, and BuildMarker opens the line of the report that names a test passing now. Both are
+// spelled here for the reason the six above are: internal/job imports this package.
+const (
+	BuildAsk = "make the failing tests for this vertical pass, and change no test"
+	// The line that names a passing test, because it is the one line every build report has: a report
+	// that names none says nothing was turned green.
+	BuildMarker = "Passing 1:"
+)
+
+// FakeBuildReport is what this double says when it is asked to build one vertical.
+//
+// It reads the vertical and the failing tests out of the task rather than stating either, because the
+// stage refuses a report filed against a vertical its worker does not hold, and refuses one that does
+// not name the tests that were failing. A double that always said the same thing would be refused for
+// every worker but the first, and every test about a fan out would become a test about the double
+// ignoring its task.
+func FakeBuildReport(asked string) string {
+	vertical := 1
+	if found := whichVertical.FindStringSubmatch(asked); found != nil {
+		vertical, _ = strconv.Atoi(found[1])
+	}
+	var passing []string
+	for at, found := range failingTest.FindAllStringSubmatch(asked, -1) {
+		passing = append(passing, fmt.Sprintf("Passing %d: %s", at+1, strings.TrimSpace(found[1])))
+	}
+	if len(passing) == 0 {
+		passing = []string{fmt.Sprintf("Passing 1: TestVertical%dPasses", vertical)}
+	}
+	return fmt.Sprintf("I built vertical %d and ran the suite.\n\nVertical: %d\nRan: 14\nRed: 0\n%s\n"+
+		"Changed 1: internal/vertical%d.go", vertical, vertical, strings.Join(passing, "\n"), vertical)
+}
+
+// whichVertical finds the vertical a task was handed, which the ask states on a line of its own.
+var whichVertical = regexp.MustCompile(`(?im)^Vertical:?[ \t]+(\d+)`)
+
+// failingTest finds the tests the ask says fail now, which it lists one to a line under a dash.
+var failingTest = regexp.MustCompile(`(?m)^- (.+)$`)
+
 // answer is what the double says, which follows the task it was handed the way a model does.
 //
 // A task that asks for an outcome gets one. Every job says so beside its brief, so a double that
@@ -177,6 +216,9 @@ func (f *FakeRunner) answer(req Request) string {
 	}
 	if strings.Contains(req.Text, TestAsk) && !strings.Contains(f.Reply, TestMarker) {
 		return statingTheOutcome(FakeTestReport(req.Text), req.Text)
+	}
+	if strings.Contains(req.Text, BuildAsk) && !strings.Contains(f.Reply, BuildMarker) {
+		return statingTheOutcome(FakeBuildReport(req.Text), req.Text)
 	}
 	return statingTheOutcome(f.Reply, req.Text)
 }

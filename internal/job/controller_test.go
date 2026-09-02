@@ -1599,3 +1599,54 @@ func (r *rows) theSuiteIsRed(id string) {
 		"Ran 1: 12\nFails 1: TestPastingALinkPrintsTheTranscript"
 	one.Reason = ""
 }
+
+// HoldJobForAcceptance writes what a job's verticals were built into and stops the job for a person,
+// in one movement, with the pair of conditions both real stores hold it to in one statement.
+//
+// The conditions are the whole reason this is here rather than two map writes. A double that let the
+// record land twice would hold one job for two people, and a double that let it land on a job that
+// already carries one would fan the same verticals out again on the next tick.
+func (r *rows) HoldJobForAcceptance(_ context.Context, id, built, question string,
+	events ...*job.Event) (*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such job")
+	}
+	if one.Phase != job.PhasePending || one.Build != "" {
+		return nil, job.ErrNotPending
+	}
+	one.Build, one.Reason = built, ""
+	one.Phase, one.Question, one.Told = job.PhaseAsking, question, ""
+	asked := time.Now().UTC()
+	one.AskedAt, one.RaisedAt = &asked, nil
+	one.LeaseOwner, one.LeaseUntil = "", nil
+	one.UpdatedAt = time.Now().UTC()
+	r.record(id, events)
+	kept := *one
+	return &kept, nil
+}
+
+// AskAboutJobBuild puts the question about verticals that are not built to a person, from the pending
+// phase, with the conditions both real stores hold it to.
+func (r *rows) AskAboutJobBuild(_ context.Context, id, question string,
+	event *job.Event) (*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such job")
+	}
+	if one.Phase != job.PhasePending || one.Build != "" {
+		return nil, job.ErrNotPending
+	}
+	one.Phase, one.Question, one.Told, one.Reason = job.PhaseAsking, question, "", ""
+	asked := time.Now().UTC()
+	one.AskedAt, one.RaisedAt = &asked, nil
+	one.LeaseOwner, one.LeaseUntil = "", nil
+	one.UpdatedAt = time.Now().UTC()
+	r.record(id, []*job.Event{event})
+	kept := *one
+	return &kept, nil
+}

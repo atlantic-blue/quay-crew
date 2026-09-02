@@ -227,6 +227,12 @@ func (r *recordingRunner) answerFor(asked int, text string) string {
 	if strings.Contains(text, job.TheTestAsk) && (!queued || !strings.Contains(said, job.TestMarker)) {
 		return statingTheOutcome(model.FakeTestReport(text), text)
 	}
+	// And a task that asks for one vertical to be built gets a report on that vertical, naming the
+	// tests the task said fail now. The stage refuses a report filed against a vertical its worker does
+	// not hold, and one that does not name the tests it was given.
+	if strings.Contains(text, job.TheBuildAsk) && (!queued || !strings.Contains(said, job.BuildMarker)) {
+		return statingTheOutcome(model.FakeBuildReport(text), text)
+	}
 	return statingTheOutcome(said, text)
 }
 
@@ -512,6 +518,10 @@ type world struct {
 	processGate gateAnswer
 	// proseGate is what the shipped prose gate answered the last time a scenario fired it.
 	proseGate gateAnswer
+	// testGate is what the shipped test gate answered the last time a scenario fired it, and building
+	// says whether the session it was fired for is one the system is building with.
+	testGate gateAnswer
+	building bool
 }
 
 type worldKey struct{}
@@ -918,6 +928,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeSecretFileSteps(sc)
 	initializeProseGateSteps(sc)
 	initializeProcessGateSteps(sc)
+	initializeBuildStageSteps(sc)
 	initializeSystemSecretSteps(sc)
 	initializeGitConfigSteps(sc)
 	initializeWizardModeSteps(sc)

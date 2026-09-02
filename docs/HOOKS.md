@@ -175,6 +175,13 @@ Each one is a rule the system already carries and nothing else checks.
   manager equivalents, and the older screen program's quit form. This product's own verbs stay open,
   because `krewe job stop` and `krewe flow stop` end the work in the record and signal nothing. It is
   designed in [`hooks/process-gate/README.md`](../hooks/process-gate/README.md).
+- **test-gate.** Reads each write and each Bash command of a session that builds against failing
+  tests, and refuses one that changes a test. It reads the write tools and the shell alike: a
+  redirect, an in place edit, a move, a copy, or a checkout of another revision. Reading a test is
+  allowed, on purpose: a build that cannot read the test cannot tell a failing assertion from a
+  broken one. It is off in every session but a worker of the build stage, because the stage before
+  that one writes the tests. It is designed in
+  [`hooks/test-gate/README.md`](../hooks/test-gate/README.md).
 - **prose-gate.** Reads prose written for a person and refuses what Simplified Technical English
   refuses, for the part of it a program can measure: a sentence of more than 25 words, a paragraph of
   more than 6 sentences, the perfect and the continuous tenses, and a dash used as punctuation. It
@@ -184,7 +191,7 @@ Each one is a rule the system already carries and nothing else checks.
   refusal says so. It is designed in
   [`hooks/prose-gate/README.md`](../hooks/prose-gate/README.md).
 
-The first four are seeded, so a fresh system is under them without anybody attaching anything. The
+The first five are seeded, so a fresh system is under them without anybody attaching anything. The
 prose gate is offered rather than attached, because prose is what a role produces all day and the
 rules it holds are a style somebody chooses. `krewe hook attach <workspace> prose-gate` is how a
 workspace takes it.
@@ -209,6 +216,16 @@ nothing to revert. The machine holding the sandboxes also holds the control plan
 broker and the operator's terminal. `KREWE_MAY_END_A_PROCESS` lifts it for a session the operator
 starts with it set, and a command line that sets the variable itself is refused, because a session
 that lifts its own gate has none.
+
+The test gate is seeded on it as well, and it is the one that refuses least. The build stage hands a
+worker a red suite and asks it to make the tests pass. The shortest way to a green suite is to change
+the assertion. From inside the session a failing test looks exactly like a wrong test, and nothing
+there tells the two apart.
+
+The system sets `KREWE_BUILDING` on the task of a worker in that stage and on nothing else. Every
+other session is refused nothing. A command line that sets the variable itself is refused, because a
+session that decides its own boundary has none. The refusal names the file. It says why the file
+reads as a test, and it says to answer that the test is wrong rather than change it.
 
 ### How a hook refuses
 

@@ -500,7 +500,7 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 	// No credential at sandbox birth. A sandbox keeps the configuration it was made with, so a
 	// credential written here would label every later task with the first task's grant, and one
 	// minted after birth would never reach the container at all. It travels on the task instead.
-	cfg.Env = environ(s.taskEnv(ctx, session, ""))
+	cfg.Env = environ(s.taskEnv(ctx, session, "", false))
 	cfg.Mounts = mounts
 	cfg.Driver = session.GetDriver()
 	var box sandbox.Sandbox
@@ -1357,14 +1357,17 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 		// answers a keystroke and moves on, so its context is cancelled the moment it does, and a task
 		// carrying that context would be killed by the very thing that started it.
 		s.tasking.Add(1)
-		go func(session *quaycrewv1.Session, text, credential string, opened *quaycrewv1.TaskEvent) {
+		go func(session *quaycrewv1.Session, text, credential string, building bool,
+			opened *quaycrewv1.TaskEvent) {
 			defer s.tasking.Done()
-			_, _ = s.task(context.WithoutCancel(ctx), session, text, credential, opened)
-		}(session, req.GetText(), s.credentialFor(ctx, req.GetJob()), opened)
+			_, _ = s.task(context.WithoutCancel(ctx), session, text, credential, building, opened)
+		}(session, req.GetText(), s.credentialFor(ctx, req.GetJob()),
+			s.buildingUnderTheBoundary(ctx, req.GetJob()), opened)
 		return &quaycrewv1.DispatchResponse{Id: session.GetId(), Handle: handle}, nil
 	}
 
-	reply, err := s.task(ctx, session, req.GetText(), s.credentialFor(ctx, req.GetJob()), nil)
+	reply, err := s.task(ctx, session, req.GetText(), s.credentialFor(ctx, req.GetJob()),
+		s.buildingUnderTheBoundary(ctx, req.GetJob()), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1378,7 +1381,7 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 // opened is the task record a caller has already written, which a detached dispatch does before it
 // answers. Nil opens one here, which is what the waited road does.
 func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, credential string,
-	opened *quaycrewv1.TaskEvent) (string, error) {
+	building bool, opened *quaycrewv1.TaskEvent) (string, error) {
 	// Registered before anything runs, so a stop that arrives a moment after the dispatch has
 	// something to cancel. The task runs under this context from here down, which is what makes
 	// `krewe stop` end the model rather than only mark a row.
@@ -1420,7 +1423,7 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, cr
 		ModelSessionID:      conversation,
 		ConversationStarted: s.conversationStarted(session, conversation),
 		PermissionMode:      permissionModeOf(session, s.birthMode),
-		Env:                 withTraceparent(ctx, s.taskEnv(ctx, session, credential)),
+		Env:                 withTraceparent(ctx, s.taskEnv(ctx, session, credential, building)),
 		Settings:            s.settingsFor(ctx, session),
 	})
 	if err != nil {
@@ -1941,7 +1944,8 @@ func environ(values map[string]string) []string {
 // taskEnv gathers the environment a task runs with from the workspace's secrets. A workspace that has
 // set none, or a model backend that needs none, simply runs with no extra env: nothing here fails a
 // task, because a secret that cannot be read is a worse reason to refuse job than to attempt it.
-func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, credential string) map[string]string {
+func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, credential string,
+	building bool) map[string]string {
 	env := map[string]string{}
 	// Who this session is. The volume is shared by every session in the workspace, so anything a
 	// session puts there needs a name of its own to avoid the session beside it: the git brief names
@@ -1966,6 +1970,17 @@ func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, crede
 		if s.driverToken != "" {
 			env[auth.TokenEnv] = s.driverToken
 		}
+	}
+	// The boundary this one task runs under, where the job it runs builds against tests it did not
+	// write. The test gate reads this name and refuses a write to a test in this session, so the rule
+	// is checked at the moment the session tries rather than stated in its brief and weighed against
+	// everything else it was told.
+	//
+	// Per task rather than at sandbox birth, for the reason the credential below is: a sandbox keeps
+	// what it was made with, and one conversation holds the tasks of one job, so a value written at
+	// birth would put every later task of that session under a boundary that belongs to one of them.
+	if building {
+		env[buildingEnv] = "1"
 	}
 	// The credential this one task runs under, where the task runs a job. It is minted for
 	// that job, carries the verbs its role declared, and expires with it, so a value read out of the

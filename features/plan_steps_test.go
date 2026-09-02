@@ -80,6 +80,28 @@ func initializePlanSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// And the stage between an approved plan and the job's own session: its verticals are built, one
+	// worker each, and a person accepts what arrived. A job that owes a build gets no session of its
+	// own, so a scenario about what that session does with the plan has to come through here.
+	sc.Step(`^its verticals were built and a person accepted them$`, func(ctx context.Context) error {
+		if err := theVerticalsWereBuilt(ctx); err != nil {
+			return err
+		}
+		w := worldFrom(ctx)
+		one, err := readJob(ctx, 0)
+		if err != nil {
+			return err
+		}
+		if _, err := w.client.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{
+			Id: one.GetId(), Answer: "I looked at both and the value arrived",
+		}); err != nil {
+			return err
+		}
+		// The work task, which is what the steps below are recorded against.
+		w.server.TickJob(ctx)
+		return nil
+	})
+
 	sc.Step(`^the session records step "([^"]*)" and nothing else$`, func(ctx context.Context, said string) error {
 		return recordAgainstThePlan(ctx, said)
 	})

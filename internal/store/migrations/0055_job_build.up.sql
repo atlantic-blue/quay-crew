@@ -1,0 +1,27 @@
+-- The failing tests become an implementation, and the job holds for a person to accept it.
+--
+-- The failure it answers: the tests existed and nothing implemented against them under a boundary.
+-- A session that builds and runs the suite can reach a green suite two ways, and the shorter one is
+-- to change the assertion. Nothing stopped that, and a suite changed to agree with the code holds
+-- nothing.
+--
+-- build is the record of that stage, in the system's own rendering: one line per vertical, the number
+-- of tests the run covering it executed, one line for each test that passes now, and one line for
+-- each file that was written to make them pass. Each line is written under the vertical it came from,
+-- because work nobody can trace to a vertical delivers nothing a person accepted.
+--
+-- The files are in it for a reason the counts are not. A test that passes without anything being
+-- written was already passing, so a green run on its own says nothing about whether a vertical was
+-- built.
+--
+-- No flag beside it. The record lands only when every vertical is green for the stated reasons, and
+-- the job is stopped for a person in the same write, so the record being there is the fact.
+--
+-- building says a job builds against tests it did not write and may not change. The system sets it on
+-- a worker the build stage declares and on nothing else, and the dispatch reads it: a session it is
+-- set on is told so, and the test gate then refuses a write to a test in that session alone.
+--
+-- Empty string and false rather than null, the way every other column on this table already is. Every
+-- job written before this built nothing, and none of them was under the boundary.
+alter table jobs add column if not exists build text not null default '';
+alter table jobs add column if not exists building boolean not null default false;

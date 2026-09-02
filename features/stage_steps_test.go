@@ -54,15 +54,9 @@ func initializeStageSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// A stage that is named and does nothing reads exactly like a stage that works, so a reader in
-	// one is told, and a reader in ideation is not told about a stage that is built.
-	sc.Step(`^the reading says the stage is not built yet$`, func(ctx context.Context) error {
-		if out := toolFrom(ctx).stdout; !strings.Contains(out, "is not built yet") {
-			return fmt.Errorf("the reading claims an unbuilt stage works: %s", out)
-		}
-		return nil
-	})
-
+	// Every stage is written now, and this is the way off the old reading: the sentence a job in build
+	// used to carry named a stage that did nothing, and a reader who met it again would believe the work
+	// had not landed.
 	sc.Step(`^the reading does not say the stage is unbuilt$`, func(ctx context.Context) error {
 		if out := toolFrom(ctx).stdout; strings.Contains(out, "is not built yet") {
 			return fmt.Errorf("a job in a stage that works is told a stage is not built: %s", out)
@@ -172,7 +166,7 @@ func theRowFor(ctx context.Context) (string, error) {
 // are told different things.
 func initializeStageWorkSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the reading says the job writes its plan next$`, func(ctx context.Context) error {
-		const want = "writes its plan next, and a person approves it before any work starts"
+		const want = "writes the plan that turns those tests green next"
 		if out := toolFrom(ctx).stdout; !strings.Contains(out, want) {
 			return fmt.Errorf("the reading does not say %q: %s", want, out)
 		}
@@ -192,12 +186,4 @@ func initializeStageWorkSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the reading says the job carries on under the plan a person approved$`,
-		func(ctx context.Context) error {
-			const want = "carries on under the plan a person approved"
-			if out := toolFrom(ctx).stdout; !strings.Contains(out, want) {
-				return fmt.Errorf("the reading does not say %q: %s", want, out)
-			}
-			return nil
-		})
 }

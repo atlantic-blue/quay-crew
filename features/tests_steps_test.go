@@ -171,7 +171,7 @@ func initializeTestStageSteps(sc *godog.ScenarioContext) {
 				return nil
 			}
 		}
-		return fmt.Errorf("the workers never finished writing their tests")
+		return fmt.Errorf("the workers never finished")
 	})
 
 	sc.Step(`^the worker for requirement (\d+) dies$`, func(ctx context.Context, requirement int) error {
@@ -326,8 +326,8 @@ func jobAsKept(one *quaycrewv1.Job) *job.Job {
 		ID: one.GetId(), Product: one.GetProduct(), Parent: one.GetParent(),
 		IdeationAnswer: one.GetIdeationAnswer(),
 		Design:         one.GetDesign(), DesignAccepted: one.GetDesignAccepted(),
-		Tests: one.GetTests(),
-		Plan:  one.GetPlan(), PlanApproved: one.GetPlanApproved(),
+		Tests: one.GetTests(), Build: one.GetBuild(),
+		Plan: one.GetPlan(), PlanApproved: one.GetPlanApproved(),
 	}
 }
 

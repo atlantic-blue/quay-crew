@@ -204,9 +204,18 @@ type Store interface {
 	// AskAboutJobTests puts the question about a suite that is not red to a person, from the pending
 	// phase. It is the one ask a job makes without a session behind it: what finished is its workers.
 	AskAboutJobTests(ctx context.Context, id, question string, event *Event) (*Job, error)
+	// HoldJobForAcceptance writes what this job's verticals were built into and stops the job for a
+	// person to accept it, in one movement, so a reader never finds a built job carrying on as though
+	// somebody had already looked at it.
+	HoldJobForAcceptance(ctx context.Context, id, built, question string,
+		events ...*Event) (*Job, error)
+	// AskAboutJobBuild puts the question about verticals that are not built to a person, from the
+	// pending phase, for the reason the ask about the tests is made from there.
+	AskAboutJobBuild(ctx context.Context, id, question string, event *Event) (*Job, error)
 	// CreateJob declares one job and the record of declaring it, in one transaction. It is how a test
-	// stage fans out, and it is the same call every other declaration goes through, so the claim on a
-	// requirement is refused here exactly as a claim typed by a person is.
+	// stage and a build stage fan out, and it is the same call every other declaration goes through,
+	// so the claim on a requirement or on a vertical is refused here exactly as a claim typed by a
+	// person is.
 	CreateJob(ctx context.Context, declared *Job, event *Event) error
 	// JobsClaiming is the jobs in one workspace claiming any of these pieces of work, whole. It is how
 	// a fan out finds the workers it declared: each one holds the claim on its own requirement, and
@@ -630,6 +639,14 @@ func (c *Controller) start(ctx context.Context, one *Job, moving *stillMoving) {
 	// takes no room on the machine and pays for no container.
 	if WaitingForItsTests(one) {
 		c.writeTheTests(ctx, one)
+		return
+	}
+
+	// A job whose plan a person approved and whose suite is red never gets a session of its own either.
+	// The work of this stage is done by one job for each vertical, all at once, and this row waits for
+	// them under the same arithmetic the stage before it waits under.
+	if WaitingForItsBuild(one) {
+		c.buildIt(ctx, one)
 		return
 	}
 

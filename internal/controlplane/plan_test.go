@@ -213,6 +213,9 @@ func TestAnAnswerOfYesStartsTheWorkAgainstThePlan(t *testing.T) {
 	}
 
 	system.runner.Reply = "the page takes a link and gives the text back"
+	// The work an approved plan starts is the build, and it is done by one worker for each vertical.
+	// The job's own session comes after a person accepts what those workers built.
+	system.builtItsVerticals(t)
 	system.server.TickJob(ctx)
 
 	sent := system.asked(t)
@@ -238,6 +241,7 @@ func TestAnApprovedPlanTheWorkDidNotFollowStopsTheJob(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("AnswerJob: %v", err)
 	}
+	system.builtItsVerticals(t)
 	// Stating its outcome, because a session that read its task states one and an answer without it
 	// stops the job before it is ever held against the plan.
 	const built = "built the page\n\n" + job.OutcomeMarker + " " + job.OutcomeProved
@@ -276,6 +280,7 @@ func TestAnApprovedPlanTheWorkFollowedFinishesInSilence(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("AnswerJob: %v", err)
 	}
+	system.builtItsVerticals(t)
 	system.runner.Reply = "the page takes a link and gives the text back"
 	system.server.TickJob(ctx)
 	system.landed(t)
@@ -324,5 +329,25 @@ func TestAnErrandIsNeverAskedToPlan(t *testing.T) {
 	}
 	if got.GetPlan() != "" || got.GetQuestion() != "" {
 		t.Fatalf("an errand was asked to plan: plan %q, question %q", got.GetPlan(), got.GetQuestion())
+	}
+}
+
+// builtItsVerticals drives the whole build stage: the fan out, the workers building against their
+// own failing tests, and the job holding for a person to accept what arrived.
+//
+// The two cases below are about what a session does with an approved plan, and this stands between
+// the approval and that session: a job that owes a build gets no session of its own, because one
+// worker for each vertical does that work. The build stage has its own cases beside these.
+func (p planning) builtItsVerticals(t *testing.T) {
+	t.Helper()
+	ctx := context.Background()
+	waitFor(t, func() bool {
+		p.server.TickJob(ctx)
+		return p.reading(t).GetBuild() != ""
+	})
+	if _, err := p.server.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{
+		Id: p.job.GetId(), Answer: "I looked at both and the value arrived",
+	}); err != nil {
+		t.Fatalf("AnswerJob: %v", err)
 	}
 }

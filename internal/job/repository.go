@@ -145,6 +145,26 @@ func Asked(one *Job) string {
 	// from a job being continued in the conversation that did the work. See ceiling.go.
 	case HandingOver(one):
 		said = append(said, HandedOn(one))
+	// A person accepting what was built. It is the one answer that starts the work rather than
+	// continuing it: everything built so far was built by a worker of its own, and this session has
+	// never been asked to do the job. So it is given the brief and the plan as well as the acceptance,
+	// for the reason a handoff is: carry on with what, and held to what.
+	case one.Told != "" && AskedToAccept(one.Question):
+		said = append(said, CarryOn(one))
+		if one.Product != "" {
+			said = append(said, ServesAPerson(one.Product))
+		}
+		said = append(said, one.Brief)
+		if one.Repository != "" {
+			said = append(said, EndsInAPullRequest(one.Repository))
+		}
+		if one.PlanApproved {
+			said = append(said, FollowThePlan(one.Plan))
+		} else {
+			said = append(said, RecordEachStep())
+		}
+	// Every other answer goes back into the conversation that asked the question, which has the job
+	// in front of it already. Sending the brief again would ask it to do the whole job over.
 	case one.Told != "":
 		said = append(said, CarryOn(one))
 	default:

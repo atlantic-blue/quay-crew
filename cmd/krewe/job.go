@@ -501,6 +501,9 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 			fmt.Fprintf(out, "  %s\n", line)
 		}
 	}
+	// What the verticals were built into, below the plan for the reason the failing tests sit above it:
+	// the page reads in the order the job went through the stages.
+	sayWhatWasBuilt(out, one)
 	// What its session finished. It is the record a second attempt carries on from, so it is here
 	// rather than only inside a task nobody can read.
 	if steps := one.GetSteps(); len(steps) > 0 {
@@ -1204,17 +1207,17 @@ func stageOf(one *quaycrewv1.Job) job.Stage {
 		Product: one.GetProduct(), Parent: one.GetParent(),
 		IdeationAnswer: one.GetIdeationAnswer(),
 		Design:         one.GetDesign(), DesignAccepted: one.GetDesignAccepted(),
-		Tests: one.GetTests(),
-		Plan:  one.GetPlan(), PlanApproved: one.GetPlanApproved(),
+		Tests: one.GetTests(), Build: one.GetBuild(),
+		Plan: one.GetPlan(), PlanApproved: one.GetPlanApproved(),
 	})
 }
 
 // sayWhichStage says which of the four stages this job is in, what closed the stage before it, and
 // what opens the next one.
 //
-// A stage that is not built says so on its own line. A named stage that does nothing reads exactly
-// like a stage that works, and a job in design carrying on under an approved plan is what is
-// actually happening, so the line says both.
+// Where the job stands inside its stage gets a line of its own. The last stage holds a job writing
+// its plan, a job whose verticals are being built in a session each, and a job waiting for somebody
+// to accept what arrived, and a reader told only "stage 4 of 4: build" cannot tell those apart.
 func sayWhichStage(out io.Writer, one *quaycrewv1.Job) {
 	stage := stageOf(one)
 	if stage.Outside != "" {
@@ -1224,7 +1227,38 @@ func sayWhichStage(out io.Writer, one *quaycrewv1.Job) {
 	fmt.Fprintf(out, "%s, phase %s\n", stage.Where(), one.GetPhase())
 	fmt.Fprintf(out, "  %s\n", stage.Closed)
 	fmt.Fprintf(out, "  %s\n", stage.Opens)
-	if stage.Unbuilt != "" {
-		fmt.Fprintf(out, "  %s\n", stage.Unbuilt)
+	if stage.Doing != "" {
+		fmt.Fprintf(out, "  %s\n", stage.Doing)
 	}
+}
+
+// sayWhatWasBuilt prints what a job's verticals were built into, once every one of them is green.
+//
+// The whole record rather than a count, the way the failing tests are printed: this is what a person
+// is being asked to accept, and a line saying three verticals were built tells them nothing about
+// whether the value arrived. The files are in it because they are the difference between a build and
+// a claim of one.
+func sayWhatWasBuilt(out io.Writer, one *quaycrewv1.Job) {
+	kept := one.GetBuild()
+	if kept == "" {
+		return
+	}
+	verticals, passing := job.BuiltOn(kept)
+	fmt.Fprintf(out, "%s:\n", saidTheBuild(verticals, passing))
+	for _, line := range strings.Split(kept, "\n") {
+		fmt.Fprintf(out, "  %s\n", line)
+	}
+}
+
+// saidTheBuild reads for one and for several, because a line that says "1 verticals" is a line that
+// says nobody read it.
+func saidTheBuild(verticals, passing int) string {
+	said := fmt.Sprintf("%d verticals were built, and %d tests pass now", verticals, passing)
+	if verticals == 1 {
+		said = fmt.Sprintf("one vertical was built, and %d tests pass now", passing)
+	}
+	if passing == 1 {
+		said = strings.Replace(said, "1 tests pass now", "one test passes now", 1)
+	}
+	return said
 }
