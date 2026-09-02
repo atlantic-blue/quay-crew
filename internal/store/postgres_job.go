@@ -17,7 +17,8 @@ const jobColumns = `id, workspace, project, title, brief, role, role_version, mo
 	expect_contains, after_jobs, deadline, budget_tokens, labels, requires, coalesce(parent, ''), depth, version,
 	phase, session, attempts, answer, outcome, reason, question, told, resuming, spent_tokens, observed_version,
 	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product, steers, claim,
-	escalation, looped_step, escalated_to, plan, plan_approved, ungated, reviewed, tested,
+	escalation, looped_step, escalated_to, plan, plan_approved, ideation, ideation_answer,
+	ungated, reviewed, tested,
 	pull_request_status, pull_request_checks, pull_request_check, pull_request_review,
 	pull_request_read_at, pull_request_failed,
 	request,
@@ -336,6 +337,33 @@ func (p *Postgres) ProposeJobPlan(ctx context.Context, id, plan, question string
 		job.PhaseAsking, plan, question, job.PhaseRunning)
 }
 
+// ProposeJobIdeation writes what the session said it understood and puts the questions about it to a
+// person, in one movement.
+//
+// The same statement the plan uses one stage earlier, and conditional on the running phase for the
+// same reason: a job nothing is running has nobody to read the work.
+func (p *Postgres) ProposeJobIdeation(ctx context.Context, id, understood, question string,
+	event *job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "propose job ideation", job.ErrNotRunning, []*job.Event{event}, `
+		update jobs set phase = $2, ideation = $3, question = $4, told = '', resuming = '',
+			lease_owner = '', lease_until = null, updated_at = now()
+		where id = $1 and phase = $5`,
+		job.PhaseAsking, understood, question, job.PhaseRunning)
+}
+
+// AnswerJobIdeation keeps what a person wrote about what the job understood, whole, and puts the job
+// back to pending so it plans from it.
+//
+// Conditional on the asking phase and on nothing having been answered yet, in the same statement, so
+// an answer that arrives twice leaves the first one and one task.
+func (p *Postgres) AnswerJobIdeation(ctx context.Context, id, answer string,
+	event *job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "answer job ideation", job.ErrNotAsking, []*job.Event{event}, `
+		update jobs set phase = $2, told = '', ideation_answer = $3, started_at = null, updated_at = now()
+		where id = $1 and phase = $4 and ideation_answer = ''`,
+		job.PhasePending, answer, job.PhaseAsking)
+}
+
 // ApproveJobPlan records that a person approved the plan and puts the job back to pending, so a
 // controller starts the work against it.
 //
@@ -416,6 +444,7 @@ func scanJob(row rowScanner) (*job.Job, error) {
 		&found.LeaseOwner, &found.LeaseUntil, &found.TraceID, &found.ParentSpanID,
 		&found.Repository, &found.PullRequest, &found.Product, &found.Steers, &found.Claim,
 		&found.Escalation, &found.LoopedStep, &found.EscalatedTo, &found.Plan, &found.PlanApproved,
+		&found.Ideation, &found.IdeationAnswer,
 		&found.Ungated, &found.Reviewed, &found.Tested,
 		&found.PullRequestState.Status, &found.PullRequestState.Checks,
 		&found.PullRequestState.FailedCheck, &found.PullRequestState.Review,

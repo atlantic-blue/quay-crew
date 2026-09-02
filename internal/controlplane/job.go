@@ -442,6 +442,7 @@ func asJob(from *job.Job) *quaycrewv1.Job {
 		Product: from.Product, Request: from.Request, Steers: int32(from.Steers),
 		Ungated: from.Ungated, Reviewed: from.Reviewed, Tested: from.Tested,
 		Plan: from.Plan, PlanApproved: from.PlanApproved,
+		Ideation: from.Ideation, IdeationAnswer: from.IdeationAnswer,
 		Parent: from.Parent, Depth: int32(from.Depth), Version: int32(from.Version),
 		Phase: from.Phase, Session: from.Session, Attempts: int32(from.Attempts),
 		Answer: from.Answer, Outcome: from.Outcome,

@@ -192,7 +192,10 @@ code { font-family: var(--mono); font-size: 13px; color: var(--accent); }
 
 .question, .why, .answer, .produced { margin: var(--step) 0 0; }
 
-.question { overflow-wrap: anywhere; }
+/* A question is written in lines and read in lines. What a job understood before it planned is a
+   list of headings, and a paragraph that ran them together would be the record made unreadable by
+   the page rather than by the system. */
+.question { overflow-wrap: anywhere; white-space: pre-wrap; }
 
 .why { color: var(--text-dim); font-size: 13px; }
 

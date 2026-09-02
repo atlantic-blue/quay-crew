@@ -132,6 +132,17 @@ type Job struct {
 	Plan         string
 	PlanApproved bool
 
+	// Ideation is what the session said it understood before it wrote the plan, and IdeationAnswer is
+	// what a person then said about it, in their own words and kept whole. A job that states the
+	// sentence says what it understood before it plans, and nothing but an answer moves it while it
+	// stands. See ideation.go.
+	//
+	// There is no flag beside these two. The answer is prose a person wrote, so an answer being there
+	// is the fact; an approval is one word, and a plan that was refused carries the same text as a
+	// plan nobody read, which is what PlanApproved above is for.
+	Ideation       string
+	IdeationAnswer string
+
 	// Steers is how many times the operator had to say something this job should have known, counted
 	// on the job the steer landed on and on every job above it. On the job at the top it is the score
 	// of the whole tree, which is the number the acceptance job exists to move. See steer.go.

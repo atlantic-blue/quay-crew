@@ -68,8 +68,14 @@ func Planned(one *Job) bool {
 }
 
 // WaitingForItsPlan says whether this job still owes a person a plan they approved.
+//
+// A job that has not said what it understood is not waiting for its plan yet. Ideation stands in
+// front of this gate and is held by the same person, so the order is what it understood, then the
+// plan written from what the person answered, then the work. A session asked to plan before anybody
+// had agreed with its reading would be marking its own reading, which is the gap the two gates
+// together close.
 func WaitingForItsPlan(one *Job) bool {
-	return Planned(one) && !one.PlanApproved
+	return Planned(one) && Ideated(one) && !one.PlanApproved
 }
 
 // Step of a plan: what the crew says it will do, and the number a recorded step accounts for it by.
@@ -207,11 +213,15 @@ func AskedForThePlanAgain(prompt string) bool {
 // The brief is evidence for the sentence, and a plan written from the brief alone would carry
 // whatever misreading the brief carries, which is the whole failure this exists to catch.
 func WriteThePlan(one *Job) string {
-	return strings.Join([]string{
-		ServesAPerson(one.Product),
-		one.Brief,
-		theShapeOfAPlan(),
-	}, "\n\n")
+	said := []string{ServesAPerson(one.Product), one.Brief}
+	// What it said it understood, and what the person answered, between the brief and the shape. The
+	// plan is written against the answer rather than against the brief again: the answer is the only
+	// part of this a human wrote, and a plan that ignored it would put the person back where they
+	// started, agreeing with a reading nobody checked.
+	if understood := WhatWeUnderstand(one); understood != "" {
+		said = append(said, understood)
+	}
+	return strings.Join(append(said, theShapeOfAPlan()), "\n\n")
 }
 
 // theShapeOfAPlan is what the system asks for, in the shape it reads back.
@@ -230,9 +240,15 @@ func theShapeOfAPlan() string {
 // the correction rather than from nothing. The person who answered no writes no plan: saying what is
 // wrong is the whole of what they owe, and writing the replacement is the crew's job.
 func WriteThePlanAgain(one *Job) string {
-	return fmt.Sprintf("The plan you wrote was not approved.\n\nYou wrote:\n\n%s\n\nThe person said: %s\n\n"+
-		"Write the plan again from what they said, and answer with it. Do no work yet.\n\n%s",
-		one.Plan, one.Told, theShapeOfAPlan())
+	said := fmt.Sprintf("The plan you wrote was not approved.\n\nYou wrote:\n\n%s\n\nThe person said: %s\n\n"+
+		"Write the plan again from what they said, and answer with it. Do no work yet.",
+		one.Plan, one.Told)
+	// The understanding travels with the second plan too. What was assumed is still an assumption, and
+	// a session rewriting a plan from one correction is the session most likely to drop the rest.
+	if understood := WhatWeUnderstand(one); understood != "" {
+		said += "\n\n" + understood
+	}
+	return said + "\n\n" + theShapeOfAPlan()
 }
 
 // AskedForAPlanTheSystemCanRead is the second ask, where a reply carried no plan the system could
