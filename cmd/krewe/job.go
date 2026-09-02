@@ -23,7 +23,7 @@ import (
 // happen; nothing here dispatches anything.
 func runJob(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: krewe job <create|list|show|stop|ask|answer|step|handoff|resume|refuse>")
+		return fmt.Errorf("usage: krewe job <create|list|show|stop|ask|answer|step|question|settle|handoff|resume|refuse>")
 	}
 	switch args[0] {
 	case "create":
@@ -40,6 +40,10 @@ func runJob(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, ar
 		return runJobAnswer(ctx, client, args[1:], out)
 	case "step":
 		return runJobStep(ctx, client, args[1:], out)
+	case "question":
+		return runJobQuestion(ctx, client, args[1:], out)
+	case "settle":
+		return runJobSettle(ctx, client, args[1:], out)
 	case "handoff":
 		return runJobHandoff(ctx, client, args[1:], out)
 	case "resume":
@@ -48,7 +52,7 @@ func runJob(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, ar
 		return runJobRefuse(ctx, client, args[1:], out)
 	default:
 		return fmt.Errorf("there is no job %s command: "+
-			"krewe job <create|list|show|stop|ask|answer|step|handoff|resume|refuse>", args[0])
+			"krewe job <create|list|show|stop|ask|answer|step|question|settle|handoff|resume|refuse>", args[0])
 	}
 }
 
@@ -491,6 +495,22 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		fmt.Fprintln(out, "finished:")
 		for _, step := range steps {
 			fmt.Fprintf(out, "  %d. %s\n", step.GetSeq(), step.GetSummary())
+		}
+	}
+	// What the readings of this plan could not settle, with what a later lens settled beside it. A row
+	// that is open is a row the person at the end is asked about, so the status is printed on every
+	// line rather than only where something happened.
+	if questions := one.GetQuestions(); len(questions) > 0 {
+		fmt.Fprintln(out, "questions:")
+		for _, asked := range questions {
+			fmt.Fprintf(out, "  %d. %s [%s]", asked.GetSeq(), asked.GetText(), asked.GetStatus())
+			if asked.GetAskedBy() != "" {
+				fmt.Fprintf(out, " asked by %s", asked.GetAskedBy())
+			}
+			fmt.Fprintln(out)
+			if asked.GetAnswer() != "" {
+				fmt.Fprintf(out, "     settled by %s: %s\n", asked.GetSettledBy(), asked.GetAnswer())
+			}
 		}
 	}
 	// What each session left behind when it stopped taking work at the context ceiling. The newest is
@@ -989,4 +1009,53 @@ func pullRequestState(one *quaycrewv1.Job) string {
 	}
 	reading.ReadAt = read.AsTime()
 	return fmt.Sprintf("%s, read %s ago", reading, display.Age(read))
+}
+
+// runJobQuestion writes down one thing this reading of the plan could not settle.
+//
+// It names no job, the way krewe job step names none: the system reads which job is reading from the
+// credential this session holds. A caller that could name any job could write on any job's record.
+func runJobQuestion(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: krewe job question \"<what this reading could not settle>\"")
+	}
+	resp, err := client.RecordJobQuestion(ctx, &quaycrewv1.RecordJobQuestionRequest{Text: args[0]})
+	if err != nil {
+		return err
+	}
+	recorded := resp.GetJob()
+	// The number this row took, which is one past the highest the job held rather than the count: a
+	// reading handed rows one to three writes its own as four, and it settles by that number.
+	written := 0
+	for _, asked := range recorded.GetQuestions() {
+		if int(asked.GetSeq()) > written {
+			written = int(asked.GetSeq())
+		}
+	}
+	fmt.Fprintf(out, "question %d of %s: %s\n", written, display.ShortID(recorded.GetId()), args[0])
+	fmt.Fprintln(out, "the next reader is handed this row and may settle it. What no reader settles is "+
+		"what a person is asked.")
+	return nil
+}
+
+// runJobSettle answers a row an earlier reading left open.
+func runJobSettle(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) != 2 {
+		return fmt.Errorf("usage: krewe job settle <number> \"<what settles it>\"")
+	}
+	seq, err := strconv.Atoi(args[0])
+	if err != nil {
+		return fmt.Errorf("a row is settled by its number, as krewe job settle 2 \"...\" (you sent %q)", args[0])
+	}
+	resp, err := client.SettleJobQuestion(ctx, &quaycrewv1.SettleJobQuestionRequest{
+		Seq: int32(seq), Answer: args[1],
+	})
+	if err != nil {
+		return err
+	}
+	settled := resp.GetJob()
+	fmt.Fprintf(out, "settled question %d of %s: %s\n", seq, display.ShortID(settled.GetId()), args[1])
+	fmt.Fprintln(out, "a settled row does not reach a person, so settle what your lens can answer and "+
+		"leave open only what it cannot.")
+	return nil
 }

@@ -200,6 +200,10 @@ type Job struct {
 	// ceiling: what is left, and what it tried that did not work. The newest one goes in front of the
 	// session that carries the job on, and the count of them names that session. See ceiling.go.
 	Handoffs []Handoff
+	// Questions are the holes in the plan this job carries: what a reader of it could not settle.
+	// A later reader is handed the open ones, settles what its own lens can, and what every lens left
+	// open is what a person is asked. See question.go.
+	Questions []Question
 	// Escalation is what this job does when it goes in circles, as the caller declared it: "ask" to put
 	// the question to the operator, or "role:<name>" to hand it to another role. Empty is asking, which
 	// is what a job whose author never thought about looping gets. See loop.go.
@@ -288,6 +292,12 @@ const (
 	// movement: the job is running before it and running after it, and what it adds is the record a
 	// second attempt carries on from.
 	EventStepped = "job.stepped"
+	// EventQuestioned is written when a reading of this job's plan says what it could not settle, and
+	// EventSettled when a later reader answers that row. Two moments rather than one, because a
+	// question that nobody settled and a question a second lens closed are the two outcomes this
+	// whole reading exists to tell apart.
+	EventQuestioned = "job.questioned"
+	EventSettled    = "job.settled"
 	// EventHandedOver is written when the session doing a job says what it leaves behind, at the
 	// context ceiling, and EventHandedOn when the system then gives the rest of the job to a fresh
 	// session. They are two moments rather than one: a session can write a handoff and the system

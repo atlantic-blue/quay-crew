@@ -450,6 +450,21 @@ type Store interface {
 	// none. It is written only onto a row that carries none, so what a job produced survives the attempt
 	// that produced it: a job that failed after opening its pull request said so nowhere else.
 	RecordJobStep(ctx context.Context, id, summary, pullRequest string, event *job.Event) (*job.Job, error)
+	// RecordJobQuestion writes down one thing a reading of this job's plan could not settle, and
+	// SettleJobQuestion is a later reader answering that row from its own lens. Both apply only while
+	// the job is running, the way a step does, because a reading that ended reads nothing.
+	//
+	// Only an open row settles, in the same statement, so two readers settling at once leave one
+	// answer rather than the later one taking the earlier one's place.
+	RecordJobQuestion(ctx context.Context, id string, asking job.Question, event *job.Event) (*job.Job, error)
+	SettleJobQuestion(ctx context.Context, id string, seq int, answer, settledBy string, event *job.Event) (*job.Job, error)
+	// CarryJobQuestions writes rows onto a job that did not write them: down onto the reading that
+	// comes next, and back up onto the plan the readings are of. It is the engine's call and never a
+	// session's, so it asks nothing about the phase: a plan is held back while its readings are out.
+	//
+	// A row already there by number is settled rather than added, and only while it is open, so the
+	// same reading carried twice leaves one row.
+	CarryJobQuestions(ctx context.Context, id string, rows []job.Question) (*job.Job, error)
 	// ResumeJob puts a job that failed back to pending, keeping its session, so a controller starts it
 	// again in the conversation it has been in all along. RefuseJob is the other answer to a failure:
 	// it ends the job as stopped, and a stopped job is never continued. Both apply only to a job that

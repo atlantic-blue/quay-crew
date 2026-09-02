@@ -91,6 +91,10 @@ type Memory struct {
 	// ceiling, in the order they wrote them. Beside the jobs for the reason the steps are, so this
 	// store and the Postgres one carry the same thing on one job.
 	jobHandoffs map[string][]job.Handoff
+	// jobQuestions is what each reading of a plan could not settle, keyed by the job the rows sit on.
+	// Beside the jobs for the reason the steps are, so this store and the Postgres one carry the same
+	// thing on one job.
+	jobQuestions map[string][]job.Question
 	// jobAttempts is what each attempt at each job said, in the order the attempts were made, beside
 	// the jobs for the same reason the steps are.
 	jobAttempts map[string][]job.Attempt

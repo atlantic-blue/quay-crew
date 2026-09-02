@@ -133,7 +133,9 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 		stampOrNow(declared.CreatedAt), stampOrNow(declared.UpdatedAt)); err != nil {
 		return fmt.Errorf("create job: %w", err)
 	}
-	return nil
+	// The rows this reading was handed, in the same transaction as the job itself, so a reading is
+	// never declared with the list it has to read missing.
+	return insertJobQuestions(ctx, tx, declared)
 }
 
 // stampOrNow is a moment the caller stamped on a row, and nothing where it stamped none, which the
@@ -171,6 +173,9 @@ func (p *Postgres) GetJob(ctx context.Context, id string) (*job.Job, error) {
 		return nil, err
 	}
 	if found.Attempted, err = p.jobAttempts(ctx, id); err != nil {
+		return nil, err
+	}
+	if found.Questions, err = p.jobQuestions(ctx, id); err != nil {
 		return nil, err
 	}
 	return found, nil

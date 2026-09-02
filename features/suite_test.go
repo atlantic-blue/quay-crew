@@ -110,6 +110,9 @@ type recordingRunner struct {
 	// onTask runs before the double answers, so a scenario can be a model that did the job rather
 	// than one that talked about it: wrote the file, left the room as it found it. Nil does nothing.
 	onTask func()
+	// duringTask runs before the double answers, with the task it was handed, so a scenario can be a
+	// session that called the system rather than one that only replied. Nil does nothing.
+	duringTask func(req model.Request)
 	// says is what the double answers, one entry per task, with the last repeating once the queue
 	// runs out. Empty echoes the task, which is what almost every scenario wants.
 	//
@@ -254,7 +257,7 @@ var _ model.Runner = (*recordingRunner)(nil)
 // about stopping a task would hang against it while the real system stopped the task at once.
 func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.Request) (model.Response, error) {
 	r.mu.Lock()
-	takes, gate, started, onTask := r.takes, r.gate, r.started, r.onTask
+	takes, gate, started, onTask, duringTask := r.takes, r.gate, r.started, r.onTask, r.duringTask
 	// Recorded on arrival rather than on the way out. A scenario about what is true *while* a task
 	// runs, which is what attaching to a running session is, cannot read a task that is only written
 	// down once it is over.
@@ -264,6 +267,9 @@ func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.
 	// Outside the lock: what the model does may ask the system something.
 	if onTask != nil {
 		onTask()
+	}
+	if duringTask != nil {
+		duringTask(req)
 	}
 	if started != nil {
 		r.once.Do(func() { close(started) })
@@ -359,6 +365,11 @@ type world struct {
 	lastHealth grpc_health_v1.HealthCheckResponse_ServingStatus
 	provider   *sandbox.FakeProvider
 	runner     *recordingRunner
+	// readings is what each reading of a plan does while its task is under way, and readingFailed is
+	// the first thing that went wrong doing it. A double cannot fail a step, so what a reading could
+	// not write is kept here and reported by the step that reads the rows back.
+	readings      *readings
+	readingFailed error
 	// realRunner replaces the recording double when a scenario is about what the real one does with
 	// what came out of the sandbox. A double that hands back a canned error cannot say anything about
 	// an explanation built from a stream.
@@ -797,6 +808,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeBriefingSteps(sc)
 	initializeBriefingHeaderSteps(sc)
 	initializeFlowSteps(sc)
+	initializePlanReadingSteps(sc)
 	initializeFlowSurfaceSteps(sc)
 	initializePullRequestReviewSteps(sc)
 	initializePullRequestSteps(sc)

@@ -1464,6 +1464,10 @@ message Job {
   // ceiling: what is left, and what it tried that did not work. The newest goes in front of the
   // session that carries the job on. A listing leaves them out, the way it leaves out the answer.
   repeated JobHandoff handoffs = 50;
+  // questions are the holes in the plan this job carries: what a reader of it could not settle. A
+  // later reader settles a row from its own lens, and only a row every reader left open is put to a
+  // person. A listing leaves them out, the way it leaves out the answer.
+  repeated JobQuestion questions = 59;
   // resuming is the failure this attempt is continuing past, and empty for a job nobody continued.
   // It is what the job failed with, moved off the reason by the resume, so a job going again does not
   // sit pending reading as one the machine is holding back.
@@ -1482,8 +1486,8 @@ message Job {
   // The answer is content rather than consent, so there is no flag beside these: an answer being there
   // is the fact that somebody answered, and a question the answer left alone stays unknown rather than
   // being read as agreed.
-  string ideation = 59;
-  string ideation_answer = 60;
+  string ideation = 60;
+  string ideation_answer = 61;
   // escalation is what this job does when it goes in circles, as it was declared: "ask", or
   // "role:<name>". Empty is asking.
   string escalation = 41;
@@ -1553,6 +1557,35 @@ message JobAttempt {
 // It is what the session reported rather than anything the system watched, the way an answer is. What
 // it buys is the only record that survives a failed attempt: nothing can see inside a container, and
 // a session that dies takes everything it did not write down with it.
+// JobQuestion is one hole in the plan a job carries: something a reader of that plan could not
+// settle, written by the session that read it.
+//
+// It is not a claim. A claim is something the plan takes to be true, and it carries a check. A
+// question is where nobody holds a claim at all, so the two stay apart rather than sharing one word
+// for two vocabularies.
+//
+// A row is written by one reader and settled by a later one reading through a different lens. What
+// no lens settled is what reaches a person, because a gate that puts every question every reader
+// raised is a gate a person stops reading.
+message JobQuestion {
+  // seq is where this question sits in the order they were asked, counting from one. It is the
+  // number a later reader settles by.
+  int32 seq = 1;
+  // text is the question, in one line, because every open row goes in front of the next reader and
+  // in front of the person at the end.
+  string text = 2;
+  // asked_by is the role that wrote it, and empty where no role ran.
+  string asked_by = 3;
+  // status is open or settled. A word the system does not hold is refused by name.
+  string status = 4;
+  // answer is what settled it, and empty while it is open.
+  string answer = 5;
+  // settled_by is the role that settled it, and empty while it is open.
+  string settled_by = 6;
+  google.protobuf.Timestamp asked_at = 7;
+  google.protobuf.Timestamp settled_at = 8;
+}
+
 message JobStep {
   // seq is where this step sits in the order they were finished, counting from one.
   int32 seq = 1;
@@ -1759,6 +1792,41 @@ message RecordJobStepResponse {
 // reason a step is: a caller that could name any job could write on any job's record. Handing over is
 // not a verb a role grants either. A role that could withhold it would leave a session at the ceiling
 // with no way to stop, which is the state this whole behaviour exists to end.
+// RecordJobQuestionRequest writes down one thing the reading of this plan could not settle.
+//
+// Written by the session doing the reading, over the credential the system minted for its job, for
+// the reason a step is: a caller that could name any job could write on any job's record. Writing a
+// question down is not a verb a role grants, for the reason asking a person is not. A reader that
+// could be stopped from saying what it could not settle would read and report nothing, which is the
+// hole this closes.
+message RecordJobQuestionRequest {
+  // text is the question, in one line. The same question twice leaves one row.
+  string text = 1;
+  // id names the job the question belongs to, and only the caller's own is accepted. Empty is the
+  // caller's own job, which is the only one it may write on.
+  string id = 2;
+}
+message RecordJobQuestionResponse {
+  Job job = 1;
+}
+
+// SettleJobQuestionRequest answers a question an earlier reader could not settle.
+//
+// The row is on the caller's own job, because a later reader is handed the open rows and never the
+// earlier reader's prose. A settled row does not reach a person: only what every lens left open
+// does.
+message SettleJobQuestionRequest {
+  // seq is the number of the row, as the reader was handed it.
+  int32 seq = 1;
+  // answer is what settles it, in one line.
+  string answer = 2;
+  // id names the job the row is on, and only the caller's own is accepted.
+  string id = 3;
+}
+message SettleJobQuestionResponse {
+  Job job = 1;
+}
+
 message RecordJobHandoffRequest {
   // left is what is still to do. Empty is refused: a handoff carrying nothing leaves a fresh session
   // starting from nothing, which is the cost this exists to stop paying.
@@ -2007,6 +2075,11 @@ service ControlPlaneService {
   // RecordJobHandoff is the session at the context ceiling saying what it leaves behind, so the next
   // session carries the job on rather than starting it again.
   rpc RecordJobHandoff(RecordJobHandoffRequest) returns (RecordJobHandoffResponse);
+  // RecordJobQuestion is a reader of a plan saying what it could not settle, and SettleJobQuestion is
+  // a later reader answering that row from its own lens. What no reader settled is what a person is
+  // asked.
+  rpc RecordJobQuestion(RecordJobQuestionRequest) returns (RecordJobQuestionResponse);
+  rpc SettleJobQuestion(SettleJobQuestionRequest) returns (SettleJobQuestionResponse);
   rpc ResumeJob(ResumeJobRequest) returns (ResumeJobResponse);
   rpc RefuseJob(RefuseJobRequest) returns (RefuseJobResponse);
 
