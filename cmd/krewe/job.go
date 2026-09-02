@@ -318,14 +318,14 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 			holding = one.GetReason()
 		}
 		if where.where == "" {
-			fmt.Fprintf(out, "%-10s %-24s %-2d %-8s %-9s %s%s\n", display.ShortID(one.GetId()),
-				addresses[one.GetProject()], one.GetDepth(), phaseOf(one), outcomeOf(one),
-				claimColumn(one, claiming), truncateLine(one.GetTitle()))
+			fmt.Fprintf(out, "%-10s %-24s %-2d %-8s %-9s %-9s %s%s\n", display.ShortID(one.GetId()),
+				addresses[one.GetProject()], one.GetDepth(), phaseOf(one), stageOf(one).Says(),
+				outcomeOf(one), claimColumn(one, claiming), truncateLine(one.GetTitle()))
 			continue
 		}
-		fmt.Fprintf(out, "%-10s %-2d %-8s %-9s %s%s\n",
-			display.ShortID(one.GetId()), one.GetDepth(), phaseOf(one), outcomeOf(one),
-			claimColumn(one, claiming),
+		fmt.Fprintf(out, "%-10s %-2d %-8s %-9s %-9s %s%s\n",
+			display.ShortID(one.GetId()), one.GetDepth(), phaseOf(one), stageOf(one).Says(),
+			outcomeOf(one), claimColumn(one, claiming),
 			truncateLine(one.GetTitle()))
 	}
 	// Said once, under the listing, because an operator reading a column of "held" needs to know it
@@ -430,6 +430,11 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		fmt.Fprintf(out, ", %d tokens", one.GetSpentTokens())
 	}
 	fmt.Fprintln(out)
+	// Which of the four stages it is in, what closed the stage before it and what opens the next one.
+	// It is here, beside the phase, because the pair is what a reader needs: the phase says the system
+	// is waiting and the stage says what it is waiting for, and a job can be in the ideation stage and
+	// the asking phase at the same time.
+	sayWhichStage(out, one)
 	// What a person does with what this builds, and what they get back. It is above everything the job
 	// says about itself, because it is what the rest of the job is read against: the design is
 	// evidence for this sentence rather than a replacement for it.
@@ -1110,4 +1115,34 @@ func runJobSettle(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	fmt.Fprintln(out, "a settled row does not reach a person, so settle what your lens can answer and "+
 		"leave open only what it cannot.")
 	return nil
+}
+
+// stageOf is a job as the stages read it, off the wire. The reading lives in the package that
+// decides it, so the tool and the system cannot say two different things about the same row.
+func stageOf(one *quaycrewv1.Job) job.Stage {
+	return job.StageOf(&job.Job{
+		Product: one.GetProduct(), Parent: one.GetParent(),
+		IdeationAnswer: one.GetIdeationAnswer(),
+		Plan:           one.GetPlan(), PlanApproved: one.GetPlanApproved(),
+	})
+}
+
+// sayWhichStage says which of the four stages this job is in, what closed the stage before it, and
+// what opens the next one.
+//
+// A stage that is not built says so on its own line. A named stage that does nothing reads exactly
+// like a stage that works, and a job in design carrying on under an approved plan is what is
+// actually happening, so the line says both.
+func sayWhichStage(out io.Writer, one *quaycrewv1.Job) {
+	stage := stageOf(one)
+	if stage.Outside != "" {
+		fmt.Fprintf(out, "no stage, phase %s: %s\n", one.GetPhase(), stage.Outside)
+		return
+	}
+	fmt.Fprintf(out, "%s, phase %s\n", stage.Where(), one.GetPhase())
+	fmt.Fprintf(out, "  %s\n", stage.Closed)
+	fmt.Fprintf(out, "  %s\n", stage.Opens)
+	if stage.Unbuilt != "" {
+		fmt.Fprintf(out, "  %s\n", stage.Unbuilt)
+	}
 }
