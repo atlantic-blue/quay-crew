@@ -84,26 +84,27 @@ func initializeBuildStageSteps(sc *godog.ScenarioContext) {
 			if err != nil {
 				return err
 			}
-			workers, err := theBuilders(ctx)
+			runs, err := theBuilders(ctx)
 			if err != nil {
 				return err
 			}
 			wanted := job.RequirementsOf(jobAsKept(one))
-			if len(workers) != len(wanted) {
-				return fmt.Errorf("%d workers are building %d verticals", len(workers), len(wanted))
+			if len(runs) != len(wanted) {
+				return fmt.Errorf("%d workers are building %d verticals", len(runs), len(wanted))
 			}
 			// The row itself buys no session for this stage. It is pending throughout, and every session
-			// the stage pays for belongs to a worker holding one vertical.
+			// the stage pays for belongs to one run holding one vertical.
 			if one.GetPhase() != job.PhasePending {
 				return fmt.Errorf("the job is %q while its workers build: %s",
 					one.GetPhase(), one.GetReason())
 			}
-			for _, worker := range workers {
-				if worker.GetSession() != "" && worker.GetSession() == one.GetSession() {
+			for _, run := range runs {
+				if run.GetSession() != "" && run.GetSession() == one.GetSession() {
 					return fmt.Errorf("a worker builds in the job's own conversation %q", one.GetSession())
 				}
 			}
-			return nil
+			// And nothing the fan out wrote stands in the listing of declared work.
+			return noRunsInTheJobsListing(ctx, one)
 		})
 
 	sc.Step(`^each worker was given its own vertical and told it may not change a test$`,
@@ -113,37 +114,44 @@ func initializeBuildStageSteps(sc *godog.ScenarioContext) {
 				return err
 			}
 			wanted := job.RequirementsOf(jobAsKept(one))
-			workers, err := theBuilders(ctx)
+			runs, err := theBuilders(ctx)
 			if err != nil {
 				return err
 			}
-			for _, worker := range workers {
+			for _, run := range runs {
+				// What the session was actually asked, read off its task rather than off the row: a run
+				// carries no words a person wrote, and what it was sent is what it worked from.
+				asked, err := whatTheSessionWasAsked(ctx, run.GetSession())
+				if err != nil {
+					return err
+				}
 				mine, others := "", 0
 				for _, vertical := range wanted {
-					if worker.GetClaim() == job.ClaimOnBuild(one.GetId(), vertical) {
+					if run.GetClaim() == job.ClaimOnBuild(one.GetId(), vertical) {
 						mine = vertical.Text
 						continue
 					}
-					if strings.Contains(worker.GetBrief(), vertical.Text) {
+					if strings.Contains(asked, vertical.Text) {
 						others++
 					}
 				}
 				if mine == "" {
-					return fmt.Errorf("worker %q claims %q, which is no vertical of this job",
-						worker.GetTitle(), worker.GetClaim())
+					return fmt.Errorf("the run of number %d claims %q, which is no vertical of this job",
+						run.GetNumber(), run.GetClaim())
 				}
-				if !strings.Contains(worker.GetBrief(), mine) || others > 0 {
+				if !strings.Contains(asked, mine) || others > 0 {
 					return fmt.Errorf("the worker holding %q was given %d other verticals as well",
 						mine, others)
 				}
-				if !strings.Contains(worker.GetBrief(), "You may not change one") {
-					return fmt.Errorf("the worker holding %q was not told the boundary: %q",
-						mine, worker.GetBrief())
+				if !strings.Contains(asked, "You may not change one") {
+					return fmt.Errorf("the worker holding %q was not told the boundary: %q", mine, asked)
 				}
 				// And it is under the gate rather than only under the sentence, because a rule a session
-				// weighs against everything else it was told is advice.
-				if !worker.GetBuilding() {
-					return fmt.Errorf("the worker holding %q builds outside the boundary", mine)
+				// weighs against everything else it was told is advice. The stage of the run is what the
+				// dispatch reads to set it.
+				if run.GetStage() != job.StageBuild {
+					return fmt.Errorf("the worker holding %q runs the %q stage, so it builds outside the "+
+						"boundary", mine, run.GetStage())
 				}
 			}
 			return nil
@@ -160,16 +168,16 @@ func initializeBuildStageSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("this job has %d verticals, so it has no %dth", len(wanted), vertical)
 		}
 		claim := job.ClaimOnBuild(one.GetId(), wanted[vertical-1])
-		workers, err := theBuilders(ctx)
+		runs, err := theBuilders(ctx)
 		if err != nil {
 			return err
 		}
-		for _, worker := range workers {
-			if worker.GetClaim() != claim {
+		for _, run := range runs {
+			if run.GetClaim() != claim {
 				continue
 			}
-			_, err := w.client.StopJob(ctx, &quaycrewv1.StopJobRequest{
-				Id: worker.GetId(), Reason: "the sandbox went away",
+			_, err := w.client.StopExecution(ctx, &quaycrewv1.StopExecutionRequest{
+				Id: run.GetId(), Reason: "the sandbox went away",
 			})
 			return err
 		}
@@ -178,20 +186,20 @@ func initializeBuildStageSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^(\d+) workers? (?:are|is) building, one for each vertical$`,
 		func(ctx context.Context, want int) error {
-			workers, err := theBuilders(ctx)
+			runs, err := theBuilders(ctx)
 			if err != nil {
 				return err
 			}
-			if len(workers) != want {
-				return fmt.Errorf("%d workers hold verticals of this job, want %d", len(workers), want)
+			if len(runs) != want {
+				return fmt.Errorf("%d workers hold verticals of this job, want %d", len(runs), want)
 			}
 			claims := map[string]bool{}
-			for _, worker := range workers {
-				if claims[worker.GetClaim()] {
+			for _, run := range runs {
+				if claims[run.GetClaim()] {
 					return fmt.Errorf("two workers claim %q, so both build the same vertical",
-						worker.GetClaim())
+						run.GetClaim())
 				}
-				claims[worker.GetClaim()] = true
+				claims[run.GetClaim()] = true
 			}
 			return nil
 		})
@@ -373,33 +381,59 @@ func initializeBuildStageSteps(sc *godog.ScenarioContext) {
 	})
 }
 
-// theBuilders is every worker this job's build stage declared, which is every job under it that holds
-// a build claim.
+// theBuilders is every run this job's build stage made, read as the runs of that stage.
 //
-// By the claim rather than by the parent, because the test stage's workers are under the same parent
-// and answered a different question. A step that counted every child would count those too.
-func theBuilders(ctx context.Context) ([]*quaycrewv1.Job, error) {
+// The test stage's runs belong to the same job and answered a different question, and the table says
+// which stage each one is a run of, so neither stage can read the other's.
+func theBuilders(ctx context.Context) ([]*quaycrewv1.Execution, error) {
 	one, err := readJob(ctx, 0)
 	if err != nil {
 		return nil, err
 	}
-	listed, err := worldFrom(ctx).client.ListJobs(ctx, &quaycrewv1.ListJobsRequest{
-		Parent: one.GetId(),
+	listed, err := worldFrom(ctx).client.ListExecutions(ctx, &quaycrewv1.ListExecutionsRequest{
+		Job: one.GetId(), Stage: job.StageBuild,
 	})
 	if err != nil {
 		return nil, err
 	}
-	building := map[string]bool{}
-	for _, vertical := range job.RequirementsOf(jobAsKept(one)) {
-		building[job.ClaimOnBuild(one.GetId(), vertical)] = true
+	return listed.GetExecutions(), nil
+}
+
+// whatTheSessionWasAsked is the text of the last task one session was sent. A run carries no words a
+// person wrote, so this is where what it worked from is read.
+func whatTheSessionWasAsked(ctx context.Context, session string) (string, error) {
+	if session == "" {
+		return "", fmt.Errorf("this run holds no session, so nothing was asked of it")
 	}
-	var builders []*quaycrewv1.Job
-	for _, worker := range listed.GetJobs() {
-		if building[worker.GetClaim()] {
-			builders = append(builders, worker)
+	tasks, err := worldFrom(ctx).client.ListTasks(ctx,
+		&quaycrewv1.ListTasksRequest{Session: session})
+	if err != nil {
+		return "", err
+	}
+	if len(tasks.GetTasks()) == 0 {
+		return "", fmt.Errorf("session %s was sent no task", session)
+	}
+	return tasks.GetTasks()[len(tasks.GetTasks())-1].GetPrompt(), nil
+}
+
+// noRunsInTheJobsListing refuses a listing of declared work that carries a row nobody declared.
+//
+// It is the whole point of the split, and it is checked here rather than only in the store because
+// this is the surface a person reads: a job with five runs under it used to be six rows.
+func noRunsInTheJobsListing(ctx context.Context, one *quaycrewv1.Job) error {
+	listed, err := worldFrom(ctx).client.ListJobs(ctx, &quaycrewv1.ListJobsRequest{
+		Project: one.GetProject(),
+	})
+	if err != nil {
+		return err
+	}
+	for _, row := range listed.GetJobs() {
+		if row.GetId() != one.GetId() {
+			return fmt.Errorf("the jobs listing carries %q, %q, which nobody declared",
+				row.GetId(), row.GetTitle())
 		}
 	}
-	return builders, nil
+	return nil
 }
 
 // fireTestGate runs the shipped entry point over one payload and records what it said, with the

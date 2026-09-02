@@ -18,7 +18,7 @@ const jobColumns = `id, workspace, project, title, brief, role, role_version, mo
 	phase, session, attempts, answer, outcome, reason, question, told, resuming, spent_tokens, observed_version,
 	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product, steers, claim,
 	escalation, looped_step, escalated_to, plan, plan_approved, ideation, ideation_answer,
-	design, design_accepted, tests, build, building, accepted,
+	design, design_accepted, tests, build, accepted,
 	ungated, reviewed, tested,
 	pull_request_status, pull_request_checks, pull_request_check, pull_request_review,
 	pull_request_read_at, pull_request_failed,
@@ -111,14 +111,14 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 			expect_contains, after_jobs, deadline, budget_tokens, labels, requires, parent, depth, version, phase,
 			session, attempts, answer, outcome, reason, question, told, spent_tokens, observed_version, started_at,
 			finished_at, lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product,
-			resuming, claim, escalation, ungated, reviewed, tested, tests, build, building,
+			resuming, claim, escalation, ungated, reviewed, tested, tests, build,
 			pull_request_status,
 			pull_request_checks, pull_request_check, pull_request_review, pull_request_read_at,
 			pull_request_failed, request, created_at, updated_at, accepted)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
 			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38,
-			$39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53,
-			coalesce($54::timestamptz, now()), coalesce($55::timestamptz, now()), $56)`,
+			$39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52,
+			coalesce($53::timestamptz, now()), coalesce($54::timestamptz, now()), $55)`,
 		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
 		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
 		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
@@ -129,7 +129,7 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 		declared.Repository, declared.PullRequest, declared.Product, declared.Resuming,
 		declared.Claim, declared.Escalation,
 		declared.Ungated, declared.Reviewed, declared.Tested, declared.Tests,
-		declared.Build, declared.Building,
+		declared.Build,
 		declared.PullRequestState.Status, declared.PullRequestState.Checks,
 		declared.PullRequestState.FailedCheck, declared.PullRequestState.Review,
 		stampOrNil(declared.PullRequestState.ReadAt), declared.PullRequestState.Failed,
@@ -414,7 +414,7 @@ func (p *Postgres) ApproveJobPlan(ctx context.Context, id string, event *job.Eve
 // worked backwards.
 func (p *Postgres) ListJobEvents(ctx context.Context, id string) ([]*job.Event, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, kind, job, workspace, project, parent, depth, detail, trace_id, occurred_at
+		select id, kind, job, workspace, project, parent, depth, execution, detail, trace_id, occurred_at
 		from job_events where job = $1 order by seq`, id)
 	if err != nil {
 		return nil, fmt.Errorf("list job events: %w", err)
@@ -425,7 +425,8 @@ func (p *Postgres) ListJobEvents(ctx context.Context, id string) ([]*job.Event, 
 	for rows.Next() {
 		var event job.Event
 		if err := rows.Scan(&event.ID, &event.Kind, &event.Job, &event.Workspace, &event.Project,
-			&event.Parent, &event.Depth, &event.Detail, &event.TraceID, &event.OccurredAt); err != nil {
+			&event.Parent, &event.Depth, &event.Execution, &event.Detail, &event.TraceID,
+			&event.OccurredAt); err != nil {
 			return nil, fmt.Errorf("scan job event: %w", err)
 		}
 		events = append(events, &event)
@@ -446,11 +447,13 @@ func appendJobEvent(ctx context.Context, tx pgx.Tx, event *job.Event) error {
 		return errors.New("store: a job event needs an id and a kind")
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into job_events (id, kind, job, workspace, project, parent, depth, detail, trace_id, occurred_at)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		insert into job_events (id, kind, job, workspace, project, parent, depth, execution, detail,
+			trace_id, occurred_at)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		on conflict (id) do nothing`,
 		event.ID, event.Kind, event.Job, event.Workspace, event.Project,
-		event.Parent, event.Depth, event.Detail, event.TraceID, event.OccurredAt); err != nil {
+		event.Parent, event.Depth, event.Execution, event.Detail, event.TraceID,
+		event.OccurredAt); err != nil {
 		return fmt.Errorf("append job event: %w", err)
 	}
 	return nil
@@ -475,7 +478,7 @@ func scanJob(row rowScanner) (*job.Job, error) {
 		&found.Repository, &found.PullRequest, &found.Product, &found.Steers, &found.Claim,
 		&found.Escalation, &found.LoopedStep, &found.EscalatedTo, &found.Plan, &found.PlanApproved,
 		&found.Ideation, &found.IdeationAnswer,
-		&found.Design, &found.DesignAccepted, &found.Tests, &found.Build, &found.Building, &found.Accepted,
+		&found.Design, &found.DesignAccepted, &found.Tests, &found.Build, &found.Accepted,
 		&found.Ungated, &found.Reviewed, &found.Tested,
 		&found.PullRequestState.Status, &found.PullRequestState.Checks,
 		&found.PullRequestState.FailedCheck, &found.PullRequestState.Review,

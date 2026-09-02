@@ -504,6 +504,10 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	// What the verticals were built into, below the plan for the reason the failing tests sit above it:
 	// the page reads in the order the job went through the stages.
 	sayWhatWasBuilt(out, one)
+	// The runs of its stages, which is where every session a fan out bought went. They are not jobs,
+	// so they stand nowhere in a listing of declared work, and this is where a person reads what a
+	// stage is doing now and what each run answered.
+	sayItsRuns(ctx, client, out, one)
 	// What its session finished. It is the record a second attempt carries on from, so it is here
 	// rather than only inside a task nobody can read.
 	if steps := one.GetSteps(); len(steps) > 0 {
@@ -1286,4 +1290,32 @@ func saidTheBuild(verticals, passing int) string {
 		said = strings.Replace(said, "1 tests pass now", "one test passes now", 1)
 	}
 	return said
+}
+
+// sayItsRuns prints the runs of this job's stages, one line each, in the order they were made.
+//
+// A run has no title, so the line is built from what it is: the stage, the number it holds, where it
+// got to and what it cost. Nothing is printed for a job whose stages never fanned out, and a call
+// that fails prints nothing rather than failing the whole reading: what a reader came for is the job.
+func sayItsRuns(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, out io.Writer,
+	one *quaycrewv1.Job) {
+	listed, err := client.ListExecutions(ctx, &quaycrewv1.ListExecutionsRequest{Job: one.GetId()})
+	if err != nil || len(listed.GetExecutions()) == 0 {
+		return
+	}
+	fmt.Fprintln(out, "runs of its stages:")
+	for _, run := range listed.GetExecutions() {
+		fmt.Fprintf(out, "  %s  %s %d  %s", display.ShortID(run.GetId()), run.GetStage(),
+			run.GetNumber(), run.GetPhase())
+		if run.GetSession() != "" {
+			fmt.Fprintf(out, " in %s", display.ShortID(run.GetSession()))
+		}
+		if run.GetOutcome() != "" {
+			fmt.Fprintf(out, ", %s", run.GetOutcome())
+		}
+		if run.GetReason() != "" {
+			fmt.Fprintf(out, ", %s", run.GetReason())
+		}
+		fmt.Fprintln(out)
+	}
 }

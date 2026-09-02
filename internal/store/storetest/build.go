@@ -151,7 +151,7 @@ func runJobBuildConformance(t *testing.T, newDataset func(t *testing.T) Opener) 
 		}
 	})
 
-	t.Run("the workers of a build fan out are found by the claim each one holds", func(t *testing.T) {
+	t.Run("the runs of a build fan out are read as the executions of that stage", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		workspace, project := aProject(t, s)
@@ -161,83 +161,76 @@ func runJobBuildConformance(t *testing.T, newDataset func(t *testing.T) Opener) 
 			t.Fatalf("GetJob: %v", err)
 		}
 		wanted := job.RequirementsOf(kept)
-		failing := job.FailuresOn(kept.Tests)
-		workers := job.BuildWorkers(kept, wanted, failing)
-		if len(workers) != 2 {
-			t.Fatalf("the fan out made %d workers for 2 verticals", len(workers))
+		runs := job.BuildExecutions(kept, wanted)
+		if len(runs) != 2 {
+			t.Fatalf("the fan out made %d runs for 2 verticals", len(runs))
 		}
-		for _, worker := range workers {
-			if err := s.CreateJob(ctx, worker, declaredEvent(worker)); err != nil {
-				t.Fatalf("CreateJob: %v", err)
+		for _, run := range runs {
+			if err := s.CreateExecution(ctx, run, ranEvent(id, workspace, project, run)); err != nil {
+				t.Fatalf("CreateExecution: %v", err)
 			}
 		}
 
-		// A second worker for a vertical one already holds is refused, by the claim rather than by
+		// A second run for a vertical one already holds is refused, by the claim rather than by
 		// anything the fan out remembers.
-		second := job.BuildWorkers(kept, wanted[:1], failing)[0]
-		err = s.CreateJob(ctx, second, declaredEvent(second))
+		second := job.BuildExecutions(kept, wanted[:1])[0]
+		err = s.CreateExecution(ctx, second, ranEvent(id, workspace, project, second))
 		var taken *job.Held
 		if !errors.As(err, &taken) {
-			t.Fatalf("a second worker for vertical 1 was declared, and the store said %v", err)
+			t.Fatalf("a second run for vertical 1 was written, and the store said %v", err)
 		}
-		if taken.Holder != workers[0].ID {
-			t.Fatalf("the refusal names job %q, and %q holds the claim", taken.Holder, workers[0].ID)
+		if taken.Holder != runs[0].ID {
+			t.Fatalf("the refusal names run %q, and %q holds the claim", taken.Holder, runs[0].ID)
 		}
 
-		// The boundary reads back off the row, because that is what the dispatch reads when it sends
-		// the task. A worker whose flag was written and never selected would build under no gate.
-		stored, err := s.GetJob(ctx, workers[0].ID)
+		// The boundary reads back off the stage, because that is what the dispatch reads when it sends
+		// the task. A run whose stage was written and never selected would build under no gate.
+		stored, err := s.GetExecution(ctx, runs[0].ID)
 		if err != nil {
-			t.Fatalf("GetJob: %v", err)
+			t.Fatalf("GetExecution: %v", err)
 		}
-		if !stored.Building {
-			t.Fatalf("the worker reads back outside the boundary, which is the column this suite " +
-				"exists to catch")
+		if stored.Stage != job.StageBuild {
+			t.Fatalf("the run reads back in stage %q, so it would build outside the boundary, which is "+
+				"the column this suite exists to catch", stored.Stage)
 		}
 
-		// And the fan out reads its workers back whole. The answer is what it came for, and a listing
-		// leaves the answer out.
+		// And the fan out reads its runs back whole. The answer is what it came for.
 		answered := "Vertical: 1\nRan: 14\nRed: 0\nPassing 1: TestItPasses\nChanged 1: paste.go"
-		if _, err := s.StartJob(ctx, workers[0].ID, aLease("controller-1"),
-			[]*job.Event{startedEvent(workers[0].ID, workspace, project)}); err != nil {
-			t.Fatalf("StartJob: %v", err)
+		if _, err := s.StartExecution(ctx, runs[0].ID, aLease("controller-1"), nil); err != nil {
+			t.Fatalf("StartExecution: %v", err)
 		}
-		if _, err := s.LandJob(ctx, workers[0].ID, job.Landing{
+		if _, err := s.LandExecution(ctx, runs[0].ID, job.ExecutionLanding{
 			Phase: job.PhaseDone, Answer: answered, Outcome: job.OutcomeProved,
-		}, answeredEvent(workers[0].ID, workspace, project)); err != nil {
-			t.Fatalf("LandJob: %v", err)
+		}, nil); err != nil {
+			t.Fatalf("LandExecution: %v", err)
 		}
 
-		var claims []string
-		for _, vertical := range wanted {
-			claims = append(claims, job.ClaimOnBuild(id, vertical))
-		}
-		found, err := s.JobsClaiming(ctx, workspace, claims)
+		found, err := s.ListExecutions(ctx, job.ExecutionFilter{Job: id, Stage: job.StageBuild})
 		if err != nil {
-			t.Fatalf("JobsClaiming: %v", err)
+			t.Fatalf("ListExecutions: %v", err)
 		}
 		if len(found) != 2 {
-			t.Fatalf("the fan out reads back %d workers for 2 verticals", len(found))
+			t.Fatalf("the fan out reads back %d runs for 2 verticals", len(found))
 		}
-		for _, worker := range found {
-			if worker.Claim != job.ClaimOnBuild(id, wanted[0]) {
+		for _, run := range found {
+			if run.Number != 1 {
 				continue
 			}
-			// The one that finished, read back with what it said. A settled worker has let its claim go, so
+			// The one that finished, read back with what it said. A settled run has let its claim go, so
 			// a query that asked who still holds it would find nothing and the stage would never close.
-			if !strings.Contains(worker.Answer, "Passing 1: TestItPasses") {
-				t.Fatalf("the worker that answered reads back with %q", worker.Answer)
+			if !strings.Contains(run.Answer, "Passing 1: TestItPasses") {
+				t.Fatalf("the run that answered reads back with %q", run.Answer)
 			}
-			if worker.Phase != job.PhaseDone {
-				t.Fatalf("the worker that answered reads back as %q", worker.Phase)
+			if run.Phase != job.PhaseDone {
+				t.Fatalf("the run that answered reads back as %q", run.Phase)
 			}
 		}
 
-		// The test stage's claim on the same vertical is a different claim, so a build worker is never
-		// refused for work the worker that wrote the tests already did.
-		writer := job.TestWorkers(kept, wanted[:1])[0]
-		if err := s.CreateJob(ctx, writer, declaredEvent(writer)); err != nil {
-			t.Fatalf("a worker writing the tests for vertical 1 was refused: %v", err)
+		// The test stage's claim on the same vertical is a different claim, so a build run is never
+		// refused for work the run that wrote the tests already did.
+		writer := job.TestExecutions(kept, wanted[:1])[0]
+		if err := s.CreateExecution(ctx, writer, ranEvent(id, workspace, project, writer)); err != nil {
+			t.Fatalf("a run writing the tests for vertical 1 was refused: %v", err)
 		}
 	})
 }

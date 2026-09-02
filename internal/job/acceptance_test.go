@@ -318,18 +318,19 @@ func TestTheQuestionCarriesThePicturesAndWhereToOpenThem(t *testing.T) {
 	}
 }
 
-// The brief a worker is given says how to make a picture, including for a product with no page. A
-// worker asked for a picture with no way to make one answers with a sentence instead.
-func TestABuildWorkerIsToldHowToShowItsVerticalWorking(t *testing.T) {
+// What a build run is asked says how to make a picture, including for a product with no page. A run
+// asked for a picture with no way to make one answers with a sentence instead.
+func TestABuildRunIsToldHowToShowItsVerticalWorking(t *testing.T) {
 	one := buildingJob()
-	worker := job.BuildWorkers(one, job.RequirementsOf(one)[:1], job.FailuresOn(one.Tests))[0]
+	vertical := job.RequirementsOf(one)[0]
+	asked := job.BuildTheVertical(one, vertical, job.FailuresOn(one.Tests)[vertical.Number])
 	for _, phrase := range []string{
 		"it has to be a picture", "Not a description of it working",
 		"krewe render", "tmux capture-pane", "/home/agent/shared", "Then label it",
 		"Picture:", "Taken:",
 	} {
-		if !strings.Contains(worker.Brief, phrase) {
-			t.Fatalf("the brief does not say %q:\n%s", phrase, worker.Brief)
+		if !strings.Contains(asked, phrase) {
+			t.Fatalf("what the run is asked does not say %q:\n%s", phrase, asked)
 		}
 	}
 }

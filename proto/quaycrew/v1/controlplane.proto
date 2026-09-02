@@ -486,6 +486,14 @@ message DispatchRequest {
   // without this the system is handed that name and drops it, which leaves a listing of running jobs
   // waiting for a description written after the work is over.
   string title = 8;
+  // execution is the run of a stage this task is, and empty for a task that runs the job itself. It
+  // is not a second job: an execution belongs to one job and to one of its stages, and the job above
+  // says which job.
+  //
+  // What reads it is the boundary. A run of the build stage may read every test and change none, so
+  // the system tells that session's runtime and the test gate refuses the write there and nowhere
+  // else. The stage of the run is what says so, rather than a flag copied onto a row.
+  string execution = 9;
 }
 message DispatchResponse {
   string id = 1;
@@ -1512,10 +1520,10 @@ message Job {
   // No flag beside it either. The record lands only when every vertical is green, and the job is
   // stopped for a person to accept it in the same write, so the record being there is the fact.
   string build = 67;
-  // building says this job builds against tests it did not write and may not change. The system sets
-  // it on a worker the build stage declares and on nothing else, and a session it is set on is refused
-  // a write to a test by the test gate.
-  bool building = 68;
+  // 68 was building, which said this job builds against tests it may not change. A job never did:
+  // the field was only ever set on the workers the build stage declared, and those are executions
+  // now, which say the stage they run rather than carrying a flag about it.
+  reserved 68;
   // accepted says a person looked at a picture of what this job built and said the value arrived. It
   // is the only road into done for a job whose verticals are built: the three checks the build stage
   // makes are the machine reading its own work, and the fourth is somebody looking at the thing.
@@ -1769,6 +1777,60 @@ message ListJobsRequest {
 message ListJobsResponse {
   // Each job without its answer. Read one with GetJob to get the answer whole.
   repeated Job jobs = 1;
+}
+
+// An execution is one run of one stage of one job, and it is not a job.
+//
+// It holds what a run needs and nothing a person wrote. The title, the words the session is asked,
+// the mode and the repository all come off the job it belongs to at the moment of the dispatch, so a
+// second copy of any of them here could only disagree with the job.
+message Execution {
+  string id = 1;
+  // job is the job this run belongs to, and stage is which of that job's stages it runs. Every
+  // execution belongs to exactly one of each.
+  string job = 2;
+  string stage = 3;
+  // number is the requirement or the vertical this run is for, counting from one.
+  int32 number = 4;
+  // claim is the piece of work this run holds. A second live run claiming it is refused, so a stage
+  // ticked twice runs one session and not two.
+  string claim = 5;
+  string phase = 6;
+  string session = 7;
+  int32 attempts = 8;
+  string answer = 9;
+  string outcome = 10;
+  string reason = 11;
+  // branch is where this run's commits ended up, and pull_request is the address its answer named.
+  string branch = 12;
+  string pull_request = 13;
+  int64 spent_tokens = 14;
+  string trace_id = 15;
+  google.protobuf.Timestamp created_at = 16;
+  google.protobuf.Timestamp updated_at = 17;
+  google.protobuf.Timestamp started_at = 18;
+  google.protobuf.Timestamp finished_at = 19;
+}
+
+// ListExecutionsRequest is the runs of one job, oldest first, and of one of its stages where it
+// names one. The job is required: a run is only ever read as one of the runs of one stage of one
+// job, which is the whole reason it is not a job.
+message ListExecutionsRequest {
+  string job = 1;
+  string stage = 2;
+}
+message ListExecutionsResponse {
+  repeated Execution executions = 1;
+}
+
+// StopExecutionRequest halts a run that has not ended, keeping the reason. It stops that run and
+// nothing else: the job it belongs to carries on, and its stage reads the run as one that ended.
+message StopExecutionRequest {
+  string id = 1;
+  string reason = 2;
+}
+message StopExecutionResponse {
+  Execution execution = 1;
 }
 
 // StopJobRequest halts a job that has not ended. The reason is kept, because a job that went quiet
@@ -2159,6 +2221,12 @@ service ControlPlaneService {
   rpc GetJob(GetJobRequest) returns (GetJobResponse);
   rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
   rpc StopJob(StopJobRequest) returns (StopJobResponse);
+
+  // An execution is one run of one stage of one job. Nobody declares one, so there is nothing here
+  // that writes one: a stage of a job fans out and the system writes the runs. What a caller may do
+  // is read them, and stop one that has not ended.
+  rpc ListExecutions(ListExecutionsRequest) returns (ListExecutionsResponse);
+  rpc StopExecution(StopExecutionRequest) returns (StopExecutionResponse);
   // AskJob is a session putting a question to a person about the job it is running, and
   // AnswerJob is the person answering. Nothing else moves the job in between.
   rpc AskJob(AskJobRequest) returns (AskJobResponse);

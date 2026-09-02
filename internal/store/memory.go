@@ -101,6 +101,10 @@ type Memory struct {
 	// jobSteers is every moment the operator had to say something a job should have known, keyed by
 	// the steer identifier.
 	jobSteers map[string]*job.Steer
+	// executions is every run of every stage of every job, keyed by the run's own identifier. A table
+	// of its own, beside the jobs and never among them: nobody declares a run, so a listing of
+	// declared work must never carry one.
+	executions map[string]*job.Execution
 	// limits is what each workspace lets its sessions declare. A workspace with no entry takes the
 	// defaults, which grant nothing.
 	limits map[string]job.Limits
