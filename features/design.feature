@@ -47,6 +47,7 @@ Feature: A job says what it would build, and a person accepts the list, before i
   # says what is wrong writes no list.
   Scenario: Sent back once, the second list is accepted
     Given a job waiting for a person to accept the list it would build
+    And the session will answer with the vertical the person asked for
     When the operator answers the job with "the browser one is not needed, an export is"
     And the controller ticks again
     Then the session is sent the list it wrote and what the person said

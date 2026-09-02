@@ -90,6 +90,12 @@ func initializeDesignSteps(sc *godog.ScenarioContext) {
 		if !strings.Contains(one.GetDesign(), "Vertical 1:") {
 			return fmt.Errorf("what it would build is %q", one.GetDesign())
 		}
+		// What the session said, rather than what the system asked for. The ask carries the shape of a
+		// list, so a row holding the instruction back is a row where nothing was read from a reply.
+		if strings.Contains(one.GetDesign(), "what a person can do when this one lands") {
+			return fmt.Errorf("the row carries the instruction the system sent, not a list: %q",
+				one.GetDesign())
+		}
 		if one.GetDesignAccepted() {
 			return fmt.Errorf("the list reads as accepted, and nobody accepted it")
 		}
@@ -159,9 +165,17 @@ func initializeDesignSteps(sc *godog.ScenarioContext) {
 				"required work towards", "name the person")
 		})
 
-	sc.Step(`^the session is sent the list it wrote and what the person said$`,
+	// Queued before the answer that sends the list back, rather than inside the assertion after it.
+	// The tick that carries the correction dispatches the second ask and the double answers it there
+	// and then, so an answer queued afterwards is an answer that arrives too late.
+	sc.Step(`^the session will answer with the vertical the person asked for$`,
 		func(ctx context.Context) error {
 			worldFrom(ctx).runner.willSayExactly(theSecondList)
+			return nil
+		})
+
+	sc.Step(`^the session is sent the list it wrote and what the person said$`,
+		func(ctx context.Context) error {
 			return theSessionWasSent(ctx, "was not accepted", "Vertical 1:",
 				"the browser one is not needed, an export is", "Do no work yet")
 		})

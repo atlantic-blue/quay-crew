@@ -194,22 +194,31 @@ func (r *recordingRunner) answerFor(asked int, text string) string {
 			return pair[1]
 		}
 	}
-	said, exact := "you said: "+text, false
+	said, exact, queued := "you said: "+text, false, false
 	if len(r.says) > 0 {
 		if asked > len(r.says) {
 			asked = len(r.says)
 		}
-		said, exact = r.says[asked-1], r.exact[asked-1]
+		said, exact, queued = r.says[asked-1], r.exact[asked-1], true
 	}
 	if exact {
 		return said
 	}
-	// A task that asks what the session understood gets a reading, unless the scenario queued one
-	// itself. Every job that states the sentence is asked this before anything else, so a double that
-	// answered a plan to it would make every scenario about a planned job into a scenario about the
-	// double ignoring its task. It is the rule the outcome line already follows.
+	// A task that asks for one of the two records gets that record, unless the scenario queued one
+	// itself. Every job that states the sentence goes through both before it plans, so a double that
+	// answered a plan to either would make every scenario about a planned job into a scenario about
+	// the double ignoring its task. It is the rule the outcome line already follows.
+	//
+	// Whether the scenario queued the answer decides this, rather than whether the answer carries the
+	// marker. With nothing queued the double echoes the task it was handed, and a task that asks for a
+	// list carries the shape of one, so a check for the marker would find it in the echo and hand the
+	// system its own instructions back as a list.
+	if strings.Contains(text, job.TheDesignAsk) &&
+		(!queued || !strings.Contains(said, job.DesignMarker)) {
+		return model.FakeDesign
+	}
 	if strings.Contains(text, job.TheUnderstandingAsk) &&
-		!strings.Contains(said, job.UnderstandingMarker) {
+		(!queued || !strings.Contains(said, job.UnderstandingMarker)) {
 		return model.FakeUnderstanding
 	}
 	return statingTheOutcome(said, text)
