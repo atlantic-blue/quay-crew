@@ -228,3 +228,39 @@ func sentBackEvent(id, workspace, project string) *job.Event {
 		Detail: "a person looked at what was built and it is not accepted",
 	}
 }
+
+// A declaration carrying the flag keeps it, which is the third list the column has to reach.
+//
+// Two lists are read about constantly, the row a select asks for and the fields a scan fills, and a
+// column missing from either is the failure this whole file exists to catch. The insert is the third
+// and it is the quiet one, because nothing on the ordinary road declares a job that a person has
+// already accepted: the flag is written by an update, so a column absent from the insert costs
+// nothing until something hands the store a whole record. The store keeps what it is handed, and two
+// stores that disagree about one field of one call is how a double comes to accept more than the
+// real thing.
+func runJobAcceptedSurvivesADeclaration(t *testing.T, newDataset func(t *testing.T) Opener) {
+	t.Helper()
+
+	t.Run("a job declared as accepted reads back accepted", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		declared := &job.Job{
+			ID: store.NewID(), Workspace: workspace, Project: project,
+			Title: "the transcript page", Brief: "build what the design describes",
+			Phase: job.PhasePending, Build: theBuiltWithPictures, Accepted: true,
+		}
+		if err := s.CreateJob(ctx, declared, declaredEvent(declared)); err != nil {
+			t.Fatalf("CreateJob: %v", err)
+		}
+
+		kept, err := s.GetJob(ctx, declared.ID)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		if !kept.Accepted {
+			t.Fatal("a job handed to the store with a person's acceptance on it reads back " +
+				"unaccepted: the column is written by the update and dropped by the insert")
+		}
+	})
+}
