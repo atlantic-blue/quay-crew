@@ -250,9 +250,14 @@ type Job struct {
 	// AskedAt is when this job put its question to a person, and RaisedAt is when the first surface
 	// named it as waiting. Both are nil where the moment has not happened.
 	//
-	// The gap between them is the time a person spent not knowing that something waited on them, and
-	// it is the number the telling is judged on. Neither can be read off UpdatedAt: anything that
-	// touches the row afterwards moves that, and the raise deliberately does not.
+	// AskedAt belongs to the question it was written for, and nothing clears it, so a job that asked,
+	// was answered and then failed still carries it. It is the start of the wait only while this job
+	// is the one asking; on any other wait the moment to measure from is WaitBegan's, and a red board
+	// records none at all. RaisedAt is cleared whenever the job starts again, so it always belongs to
+	// the wait in hand.
+	//
+	// Neither can be read off UpdatedAt: anything that touches the row afterwards moves that, and the
+	// raise deliberately does not.
 	AskedAt  *time.Time
 	RaisedAt *time.Time
 }

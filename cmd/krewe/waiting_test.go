@@ -10,6 +10,7 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"time"
 
+	"github.com/atlantic-blue/quay-krewe/internal/forge"
 	"github.com/atlantic-blue/quay-krewe/internal/job"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -188,6 +189,8 @@ func TestJobShowPrintsTheGapBetweenAskingAndBeingTold(t *testing.T) {
 	asked := time.Now().Add(-70 * time.Minute)
 	var out bytes.Buffer
 	sayWhenItWasTold(&out, &quaycrewv1.Job{
+		Phase:    job.PhaseAsking,
+		Question: "aurora or a key value store?",
 		AskedAt:  timestamppb.New(asked),
 		RaisedAt: timestamppb.New(asked.Add(64 * time.Minute)),
 	})
@@ -217,5 +220,57 @@ func TestJobShowSaysNothingAboutAJobThatNeverAsked(t *testing.T) {
 	sayWhenItWasTold(&out, &quaycrewv1.Job{})
 	if out.String() != "" {
 		t.Fatalf("a job that never asked prints:\n%s", out.String())
+	}
+}
+
+// The gap is the number this work is judged on, so it has to belong to the wait a person is in now.
+// A job that asked, was answered, ran on and then failed still carries the moment of that first
+// question, and dating this wait from it reports the whole run as time somebody spent not knowing.
+func TestJobShowMeasuresABlockedWaitFromWhenTheJobStopped(t *testing.T) {
+	now := time.Now()
+	var out bytes.Buffer
+	sayWhenItWasTold(&out, &quaycrewv1.Job{
+		Phase:     job.PhaseFailed,
+		Reason:    "the container went away",
+		AskedAt:   timestamppb.New(now.Add(-3 * time.Hour)),
+		UpdatedAt: timestamppb.New(now.Add(-10 * time.Minute)),
+		RaisedAt:  timestamppb.New(now.Add(-9 * time.Minute)),
+	})
+
+	printed := out.String()
+	if strings.Contains(printed, "2 hours") || strings.Contains(printed, "3 hours") {
+		t.Fatalf("the wait is dated from a question answered hours ago:\n%s", printed)
+	}
+	if !strings.Contains(printed, "1 minute") {
+		t.Fatalf("the gap does not read as the minute somebody spent not knowing:\n%s", printed)
+	}
+	// The question belonged to a wait that ended, so this reading must not present it as this one.
+	if strings.Contains(printed, "asked at:") {
+		t.Fatalf("a wait nobody asked about prints a question:\n%s", printed)
+	}
+}
+
+// A red board is the third kind of wait, and nothing records the moment the checks turned red: the
+// forge reading deliberately leaves the row alone. So this says what it knows rather than dating the
+// wait from a question that belongs to something else.
+func TestJobShowSaysWhatItCannotMeasureOnARedBoard(t *testing.T) {
+	now := time.Now()
+	var out bytes.Buffer
+	sayWhenItWasTold(&out, &quaycrewv1.Job{
+		Phase:             job.PhaseDone,
+		PullRequest:       "https://github.com/atlantic-blue/quay-krewe/pull/633",
+		PullRequestChecks: forge.ChecksRed,
+		AskedAt:           timestamppb.New(now.Add(-3 * time.Hour)),
+		UpdatedAt:         timestamppb.New(now.Add(-40 * time.Minute)),
+		PullRequestReadAt: timestamppb.New(now.Add(-12 * time.Minute)),
+		RaisedAt:          timestamppb.New(now.Add(-11 * time.Minute)),
+	})
+
+	printed := out.String()
+	if strings.Contains(printed, "2 hours") || strings.Contains(printed, "3 hours") {
+		t.Fatalf("a red board is dated from a question answered hours ago:\n%s", printed)
+	}
+	if !strings.Contains(printed, "nothing records when the checks turned red") {
+		t.Fatalf("the reading does not say what it cannot measure:\n%s", printed)
 	}
 }

@@ -236,6 +236,71 @@ func initializeTellingSteps(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+
+	// The shape the gap was wrong in: a question, an answer, more work, and then a failure. The row
+	// still carries the moment of the question, and dating this wait from it reported the answer and
+	// the whole run as time somebody spent not knowing.
+	sc.Step(`^a person answered it and the job ran on$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		one, err := readJob(ctx, 0)
+		if err != nil {
+			return err
+		}
+		if _, err := w.client.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{
+			Id: one.GetId(), Answer: "the key value store, on demand",
+		}); err != nil {
+			return err
+		}
+		w.server.TickJob(ctx)
+		return nil
+	})
+
+	sc.Step(`^that job fails and a surface names it$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		w.runner.failTheNextTask()
+		if w.release != nil {
+			w.release()
+			w.release = nil
+		}
+		if err := w.settled(ctx); err != nil {
+			return err
+		}
+		w.server.TickJob(ctx)
+		if _, err := whatWaits(ctx, "console"); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	sc.Step(`^krewe job show dates the wait from the failure, not from the answered question$`,
+		func(ctx context.Context) error {
+			one, err := readJob(ctx, 0)
+			if err != nil {
+				return err
+			}
+			if one.GetRaisedAt() == nil {
+				return fmt.Errorf("no surface named this wait, so there is no gap to read")
+			}
+			if err := listenForTool(ctx); err != nil {
+				return err
+			}
+			if err := runTool(ctx, "job", "show", one.GetId()); err != nil {
+				return err
+			}
+			t := toolFrom(ctx)
+			if err := says("standard output", t.stdout, "the wait was carried after"); err != nil {
+				return err
+			}
+			// The question belonged to a wait that ended, so this reading must not carry it into this
+			// one. The arithmetic itself is held by the unit tests, which can put the question hours
+			// before the failure. A scenario runs both inside one second, so a gap measured from
+			// either moment reads the same here and this cannot tell the two apart.
+			if strings.Contains(t.stdout, "asked at:") {
+				return fmt.Errorf("the reading dates this wait from the answered question:\n%s",
+					t.stdout)
+			}
+			return nil
+		})
 }
 
 // whatWaits asks the system what waits for a person, as one surface.

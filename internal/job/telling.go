@@ -3,6 +3,9 @@ package job
 import (
 	"fmt"
 	"time"
+
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/forge"
 )
 
 // What waits for a person, read off a row, so every surface says the same thing. Four jobs stopped
@@ -23,9 +26,10 @@ const (
 
 // DefaultWaiting is how long a job waits before the telling names the age beside it.
 //
-// Fifteen minutes, and it is a guess: nothing has measured it. What replaces it is the median time
-// from job.asked to job.raised over one week of real jobs. A limit under that median names an age on
-// every wait and stops being read; one far above it says nothing while a person waits an hour.
+// Fifteen minutes, and it is a guess: nothing has measured it. What replaces it is the median gap
+// between a wait starting and a surface naming it, over a week of real jobs, taken from the kinds
+// that record when their wait began. A limit under that median names an age on every wait and stops
+// being read; one far above it says nothing while a person waits an hour.
 const DefaultWaiting = 15 * time.Minute
 
 // Waiting is how long a job may wait here before the telling names the age, or the system's own
@@ -81,11 +85,17 @@ func redCheck(failed string) string {
 	return fmt.Sprintf("the check %s is red on its pull request", failed)
 }
 
-// WaitingSince is when a job's wait started.
+// WaitingSince is when a job's wait started, as every surface measures its age.
 //
-// It is the moment the row last moved, which for every one of the three kinds is the moment the wait
-// began: the ask, the failure, or the reading that found the board red. The briefing already measures
-// it this way, and a second reading of the same thing could only disagree with it.
+// It is the moment the row last moved, which is the ask for a job that is asking and the failure,
+// the stop or the hold for a blocked one. A red board is the exception and it is worth naming: the
+// forge reading writes what it read without touching the row, on purpose, so this is when the job
+// ended rather than when the checks turned red. The age of that kind of wait therefore counts from
+// the end of the work, which is earlier than the moment anybody could have acted on it.
+//
+// The briefing already measures it this way, and a second reading of the same thing could only
+// disagree with it. Where the exact start of the wait matters rather than its age, WaitBegan says
+// which kinds record one.
 func WaitingSince(one *Job) time.Time {
 	if one == nil {
 		return time.Time{}
@@ -117,4 +127,62 @@ func plural(count int, unit string) string {
 		return fmt.Sprintf("1 %s", unit)
 	}
 	return fmt.Sprintf("%d %ss", count, unit)
+}
+
+// WaitsOn is Waits read off the record a caller holds rather than off a row.
+//
+// The command line reads a job back through the control plane, so it holds this shape and not the
+// one above. The two answer the same question and a test holds them to the same word for the same
+// job: a surface that decided the kind of wait for itself is how two surfaces come to disagree
+// about one job.
+func WaitsOn(one *quaycrewv1.Job) (why, want string, waiting bool) {
+	if one == nil {
+		return "", "", false
+	}
+	reading := forge.Reading{Checks: one.GetPullRequestChecks()}
+	switch {
+	case one.GetPhase() == PhaseAsking:
+		return WaitingAsking, one.GetQuestion(), true
+	case one.GetPhase() == PhaseFailed, one.GetPhase() == PhaseStopped:
+		if one.GetResuming() != "" {
+			return "", "", false
+		}
+		return WaitingBlocked, one.GetReason(), true
+	case one.GetPhase() == PhasePending && one.GetReason() != "":
+		return WaitingBlocked, one.GetReason(), true
+	case reading.Red():
+		return WaitingChecks, redCheck(one.GetPullRequestCheck()), true
+	default:
+		return "", "", false
+	}
+}
+
+// WaitBegan is when the wait a job is in now started, and false where the row records no moment for
+// it.
+//
+// The gap this is half of is the number the telling is judged on, so it has to belong to the wait a
+// person is in now. asked_at is written at the question and nothing clears it, so a job that asked,
+// was answered, ran on and then failed still carries that first moment. Dating the later wait from
+// it reports the answer and the whole run as time somebody spent not knowing: on a job that stopped
+// ten minutes ago and was named a minute later, it read two hours fifty one minutes.
+//
+// Two of the three kinds record their start. A question stamps the moment in the same statement that
+// moves the phase. A job that failed, was stopped or is held moved the row, so the row's own moment
+// is when it stopped. Nothing records when a board turned red, because the forge reading writes what
+// it read without touching the row and says so where it is written, so that kind answers false
+// rather than reaching for the nearest moment lying on the row.
+func WaitBegan(why string, asked *time.Time, moved time.Time) (time.Time, bool) {
+	switch why {
+	case WaitingAsking:
+		// A question with no moment on it predates the column. The row still moved when it was
+		// asked, which is the same moment for every asking transition that writes both.
+		if asked == nil {
+			return moved, !moved.IsZero()
+		}
+		return *asked, true
+	case WaitingBlocked:
+		return moved, !moved.IsZero()
+	default:
+		return time.Time{}, false
+	}
 }

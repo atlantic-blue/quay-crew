@@ -187,8 +187,8 @@ commands:
                                           waiting time is how long a job may wait for a person here
                                           before the telling names how long it has waited. It starts
                                           at fifteen minutes, which is a guess: what replaces it is
-                                          the median from job.asked to job.raised over a week of real
-                                          jobs
+                                          the median gap between a wait starting and a
+                                          surface naming it, over a week of real jobs
   task [<address>] <text>                 start or continue a session, and wait here for the
                                           answer. For a short question, where the reply is the
                                           point
