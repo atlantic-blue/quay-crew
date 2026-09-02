@@ -4,6 +4,7 @@ package controlplane_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,8 +18,8 @@ import (
 
 // Which stage a job is in, read off the wire, over a real Postgres.
 //
-// The stage is read from four things the row carries: the sentence, the parent, the answer to what
-// the job understood, and the approval of the plan. The memory store holds a job.Job in a map and
+// The stage is read from five things the row carries: the sentence, the parent, the answer to what
+// the job understood, the plan and its approval. The memory store holds a job.Job in a map and
 // cannot say whether those four reach the row, come back out of it, and cross the control plane. A
 // store that missed one of them in jobColumns or in scanJob would leave every surface reading a job
 // in the wrong stage while the whole unit tier stayed green.
@@ -70,7 +71,8 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 	// stage sits beside the phase rather than replacing it.
 	if stage := job.StageOf(&job.Job{
 		Product: asking.GetProduct(), Parent: asking.GetParent(),
-		IdeationAnswer: asking.GetIdeationAnswer(), PlanApproved: asking.GetPlanApproved(),
+		IdeationAnswer: asking.GetIdeationAnswer(),
+		Plan:           asking.GetPlan(), PlanApproved: asking.GetPlanApproved(),
 	}); stage.Name != job.StageIdeation {
 		t.Fatalf("a job waiting for its answer is in stage %q, phase %q", stage.Name, asking.GetPhase())
 	}
@@ -91,8 +93,13 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 	if moved.Closed != "ideation closed on your answer to what it understood" {
 		t.Fatalf("it says ideation was closed by %q", moved.Closed)
 	}
-	if moved.Built || moved.NotBuiltYet() == "" {
+	if moved.Built || moved.Unbuilt == "" {
 		t.Fatalf("design reads as built, and design is a later slice")
+	}
+	// And what it says the job is doing instead is true of this job: it answered its reading a moment
+	// ago, so it has no plan, and nobody has approved anything.
+	if !strings.Contains(moved.Unbuilt, "writes its plan next") {
+		t.Fatalf("a job with no plan is told %q", moved.Unbuilt)
 	}
 }
 
@@ -103,7 +110,8 @@ func stageOnTheWire(t *testing.T, ctx context.Context,
 	one := readJob(t, ctx, client, id)
 	return job.StageOf(&job.Job{
 		Product: one.GetProduct(), Parent: one.GetParent(),
-		IdeationAnswer: one.GetIdeationAnswer(), PlanApproved: one.GetPlanApproved(),
+		IdeationAnswer: one.GetIdeationAnswer(),
+		Plan:           one.GetPlan(), PlanApproved: one.GetPlanApproved(),
 	})
 }
 

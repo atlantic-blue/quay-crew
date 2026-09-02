@@ -38,8 +38,9 @@ func TestJobShowSaysTheStageAndWhatClosesAndOpensIt(t *testing.T) {
 	}
 }
 
-// The stage after the answer, and the truth about it: design is a later slice, so the job carries on
-// under the plan a person approved rather than doing anything a design stage would do.
+// The stage after the answer, and the truth about it. Design is a later slice, and what the job is
+// doing instead is read off its own plan columns: a job that has just answered its reading has no
+// plan, so it is not carrying on under one.
 func TestJobShowSaysWhenTheStageItIsInIsNotBuilt(t *testing.T) {
 	client, _, id := aJobWaitingToBeAnswered(t)
 
@@ -50,11 +51,17 @@ func TestJobShowSaysWhenTheStageItIsInIsNotBuilt(t *testing.T) {
 		"stage 2 of 4: design",
 		"ideation closed on your answer to what it understood",
 		"nothing opens test yet, it is a later slice",
-		"design is not built yet, so this job carries on under the plan a person approved",
+		// The truth about this job at this moment: it answered its reading and has written no plan,
+		// so nothing has been approved and nothing is being carried on with.
+		"design is not built yet, so this job writes its plan next, and a person approves it before " +
+			"any work starts",
 	} {
 		if !strings.Contains(shown, want) {
 			t.Errorf("krewe job show does not say %q: %q", want, shown)
 		}
+	}
+	if strings.Contains(shown, "a person approved") {
+		t.Errorf("a job that has written no plan is told a person approved one: %q", shown)
 	}
 }
 

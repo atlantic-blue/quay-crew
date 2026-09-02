@@ -11,7 +11,9 @@ Feature: A job says which of the four stages it is in
   requirements into failing tests. Build implements until those tests pass.
 
   Only ideation is built. A job that passed it reads as being in design, and the reading says design
-  is not built yet, so nobody takes a named stage for a stage that works.
+  is not built yet, so nobody takes a named stage for a stage that works. It also says what that job
+  is doing instead, which is a fact about the job and not about the stage: the moment ideation closes
+  there is no plan at all.
 
   There is no command that sets a stage. The stage follows from what the job has done, and it is read
   off the row rather than written on it: every boundary is already a fact the row carries, and a
@@ -45,6 +47,15 @@ Feature: A job says which of the four stages it is in
     Then the reading says the job is in the "design" stage
     And the reading says the answer closed ideation
     And the reading says the stage is not built yet
+    And the reading says the job writes its plan next
+    And the reading does not claim a plan nobody approved
+
+  # A job whose plan a person approved is doing something different, and the same line has to say so
+  # rather than saying one thing for the whole stage.
+  Scenario: A job working to an approved plan is told it is carrying on under it
+    Given a job whose plan was approved
+    When the caller reads that job back through the tool
+    Then the reading says the job carries on under the plan a person approved
 
   # The whole reason the listing carries the column: a job stuck at the beginning and a job stuck
   # further on read differently at a glance.

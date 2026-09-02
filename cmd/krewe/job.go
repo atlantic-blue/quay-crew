@@ -1099,7 +1099,8 @@ func runJobSettle(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 func stageOf(one *quaycrewv1.Job) job.Stage {
 	return job.StageOf(&job.Job{
 		Product: one.GetProduct(), Parent: one.GetParent(),
-		IdeationAnswer: one.GetIdeationAnswer(), PlanApproved: one.GetPlanApproved(),
+		IdeationAnswer: one.GetIdeationAnswer(),
+		Plan:           one.GetPlan(), PlanApproved: one.GetPlanApproved(),
 	})
 }
 
@@ -1118,7 +1119,7 @@ func sayWhichStage(out io.Writer, one *quaycrewv1.Job) {
 	fmt.Fprintf(out, "%s, phase %s\n", stage.Where(), one.GetPhase())
 	fmt.Fprintf(out, "  %s\n", stage.Closed)
 	fmt.Fprintf(out, "  %s\n", stage.Opens)
-	if notBuilt := stage.NotBuiltYet(); notBuilt != "" {
-		fmt.Fprintf(out, "  %s\n", notBuilt)
+	if stage.Unbuilt != "" {
+		fmt.Fprintf(out, "  %s\n", stage.Unbuilt)
 	}
 }
