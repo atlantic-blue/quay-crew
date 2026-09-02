@@ -53,11 +53,26 @@ func aPlannedJob(t *testing.T, reply string) planning {
 	}
 	system := planning{server: server, runner: runner, job: declared.GetJob()}
 	ctx := context.Background()
+	// The reading comes first, and a person answers it, because a job that has not said what it
+	// understood never reaches the plan. The double answers the reading to the task that asks for one,
+	// the way a session that read its task would.
+	server.TickJob(ctx)
+	system.landed(t)
+	server.TickJob(ctx)
+	if _, err := server.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{
+		Id: system.job.GetId(), Answer: theAnswerToTheReading,
+	}); err != nil {
+		t.Fatalf("AnswerJob: %v", err)
+	}
 	server.TickJob(ctx)
 	system.landed(t)
 	server.TickJob(ctx)
 	return system
 }
+
+// theAnswerToTheReading is what a person writes about what the job understood: prose, opening with
+// the number of the question it answers.
+const theAnswerToTheReading = "1: on the command line, the way every other listing is read"
 
 // reading is the job as the system holds it now.
 func (p planning) reading(t *testing.T) *quaycrewv1.Job {
@@ -112,9 +127,10 @@ func TestAPlannedJobStopsForAPersonBeforeItBuildsAnything(t *testing.T) {
 			t.Fatalf("the question is %q, want it to say %q", got.GetQuestion(), phrase)
 		}
 	}
-	// One task, which is what the gate costs. The same answer after everything is built costs the job.
-	if sent := tasksOf(t, system.server, got.GetId()); len(sent) != 1 {
-		t.Fatalf("the session ran %d tasks before the plan was approved, want 1", len(sent))
+	// Two tasks, which is what the pair of gates costs: one to say what it understood and one to write
+	// the plan from what the person answered. The same answer after everything is built costs the job.
+	if sent := tasksOf(t, system.server, got.GetId()); len(sent) != 2 {
+		t.Fatalf("the session ran %d tasks before the plan was approved, want 2", len(sent))
 	}
 }
 

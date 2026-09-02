@@ -119,7 +119,12 @@ commands:
                                           again with the answer, in the session that asked. Where
                                           the job is waiting for its plan to be approved, "yes"
                                           starts the work and anything else is what you wanted
-                                          instead, which the session writes the next plan from
+                                          instead, which the session writes the next plan from.
+                                          Where it is waiting on what it understood, answer the
+                                          questions in your own words, opening each with the number
+                                          it answers. Those words are kept whole and the plan is
+                                          written from them, and a question you leave alone stays
+                                          unknown rather than taken as agreed
   job step "<what you finished>"          record one step of the job you are running, as you finish
                                           it. If the job dies part way, what is on that record is
                                           where it carries on from, and what is not on it is done a

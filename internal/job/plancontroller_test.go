@@ -17,8 +17,22 @@ func plannedJob() *job.Job {
 	one := declaredJob("the transcript page")
 	one.Brief = "build what the design describes"
 	one.Product = "you paste a link and get the text back"
+	// Past the stage in front of this one. What it understood is on the row and a person answered it,
+	// which is what leaves the job owing a plan rather than a reading. The reading itself has its own
+	// tests beside these.
+	one.Ideation = understoodAndAnswered
+	one.IdeationAnswer = "1: on the command line"
 	return one
 }
+
+// understoodAndAnswered is a reading the system can read back, as it keeps it.
+const understoodAndAnswered = "Understood: a page that takes a link and gives back the text\n" +
+	"Not: a page that takes an identifier\n" +
+	"Told: the person pastes a link\n" +
+	"Assumed: the transcript is already stored\n" +
+	"Unknown: which surface this is read on\n" +
+	"Confidence: fairly sure of the shape\n" +
+	"Question 1: which surface does a person read this on"
 
 // aPlan is what a session answers with when it is asked for one.
 const aPlan = "Here is the plan.\n\nStep 1: read the design\nStep 2: build the address that takes a link"

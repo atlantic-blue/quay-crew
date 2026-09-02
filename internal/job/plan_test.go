@@ -203,9 +203,16 @@ func TestAJobThatOwesAPlanIsAskedForOneAndForNoWork(t *testing.T) {
 	asked := job.Asked(&job.Job{
 		Title: "the transcript page", Brief: "build what the design describes",
 		Product: "you paste a link and get the text back",
+		// Past the reading, which is the stage in front of the plan: a job that has not said what it
+		// understood is asked for that first, and it has its own tests.
+		Ideation: "Understood: a page that takes a link\nNot: a page that takes an identifier\n" +
+			"Confidence: fairly sure\nQuestion 1: which surface is this read on",
+		IdeationAnswer: "1: on the command line",
 	})
 	for _, phrase := range []string{
 		"you paste a link and get the text back", "Do no work yet", "Step 1:",
+		// And the reading travels with the plan task, marks and all.
+		"a page that takes a link", "1: on the command line", "still an assumption",
 	} {
 		if !strings.Contains(asked, phrase) {
 			t.Fatalf("the session was asked %q, want it to say %q", asked, phrase)
@@ -220,6 +227,9 @@ func TestASessionToldNoIsGivenTheRefusedPlanAndTheCorrection(t *testing.T) {
 		Brief: "build what the design describes", Product: "you paste a link and get the text back",
 		Plan: "Step 1: build the address that takes a video id",
 		Told: "a reader pastes a link, so do not make them find an identifier first",
+		Ideation: "Understood: a page that takes a link\nNot: a page that takes an identifier\n" +
+			"Confidence: fairly sure\nQuestion 1: which surface is this read on",
+		IdeationAnswer: "1: on the command line",
 	})
 	for _, phrase := range []string{
 		"was not approved", "Step 1: build the address that takes a video id",

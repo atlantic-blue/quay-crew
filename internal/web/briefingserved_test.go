@@ -173,3 +173,63 @@ func tickUntil(t *testing.T, client quaycrewv1.ControlPlaneServiceClient,
 	t.Fatalf("the job is %q saying %q, want %q", last.GetPhase(), last.GetReason(), phase)
 	return nil
 }
+
+// TestAJobWaitingToBeAnsweredDrawsWhatItUnderstoodInItsLines is the briefing half of the stage in
+// front of the plan. A job says what it understood and stops, and this page is one of the two
+// surfaces a person reads that on.
+//
+// The lines are the assertion. What it understood is a list of headings, and a paragraph that ran
+// them together would be the record made unreadable by the page rather than by the system, so the
+// page carries the line breaks and the stylesheet is told to keep them.
+func TestAJobWaitingToBeAnsweredDrawsWhatItUnderstoodInItsLines(t *testing.T) {
+	client, system := systemDoingJobs(t, &model.FakeRunner{})
+	declare(t, client, &quaycrewv1.CreateJobRequest{
+		Project: projectOf(t, client), Title: "the transcript page",
+		Brief: "build what the design describes", Product: "you paste a link and get the text back",
+	})
+	asking := tickUntil(t, client, system, job.PhaseAsking)
+	if asking.GetIdeation() == "" {
+		t.Fatalf("the job is asking and carries no reading: %s", asking.GetReason())
+	}
+
+	body, status := get(t, client, "/")
+	if status != http.StatusOK {
+		t.Fatalf("the briefing answered %d", status)
+	}
+	// Every heading of the record reaches the page, and each on a line of its own.
+	for _, line := range strings.Split(asking.GetIdeation(), "\n") {
+		if !strings.Contains(body, line) {
+			t.Errorf("the briefing does not carry %q:\n%s", line, body)
+		}
+	}
+	if !strings.Contains(body, asking.GetIdeation()) {
+		t.Errorf("the briefing carries the record without its line breaks:\n%s", body)
+	}
+	// And how to answer it, which is the half that decides whether the page is worth opening.
+	if !strings.Contains(body, "krewe job answer") {
+		t.Errorf("the briefing says nothing about how to answer it:\n%s", body)
+	}
+	// The stylesheet keeps the lines. Without this the markup carries them and the browser does not.
+	if rule := questionStyle(t); !strings.Contains(rule, "white-space: pre-wrap") {
+		t.Errorf("the question is styled %q, which runs its lines together", rule)
+	}
+}
+
+// questionStyle is the rule the browser is served for a question on this page.
+func questionStyle(t *testing.T) string {
+	t.Helper()
+	body, err := staticFiles.ReadFile("static/style.css")
+	if err != nil {
+		t.Fatalf("read the stylesheet: %v", err)
+	}
+	sheet := string(body)
+	opens := strings.Index(sheet, ".question {")
+	if opens < 0 {
+		t.Fatal("the stylesheet has no rule for a question")
+	}
+	closes := strings.Index(sheet[opens:], "}")
+	if closes < 0 {
+		t.Fatal("the rule for a question is never closed")
+	}
+	return sheet[opens : opens+closes+1]
+}

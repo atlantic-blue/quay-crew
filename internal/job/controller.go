@@ -190,6 +190,10 @@ type Store interface {
 	// on it would be looking at a question about nothing, and a plan on a running row would be a plan
 	// nobody was ever asked to approve.
 	ProposeJobPlan(ctx context.Context, id, plan, question string, event *Event) (*Job, error)
+	// ProposeJobIdeation writes what the session said it understood and puts the questions to a
+	// person, in one movement, for the reason above: a job asking with no record on it is a question
+	// about nothing.
+	ProposeJobIdeation(ctx context.Context, id, understood, question string, event *Event) (*Job, error)
 	// AskJob puts a question to a person and stops the job there. It applies only to a running job.
 	//
 	// The controller reaches for it where a session answered that a person has to decide, so that job
@@ -961,6 +965,17 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 	// A job that owes a person a plan answered with the plan rather than with work, so nothing is
 	// landed here: the plan goes on the row and the question goes to a person. This is the moment the
 	// gate exists for, and it costs one task. The same answer after everything is built costs the job.
+	// Before that, a job that owes a person what it understood answered with the reading rather than
+	// with a plan or with work. The same shape as the plan below it, one stage earlier: nothing is
+	// landed, the record goes on the row, and the questions go to a person.
+	if kind == EventAnswered && WaitingForItsIdeation(whole) {
+		if put, why := c.proposeWhatItUnderstood(ctx, whole, tasks, landing.Answer); put {
+			return
+		} else if why != "" {
+			landing.Phase, landing.Reason, kind =
+				PhaseStopped, NoUnderstandingToAnswer(why), EventStopped
+		}
+	}
 	if kind == EventAnswered && WaitingForItsPlan(whole) {
 		if put, why := c.proposeThePlan(ctx, whole, tasks, landing.Answer); put {
 			return
@@ -1143,6 +1158,52 @@ func (c *Controller) askForThePullRequest(ctx context.Context, one *Job, asked i
 	// The hold moves on, because the job is still this controller's and a task is in flight again.
 	c.renew(ctx, one)
 	return true
+}
+
+// proposeWhatItUnderstood reads what the session says it understood out of its answer and puts it to
+// a person, and says what it did.
+//
+// It answers the same two things proposeThePlan does, one stage earlier, and it is deliberately the
+// same shape: one ask, one second ask carrying the refusal, then a stop. A second mechanism here
+// would be a second way for a job to wait for a person, and the two would drift.
+func (c *Controller) proposeWhatItUnderstood(ctx context.Context, one *Job, tasks []*quaycrewv1.Task,
+	answer string) (put bool, why string) {
+	understood, err := ReadIdeation(answer)
+	if err != nil {
+		if AskedWhatItUnderstoodAgain(tasks[len(tasks)-1].GetPrompt()) {
+			return false, oneLine(err.Error())
+		}
+		if _, sent := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+			Project: one.Project, Handle: ConversationFor(one),
+			Text:           AskedForAnUnderstandingTheSystemCanRead(err.Error()),
+			PermissionMode: one.Mode, Detach: true, Role: RoleNow(one), Job: one.ID,
+		}); sent != nil {
+			// A system that cannot ask again stops the job with the reason, rather than holding a row
+			// open waiting for a task nobody sent.
+			c.logger.WarnContext(ctx, "could not ask a session again what it understood",
+				"job", one.ID, "session", one.Session, "error", sent)
+			return false, oneLine(err.Error())
+		}
+		// The hold moves on, because the job is still this controller's and a task is in flight again.
+		c.renew(ctx, one)
+		return true, ""
+	}
+
+	ctx = telemetry.Under(ctx, one.TraceID, one.ParentSpanID)
+	kept := IdeationText(understood)
+	question := AskingWhetherThisIsRight(one.Product, kept)
+	record := c.event(ctx, one, EventAsked, question)
+	if _, err := c.store.ProposeJobIdeation(ctx, one.ID, kept, question, record); err != nil {
+		if !errors.Is(err, ErrNotRunning) {
+			c.logger.WarnContext(ctx, "could not put what a job understood to a person",
+				"job", one.ID, "error", err)
+		}
+		// Nothing is landed either way. The row moved under this controller, or the write did not
+		// apply, and a later tick reads the record again and does the same arithmetic.
+		return true, ""
+	}
+	c.exported(ctx, record)
+	return true, ""
 }
 
 // proposeThePlan reads the plan out of what the session answered and puts it to a person, and says
