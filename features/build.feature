@@ -40,7 +40,7 @@ Feature: The failing tests become an implementation, and nothing that builds can
     And the job is waiting for a person to accept what was built
     When the caller reads that job back through the tool
     Then the reading says the job is in the "build" stage
-    And the reading says it waits for a person to accept what was built
+    And the reading says it waits for a person to look at what was built
 
   # The claim doing the work it already does for anything else. The second declaration is refused by
   # the store, so a second controller ticking the same row buys no second session.

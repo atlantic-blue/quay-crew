@@ -44,7 +44,13 @@ func builtJob() *job.Job {
 	one := plannedJob()
 	one.Build = "Vertical 1: a person pastes a link on the command line and gets the text back\n" +
 		"Ran 1: 14\nPasses 1: TestPastingALinkPrintsTheTranscript\n" +
-		"Changed 1: internal/transcript/paste.go"
+		"Changed 1: internal/transcript/paste.go\nPicture 1: paste.png\n" +
+		"Taken 1: the command line, captured with tmux capture-pane and drawn with krewe render"
+	// Accepted, because these are tests of the plan gate and a job whose verticals are built reaches
+	// done one way: a person looked at the picture. Left unaccepted, every one of them would stop on
+	// the acceptance gate before the plan gate was ever reached, and each would read as a test of the
+	// plan that happens to pass for another reason.
+	one.Accepted = true
 	return one
 }
 

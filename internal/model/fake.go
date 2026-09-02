@@ -186,7 +186,9 @@ func FakeBuildReport(asked string) string {
 		passing = []string{fmt.Sprintf("Passing 1: TestVertical%dPasses", vertical)}
 	}
 	return fmt.Sprintf("I built vertical %d and ran the suite.\n\nVertical: %d\nRan: 14\nRed: 0\n%s\n"+
-		"Changed 1: internal/vertical%d.go", vertical, vertical, strings.Join(passing, "\n"), vertical)
+		"Changed 1: internal/vertical%d.go\nPicture: vertical%d.png\n"+
+		"Taken: the page at http://localhost:3000, drawn with krewe render while the server was up",
+		vertical, vertical, strings.Join(passing, "\n"), vertical, vertical)
 }
 
 // whichVertical finds the vertical a task was handed, which the ask states on a line of its own.

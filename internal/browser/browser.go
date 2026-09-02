@@ -37,7 +37,11 @@ const Playwright = "playwright"
 
 // Drawing is one picture: what to draw, how wide, in which colour scheme, and where it goes.
 type Drawing struct {
-	URL    string
+	URL string
+	// Shown is what to call the subject in the label under the picture. It is the url for a page, and
+	// the name of the capture for a screen, because a data url carrying a whole page is not something
+	// a reader can look at and say what they are being shown.
+	Shown  string
 	File   string
 	Width  int
 	Height int
@@ -68,7 +72,18 @@ func From(args []string) (Drawing, error) {
 		return Drawing{}, fmt.Errorf("usage: krewe render <url> [<file>] [<width>x<height>] [light|dark] [<wait>]\n\n" +
 			"for example: krewe render http://localhost:3000 home.png 390x844 dark 2s")
 	}
+	// A capture of a screen is drawn the same way a page is, because a product with no page still has
+	// to be shown working. What was typed stays in Shown, so the line under the picture says the
+	// capture it came from rather than a data url nobody can read.
 	drawing.URL = address(args[0])
+	drawing.Shown = drawing.URL
+	if ATerminalCapture(args[0]) {
+		where, err := TheCapture(args[0])
+		if err != nil {
+			return Drawing{}, err
+		}
+		drawing.URL, drawing.Shown, drawing.Scheme = where, "the screen captured in "+args[0], "dark"
+	}
 
 	named := false
 	for _, arg := range args[1:] {
@@ -146,7 +161,7 @@ func Render(by Browser, drawing Drawing, out io.Writer) error {
 		size = fmt.Sprintf(" (%d by %d)", width, height)
 	}
 	fmt.Fprintf(out, "drew %s at %dx%d, %s, into %s%s\n",
-		drawing.URL, drawing.Width, drawing.Height, drawing.Scheme, drawing.File, size)
+		drawing.Subject(), drawing.Width, drawing.Height, drawing.Scheme, drawing.File, size)
 	return nil
 }
 
@@ -212,4 +227,16 @@ func (p Program) Draw(drawing Drawing) error {
 		return fmt.Errorf("drawing %s: %w\n%s", drawing.URL, err, strings.TrimSpace(string(said)))
 	}
 	return nil
+}
+
+// Subject is what the label under a picture calls what was drawn.
+//
+// A page is its own address and needs nothing. A capture of a screen is a data url carrying the whole
+// page, which is not something a reader can look at and say what they are being shown, so it is named
+// by the capture it came from instead.
+func (d Drawing) Subject() string {
+	if d.Shown != "" {
+		return d.Shown
+	}
+	return d.URL
 }

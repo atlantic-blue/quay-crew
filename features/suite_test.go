@@ -929,6 +929,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeProseGateSteps(sc)
 	initializeProcessGateSteps(sc)
 	initializeBuildStageSteps(sc)
+	initializeAcceptanceStageSteps(sc)
 	initializeSystemSecretSteps(sc)
 	initializeGitConfigSteps(sc)
 	initializeWizardModeSteps(sc)

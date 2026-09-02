@@ -276,9 +276,9 @@ func initializeBuildStageSteps(sc *godog.ScenarioContext) {
 			return theReadingSays(ctx, "one session for each vertical", "change a test")
 		})
 
-	sc.Step(`^the reading says it waits for a person to accept what was built$`,
+	sc.Step(`^the reading says it waits for a person to look at what was built$`,
 		func(ctx context.Context) error {
-			return theReadingSays(ctx, "waits for you to accept", "verticals were built")
+			return theReadingSays(ctx, "waits for you to look at", "verticals were built")
 		})
 
 	// The boundary, fired the way the model runtime fires it.

@@ -93,13 +93,27 @@ func initializePlanSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		if _, err := w.client.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{
-			Id: one.GetId(), Answer: "I looked at both and the value arrived",
+			// The word, because the acceptance is a word: an answer that is not it sends the verticals
+			// back to be built again, which is the road acceptance.feature drives.
+			Id: one.GetId(), Answer: "yes",
 		}); err != nil {
 			return err
 		}
-		// The work task, which is what the steps below are recorded against.
-		w.server.TickJob(ctx)
-		return nil
+		// Two movements rather than one. The first tick records the acceptance and leaves the row
+		// pending, because their word is permission rather than an ending, and the second dispatches
+		// the session that carries the job to its pull request. That session is what the steps below
+		// are recorded against.
+		for range 4 {
+			w.server.TickJob(ctx)
+			read, err := readJob(ctx, 0)
+			if err != nil {
+				return err
+			}
+			if read.GetPhase() == job.PhaseRunning {
+				return nil
+			}
+		}
+		return fmt.Errorf("the accepted job never got the session that finishes it")
 	})
 
 	sc.Step(`^the session records step "([^"]*)" and nothing else$`, func(ctx context.Context, said string) error {

@@ -326,7 +326,7 @@ func jobAsKept(one *quaycrewv1.Job) *job.Job {
 		ID: one.GetId(), Product: one.GetProduct(), Parent: one.GetParent(),
 		IdeationAnswer: one.GetIdeationAnswer(),
 		Design:         one.GetDesign(), DesignAccepted: one.GetDesignAccepted(),
-		Tests: one.GetTests(), Build: one.GetBuild(),
+		Tests: one.GetTests(), Build: one.GetBuild(), Accepted: one.GetAccepted(),
 		Plan: one.GetPlan(), PlanApproved: one.GetPlanApproved(),
 	}
 }

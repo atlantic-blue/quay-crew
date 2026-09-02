@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -121,9 +122,12 @@ func theShapeOfABuildReport(wanted Requirement) string {
 		"Passing 1: the name of a test of yours that failed before and passes now\n"+
 		"Passing 2: the name of the next one\n"+
 		"Changed 1: a file you wrote to make them pass\n"+
-		"Changed 2: the next one\n\n"+
+		"Changed 2: the next one\n"+
+		"Picture: the name of a picture of this vertical running\n"+
+		"Taken: what was running, the command that drew it, and what has to be up to draw it again\n\n"+
 		"A run that executed nothing is a failure of this task rather than a pass. A green run that "+
-		"changed no file means the test was already passing, which builds nothing.", wanted.Number)
+		"changed no file means the test was already passing, which builds nothing.\n\n%s",
+		wanted.Number, ShowItWorking(wanted))
 }
 
 // buildLine is the shape a report is read back in: the vertical it was built for, what the run did,
@@ -133,16 +137,22 @@ func theShapeOfABuildReport(wanted Requirement) string {
 // it finds is then what the worker meant to say, rather than a sentence that happened to hold the
 // word.
 var buildLine = regexp.MustCompile(
-	`(?im)^[ \t]*(vertical|ran|red|passing|passes|changed)[ \t]*(\d*)[ \t]*[:.][ \t]*(.+?)[ \t]*$`)
+	`(?im)^[ \t]*(vertical|ran|red|passing|passes|changed|picture|taken)[ \t]*(\d*)[ \t]*[:.][ \t]*(.+?)[ \t]*$`)
 
 // BuildReport is what one worker answers with: which vertical it built, what its run did, the tests
-// that pass now and the files it changed to make them.
+// that pass now, the files it changed to make them, and the picture of the vertical running.
 type BuildReport struct {
 	Vertical int
 	Ran      int
 	Red      int
 	Passing  []string
 	Changed  []string
+	// Picture is the name of a picture of this vertical running, in the workspace's shared folder, and
+	// Taken is the label saying where it came from and what it takes to draw it again. They are what a
+	// person is shown at the end of the stage, and neither of the two is any use without the other: a
+	// picture nobody can reproduce is worth nothing, and a label with no picture is a paragraph.
+	Picture string
+	Taken   string
 }
 
 // ReadBuildReport is the report a reply carries, and the refusal where it carries none.
@@ -181,6 +191,17 @@ func ReadBuildReport(reply string) (BuildReport, error) {
 			}
 		case "passing", "passes":
 			report.Passing = append(report.Passing, text)
+		case "picture":
+			// One picture stands, and it is the first readable one. A worker that named several showed
+			// several things, and the person is here to look at this vertical working rather than to pick
+			// which of four files is the one that shows it.
+			if report.Picture == "" {
+				report.Picture = path.Base(text)
+			}
+		case "taken":
+			if report.Taken == "" {
+				report.Taken = text
+			}
 		default:
 			report.Changed = append(report.Changed, text)
 		}
@@ -246,7 +267,9 @@ func (r BuildReport) green() error {
 				"the test is about. If the test itself is wrong, say so and name the assertion", where)
 		}
 	}
-	return nil
+	// Last, because it is the check the machine cannot make for itself. Everything above is the run
+	// reporting on the run, and a person cannot read any of it and say whether the value arrived.
+	return Picture{Vertical: r.Vertical, File: r.Picture, Taken: r.Taken}.Shows()
 }
 
 // aTestFile is the shape of a name that says a file is a test, in the ecosystems this system meets.
@@ -334,6 +357,11 @@ func BuiltText(wanted []Requirement, reports map[int]BuildReport) string {
 		for _, changed := range report.Changed {
 			lines = append(lines, fmt.Sprintf("Changed %d: %s", one.Number, changed))
 		}
+		// The picture and its label travel with the vertical they show, because what a person is shown
+		// at the end of the stage is read back off this record rather than out of a worker's session,
+		// and by then every one of those sandboxes is gone.
+		lines = append(lines, fmt.Sprintf("Picture %d: %s", one.Number, report.Picture),
+			fmt.Sprintf("Taken %d: %s", one.Number, report.Taken))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -417,35 +445,6 @@ func NotBuilt(why string) string {
 		"is, or stop the job with krewe job stop.", why)
 }
 
-// AcceptWhatWasBuilt is what a person is asked when every vertical is green.
-//
-// The stage ends here rather than at done. The machine's three checks are in the report it just read,
-// and the fourth is a person looking at the thing and agreeing the value arrived. Nothing here can do
-// that on their behalf, so the job holds.
-func AcceptWhatWasBuilt(one *Job, wanted []Requirement, reports map[int]BuildReport) string {
-	var lines []string
-	for _, vertical := range wanted {
-		report := reports[vertical.Number]
-		lines = append(lines, fmt.Sprintf("%d. %s\n   shown: %s\n   %d tests ran, %d of them named as "+
-			"passing now", vertical.Number, vertical.Text, vertical.Shown, report.Ran,
-			len(report.Passing)))
-	}
-	return fmt.Sprintf("%s\n\n%s\n\nAnswer with what you see, or say what is missing. Nothing else "+
-		"happens on this job until you do.", TheAcceptanceAsk, strings.Join(lines, "\n"))
-}
-
-// TheAcceptanceAsk is the phrase the question about a finished build opens with, and it is how
-// anything holding a reply can tell that answer from every other one a job gets.
-//
-// It matters because that answer is the only one that starts work rather than continuing it. The
-// verticals were built by a worker each, so the session this job is about to get has never been asked
-// to do it, and a session told to carry on and nothing else would carry on with nothing.
-const TheAcceptanceAsk = "Every vertical is built and its tests pass. Look at it and say whether the " +
-	"value arrived."
-
-// AskedToAccept says whether this question is the one a finished build puts to a person.
-func AskedToAccept(question string) bool { return strings.Contains(question, TheAcceptanceAsk) }
-
 // BuiltIt is the record of the stage closing: how many verticals, and how many tests pass now.
 func BuiltIt(wanted []Requirement, reports map[int]BuildReport) string {
 	passing := 0
@@ -490,6 +489,15 @@ func (c *Controller) buildIt(ctx context.Context, one *Job) {
 			continue
 		}
 		report, why := BuiltBy(theirs, vertical, failing[vertical.Number])
+		// A vertical whose worker answered before a person sent the work back is not built, however
+		// well that answer reads. The report was read once already and the picture in it is what they
+		// looked at, so reading it again would put the same picture in front of them and call it an
+		// answer to what they said was missing.
+		if why == "" && SentBackToBuild(one, len(theirs)) {
+			why = fmt.Sprintf("vertical %d, %q: a person looked at it and said the value did not arrive",
+				vertical.Number, vertical.Text)
+			report = BuildReport{}
+		}
 		if why == "" {
 			built++
 			reports[vertical.Number] = report

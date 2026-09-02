@@ -151,6 +151,12 @@ func Asked(one *Job) string {
 	// for the reason a handoff is: carry on with what, and held to what.
 	case one.Told != "" && AskedToAccept(one.Question):
 		said = append(said, CarryOn(one))
+		// What is left, said before the brief, because a session handed the brief of a job whose
+		// verticals are all built reads it as work to do and builds it again. What a person accepted is
+		// what is built, so the only thing left is the ending every job has.
+		if Accepted(one) {
+			said = append(said, TheValueArrived)
+		}
 		if one.Product != "" {
 			said = append(said, ServesAPerson(one.Product))
 		}

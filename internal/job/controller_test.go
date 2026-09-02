@@ -1650,3 +1650,63 @@ func (r *rows) AskAboutJobBuild(_ context.Context, id, question string,
 	kept := *one
 	return &kept, nil
 }
+
+// SendJobBackToBuild clears what was built and puts the row back to pending, under the same
+// conditions, so an accepted job can never be sent back over its own acceptance.
+func (r *rows) SendJobBackToBuild(_ context.Context, id string,
+	events ...*job.Event) (*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such job")
+	}
+	if one.Phase != job.PhasePending || one.Build == "" || one.Accepted {
+		return nil, job.ErrNotPending
+	}
+	one.Build = ""
+	one.Phase, one.Question, one.Reason = job.PhasePending, "", ""
+	one.Answer, one.Outcome = "", ""
+	one.LeaseOwner, one.LeaseUntil = "", nil
+	one.AskedAt, one.RaisedAt = nil, nil
+	one.UpdatedAt = time.Now().UTC()
+	r.record(id, events)
+	kept := *one
+	return &kept, nil
+}
+
+// wrote says whether a kind of event is on this job's record. The kinds are read rather than
+// indexed, because the order rows are written in is not a contract and a test that indexes into a
+// listing passes by accident.
+func (r *rows) wrote(id, kind string) bool {
+	for _, one := range r.kinds(id) {
+		if one == kind {
+			return true
+		}
+	}
+	return false
+}
+
+// AcceptJob writes that a person looked at what was built, holding the same three conditions the
+// real stores hold: the row is pending, it carries a record, and nobody accepted it yet. A double
+// that is looser than the real thing manufactures a green suite.
+//
+// The row stays pending under it, the way both real stores leave it, because the acceptance is
+// permission rather than an ending.
+func (r *rows) AcceptJob(_ context.Context, id, answer string,
+	events ...*job.Event) (*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such job")
+	}
+	if one.Phase != job.PhasePending || one.Build == "" || one.Accepted {
+		return nil, job.ErrNotPending
+	}
+	one.Accepted, one.Told, one.Reason = true, answer, ""
+	one.UpdatedAt = time.Now().UTC()
+	r.record(id, events)
+	kept := *one
+	return &kept, nil
+}

@@ -214,6 +214,55 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 	if builders != verticals {
 		t.Fatalf("%d workers built %d verticals", builders, verticals)
 	}
+
+	// Every vertical arrives with a picture of it running and a label saying where the picture came
+	// from, and both cross the wire inside the record. A person answering from a terminal has nothing
+	// to look at without them.
+	shots := job.PicturesIn(whole.GetBuild())
+	if len(shots) != verticals {
+		t.Fatalf("%d verticals were built and %d pictures came off the wire", verticals, len(shots))
+	}
+	for _, shot := range shots {
+		if err := shot.Shows(); err != nil {
+			t.Fatalf("the picture of vertical %d does not show it working: %v", shot.Vertical, err)
+		}
+	}
+
+	// The gate itself, over a real engine. Ticking changes nothing while the question stands: an
+	// acceptance that never comes has to leave the job exactly where it is, or the gate is decoration.
+	for i := 0; i < 3; i++ {
+		server.TickJob(ctx)
+	}
+	waiting := readJob(t, ctx, client, id)
+	if waiting.GetPhase() != job.PhaseAsking || waiting.GetAccepted() {
+		t.Fatalf("three ticks with nobody answering left the job %q, accepted %v",
+			waiting.GetPhase(), waiting.GetAccepted())
+	}
+
+	// Then the person's word, which is the only thing that lands it. This is the trap one last time
+	// and the one this slice turns on: accepted is a column, and one written and never selected reads
+	// back false, so the job would stop on its own acceptance gate for ever while every unit test
+	// stayed green.
+	if _, err := client.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{Id: id, Answer: "yes"}); err != nil {
+		t.Fatalf("AnswerJob: %v", err)
+	}
+	tickUntilThePhase(t, ctx, server, client, id, job.PhaseDone)
+
+	done := readJob(t, ctx, client, id)
+	if !done.GetAccepted() {
+		t.Fatal("the job reads back unaccepted off the wire, so the column is written and never read")
+	}
+	if done.GetOutcome() != job.OutcomeProved {
+		t.Fatalf("an accepted job settled %q, want proved", done.GetOutcome())
+	}
+	// The record of what was built, and its pictures, are still there. That is what the person
+	// accepted, and it is what anybody reading this job afterwards has to be able to see.
+	if len(job.PicturesIn(done.GetBuild())) != verticals {
+		t.Fatalf("landing the job lost the pictures: %q", done.GetBuild())
+	}
+	if ended := stageOnTheWire(t, ctx, client, id); !strings.Contains(ended.Doing, "value arrived") {
+		t.Fatalf("an accepted job is told %q", ended.Doing)
+	}
 }
 
 // tickUntilTheBuild drives the controller until every vertical of the accepted list is built and the
@@ -273,7 +322,7 @@ func stageOnTheWire(t *testing.T, ctx context.Context,
 		Product: one.GetProduct(), Parent: one.GetParent(),
 		IdeationAnswer: one.GetIdeationAnswer(),
 		Design:         one.GetDesign(), DesignAccepted: one.GetDesignAccepted(),
-		Tests: one.GetTests(), Build: one.GetBuild(),
+		Tests: one.GetTests(), Build: one.GetBuild(), Accepted: one.GetAccepted(),
 		Plan: one.GetPlan(), PlanApproved: one.GetPlanApproved(),
 	})
 }

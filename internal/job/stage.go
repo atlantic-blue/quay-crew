@@ -148,8 +148,13 @@ func StageOf(one *Job) Stage {
 // what a reader is told has to be true of the job in front of them.
 func whereItStandsInTheBuild(one *Job) string {
 	switch {
+	case Accepted(one):
+		return "a person looked at the pictures of every vertical running and said the value arrived, " +
+			"and what is left is the pull request the work is read in"
 	case Built(one):
-		return "every vertical is built and its tests pass, and it waits for you to accept what arrived"
+		return fmt.Sprintf("every vertical is built and its tests pass, and it waits for you to look at "+
+			"%s of them running and say whether the value arrived",
+			pluralPictures(len(PicturesIn(one.Build))))
 	case one.PlanApproved:
 		return "one session for each vertical is building against those tests, and none of them can " +
 			"change a test"
