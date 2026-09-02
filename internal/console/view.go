@@ -21,7 +21,7 @@ func (m Model) View() string {
 		lines = append(lines, alert.Render(m.fit(line)))
 	}
 	if m.mode == modeReading {
-		lines = append(lines, m.panelTop(len(m.reading)))
+		lines = append(lines, m.panelTop(len(m.readingLines())))
 		for _, line := range m.readingBody() {
 			lines = append(lines, m.framed(line))
 		}

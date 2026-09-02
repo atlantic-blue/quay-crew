@@ -365,6 +365,60 @@ func TestShellingInWorksOnAJobWhoseSessionHasAnsweredNothingYet(t *testing.T) {
 	}
 }
 
+// A task is a paragraph, and the panel is about a hundred characters wide. A line left whole is a
+// line cut at the border, which is the fault this key exists to answer, one order of magnitude along.
+func TestALongAskIsReadWholeRatherThanCutAtTheBorder(t *testing.T) {
+	const ask = "read the electricity bill for the flat in the north of the city, work out what " +
+		"the standing charge came to over the quarter, and say whether the supplier moved it " +
+		"without telling anybody"
+	client := aSystemWithOneOfEverything()
+	client.tasks[0].Prompt = ask
+
+	model := openedOnTheTree(t, client)
+	model = walk(t, walk(t, walk(t, model, enter()), enter()), enter())
+	model = walk(t, model, enter())
+
+	// Every word of it, in the order it was written, across however many rows the panel needed.
+	if drawn := drawnText(model); !strings.Contains(drawn, ask) {
+		t.Fatalf("the screen does not carry the whole ask:\n%s", model.View())
+	}
+}
+
+// drawnText is what the screen says with the frame taken off and the rows run together, so a sentence
+// wrapped over several rows reads as the sentence it is.
+func drawnText(model Model) string {
+	drawn := strings.NewReplacer("│", " ", "╭", " ", "╮", " ", "╰", " ", "╯", " ").Replace(model.View())
+	return strings.Join(strings.Fields(drawn), " ")
+}
+
+// Wrapping is where a reading of any length is kept, so the pieces are checked on their own too: a
+// word too long for the panel is broken rather than dropped, and nothing is lost between two pieces.
+func TestWrappingKeepsEveryWord(t *testing.T) {
+	for _, one := range []struct {
+		name string
+		line string
+		wide int
+		want []string
+	}{
+		{"a line that already fits", "pay the bill", 20, []string{"pay the bill"}},
+		{"broken on its spaces", "pay the water bill today", 10, []string{"pay the", "water bill", "today"}},
+		{"a word longer than the panel", "aaaaaaaa bb", 4, []string{"aaaa", "aaaa", "bb"}},
+		{"nothing at all", "", 10, []string{""}},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			got := wrapTo(one.line, one.wide)
+			if strings.Join(got, "|") != strings.Join(one.want, "|") {
+				t.Fatalf("wrapping %q at %d gives %q, want %q", one.line, one.wide, got, one.want)
+			}
+			for _, piece := range got {
+				if len([]rune(piece)) > one.wide {
+					t.Fatalf("the piece %q is wider than the %d the panel has", piece, one.wide)
+				}
+			}
+		})
+	}
+}
+
 // The fault this level had: every row opened the same shell, so the one key that means "this one"
 // could not reach the task under the cursor. The column holds 34 characters, so what a row shows is a
 // fragment of a sentence, and the whole of it was only at the command line.

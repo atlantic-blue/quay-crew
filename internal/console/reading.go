@@ -55,7 +55,7 @@ func (m Model) updateReadingKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	if m.readingTop < 0 {
 		m.readingTop = 0
 	}
-	if most := len(m.reading) - 1; m.readingTop > most {
+	if most := len(m.readingLines()) - 1; m.readingTop > most {
 		m.readingTop = most
 	}
 	return m, nil
@@ -72,7 +72,7 @@ func (m Model) readingBody() []string {
 	// it is given, so a short line leaves the right border next to the text and a long one spills
 	// past it and wraps the terminal. Either way the panel comes out ragged.
 	lines := []string{m.fit(prompt.Render(m.readingTitle))}
-	for _, line := range m.reading {
+	for _, line := range m.readingLines() {
 		lines = append(lines, m.fit(line))
 	}
 	top := m.readingTop
@@ -87,4 +87,49 @@ func (m Model) readingBody() []string {
 		end = len(lines)
 	}
 	return lines[top:end]
+}
+
+// readingLines is the text broken to the width of the panel. What is read here is prose: a task is a
+// paragraph and a terminal is not that wide, so a line left whole is a line cut at the border, which
+// takes the end of the sentence with it. That is the fault this panel exists to answer.
+func (m Model) readingLines() []string {
+	lines := make([]string, 0, len(m.reading))
+	for _, line := range m.reading {
+		lines = append(lines, wrapTo(line, m.innerWidth())...)
+	}
+	return lines
+}
+
+// wrapTo breaks a line on its spaces so each piece fits the width. A word longer than the width is
+// broken where it has to be: an identifier or a path with no space in it is still worth reading.
+func wrapTo(line string, wide int) []string {
+	if wide < 1 {
+		wide = 1
+	}
+	if len([]rune(line)) <= wide {
+		return []string{line}
+	}
+	var out []string
+	held := ""
+	for _, word := range strings.Fields(line) {
+		for len([]rune(word)) > wide {
+			if held != "" {
+				out, held = append(out, held), ""
+			}
+			runes := []rune(word)
+			out, word = append(out, string(runes[:wide])), string(runes[wide:])
+		}
+		switch {
+		case held == "":
+			held = word
+		case len([]rune(held))+1+len([]rune(word)) <= wide:
+			held += " " + word
+		default:
+			out, held = append(out, held), word
+		}
+	}
+	if held != "" {
+		out = append(out, held)
+	}
+	return out
 }
