@@ -23,6 +23,24 @@ It draws the whole page rather than the first screen of it, and it says what it 
 A page a session is serving itself is the usual subject, so start the server first and render the
 address it prints. `file:///path/page.html` works for a page with no server behind it.
 
+## Record it, where a still frame cannot carry it
+
+Some value is in what happens between two frames: a list that refreshes, a wizard that comes back to
+where it started, a key that is swallowed. Capture the screen several times while it runs, then join
+the captures:
+
+    tmux capture-pane -t work -e -p > frame-01.txt
+    krewe record run.webm frame-*.txt 900x400 2
+
+The file comes first because the captures are a list. Everything after them is read by its shape:
+a size, `light` or `dark`, and a number as the frames a second. It says what it recorded:
+
+    recorded 12 captures at 900x400, dark, 6.0 seconds, into /home/agent/workspace/run.webm
+
+It writes webm and nothing else, because the encoder here is the one the headless browser brings
+with it. Where a machine has no encoder, `krewe record` says it cannot record: then record on your
+own machine and attach the file, or say what you would have shown in steps a person can run.
+
 ## Look at it
 
 Read the file. That is the whole point, and it is the step that gets skipped: the command exiting

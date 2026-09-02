@@ -267,6 +267,10 @@ commands:
   render <url> [<file>] [<size>]           draw a page into a picture and say what it drew, so a
     [light|dark] [<wait>]                  session can look at what it built. The whole page, at
                                            1280x900 in light unless told otherwise
+  record <file.webm> <capture>             join captures of a screen into one recording, for value a
+    [<capture>...] [<size>]                still frame cannot carry. Capture the screen while the
+    [light|dark] [<frames a second>]       thing runs, once every half second, with tmux
+                                           capture-pane -e -p, and name every frame here
   secret set [<workspace>] <key>          set a workspace secret from standard input, so the value
                                           never reaches your shell history: pipe it in, or redirect
                                           a file. A value given as an argument still works. Say system
