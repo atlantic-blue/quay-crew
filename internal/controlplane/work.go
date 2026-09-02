@@ -66,6 +66,39 @@ func (s *Server) PublishSessionWork(ctx context.Context, sessionID string) publi
 	return publish.Read(ctx, carrying{box: box, env: environ(s.taskEnv(ctx, session, "", false))}, place)
 }
 
+// PushSessionWork puts what this session committed onto one named branch, and says what it found.
+//
+// It is the same road as the call above and answers in the same words. What differs is whose branch
+// the work goes on: there the session chose it, and here the branch belongs to the job, because
+// several sessions at once are writing work that has to arrive in one place for the next stage to
+// read. A push that finds somebody already there is replayed onto them rather than refused.
+func (s *Server) PushSessionWork(ctx context.Context, sessionID, branch string) publish.Work {
+	session, err := s.store.GetSession(ctx, sessionID)
+	if err != nil {
+		return publish.Work{State: publish.Unreadable, Why: "the system could not read the session the job ran in"}
+	}
+	places := s.storage.WorkPlaces(boxOf(session))
+	if len(places) == 0 {
+		return publish.Work{State: publish.Unreadable, Why: "this system keeps no working directory on disk"}
+	}
+	place, held := sandbox.Repository(places)
+	if !held {
+		// A session that cloned nothing. Its own directory is still named, because whatever it wrote is
+		// in there and the operator has to be told where rather than that there is nothing.
+		return publish.Work{State: publish.Absent, Host: places[0].Host}
+	}
+	box, live, err := s.provider.Existing(ctx, sessionID)
+	switch {
+	case err != nil:
+		return publish.Work{State: publish.Unreadable, Host: place.Host,
+			Why: "the system could not tell whether the session still has a container"}
+	case !live:
+		return publish.Deliver(ctx, nil, place, branch)
+	}
+	return publish.Deliver(ctx, carrying{box: box, env: environ(s.taskEnv(ctx, session, "", false))},
+		place, branch)
+}
+
 // carrying is a sandbox whose every command is given the session's environment.
 type carrying struct {
 	box sandbox.Sandbox
