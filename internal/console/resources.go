@@ -359,8 +359,8 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	}
 }
 
-// Tasks is the running work: one session, what it was asked, and what came back from each. It is read
-// from the tasks the dispatch path writes, so it answers without starting a container and keeps
+// Exec is what a session ran: one session, what it was asked, and what came back from each. It is
+// read from the tasks the dispatch path writes, so it answers without starting a container and keeps
 // answering once the sandbox is gone. It has no tool calls and no thinking: opening the conversation
 // is for that, and that is a key here.
 //
@@ -369,12 +369,13 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 // sandbox. Both act on the session this view is scoped to rather than on a row, because a job whose
 // session has produced no task yet lists nothing and still has a container worth opening.
 //
-// tasks and task stay as aliases. The word changed and the muscle memory did not, and a view that
-// answers to what somebody already types costs nothing.
-func Tasks(client quaycrewv1.ControlPlaneServiceClient) Resource {
+// The view was called tasks, and every word it answered to then answers to it now: tasks, task,
+// history and h all open it. They are in fingers, in notes and in the two keys that descend here, so
+// a word that quietly stopped working is how an operator learns to distrust the rest of the bar.
+func Exec(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
-		Name:    "tasks",
-		Aliases: []string{"task", "history", "h"},
+		Name:    "exec",
+		Aliases: []string{"e", "tasks", "task", "history", "h"},
 		Columns: []Column{
 			{Title: "when", Width: 10, Colour: dim},
 			{Title: "status", Width: 10, Colour: colourOfStatus},
@@ -511,13 +512,13 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			},
 			{
 				// The same key the live view uses, because an archived session is the one whose
-				// history somebody actually comes looking for: a flow run archives its own session
-				// when it ends, and what the run did is in there. The history is read from the
-				// store, so it needs no container and no restore.
+				// history somebody actually comes looking for: a flow archives its own session when it
+				// ends, and what it did is in there. The history is read from the store, so it needs no
+				// container and no restore.
 				Key:     "t",
 				Moved:   []string{"l", "h"},
 				Label:   "History",
-				Descend: "tasks",
+				Descend: "exec",
 			},
 		},
 	}
@@ -656,13 +657,14 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 		{
 			// The history, beside opening the conversation. Lowercase and cheap, because looking at
 			// what a session has been doing is something an operator does constantly, and it changes
-			// nothing. `t` for the view it opens, which is the tasks view and is spelled that way in
-			// the command bar. It was on `l` and `h`, which are vim's horizontal motion keys, and an
-			// action on a motion key is what teaches an operator to distrust the rest of them.
+			// nothing. The view it opens is called exec now and the key stays on `t`, because a key is
+			// in fingers and the word it was named after moved without it. It was on `l` and `h`, which
+			// are vim's horizontal motion keys, and an action on a motion key is what teaches an
+			// operator to distrust the rest of them.
 			Key:     "t",
 			Moved:   []string{"l", "h"},
 			Label:   "History",
-			Descend: "tasks",
+			Descend: "exec",
 		},
 		{
 			Key:   "s",
@@ -699,10 +701,11 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 			// Naming a session. Not r, which the sessions tool uses and which #84 asked for: r is
 			// refresh here, and refreshing is the thing an operator presses constantly while naming
 			// is rare, so the cheap key stays with the frequent action.
-			Key:   "L",
-			Label: "Name",
-			Asks:  "call",
-			Typed: func(row Row) string { return row.Detail },
+			Key:        "L",
+			Label:      "Name",
+			Asks:       "call",
+			EmptyMeans: "empty clears it",
+			Typed:      func(row Row) string { return row.Detail },
 			RunTyped: func(ctx context.Context, row Row, typed string) error {
 				if row.ID == "" {
 					return fmt.Errorf("no session selected")

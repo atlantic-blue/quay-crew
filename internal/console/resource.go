@@ -121,9 +121,18 @@ type Action struct {
 	// terminal belongs to somebody else. Editing context is the case: the editor writes a file and
 	// this is what tells the system about it.
 	After func(ctx context.Context, row Row) error
+	// Refuses says why this key cannot act on this row, and is nil where it always can. A key with it
+	// says so before it opens anything: asking somebody to type an answer the system will throw away
+	// is worse than the key doing nothing, because they wrote the answer first.
+	Refuses func(row Row) error
 	// Asks is what a key that wants a line of text says while it waits, for example "call it". A key
 	// with it opens the line rather than acting, and RunTyped is what acts once enter is pressed.
 	Asks string
+	// EmptyMeans is what an empty line does on this key, for the hint beside it, and is empty where an
+	// empty line is refused. Naming a session is the one: an empty name clears the name, and nobody
+	// would guess that. An answer to a job is the other: an empty one is refused, and a hint offering
+	// to clear something would be a lie about the next keystroke.
+	EmptyMeans string
 	// RunTyped acts on the row with the line that was typed. Empty text is a real answer, not a
 	// cancel: it is how a name is cleared. Escape is how nothing happens.
 	RunTyped func(ctx context.Context, row Row, typed string) error

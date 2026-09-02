@@ -18,11 +18,13 @@ Feature: The console's keys agree with vim
     And a workspace named "acme"
     And a project named "house-bills"
 
-  Scenario: The history is on the key that names the view it opens
+  # The view it opens is called exec now, and the key stays on t: a key lives in fingers, and the
+  # word it was named after moved without it.
+  Scenario: The history is on the key an operator already presses
     Given a session started by dispatching "hello"
     When the operator is at the console on the "sessions" view
     And the operator presses "t" in the console
-    Then the console is on the "tasks" view
+    Then the console is on the "exec" view
 
   # Each of these was in somebody's fingers. The refusal names the key to press instead, which is the
   # difference between a key that moved and a key that broke.

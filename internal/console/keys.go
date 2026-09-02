@@ -345,6 +345,14 @@ func (m Model) act(key string) (Model, tea.Cmd) {
 		if !action.Bound(key) {
 			continue
 		}
+		// A row this key cannot act on is answered here, before any mode opens. The refusal is what
+		// the operator gets instead of a line to type into or a question to say yes to.
+		if action.Refuses != nil {
+			if err := action.Refuses(row); err != nil {
+				m.err, m.held = err, true
+				return m, nil
+			}
+		}
 		if action.RunTyped != nil {
 			m.mode, m.typing, m.input = modeType, pending{action: action, row: row}, ""
 			if action.Typed != nil {

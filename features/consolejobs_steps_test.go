@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/display"
 	"github.com/atlantic-blue/quay-krewe/internal/job"
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,7 +18,7 @@ import (
 
 // sessionCell is where a job's session sits in its row. Named so a step reads as the cell it is about
 // rather than as a number in a slice.
-const sessionCell = 5
+const sessionCell = 6
 
 func initializeConsoleJobsSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the operator opens the console on jobs$`, func(ctx context.Context) error {
@@ -83,7 +84,7 @@ func initializeConsoleJobsSteps(sc *godog.ScenarioContext) {
 		return c.press(tea.KeyMsg{Type: tea.KeyEnter})
 	})
 
-	// What the job's session was asked, which is the first thing the tasks view puts on screen and
+	// What the job's session was asked, which is the first thing the exec view puts on screen and
 	// the reason enter goes there rather than to the session row.
 	sc.Step(`^the console shows what the job's session was asked$`, func(ctx context.Context) error {
 		one, err := readJob(ctx, 0)
@@ -98,9 +99,9 @@ func initializeConsoleJobsSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("the screen does not carry %q, so enter did not open what the job did:\n%s",
 				opening, view)
 		}
-		// The breadcrumb says where the operator is: the tasks of the job they came from.
-		if !strings.Contains(view, "tasks("+one.GetTitle()+")") {
-			return fmt.Errorf("the screen does not say it is showing that job's tasks:\n%s", view)
+		// The breadcrumb says where the operator is: what the job they came from ran.
+		if !strings.Contains(view, "exec("+one.GetTitle()+")") {
+			return fmt.Errorf("the screen does not say it is showing what that job ran:\n%s", view)
 		}
 		return nil
 	})
@@ -169,4 +170,171 @@ func initializeConsoleJobsSteps(sc *godog.ScenarioContext) {
 // openModelOnJobs stands the real console up and walks it to the jobs view.
 func (c *consoleWorld) openModelOnJobs(w *world) error {
 	return c.openModelOn(w, "jobs")
+}
+
+// initializeConsoleViewSteps registers the steps for the views this console gained: the stage on a
+// job's row, the key that answers a job, and the listings of what the system holds.
+func initializeConsoleViewSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^the operator types "([^"]*)" into the command bar$`, func(ctx context.Context, typed string) error {
+		return consoleFrom(ctx).openModelOn(worldFrom(ctx), typed)
+	})
+
+	sc.Step(`^the job's row says it is in the "([^"]*)" stage$`, func(ctx context.Context, stage string) error {
+		row, err := onlyRow(consoleFrom(ctx))
+		if err != nil {
+			return err
+		}
+		if got := row.Cells[stageCell]; got != stage {
+			return fmt.Errorf("the stage cell says %q, want %q", got, stage)
+		}
+		return nil
+	})
+
+	// The key an operator presses, on the console standing over the real control plane, and then the
+	// answer and the listing that follows it fed back the way the runtime feeds them.
+	sc.Step(`^the operator answers the job under the cursor with "([^"]*)"$`,
+		func(ctx context.Context, said string) error {
+			c := consoleFrom(ctx)
+			if err := c.openModelOnJobs(worldFrom(ctx)); err != nil {
+				return err
+			}
+			if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")}); err != nil {
+				return err
+			}
+			for _, letter := range said {
+				if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{letter}}); err != nil {
+					return err
+				}
+			}
+			return c.press(tea.KeyMsg{Type: tea.KeyEnter})
+		})
+
+	sc.Step(`^the console shows that job is no longer asking$`, func(ctx context.Context) error {
+		one, err := readJob(ctx, 0)
+		if err != nil {
+			return err
+		}
+		view := consoleFrom(ctx).model.View()
+		opening := strings.Join(strings.Fields(one.GetTitle())[:2], " ")
+		for _, line := range strings.Split(view, "\n") {
+			if !strings.Contains(line, opening) {
+				continue
+			}
+			if strings.Contains(line, job.PhaseAsking) {
+				return fmt.Errorf("the row still reads asking:\n%s", line)
+			}
+			return nil
+		}
+		return fmt.Errorf("the job is not on the screen at all:\n%s", view)
+	})
+
+	sc.Step(`^the operator opens the console on the "([^"]*)" view$`, func(ctx context.Context, view string) error {
+		return consoleFrom(ctx).open(ctx, worldFrom(ctx).client, view)
+	})
+
+	// What the console lists against what the system says it holds, read a second time from the
+	// control plane. A count written into the scenario would pass against a console listing the wrong
+	// thing entirely.
+	sc.Step(`^the console lists every (skill|role|hook) the system holds$`, func(ctx context.Context, held string) error {
+		c := consoleFrom(ctx)
+		names, err := whatTheSystemHolds(ctx, held)
+		if err != nil {
+			return err
+		}
+		if len(names) == 0 {
+			return fmt.Errorf("the system holds no %ss, so this scenario proves nothing", held)
+		}
+		if len(c.rows) != len(names) {
+			return fmt.Errorf("the console lists %d %ss and the system holds %d", len(c.rows), held, len(names))
+		}
+		for _, name := range names {
+			if _, found := rowNamed(c.rows, name); !found {
+				return fmt.Errorf("the console does not list the %s %q", held, name)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^the console lists nothing, and says so$`, func(ctx context.Context) error {
+		c := consoleFrom(ctx)
+		if len(c.rows) != 0 {
+			return fmt.Errorf("the console lists %d rows, want none", len(c.rows))
+		}
+		if err := c.openModelOn(worldFrom(ctx), c.active.Name); err != nil {
+			return err
+		}
+		if !strings.Contains(c.model.View(), "nothing here") {
+			return fmt.Errorf("an empty listing says nothing about being empty:\n%s", c.model.View())
+		}
+		return nil
+	})
+}
+
+// stageCell is where a job's stage sits in its row, named so a step reads as the cell it is about
+// rather than as a number in a slice.
+const stageCell = 2
+
+// whatTheSystemHolds asks the control plane again, rather than trusting the console's own answer, so
+// the comparison is between two readings of one system.
+func whatTheSystemHolds(ctx context.Context, held string) ([]string, error) {
+	client := worldFrom(ctx).client
+	switch held {
+	case "skill":
+		resp, err := client.ListSkills(ctx, &quaycrewv1.ListSkillsRequest{})
+		if err != nil {
+			return nil, err
+		}
+		names := make([]string, 0, len(resp.GetSkills()))
+		for _, one := range resp.GetSkills() {
+			names = append(names, one.GetName())
+		}
+		return names, nil
+	case "role":
+		resp, err := client.ListRoles(ctx, &quaycrewv1.ListRolesRequest{})
+		if err != nil {
+			return nil, err
+		}
+		names := make([]string, 0, len(resp.GetRoles()))
+		for _, one := range resp.GetRoles() {
+			names = append(names, one.GetName())
+		}
+		return names, nil
+	case "hook":
+		resp, err := client.ListHooks(ctx, &quaycrewv1.ListHooksRequest{})
+		if err != nil {
+			return nil, err
+		}
+		names := make([]string, 0, len(resp.GetHooks()))
+		for _, one := range resp.GetHooks() {
+			names = append(names, one.GetName())
+		}
+		return names, nil
+	}
+	return nil, fmt.Errorf("nothing reads what the system holds as %q", held)
+}
+
+// initializeConsoleAnswerSteps reads the record the console's answer key wrote. It is a separate
+// reading from the screen: one says the operator can see what happened, and this says the system
+// holds it.
+func initializeConsoleAnswerSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^the system keeps "([^"]*)" as what the person wrote$`, func(ctx context.Context, said string) error {
+		one, err := readJob(ctx, 0)
+		if err != nil {
+			return err
+		}
+		if one.GetPhase() == job.PhaseAsking {
+			return fmt.Errorf("the job is still asking after being answered")
+		}
+		events, err := worldFrom(ctx).store.ListJobEvents(ctx, one.GetId())
+		if err != nil {
+			return err
+		}
+		for _, event := range events {
+			if event.Kind == job.EventTold && strings.Contains(event.Detail, said) {
+				return nil
+			}
+		}
+		return fmt.Errorf("no record of that job says a person answered %q: the records read %v",
+			said, eventKinds(events))
+	})
 }
