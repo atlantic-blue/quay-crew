@@ -227,6 +227,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runWeb(ctx, client, args[1:], out)
 	case "render":
 		return runRender(args[1:], out)
+	case "record":
+		return runRecord(args[1:], out)
 	case "room":
 		return runRoom(ctx, client, out)
 	// Internal: a status line under a conversation runs the first, `krewe` on its own runs the second,
