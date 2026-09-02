@@ -3,6 +3,7 @@ package job
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // A job ends by stating one outcome from a fixed set, and the prose sits underneath it.
@@ -175,4 +176,42 @@ func lastWords(answer string) string {
 		return said
 	}
 	return "..." + said[len(said)-shown:]
+}
+
+// nothingToDecide is the question a person is put when a session stopped for them and said nothing
+// under the line. The session is named so the conversation can be read, because that is the only
+// place the reason can still be.
+const nothingToDecide = "This session stopped for a person and wrote nothing under the line, so " +
+	"what it needs is only in its conversation. Read it, and tell it what to do."
+
+// cutHere marks a question the answer was too long to carry whole. The whole answer is in the
+// conversation, and the question is read in a terminal by somebody doing something else.
+const cutHere = "\n\n(cut here: the rest is in the conversation)"
+
+// TheDecisionPutToAPerson is the question a session's answer asks, where that answer says a person
+// has to decide.
+//
+// The prose under the outcome line is the question. The session was told to put everything it wants
+// to say there, so reading it back is reading what it wrote rather than inventing a sentence on its
+// behalf, and a person is answering the session's own words.
+//
+// It never comes back empty. A session that states the word and says nothing is still a session
+// waiting on a person, and a record that dropped it because the prose was blank would be the failure
+// this exists to end, one case further along.
+func TheDecisionPutToAPerson(answer, session string) string {
+	asked := strings.TrimSpace(WithoutTheOutcome(answer))
+	if asked == "" {
+		if session == "" {
+			return nothingToDecide
+		}
+		return fmt.Sprintf("%s The conversation is %s.", nothingToDecide, session)
+	}
+	if len(asked) > QuestionLimit {
+		kept := QuestionLimit - len(cutHere)
+		for kept > 0 && !utf8.RuneStart(asked[kept]) {
+			kept--
+		}
+		asked = strings.TrimSpace(asked[:kept]) + cutHere
+	}
+	return asked
 }

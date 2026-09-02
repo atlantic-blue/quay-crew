@@ -3,6 +3,7 @@ package job
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/atlantic-blue/quay-krewe/internal/model"
 )
@@ -156,5 +157,64 @@ func TestTheModelDoubleWritesTheLineThisPackageReads(t *testing.T) {
 	}
 	if !KnownOutcome(model.FakeOutcome) {
 		t.Fatalf("the double states %q, which is not an outcome", model.FakeOutcome)
+	}
+}
+
+// The question a person is put, read off the answer that says a person has to decide.
+
+func TestTheQuestionIsWhatTheSessionWroteUnderTheLine(t *testing.T) {
+	answer := "Two roles read the plan, or one. Two costs a task each time.\n\n" +
+		OutcomeMarker + " " + OutcomeDecide
+	asked := TheDecisionPutToAPerson(answer, "session-1")
+	if asked != "Two roles read the plan, or one. Two costs a task each time." {
+		t.Fatalf("the question is %q", asked)
+	}
+}
+
+// An answer with nothing under the line still reaches a person, and it says where to read. A record
+// that dropped this one would be the failure it exists to end, one case further along.
+func TestAnAnswerWithNothingUnderTheLineStillAsksSomething(t *testing.T) {
+	asked := TheDecisionPutToAPerson(OutcomeMarker+" "+OutcomeDecide, "session-1")
+	if asked == "" {
+		t.Fatal("a session stopped for a person and the question is empty")
+	}
+	if !strings.Contains(asked, "session-1") {
+		t.Fatalf("the question is %q, want it to name the conversation to read", asked)
+	}
+	if _, err := TidyQuestion(asked); err != nil {
+		t.Fatalf("the record refuses this question: %v", err)
+	}
+}
+
+// A question is read by a person in a terminal, so it is held to the ceiling the record holds every
+// question to. An answer too long to carry whole is cut, and never refused: refusing it would leave
+// the job running, which is the whole fault.
+func TestALongAnswerIsCutRatherThanRefused(t *testing.T) {
+	said := ""
+	for range 400 {
+		said += "the store bills nothing at rest. "
+	}
+	asked := TheDecisionPutToAPerson(said+"\n\n"+OutcomeMarker+" "+OutcomeDecide, "session-1")
+	if len(asked) > QuestionLimit {
+		t.Fatalf("the question is %d bytes and a question may be %d", len(asked), QuestionLimit)
+	}
+	if _, err := TidyQuestion(asked); err != nil {
+		t.Fatalf("the record refuses this question: %v", err)
+	}
+	if !strings.Contains(asked, "conversation") {
+		t.Fatalf("a cut question does not say where the rest is: %q", asked)
+	}
+}
+
+// The cut lands on a character rather than inside one, so a question is never handed over ending in
+// a broken rune.
+func TestACutQuestionIsStillText(t *testing.T) {
+	said := ""
+	for range 2000 {
+		said += "café "
+	}
+	asked := TheDecisionPutToAPerson(said+"\n\n"+OutcomeMarker+" "+OutcomeDecide, "session-1")
+	if !utf8.ValidString(asked) {
+		t.Fatal("the question was cut inside a character")
 	}
 }

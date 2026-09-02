@@ -165,6 +165,17 @@ func (r *recordingRunner) willSayExactly(answer string) {
 	r.exact = append(r.exact, true)
 }
 
+// lastSaid is the last answer the double was told to give, so a step can hold what the record kept
+// against what the session wrote without the scenario repeating the words in two places.
+func (r *recordingRunner) lastSaid() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.says) == 0 {
+		return ""
+	}
+	return r.says[len(r.says)-1]
+}
+
 // willAnswer says what the double answers a task carrying a phrase, whenever that task arrives.
 func (r *recordingRunner) willAnswer(whenAsked, answer string) {
 	r.mu.Lock()
@@ -830,6 +841,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeJobEventsSteps(sc)
 	initializeJobLeaseSteps(sc)
 	initializeAskingSteps(sc)
+	initializeDecidingSteps(sc)
 	initializeResumingSteps(sc)
 	initializeContextCeilingSteps(sc)
 	initializeSettlingSteps(sc)

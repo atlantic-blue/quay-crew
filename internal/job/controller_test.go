@@ -724,6 +724,27 @@ func (r *rows) ProposeJobPlan(_ context.Context, id, plan, question string,
 	return &kept, nil
 }
 
+// AskJob puts a question on the row and stops the job there, refusing anything that is not running
+// the way both real stores do: a double that took the write from any phase would pass a test the
+// system would fail.
+func (r *rows) AskJob(_ context.Context, id, question string, event *job.Event) (*job.Job, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	one, held := r.held[id]
+	if !held {
+		return nil, errors.New("no such job")
+	}
+	if one.Phase != job.PhaseRunning {
+		return nil, job.ErrNotRunning
+	}
+	one.Phase, one.Question, one.Told, one.Resuming = job.PhaseAsking, question, "", ""
+	one.LeaseOwner, one.LeaseUntil = "", nil
+	one.UpdatedAt = time.Now().UTC()
+	r.record(id, []*job.Event{event})
+	kept := *one
+	return &kept, nil
+}
+
 // GetJob reads one job whole, which here is the row itself: the steps and the attempts live on it.
 func (r *rows) GetJob(_ context.Context, id string) (*job.Job, error) {
 	r.mu.Lock()

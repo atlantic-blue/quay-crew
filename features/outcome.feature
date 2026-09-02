@@ -11,6 +11,10 @@ Feature: A job ends by stating one outcome, so done is a word rather than a read
   as the explanation. The system reads the word off the answer rather than believing a report of it,
   the way it already reads the address of a pull request.
 
+  Three of the four say what became of the work, and the job settles on that word. The fourth says
+  the work stopped with a person, so the job stops with them instead of settling: deciding.feature
+  holds what happens then.
+
   A session that states none has not finished the job. It is not asked again, because the line was in
   the task it just answered, and the job stops saying what was missing rather than reading as work
   that went well.
@@ -82,7 +86,18 @@ Feature: A job ends by stating one outcome, so done is a word rather than a read
       | proved   |
       | unproved |
       | blocked  |
-      | decide   |
+
+  # The fourth word is not a settling. A job whose session says a person has to decide has stopped
+  # with that person, so it goes where everything that reads what waits on you looks. The rest of it
+  # is in deciding.feature.
+  Scenario: The word decide stops the job with a person rather than settling it
+    Given a job titled "read the electricity bill"
+    And the model will answer "Two stores fit and the cost differs. Which?" and state the outcome "decide"
+    When the controller ticks
+    And the task the controller sent lands
+    And the controller ticks again
+    Then the job is waiting on a person, carrying what the session wrote
+    And the job did not end
 
   # The listing this exists for. Two jobs are done and one of them could not do its work, and the
   # phase cannot tell them apart.
