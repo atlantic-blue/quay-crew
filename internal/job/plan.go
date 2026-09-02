@@ -69,17 +69,21 @@ func Planned(one *Job) bool {
 
 // WaitingForItsPlan says whether this job still owes a person a plan they approved.
 //
-// Two gates stand in front of this one and the same person holds all three. The order is what it
-// understood, then the list of what it would build, then the plan written from both, then the work.
-// A session asked to plan before anybody had agreed with its reading would be marking its own
-// reading, and a session asked to plan before anybody had accepted the list would be planning steps
-// towards deliverables nobody had chosen.
+// Three stages stand in front of this one. The order is what it understood, then the list of what it
+// would build, then the failing tests for every requirement on that list, then the plan written to
+// make them pass. A session asked to plan before anybody had agreed with its reading would be
+// marking its own reading, and a session asked to plan before anybody had accepted the list would be
+// planning steps towards deliverables nobody had chosen.
 //
-// A job holding a plan is past the design gate whether or not it went through one, which is what
-// carries a row written before the list existed: it is already at this gate, and sending it back to
-// design would take work a person had agreed to back to the beginning.
+// The tests come before the plan because the plan is the steps that turn a red suite green. A plan
+// written first says what the crew will do and the tests are then written to agree with it, which is
+// the whole failure the test stage exists to stop.
+//
+// A job holding a plan is past the design and test gates whether or not it went through either, which
+// is what carries a row written before they existed: it is already at this gate, and sending it back
+// would take work a person had agreed to back to the beginning.
 func WaitingForItsPlan(one *Job) bool {
-	return Planned(one) && Ideated(one) && pastItsDesign(one) && !one.PlanApproved
+	return Planned(one) && Ideated(one) && pastItsDesign(one) && pastItsTests(one) && !one.PlanApproved
 }
 
 // Step of a plan: what the crew says it will do, and the number a recorded step accounts for it by.

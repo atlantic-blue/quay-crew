@@ -18,7 +18,7 @@ const jobColumns = `id, workspace, project, title, brief, role, role_version, mo
 	phase, session, attempts, answer, outcome, reason, question, told, resuming, spent_tokens, observed_version,
 	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product, steers, claim,
 	escalation, looped_step, escalated_to, plan, plan_approved, ideation, ideation_answer,
-	design, design_accepted,
+	design, design_accepted, tests,
 	ungated, reviewed, tested,
 	pull_request_status, pull_request_checks, pull_request_check, pull_request_review,
 	pull_request_read_at, pull_request_failed,
@@ -111,13 +111,13 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 			expect_contains, after_jobs, deadline, budget_tokens, labels, requires, parent, depth, version, phase,
 			session, attempts, answer, outcome, reason, question, told, spent_tokens, observed_version, started_at,
 			finished_at, lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product,
-			resuming, claim, escalation, ungated, reviewed, tested, pull_request_status,
+			resuming, claim, escalation, ungated, reviewed, tested, tests, pull_request_status,
 			pull_request_checks, pull_request_check, pull_request_review, pull_request_read_at,
 			pull_request_failed, request, created_at, updated_at)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
 			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38,
-			$39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50,
-			coalesce($51::timestamptz, now()), coalesce($52::timestamptz, now()))`,
+			$39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51,
+			coalesce($52::timestamptz, now()), coalesce($53::timestamptz, now()))`,
 		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
 		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
 		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
@@ -127,7 +127,7 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 		declared.LeaseOwner, declared.LeaseUntil, declared.TraceID, declared.ParentSpanID,
 		declared.Repository, declared.PullRequest, declared.Product, declared.Resuming,
 		declared.Claim, declared.Escalation,
-		declared.Ungated, declared.Reviewed, declared.Tested,
+		declared.Ungated, declared.Reviewed, declared.Tested, declared.Tests,
 		declared.PullRequestState.Status, declared.PullRequestState.Checks,
 		declared.PullRequestState.FailedCheck, declared.PullRequestState.Review,
 		stampOrNil(declared.PullRequestState.ReadAt), declared.PullRequestState.Failed,
@@ -472,7 +472,7 @@ func scanJob(row rowScanner) (*job.Job, error) {
 		&found.Repository, &found.PullRequest, &found.Product, &found.Steers, &found.Claim,
 		&found.Escalation, &found.LoopedStep, &found.EscalatedTo, &found.Plan, &found.PlanApproved,
 		&found.Ideation, &found.IdeationAnswer,
-		&found.Design, &found.DesignAccepted,
+		&found.Design, &found.DesignAccepted, &found.Tests,
 		&found.Ungated, &found.Reviewed, &found.Tested,
 		&found.PullRequestState.Status, &found.PullRequestState.Checks,
 		&found.PullRequestState.FailedCheck, &found.PullRequestState.Review,
@@ -945,4 +945,71 @@ func (p *Postgres) RaiseJob(ctx context.Context, id string, event *job.Event) (b
 		return false, fmt.Errorf("raise job: %w", err)
 	}
 	return true, nil
+}
+
+// RecordJobTests writes the record of the requirements this job turned into failing tests.
+//
+// Conditional on the pending phase and on nothing being recorded yet, in the same statement. The job
+// is pending while its workers run, because the row itself is doing nothing: what is running is one
+// job for each requirement, each in its own session. Two controllers reading the same finished fan
+// out therefore leave one record and one movement on to the plan.
+//
+// It clears the reason, which is the line saying how many requirements were still being written. A
+// row that kept it would tell an operator the tests are being written after they are.
+func (p *Postgres) RecordJobTests(ctx context.Context, id, tests string, event *job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "record job tests", job.ErrNotPending, []*job.Event{event}, `
+		update jobs set tests = $2, reason = '', updated_at = now()
+		where id = $1 and phase = $3 and tests = ''`,
+		tests, job.PhasePending)
+}
+
+// JobsClaiming is the jobs in one workspace that claim any of these pieces of work, whole.
+//
+// Whole rather than as a listing, because what the reader of this wants is the answer each of those
+// jobs gave: the fan out of a test stage finds its workers by the claim each one holds, and a listing
+// leaves the answer out.
+//
+// It is not filtered by whether the claim is still held. A worker that finished has let its claim go,
+// and its answer is exactly what the job that fanned out is looking for.
+func (p *Postgres) JobsClaiming(ctx context.Context, workspace string, claims []string) ([]*job.Job, error) {
+	if len(claims) == 0 {
+		return nil, nil
+	}
+	rows, err := p.pool.Query(ctx, `select `+jobColumns+` from jobs
+		where workspace = $1 and claim = any($2::text[]) order by created_at asc, id asc`,
+		workspace, claims)
+	if err != nil {
+		return nil, fmt.Errorf("jobs claiming: %w", err)
+	}
+	defer rows.Close()
+	var held []*job.Job
+	for rows.Next() {
+		one, err := scanJob(rows)
+		if err != nil {
+			return nil, fmt.Errorf("jobs claiming: %w", err)
+		}
+		held = append(held, one)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("jobs claiming: %w", err)
+	}
+	return held, nil
+}
+
+// AskAboutJobTests puts the question about a suite that is not red to a person, and stops the job
+// there.
+//
+// It is the ordinary ask made from the pending phase rather than from the running one, and that is
+// the whole difference. Every other question a job asks comes from the session running it; this one
+// comes from the job's own workers finishing, and the row itself was never running while they did.
+//
+// Conditional on pending and on no record, in the same statement, so two controllers reading one
+// finished fan out ask one question.
+func (p *Postgres) AskAboutJobTests(ctx context.Context, id, question string,
+	event *job.Event) (*job.Job, error) {
+	return p.moveJob(ctx, id, "ask about job tests", job.ErrNotPending, []*job.Event{event}, `
+		update jobs set phase = $2, question = $3, told = '', resuming = '', reason = '',
+			lease_owner = '', lease_until = null, updated_at = now(), asked_at = now(), raised_at = null
+		where id = $1 and phase = $4 and tests = ''`,
+		job.PhaseAsking, question, job.PhasePending)
 }

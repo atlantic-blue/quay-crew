@@ -76,7 +76,9 @@ func TestAnAnswerOfYesAcceptsTheListAndThePlanIsWrittenFromIt(t *testing.T) {
 		t.Fatalf("an accepted job carries %q as the thing it was told", got.GetTold())
 	}
 
-	system.server.TickJob(ctx)
+	// The stage between the acceptance and the plan: every requirement on the list a person accepted
+	// becomes a failing test, and only then is the plan asked for.
+	system.wroteItsFailingTests(t)
 	asked := system.asked(t)
 	for _, phrase := range []string{"Step 1:", "A person accepted this list", "Vertical 1:"} {
 		if !strings.Contains(asked, phrase) {

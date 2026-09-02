@@ -221,6 +221,12 @@ func (r *recordingRunner) answerFor(asked int, text string) string {
 		(!queued || !strings.Contains(said, job.UnderstandingMarker)) {
 		return model.FakeUnderstanding
 	}
+	// And a task that asks for the failing tests of one requirement gets a report on that requirement,
+	// for the same reason. The number comes out of the task rather than being stated here: the stage
+	// refuses a report filed against a requirement its worker does not hold.
+	if strings.Contains(text, job.TheTestAsk) && (!queued || !strings.Contains(said, job.TestMarker)) {
+		return statingTheOutcome(model.FakeTestReport(text), text)
+	}
 	return statingTheOutcome(said, text)
 }
 
@@ -836,6 +842,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeFlowSteps(sc)
 	initializePlanReadingSteps(sc)
 	initializeStageSteps(sc)
+	initializeTestStageSteps(sc)
 	initializeStageWorkSteps(sc)
 	initializeFlowSurfaceSteps(sc)
 	initializePullRequestReviewSteps(sc)

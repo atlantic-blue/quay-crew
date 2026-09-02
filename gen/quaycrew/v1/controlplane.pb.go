@@ -8948,6 +8948,14 @@ type Job struct {
 	// list a person sent back for a rewrite carries the same text as a list nobody has answered yet.
 	Design         string `protobuf:"bytes,64,opt,name=design,proto3" json:"design,omitempty"`
 	DesignAccepted bool   `protobuf:"varint,65,opt,name=design_accepted,json=designAccepted,proto3" json:"design_accepted,omitempty"`
+	// tests is the record of the requirements that became failing tests before anything was built: one
+	// line per requirement, the number of tests the run covering it executed, and one line for each test
+	// that fails now, written under the requirement it came from.
+	//
+	// There is no flag beside it. What closes that stage is a suite that ran and failed for every
+	// requirement, which the system reads rather than a person, so the record being there is the fact.
+	// It is not tested, which is the settle gate over finished work.
+	Tests string `protobuf:"bytes,66,opt,name=tests,proto3" json:"tests,omitempty"`
 	// escalation is what this job does when it goes in circles, as it was declared: "ask", or
 	// "role:<name>". Empty is asking.
 	Escalation string `protobuf:"bytes,41,opt,name=escalation,proto3" json:"escalation,omitempty"`
@@ -9380,6 +9388,13 @@ func (x *Job) GetDesignAccepted() bool {
 		return x.DesignAccepted
 	}
 	return false
+}
+
+func (x *Job) GetTests() string {
+	if x != nil {
+		return x.Tests
+	}
+	return ""
 }
 
 func (x *Job) GetEscalation() string {
@@ -12919,7 +12934,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xc6\x12\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xdc\x12\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -12975,7 +12990,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\bideation\x18< \x01(\tR\bideation\x12'\n" +
 	"\x0fideation_answer\x18= \x01(\tR\x0eideationAnswer\x12\x16\n" +
 	"\x06design\x18@ \x01(\tR\x06design\x12'\n" +
-	"\x0fdesign_accepted\x18A \x01(\bR\x0edesignAccepted\x12\x1e\n" +
+	"\x0fdesign_accepted\x18A \x01(\bR\x0edesignAccepted\x12\x14\n" +
+	"\x05tests\x18B \x01(\tR\x05tests\x12\x1e\n" +
 	"\n" +
 	"escalation\x18) \x01(\tR\n" +
 	"escalation\x125\n" +

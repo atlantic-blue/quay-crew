@@ -10,10 +10,10 @@ Feature: A job says which of the four stages it is in
   it asks a person before it plans. Design is how the work comes alive as verticals. Test turns the
   requirements into failing tests. Build implements until those tests pass.
 
-  Only ideation is built. A job that passed it reads as being in design, and the reading says design
-  is not built yet, so nobody takes a named stage for a stage that works. It also says what that job
-  is doing instead, which is a fact about the job and not about the stage: the moment ideation closes
-  there is no plan at all.
+  Build is the one that is not written yet. A job that reached it reads as being in build, and the
+  reading says build is not built yet, so nobody takes a named stage for a stage that works. It also
+  says what that job is doing instead, which is a fact about the job and not about the stage: the
+  moment the suite goes red there is no plan at all.
 
   There is no command that sets a stage. The stage follows from what the job has done, and it is read
   off the row rather than written on it: every boundary is already a fact the row carries, and a
@@ -49,12 +49,20 @@ Feature: A job says which of the four stages it is in
     And the reading says accepting the list opens the next stage
     And the reading does not say the stage is unbuilt
 
-  Scenario: The acceptance closes design, and test says it is not built
+  Scenario: The acceptance closes design, and the job writes its failing tests next
     Given a job waiting for a person to accept the list it would build
     When the operator answers the job with "yes"
     And the caller reads that job back through the tool
     Then the reading says the job is in the "test" stage
     And the reading says the acceptance closed design
+    And the reading says a failing test for every requirement opens the next stage
+    And the reading does not say the stage is unbuilt
+
+  Scenario: A red suite closes test, and build says it is not built
+    Given a job whose list of 2 verticals a person accepted
+    And its requirements became failing tests
+    When the caller reads that job back through the tool
+    Then the reading says the job is in the "build" stage
     And the reading says the stage is not built yet
     And the reading says the job writes its plan next
     And the reading does not claim a plan nobody approved

@@ -192,8 +192,12 @@ func TestAJobOwesNoPlanUntilItsReadingIsAnswered(t *testing.T) {
 		t.Fatal("a job owes a plan before anybody accepted the list it would build")
 	}
 	one.Design, one.DesignAccepted = "Vertical 1: a person pastes a link", true
+	if job.WaitingForItsPlan(one) {
+		t.Fatal("a job owes a plan before its requirements have failing tests")
+	}
+	one.Tests = "Requirement 1: a person pastes a link\nRan 1: 12\nFails 1: TestItFails"
 	if !job.WaitingForItsPlan(one) {
-		t.Fatal("a job whose list was accepted does not owe a plan")
+		t.Fatal("a job whose suite is red does not owe a plan")
 	}
 }
 
@@ -238,6 +242,8 @@ func TestThePlanIsWrittenAgainstTheAnswerAndKeepsTheAssumedMarks(t *testing.T) {
 		// asks, and this is the one about the plan.
 		Design:         "Vertical 1: a person pastes a link and gets the text back\nShown 1: the terminal prints it",
 		DesignAccepted: true,
+		// And past the failing tests it became, which is the stage between that acceptance and the plan.
+		Tests: "Requirement 1: a person pastes a link\nRan 1: 12\nFails 1: TestItFails",
 	}
 	asked := job.Asked(one)
 	for _, phrase := range []string{

@@ -31,10 +31,10 @@ var Stages = []string{StageIdeation, StageDesign, StageTest, StageBuild}
 
 // StageBuilt says whether a stage is built yet.
 //
-// Ideation and design are. A reader of a job in test has to be told that test is not, because a stage
-// that is named and does nothing reads exactly like a stage that works, and the second reading is a
-// lie the job itself tells.
-func StageBuilt(stage string) bool { return stage == StageIdeation || stage == StageDesign }
+// Ideation, design and test are. A reader of a job in build has to be told that build is not, because
+// a stage that is named and does nothing reads exactly like a stage that works, and the second
+// reading is a lie the job itself tells.
+func StageBuilt(stage string) bool { return stage != StageBuild }
 
 // StageOpenedBy is what moves a job into this stage, as a phrase a sentence is built round. It is
 // empty where nothing moves a job there yet, which is every stage after test, and empty for ideation,
@@ -45,6 +45,8 @@ func StageOpenedBy(stage string) string {
 		return "your answer to what it understood"
 	case StageTest:
 		return "your acceptance of the list it would build"
+	case StageBuild:
+		return "a failing test for every requirement on that list"
 	}
 	return ""
 }
@@ -105,27 +107,36 @@ func StageOf(one *Job) Stage {
 	if WaitingForItsDesign(one) {
 		return stageStanding(StageDesign, closedOn)
 	}
-	// Past the list, so the next stage is test, and test is not built. A row written before the list
-	// existed reads the same way and says why: it carries a plan and no list, and saying a person
-	// accepted a list nobody put to them would be a false record.
+	// Past the list. A row written before the list existed reads the same way and says why: it carries
+	// a plan and no list, and saying a person accepted a list nobody put to them would be a false
+	// record.
 	accepted := StageOpenedBy(StageTest)
 	if !Designed(one) {
 		accepted = "the plan itself, because this job is older than the design stage"
 	}
-	test := stageStanding(StageTest, accepted)
-	test.Unbuilt = whatItDoesWhileTestIsNotBuilt(one)
-	return test
+	if WaitingForItsTests(one) {
+		return stageStanding(StageTest, accepted)
+	}
+	// Past the tests, so the next stage is build, and build is not built. A row that never went through
+	// the test stage says so rather than claiming a red suite nobody ran.
+	red := StageOpenedBy(StageBuild)
+	if !TestsWritten(one) {
+		red = "the plan itself, because this job is older than the test stage"
+	}
+	build := stageStanding(StageBuild, red)
+	build.Unbuilt = whatItDoesWhileBuildIsNotBuilt(one)
+	return build
 }
 
-// whatItDoesWhileTestIsNotBuilt is what a job past the list is actually doing.
+// whatItDoesWhileBuildIsNotBuilt is what a job past its failing tests is actually doing.
 //
-// The moment the list is accepted there is no plan, and a job that said it was carrying on under a
-// plan a person approved would be describing a state no job is in yet: the plan is written next, and
-// a person approves it before any work starts. So this reads the two plan columns rather than the
+// The moment the suite is red there is no plan, and a job that said it was carrying on under a plan a
+// person approved would be describing a state no job is in yet: the plan is written next, and a
+// person approves it before any work starts. So this reads the two plan columns rather than the
 // stage, for the reason the stage itself is read off the row: what a reader is told has to be true of
 // the job in front of them.
-func whatItDoesWhileTestIsNotBuilt(one *Job) string {
-	const notBuilt = "test is not built yet, so this job "
+func whatItDoesWhileBuildIsNotBuilt(one *Job) string {
+	const notBuilt = "build is not built yet, so this job "
 	switch {
 	case one.PlanApproved:
 		return notBuilt + "carries on under the plan a person approved"

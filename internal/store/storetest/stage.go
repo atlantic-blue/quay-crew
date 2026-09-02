@@ -124,15 +124,31 @@ func runJobStageConformance(t *testing.T, newDataset func(t *testing.T) Opener) 
 				"as %t, which is the column this suite exists to catch",
 				stage.Name, accepted.DesignAccepted)
 		}
-		if stage.Built {
-			t.Fatalf("test reads as built, and test is a later slice")
+		if !stage.Built || stage.Unbuilt != "" {
+			t.Fatalf("test reads as unbuilt, saying %q, and the job writes its failing tests there",
+				stage.Unbuilt)
 		}
-		if stage.Unbuilt == "" {
-			t.Fatalf("a job in test says nothing about test not being built")
+
+		// And the record of those failing tests moves it on again, to the stage nobody has written.
+		if _, err := s.RecordJobTests(ctx, id, theRedSuite,
+			testedEvent(id, workspace, project)); err != nil {
+			t.Fatalf("RecordJobTests: %v", err)
 		}
-		// And it says what the job is doing instead, truthfully. This job accepted its list a moment
-		// ago and has written no plan, so a line about carrying on under an approved plan would
-		// describe a state no job is in yet.
+		red, err := s.GetJob(ctx, id)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		stage = job.StageOf(red)
+		if stage.Name != job.StageBuild {
+			t.Fatalf("a job whose suite is red reads as stage %q: the record reads back as %q, which is "+
+				"the column this suite exists to catch", stage.Name, red.Tests)
+		}
+		if stage.Built || stage.Unbuilt == "" {
+			t.Fatalf("build reads as built, and build is a later slice")
+		}
+		// And it says what the job is doing instead, truthfully. This job went red a moment ago and has
+		// written no plan, so a line about carrying on under an approved plan would describe a state no
+		// job is in yet.
 		if strings.Contains(stage.Unbuilt, "a person approved") {
 			t.Fatalf("a job with no plan is told %q", stage.Unbuilt)
 		}

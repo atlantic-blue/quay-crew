@@ -78,6 +78,15 @@ func initializeStageSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	sc.Step(`^the reading says a failing test for every requirement opens the next stage$`,
+		func(ctx context.Context) error {
+			const want = "build opens on a failing test for every requirement on that list"
+			if out := toolFrom(ctx).stdout; !strings.Contains(out, want) {
+				return fmt.Errorf("the reading does not say %q: %s", want, out)
+			}
+			return nil
+		})
+
 	sc.Step(`^the reading says the acceptance closed design$`, func(ctx context.Context) error {
 		const want = "design closed on your acceptance of the list it would build"
 		if out := toolFrom(ctx).stdout; !strings.Contains(out, want) {

@@ -238,11 +238,6 @@ func initializeDesignSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the session is asked for a plan carrying the list a person accepted$`,
-		func(ctx context.Context) error {
-			return theSessionWasSent(ctx, "Step 1:", "A person accepted this list", "Yours 2:")
-		})
-
 	sc.Step(`^the session is asked again for the list and told what was wrong$`,
 		func(ctx context.Context) error {
 			return theSessionWasSent(ctx, "asked for the list once already", "Vertical 1:")

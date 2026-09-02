@@ -452,6 +452,24 @@ type Store interface {
 	ProposeJobDesign(ctx context.Context, id, design, question string,
 		event *job.Event) (*job.Job, error)
 	AcceptJobDesign(ctx context.Context, id string, event *job.Event) (*job.Job, error)
+	// RecordJobTests writes the record of the requirements a job turned into failing tests, one stage
+	// later again. It applies to a pending job that has none yet: the row is pending throughout,
+	// because what runs in that stage is one job for each requirement rather than the job itself.
+	//
+	// There is no acceptance beside it and no answer. What closes this stage is a suite that ran and
+	// failed for every requirement, which the system reads, so the record landing is the fact.
+	RecordJobTests(ctx context.Context, id, tests string, event *job.Event) (*job.Job, error)
+	// AskAboutJobTests is the other way that stage ends: the workers finished and the suite is not red
+	// for the reasons the stage needs, so the question goes to a person. It applies from the pending
+	// phase, unlike every other ask, because the row was never running while its workers wrote.
+	AskAboutJobTests(ctx context.Context, id, question string, event *job.Event) (*job.Job, error)
+	// JobsClaiming is the jobs in one workspace claiming any of these pieces of work, whole. It is how
+	// the test stage finds the workers it declared, each of which holds the claim on one requirement,
+	// and what it needs back from them is the answer each one gave.
+	//
+	// Holding is not asked. A worker that finished has let its claim go, and that worker's answer is
+	// exactly what the job that fanned out is reading.
+	JobsClaiming(ctx context.Context, workspace string, claims []string) ([]*job.Job, error)
 	// RecordJobStep writes down one thing the session doing a running job finished. The same words
 	// twice leave one step, because the record is the set of what is finished rather than a log of
 	// what was said, and a session continuing a job says again what it said before.

@@ -208,10 +208,14 @@ func TestAJobThatOwesAPlanIsAskedForOneAndForNoWork(t *testing.T) {
 		Ideation: "Understood: a page that takes a link\nNot: a page that takes an identifier\n" +
 			"Confidence: fairly sure\nQuestion 1: which surface is this read on",
 		IdeationAnswer: "1: on the command line",
-		// And past the list, which is the other stage in front of the plan.
+		// And past the list, which is the stage after that one.
 		Design: "Vertical 1: a person pastes a link and gets the text back\n" +
 			"Shown 1: the transcript prints in the terminal",
 		DesignAccepted: true,
+		// And past the failing tests those requirements became, which is the last stage in front of the
+		// plan: a plan is the steps that turn a red suite green.
+		Tests: "Requirement 1: a person pastes a link and gets the text back\n" +
+			"Ran 1: 12\nFails 1: TestPastingALinkPrintsTheTranscript",
 	})
 	for _, phrase := range []string{
 		"you paste a link and get the text back", "Do no work yet", "Step 1:",

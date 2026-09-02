@@ -197,6 +197,21 @@ type Store interface {
 	// ProposeJobDesign writes the list of verticals the crew said it would build and puts it to a
 	// person, in one movement, so a reader never finds a job asking with no list on it.
 	ProposeJobDesign(ctx context.Context, id, design, question string, event *Event) (*Job, error)
+	// RecordJobTests writes the record of the requirements this job turned into failing tests, on a
+	// pending job that has none yet. The job is pending while its workers run, because the row itself
+	// is doing nothing: what is running is one job for each requirement, each in its own session.
+	RecordJobTests(ctx context.Context, id, tests string, event *Event) (*Job, error)
+	// AskAboutJobTests puts the question about a suite that is not red to a person, from the pending
+	// phase. It is the one ask a job makes without a session behind it: what finished is its workers.
+	AskAboutJobTests(ctx context.Context, id, question string, event *Event) (*Job, error)
+	// CreateJob declares one job and the record of declaring it, in one transaction. It is how a test
+	// stage fans out, and it is the same call every other declaration goes through, so the claim on a
+	// requirement is refused here exactly as a claim typed by a person is.
+	CreateJob(ctx context.Context, declared *Job, event *Event) error
+	// JobsClaiming is the jobs in one workspace claiming any of these pieces of work, whole. It is how
+	// a fan out finds the workers it declared: each one holds the claim on its own requirement, and
+	// what the fan out needs back is the answer each of them gave.
+	JobsClaiming(ctx context.Context, workspace string, claims []string) ([]*Job, error)
 	// AskJob puts a question to a person and stops the job there. It applies only to a running job.
 	//
 	// The controller reaches for it where a session answered that a person has to decide, so that job
@@ -401,7 +416,7 @@ func NewController(store Store, plane ControlPlane, spend Spend, prover Prover, 
 		every: DefaultTickEvery, batch: DefaultBatch, lease: DefaultLease,
 		// A name of its own, minted rather than asked for, because two controllers sharing one could
 		// each take the other's job by renewing a lease they never held.
-		owner: "controller-" + newEventID()[:8],
+		owner: "controller-" + newRowID()[:8],
 	}
 }
 
@@ -609,6 +624,14 @@ func (c *Controller) start(ctx context.Context, one *Job, moving *stillMoving) {
 	// a job to the conversation that ran it. The context comes off the row rather than out
 	// of this process, so it is the same trace after a controller has died and another took over.
 	ctx = telemetry.Under(ctx, one.TraceID, one.ParentSpanID)
+
+	// A job whose accepted requirements have no failing tests yet never gets a session of its own. The
+	// work of this stage is done by one job for each requirement, and this row waits for them, so it
+	// takes no room on the machine and pays for no container.
+	if WaitingForItsTests(one) {
+		c.writeTheTests(ctx, one)
+		return
+	}
 
 	// The conversation this attempt runs in. It is named after the job, so a dispatch made twice lands
 	// where the job has been all along, and it moves on once per handoff: a session that reached the
@@ -1745,16 +1768,19 @@ func (c *Controller) event(ctx context.Context, one *Job, kind, detail string) *
 		detail = c.redactor.RedactFor(ctx, one.Workspace, detail)
 	}
 	return &Event{
-		ID: newEventID(), Kind: kind, Job: one.ID, Workspace: one.Workspace, Project: one.Project,
+		ID: newRowID(), Kind: kind, Job: one.ID, Workspace: one.Workspace, Project: one.Project,
 		Parent: one.Parent, Depth: one.Depth, Detail: detail, TraceID: one.TraceID,
 		OccurredAt: time.Now().UTC(),
 	}
 }
 
-// newEventID mints an identifier for a record, the same shape the store mints everything else in.
-// Minted here rather than by the store, because writing the same record twice has to leave one row
-// and the identifier is what makes that possible.
-func newEventID() string {
+// newRowID mints an identifier for a record or for a job the system declares itself, in the same
+// shape the store mints everything else in.
+//
+// Minted here rather than by the store, because writing the same record twice has to leave one row and
+// the identifier is what makes that possible, and because the store imports this package and cannot
+// be imported back.
+func newRowID() string {
 	b := make([]byte, 12)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)

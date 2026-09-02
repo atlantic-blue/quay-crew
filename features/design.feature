@@ -58,7 +58,7 @@ Feature: A job says what it would build, and a person accepts the list, before i
     Then the list is accepted
     And the row marks the vertical the person put there as theirs
     When the controller ticks again
-    Then the session is asked for a plan carrying the list a person accepted
+    Then a worker is writing the tests for each requirement, and the job itself has no session
 
   Scenario: A list nobody answers moves nothing
     Given a job waiting for a person to accept the list it would build

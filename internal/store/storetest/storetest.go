@@ -2237,6 +2237,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	runJobPlanConformance(t, newDataset)
 	runJobIdeationConformance(t, newDataset)
 	runJobDesignConformance(t, newDataset)
+	runJobTestConformance(t, newDataset)
 	runJobStageConformance(t, newDataset)
 	runJobClaimConformance(t, newDataset)
 	runJobResumeConformance(t, newDataset)

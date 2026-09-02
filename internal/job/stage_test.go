@@ -46,7 +46,8 @@ func TestAnAnsweredReadingPutsAJobInDesign(t *testing.T) {
 	}
 }
 
-// An accepted list closes design, and the stage after it is one nobody has written.
+// An accepted list closes design, and the job stands in test until its requirements have failing
+// tests.
 func TestAnAcceptedListPutsAJobInTest(t *testing.T) {
 	stage := StageOf(&Job{
 		Product:        "you paste a link and get the text back",
@@ -60,8 +61,33 @@ func TestAnAcceptedListPutsAJobInTest(t *testing.T) {
 	if stage.Closed != "design closed on your acceptance of the list it would build" {
 		t.Fatalf("test says design was closed by %q", stage.Closed)
 	}
-	if stage.Opens != "nothing opens build yet, it is a later slice" {
+	if stage.Opens != "build opens on a failing test for every requirement on that list" {
 		t.Fatalf("test says the next stage opens on %q", stage.Opens)
+	}
+	// Built, and it says nothing about being unbuilt. This is the way off the old reading: test used to
+	// be a name with nothing behind it, and a job standing in it was told so.
+	if !stage.Built || stage.Unbuilt != "" {
+		t.Fatalf("test reads as unbuilt, saying %q", stage.Unbuilt)
+	}
+}
+
+// A red suite closes test, and the stage after it is the one nobody has written.
+func TestAFailingSuitePutsAJobInBuild(t *testing.T) {
+	stage := StageOf(&Job{
+		Product:        "you paste a link and get the text back",
+		IdeationAnswer: "1: on the command line",
+		Design:         "Vertical 1: a person pastes a link and gets the text back",
+		DesignAccepted: true,
+		Tests:          "Requirement 1: a person pastes a link\nRan 1: 12\nFails 1: TestItFails",
+	})
+	if stage.Name != StageBuild || stage.Number != 4 {
+		t.Fatalf("a job whose suite is red is %q, %d of four", stage.Name, stage.Number)
+	}
+	if stage.Closed != "test closed on a failing test for every requirement on that list" {
+		t.Fatalf("build says test was closed by %q", stage.Closed)
+	}
+	if stage.Opens != "nothing, build is the last stage" {
+		t.Fatalf("build says the next stage opens on %q", stage.Opens)
 	}
 }
 
@@ -72,15 +98,16 @@ func TestAJobInAnUnbuiltStageSaysSo(t *testing.T) {
 		Product:        "you paste a link and get the text back",
 		IdeationAnswer: "1: on the command line",
 		DesignAccepted: true,
+		Tests:          "Requirement 1: a person pastes a link\nRan 1: 12\nFails 1: TestItFails",
 	})
 	if stage.Built {
-		t.Fatalf("test reads as built, and test is a later slice")
+		t.Fatalf("build reads as built, and build is a later slice")
 	}
 	if stage.Unbuilt == "" {
-		t.Fatalf("a job in test is told nothing about test not being built")
+		t.Fatalf("a job in build is told nothing about build not being built")
 	}
-	if stage.Where() != "stage 3 of 4: test" {
-		t.Fatalf("a job in test reads as %q", stage.Where())
+	if stage.Where() != "stage 4 of 4: build" {
+		t.Fatalf("a job in build reads as %q", stage.Where())
 	}
 }
 
@@ -93,12 +120,12 @@ func TestARowOlderThanTheseStagesIsPastThem(t *testing.T) {
 		Plan:         "Step 1: read the design",
 		PlanApproved: true,
 	})
-	if stage.Name != StageTest {
+	if stage.Name != StageBuild {
 		t.Fatalf("a job with an approved plan and no list is in %q", stage.Name)
 	}
-	want := "design closed on the plan itself, because this job is older than the design stage"
+	want := "test closed on the plan itself, because this job is older than the test stage"
 	if stage.Closed != want {
-		t.Fatalf("it says design was closed by %q", stage.Closed)
+		t.Fatalf("it says test was closed by %q", stage.Closed)
 	}
 }
 
@@ -117,7 +144,7 @@ func TestARowHoldingAPlanIsPastTheList(t *testing.T) {
 	if !WaitingForItsPlan(one) {
 		t.Fatalf("a job holding a plan nobody approved owes no plan")
 	}
-	if stage := StageOf(one); stage.Name != StageTest {
+	if stage := StageOf(one); stage.Name != StageBuild {
 		t.Fatalf("a job holding a plan reads as stage %q", stage.Name)
 	}
 }
@@ -172,20 +199,18 @@ func TestWhatClosesAndOpensEachStage(t *testing.T) {
 	if StageOpenedBy(StageTest) == "" {
 		t.Fatalf("nothing opens test, and accepting the list does")
 	}
-	// Nothing moves a job into build, because build is not built. A phrase here would be the reading
-	// claiming a boundary the code does not have.
-	if StageOpenedBy(StageBuild) != "" {
-		t.Fatalf("build opens on %q, and build is a later slice", StageOpenedBy(StageBuild))
+	if StageOpenedBy(StageBuild) == "" {
+		t.Fatalf("nothing opens build, and a failing test for every requirement does")
 	}
-	for _, name := range []string{StageIdeation, StageDesign} {
+	for _, name := range []string{StageIdeation, StageDesign, StageTest} {
 		if !StageBuilt(name) {
 			t.Fatalf("%s reads as not built", name)
 		}
 	}
-	for _, name := range []string{StageTest, StageBuild} {
-		if StageBuilt(name) {
-			t.Fatalf("%s reads as built, and it is a later slice", name)
-		}
+	// Build is the one that is not, and a reader standing in it is told so rather than left to find
+	// out from a stage that names itself and does nothing.
+	if StageBuilt(StageBuild) {
+		t.Fatalf("build reads as built, and it is a later slice")
 	}
 }
 
@@ -195,28 +220,31 @@ func TestNoJobIsInNoStage(t *testing.T) {
 	}
 }
 
-// What a job past the list is told it is doing, for each of the three states it can be in. The line
-// has to be true of the job in front of the reader: the moment the list is accepted there is no plan
-// at all, and a job cannot be carrying on under one nobody has written.
-func TestAJobInTestIsToldWhatItIsActuallyDoing(t *testing.T) {
-	justAccepted := StageOf(&Job{
+// What a job past its failing tests is told it is doing, for each of the three states it can be in.
+// The line has to be true of the job in front of the reader: the moment the suite goes red there is
+// no plan at all, and a job cannot be carrying on under one nobody has written.
+func TestAJobInBuildIsToldWhatItIsActuallyDoing(t *testing.T) {
+	red := "Requirement 1: a person pastes a link\nRan 1: 12\nFails 1: TestItFails"
+	justRed := StageOf(&Job{
 		Product:        "you paste a link and get the text back",
 		IdeationAnswer: "1: on the command line",
 		DesignAccepted: true,
+		Tests:          red,
 	})
-	want := "test is not built yet, so this job writes its plan next, and a person approves it " +
+	want := "build is not built yet, so this job writes its plan next, and a person approves it " +
 		"before any work starts"
-	if justAccepted.Unbuilt != want {
-		t.Fatalf("a job that has just had its list accepted is told %q", justAccepted.Unbuilt)
+	if justRed.Unbuilt != want {
+		t.Fatalf("a job whose suite has just gone red is told %q", justRed.Unbuilt)
 	}
 
 	written := StageOf(&Job{
 		Product:        "you paste a link and get the text back",
 		IdeationAnswer: "1: on the command line",
 		DesignAccepted: true,
+		Tests:          red,
 		Plan:           "Step 1: read the design",
 	})
-	if written.Unbuilt != "test is not built yet, so this job holds a plan nobody has approved yet" {
+	if written.Unbuilt != "build is not built yet, so this job holds a plan nobody has approved yet" {
 		t.Fatalf("a job whose plan nobody answered is told %q", written.Unbuilt)
 	}
 
@@ -224,10 +252,11 @@ func TestAJobInTestIsToldWhatItIsActuallyDoing(t *testing.T) {
 		Product:        "you paste a link and get the text back",
 		IdeationAnswer: "1: on the command line",
 		DesignAccepted: true,
+		Tests:          red,
 		Plan:           "Step 1: read the design",
 		PlanApproved:   true,
 	})
-	working := "test is not built yet, so this job carries on under the plan a person approved"
+	working := "build is not built yet, so this job carries on under the plan a person approved"
 	if approved.Unbuilt != working {
 		t.Fatalf("a job working to an approved plan is told %q", approved.Unbuilt)
 	}
