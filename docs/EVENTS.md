@@ -145,6 +145,10 @@ The contract, which another service may depend on:
 - `job.told`, when that person answered it. The detail is the answer. The pair is the record of every
   decision a run stopped for, so somebody reading it afterwards learns what was chosen without
   opening a container that is long gone.
+- `job.raised`, when the first surface named this job to a person as waiting: the console, a command,
+  or the line under a conversation. The detail is which surface carried it. It is written once for
+  each wait rather than once for each redraw, so the gap from `job.asked` is the time somebody spent
+  not knowing rather than the time since the last draw. `krewe job show` prints both moments.
 
 A flow run is carried by a job, so a run's own records are on this stream too, against that
 job. They are the four kinds

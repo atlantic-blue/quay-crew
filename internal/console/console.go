@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
@@ -123,7 +124,7 @@ func Run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, known
 	// Show what is already known while the control plane is still being asked, rather than an empty
 	// block that fills in a moment later.
 	model = model.WithInfo(known).WithClient(client).Beside(beside).Freshen(freshen).
-		WithCommandRunner(TheToolItself()).Remembering(remembering)
+		WithCommandRunner(TheToolItself()).Remembering(remembering).WithBell(TheTerminalBell())
 	if remembering.Load != nil {
 		// A place that cannot be read is no place: the console opens at the top, which is where it
 		// opened before it remembered anything.
@@ -161,4 +162,14 @@ func Plain(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, out
 		fmt.Fprintln(out, strings.Join(row.Cells, "  "))
 	}
 	return nil
+}
+
+// TheTerminalBell rings the terminal this console is drawn on.
+//
+// It writes to the error stream rather than to the screen the console owns. The bell character moves
+// no cursor and draws nothing, so it cannot corrupt the frame, and it reaches a terminal tab that is
+// not in front, which is the whole reason it is here: a person looking at something else is exactly
+// the person nothing was telling.
+func TheTerminalBell() Bell {
+	return func() { fmt.Fprint(os.Stderr, "\a") }
 }

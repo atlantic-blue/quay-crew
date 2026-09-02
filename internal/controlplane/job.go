@@ -456,6 +456,14 @@ func asJob(from *job.Job) *quaycrewv1.Job {
 		TraceId: from.TraceID, ParentSpanId: from.ParentSpanID,
 		CreatedAt: timestamppb.New(from.CreatedAt), UpdatedAt: timestamppb.New(from.UpdatedAt),
 	}
+	// The two moments the telling is measured between. Left unset where the moment has not happened,
+	// so a job nobody asked anything of and one asked at the start of the epoch never read the same.
+	if from.AskedAt != nil {
+		on.AskedAt = timestamppb.New(*from.AskedAt)
+	}
+	if from.RaisedAt != nil {
+		on.RaisedAt = timestamppb.New(*from.RaisedAt)
+	}
 	// What the forge last said about the pull request, as words rather than as a shape a caller has to
 	// interpret. The moment is left unset where nothing has read it, so a caller can tell a reading of
 	// unknown from no reading at all.

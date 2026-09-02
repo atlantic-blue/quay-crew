@@ -8967,12 +8967,21 @@ type Job struct {
 	//
 	// Both are columns rather than something a process holds, which is what makes a trace survive a
 	// controller that died: the context is in the declaration.
-	TraceId       string                 `protobuf:"bytes,30,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
-	ParentSpanId  string                 `protobuf:"bytes,31,opt,name=parent_span_id,json=parentSpanId,proto3" json:"parent_span_id,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,26,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,27,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,28,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
-	FinishedAt    *timestamppb.Timestamp `protobuf:"bytes,29,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	TraceId      string                 `protobuf:"bytes,30,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
+	ParentSpanId string                 `protobuf:"bytes,31,opt,name=parent_span_id,json=parentSpanId,proto3" json:"parent_span_id,omitempty"`
+	CreatedAt    *timestamppb.Timestamp `protobuf:"bytes,26,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt    *timestamppb.Timestamp `protobuf:"bytes,27,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	StartedAt    *timestamppb.Timestamp `protobuf:"bytes,28,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	FinishedAt   *timestamppb.Timestamp `protobuf:"bytes,29,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	// asked_at is when this job put its question to a person, and raised_at is when the first surface
+	// named it as waiting. The gap between the two is the time a person spent not knowing, which is
+	// the number the telling is judged on.
+	//
+	// Both are unset where the moment has not happened. A raise is written once for each wait rather
+	// than once for each poll, so a surface that draws the same waiting job every three seconds moves
+	// neither of them.
+	AskedAt       *timestamppb.Timestamp `protobuf:"bytes,62,opt,name=asked_at,json=askedAt,proto3" json:"asked_at,omitempty"`
+	RaisedAt      *timestamppb.Timestamp `protobuf:"bytes,63,opt,name=raised_at,json=raisedAt,proto3" json:"raised_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9430,6 +9439,20 @@ func (x *Job) GetStartedAt() *timestamppb.Timestamp {
 func (x *Job) GetFinishedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.FinishedAt
+	}
+	return nil
+}
+
+func (x *Job) GetAskedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.AskedAt
+	}
+	return nil
+}
+
+func (x *Job) GetRaisedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RaisedAt
 	}
 	return nil
 }
@@ -11675,8 +11698,16 @@ type WorkspaceLimits struct {
 	// cent of a window and is poor past 70, and from no measurement anybody has taken here. A
 	// workspace that wants the gate off sets it to 100, which refuses nothing until the window is full.
 	ContextCeilingPercent int32 `protobuf:"varint,10,opt,name=context_ceiling_percent,json=contextCeilingPercent,proto3" json:"context_ceiling_percent,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// waiting_seconds is how long a job may wait for a person here before the telling names the age
+	// beside it. Zero takes the system's own, which is 15 minutes.
+	//
+	// That 15 is a guess and nothing has measured it. The measurement that replaces it is the median
+	// time from job.asked to job.raised over one week of real jobs: a limit under that median names
+	// the age on every wait and stops being read, and one far above it says nothing while a person
+	// waits an hour.
+	WaitingSeconds int32 `protobuf:"varint,11,opt,name=waiting_seconds,json=waitingSeconds,proto3" json:"waiting_seconds,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *WorkspaceLimits) Reset() {
@@ -11779,6 +11810,245 @@ func (x *WorkspaceLimits) GetContextCeilingPercent() int32 {
 	return 0
 }
 
+func (x *WorkspaceLimits) GetWaitingSeconds() int32 {
+	if x != nil {
+		return x.WaitingSeconds
+	}
+	return 0
+}
+
+// Waiting is one job that waits for a person, and what it wants from them. It is the one shape every
+// surface draws the telling from, so the console, the command line and the status line can never
+// disagree about how many jobs wait or about what one of them asked.
+type Waiting struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Job       string                 `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
+	Workspace string                 `protobuf:"bytes,2,opt,name=workspace,proto3" json:"workspace,omitempty"`
+	Project   string                 `protobuf:"bytes,3,opt,name=project,proto3" json:"project,omitempty"`
+	Title     string                 `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
+	// why is the kind of wait, in one word: "asking" for a question a person has to answer, "blocked"
+	// for a job that failed or was stopped, and "checks" for one whose pull request the forge says is
+	// red.
+	Why string `protobuf:"bytes,5,opt,name=why,proto3" json:"why,omitempty"`
+	// want is what this job wants from a person: the question it put, the reason it stopped, or the
+	// check that failed. It goes through the same redactor a record does, so a sealed value a question
+	// quoted never reaches a screen.
+	Want string `protobuf:"bytes,6,opt,name=want,proto3" json:"want,omitempty"`
+	// since is when the wait started, and waited_seconds how long it has lasted at the moment of the
+	// read. over_limit says the wait passed the workspace's limit, which is what makes a surface name
+	// the age rather than only the job.
+	Since         *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=since,proto3" json:"since,omitempty"`
+	WaitedSeconds int64                  `protobuf:"varint,8,opt,name=waited_seconds,json=waitedSeconds,proto3" json:"waited_seconds,omitempty"`
+	OverLimit     bool                   `protobuf:"varint,9,opt,name=over_limit,json=overLimit,proto3" json:"over_limit,omitempty"`
+	// pull_request is the address of the work, for a wait a person answers by opening it. Empty where
+	// there is none.
+	PullRequest   string `protobuf:"bytes,10,opt,name=pull_request,json=pullRequest,proto3" json:"pull_request,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Waiting) Reset() {
+	*x = Waiting{}
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[177]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Waiting) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Waiting) ProtoMessage() {}
+
+func (x *Waiting) ProtoReflect() protoreflect.Message {
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[177]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Waiting.ProtoReflect.Descriptor instead.
+func (*Waiting) Descriptor() ([]byte, []int) {
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{177}
+}
+
+func (x *Waiting) GetJob() string {
+	if x != nil {
+		return x.Job
+	}
+	return ""
+}
+
+func (x *Waiting) GetWorkspace() string {
+	if x != nil {
+		return x.Workspace
+	}
+	return ""
+}
+
+func (x *Waiting) GetProject() string {
+	if x != nil {
+		return x.Project
+	}
+	return ""
+}
+
+func (x *Waiting) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *Waiting) GetWhy() string {
+	if x != nil {
+		return x.Why
+	}
+	return ""
+}
+
+func (x *Waiting) GetWant() string {
+	if x != nil {
+		return x.Want
+	}
+	return ""
+}
+
+func (x *Waiting) GetSince() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Since
+	}
+	return nil
+}
+
+func (x *Waiting) GetWaitedSeconds() int64 {
+	if x != nil {
+		return x.WaitedSeconds
+	}
+	return 0
+}
+
+func (x *Waiting) GetOverLimit() bool {
+	if x != nil {
+		return x.OverLimit
+	}
+	return false
+}
+
+func (x *Waiting) GetPullRequest() string {
+	if x != nil {
+		return x.PullRequest
+	}
+	return ""
+}
+
+// GetWaitingRequest asks what waits for a person.
+//
+// surface is what is asking: the console, the command line, the status line. The first surface to
+// name a waiting job writes job.raised carrying its name, so the gap from job.asked reads back
+// afterwards. A request that names no surface is answered and records nothing, because a caller that
+// will not say who it is has not told anybody.
+type GetWaitingRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Workspace     string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
+	Surface       string                 `protobuf:"bytes,2,opt,name=surface,proto3" json:"surface,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetWaitingRequest) Reset() {
+	*x = GetWaitingRequest{}
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[178]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetWaitingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetWaitingRequest) ProtoMessage() {}
+
+func (x *GetWaitingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[178]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetWaitingRequest.ProtoReflect.Descriptor instead.
+func (*GetWaitingRequest) Descriptor() ([]byte, []int) {
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{178}
+}
+
+func (x *GetWaitingRequest) GetWorkspace() string {
+	if x != nil {
+		return x.Workspace
+	}
+	return ""
+}
+
+func (x *GetWaitingRequest) GetSurface() string {
+	if x != nil {
+		return x.Surface
+	}
+	return ""
+}
+
+type GetWaitingResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Waiting       []*Waiting             `protobuf:"bytes,1,rep,name=waiting,proto3" json:"waiting,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetWaitingResponse) Reset() {
+	*x = GetWaitingResponse{}
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[179]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetWaitingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetWaitingResponse) ProtoMessage() {}
+
+func (x *GetWaitingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[179]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetWaitingResponse.ProtoReflect.Descriptor instead.
+func (*GetWaitingResponse) Descriptor() ([]byte, []int) {
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{179}
+}
+
+func (x *GetWaitingResponse) GetWaiting() []*Waiting {
+	if x != nil {
+		return x.Waiting
+	}
+	return nil
+}
+
 type GetWorkspaceLimitsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Workspace     string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
@@ -11788,7 +12058,7 @@ type GetWorkspaceLimitsRequest struct {
 
 func (x *GetWorkspaceLimitsRequest) Reset() {
 	*x = GetWorkspaceLimitsRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[177]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[180]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11800,7 +12070,7 @@ func (x *GetWorkspaceLimitsRequest) String() string {
 func (*GetWorkspaceLimitsRequest) ProtoMessage() {}
 
 func (x *GetWorkspaceLimitsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[177]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[180]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11813,7 +12083,7 @@ func (x *GetWorkspaceLimitsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorkspaceLimitsRequest.ProtoReflect.Descriptor instead.
 func (*GetWorkspaceLimitsRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{177}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{180}
 }
 
 func (x *GetWorkspaceLimitsRequest) GetWorkspace() string {
@@ -11832,7 +12102,7 @@ type GetWorkspaceLimitsResponse struct {
 
 func (x *GetWorkspaceLimitsResponse) Reset() {
 	*x = GetWorkspaceLimitsResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[178]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[181]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11844,7 +12114,7 @@ func (x *GetWorkspaceLimitsResponse) String() string {
 func (*GetWorkspaceLimitsResponse) ProtoMessage() {}
 
 func (x *GetWorkspaceLimitsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[178]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[181]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11857,7 +12127,7 @@ func (x *GetWorkspaceLimitsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorkspaceLimitsResponse.ProtoReflect.Descriptor instead.
 func (*GetWorkspaceLimitsResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{178}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{181}
 }
 
 func (x *GetWorkspaceLimitsResponse) GetLimits() *WorkspaceLimits {
@@ -11878,7 +12148,7 @@ type SetWorkspaceLimitsRequest struct {
 
 func (x *SetWorkspaceLimitsRequest) Reset() {
 	*x = SetWorkspaceLimitsRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[179]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[182]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11890,7 +12160,7 @@ func (x *SetWorkspaceLimitsRequest) String() string {
 func (*SetWorkspaceLimitsRequest) ProtoMessage() {}
 
 func (x *SetWorkspaceLimitsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[179]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[182]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11903,7 +12173,7 @@ func (x *SetWorkspaceLimitsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetWorkspaceLimitsRequest.ProtoReflect.Descriptor instead.
 func (*SetWorkspaceLimitsRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{179}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{182}
 }
 
 func (x *SetWorkspaceLimitsRequest) GetLimits() *WorkspaceLimits {
@@ -11922,7 +12192,7 @@ type SetWorkspaceLimitsResponse struct {
 
 func (x *SetWorkspaceLimitsResponse) Reset() {
 	*x = SetWorkspaceLimitsResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[180]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[183]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11934,7 +12204,7 @@ func (x *SetWorkspaceLimitsResponse) String() string {
 func (*SetWorkspaceLimitsResponse) ProtoMessage() {}
 
 func (x *SetWorkspaceLimitsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[180]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[183]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11947,7 +12217,7 @@ func (x *SetWorkspaceLimitsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetWorkspaceLimitsResponse.ProtoReflect.Descriptor instead.
 func (*SetWorkspaceLimitsResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{180}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{183}
 }
 
 func (x *SetWorkspaceLimitsResponse) GetLimits() *WorkspaceLimits {
@@ -11970,7 +12240,7 @@ type ListSessionEventsRequest struct {
 
 func (x *ListSessionEventsRequest) Reset() {
 	*x = ListSessionEventsRequest{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[181]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[184]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11982,7 +12252,7 @@ func (x *ListSessionEventsRequest) String() string {
 func (*ListSessionEventsRequest) ProtoMessage() {}
 
 func (x *ListSessionEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[181]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[184]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11995,7 +12265,7 @@ func (x *ListSessionEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionEventsRequest.ProtoReflect.Descriptor instead.
 func (*ListSessionEventsRequest) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{181}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{184}
 }
 
 func (x *ListSessionEventsRequest) GetSession() string {
@@ -12021,7 +12291,7 @@ type ListSessionEventsResponse struct {
 
 func (x *ListSessionEventsResponse) Reset() {
 	*x = ListSessionEventsResponse{}
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[182]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[185]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12033,7 +12303,7 @@ func (x *ListSessionEventsResponse) String() string {
 func (*ListSessionEventsResponse) ProtoMessage() {}
 
 func (x *ListSessionEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[182]
+	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[185]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12046,7 +12316,7 @@ func (x *ListSessionEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionEventsResponse.ProtoReflect.Descriptor instead.
 func (*ListSessionEventsResponse) Descriptor() ([]byte, []int) {
-	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{182}
+	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{185}
 }
 
 func (x *ListSessionEventsResponse) GetEvents() []*SessionEvent {
@@ -12626,7 +12896,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\x95\x11\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\x85\x12\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -12699,7 +12969,9 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\n" +
 	"started_at\x18\x1c \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12;\n" +
 	"\vfinished_at\x18\x1d \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"finishedAt\x1a9\n" +
+	"finishedAt\x125\n" +
+	"\basked_at\x18> \x01(\v2\x1a.google.protobuf.TimestampR\aaskedAt\x127\n" +
+	"\traised_at\x18? \x01(\v2\x1a.google.protobuf.TimestampR\braisedAt\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xd1\x01\n" +
@@ -12858,7 +13130,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x03job\x18\x01 \x01(\tR\x03job\"f\n" +
 	"\x12ListSteersResponse\x12*\n" +
 	"\x06steers\x18\x01 \x03(\v2\x12.quaycrew.v1.SteerR\x06steers\x12$\n" +
-	"\x04root\x18\x02 \x01(\v2\x10.quaycrew.v1.JobR\x04root\"\xab\x03\n" +
+	"\x04root\x18\x02 \x01(\v2\x10.quaycrew.v1.JobR\x04root\"\xd4\x03\n" +
 	"\x0fWorkspaceLimits\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x1b\n" +
 	"\tmax_depth\x18\x02 \x01(\x05R\bmaxDepth\x12\x1f\n" +
@@ -12871,7 +13143,26 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x12request_memory_mib\x18\b \x01(\x05R\x10requestMemoryMib\x12:\n" +
 	"\x19request_processor_percent\x18\t \x01(\x05R\x17requestProcessorPercent\x126\n" +
 	"\x17context_ceiling_percent\x18\n" +
-	" \x01(\x05R\x15contextCeilingPercent\"9\n" +
+	" \x01(\x05R\x15contextCeilingPercent\x12'\n" +
+	"\x0fwaiting_seconds\x18\v \x01(\x05R\x0ewaitingSeconds\"\xaa\x02\n" +
+	"\aWaiting\x12\x10\n" +
+	"\x03job\x18\x01 \x01(\tR\x03job\x12\x1c\n" +
+	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
+	"\aproject\x18\x03 \x01(\tR\aproject\x12\x14\n" +
+	"\x05title\x18\x04 \x01(\tR\x05title\x12\x10\n" +
+	"\x03why\x18\x05 \x01(\tR\x03why\x12\x12\n" +
+	"\x04want\x18\x06 \x01(\tR\x04want\x120\n" +
+	"\x05since\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\x05since\x12%\n" +
+	"\x0ewaited_seconds\x18\b \x01(\x03R\rwaitedSeconds\x12\x1d\n" +
+	"\n" +
+	"over_limit\x18\t \x01(\bR\toverLimit\x12!\n" +
+	"\fpull_request\x18\n" +
+	" \x01(\tR\vpullRequest\"K\n" +
+	"\x11GetWaitingRequest\x12\x1c\n" +
+	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x18\n" +
+	"\asurface\x18\x02 \x01(\tR\asurface\"D\n" +
+	"\x12GetWaitingResponse\x12.\n" +
+	"\awaiting\x18\x01 \x03(\v2\x14.quaycrew.v1.WaitingR\awaiting\"9\n" +
 	"\x19GetWorkspaceLimitsRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\"R\n" +
 	"\x1aGetWorkspaceLimitsResponse\x124\n" +
@@ -12898,7 +13189,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\rDirectoryKind\x12\x1e\n" +
 	"\x1aDIRECTORY_KIND_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15DIRECTORY_KIND_SHARED\x10\x01\x12\x1a\n" +
-	"\x16DIRECTORY_KIND_WORKING\x10\x022\xb71\n" +
+	"\x16DIRECTORY_KIND_WORKING\x10\x022\x862\n" +
 	"\x13ControlPlaneService\x12\\\n" +
 	"\x0fCreateWorkspace\x12#.quaycrew.v1.CreateWorkspaceRequest\x1a$.quaycrew.v1.CreateWorkspaceResponse\x12S\n" +
 	"\fGetWorkspace\x12 .quaycrew.v1.GetWorkspaceRequest\x1a!.quaycrew.v1.GetWorkspaceResponse\x12Y\n" +
@@ -12980,7 +13271,9 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\tRefuseJob\x12\x1d.quaycrew.v1.RefuseJobRequest\x1a\x1e.quaycrew.v1.RefuseJobResponse\x12P\n" +
 	"\vRecordSteer\x12\x1f.quaycrew.v1.RecordSteerRequest\x1a .quaycrew.v1.RecordSteerResponse\x12M\n" +
 	"\n" +
-	"ListSteers\x12\x1e.quaycrew.v1.ListSteersRequest\x1a\x1f.quaycrew.v1.ListSteersResponse\x12e\n" +
+	"ListSteers\x12\x1e.quaycrew.v1.ListSteersRequest\x1a\x1f.quaycrew.v1.ListSteersResponse\x12M\n" +
+	"\n" +
+	"GetWaiting\x12\x1e.quaycrew.v1.GetWaitingRequest\x1a\x1f.quaycrew.v1.GetWaitingResponse\x12e\n" +
 	"\x12GetWorkspaceLimits\x12&.quaycrew.v1.GetWorkspaceLimitsRequest\x1a'.quaycrew.v1.GetWorkspaceLimitsResponse\x12e\n" +
 	"\x12SetWorkspaceLimits\x12&.quaycrew.v1.SetWorkspaceLimitsRequest\x1a'.quaycrew.v1.SetWorkspaceLimitsResponse\x12b\n" +
 	"\x11ListSessionEvents\x12%.quaycrew.v1.ListSessionEventsRequest\x1a&.quaycrew.v1.ListSessionEventsResponse\x12D\n" +
@@ -13005,7 +13298,7 @@ func file_quaycrew_v1_controlplane_proto_rawDescGZIP() []byte {
 }
 
 var file_quaycrew_v1_controlplane_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_quaycrew_v1_controlplane_proto_msgTypes = make([]protoimpl.MessageInfo, 187)
+var file_quaycrew_v1_controlplane_proto_msgTypes = make([]protoimpl.MessageInfo, 190)
 var file_quaycrew_v1_controlplane_proto_goTypes = []any{
 	(SessionPresence)(0),                     // 0: quaycrew.v1.SessionPresence
 	(SecretProjection)(0),                    // 1: quaycrew.v1.SecretProjection
@@ -13187,29 +13480,32 @@ var file_quaycrew_v1_controlplane_proto_goTypes = []any{
 	(*ListSteersRequest)(nil),                // 177: quaycrew.v1.ListSteersRequest
 	(*ListSteersResponse)(nil),               // 178: quaycrew.v1.ListSteersResponse
 	(*WorkspaceLimits)(nil),                  // 179: quaycrew.v1.WorkspaceLimits
-	(*GetWorkspaceLimitsRequest)(nil),        // 180: quaycrew.v1.GetWorkspaceLimitsRequest
-	(*GetWorkspaceLimitsResponse)(nil),       // 181: quaycrew.v1.GetWorkspaceLimitsResponse
-	(*SetWorkspaceLimitsRequest)(nil),        // 182: quaycrew.v1.SetWorkspaceLimitsRequest
-	(*SetWorkspaceLimitsResponse)(nil),       // 183: quaycrew.v1.SetWorkspaceLimitsResponse
-	(*ListSessionEventsRequest)(nil),         // 184: quaycrew.v1.ListSessionEventsRequest
-	(*ListSessionEventsResponse)(nil),        // 185: quaycrew.v1.ListSessionEventsResponse
-	nil,                                      // 186: quaycrew.v1.FlowRun.StateEntry
-	nil,                                      // 187: quaycrew.v1.StartFlowRequest.StateEntry
-	nil,                                      // 188: quaycrew.v1.Job.LabelsEntry
-	nil,                                      // 189: quaycrew.v1.CreateJobRequest.LabelsEntry
-	(*timestamppb.Timestamp)(nil),            // 190: google.protobuf.Timestamp
-	(*SessionEvent)(nil),                     // 191: quaycrew.v1.SessionEvent
+	(*Waiting)(nil),                          // 180: quaycrew.v1.Waiting
+	(*GetWaitingRequest)(nil),                // 181: quaycrew.v1.GetWaitingRequest
+	(*GetWaitingResponse)(nil),               // 182: quaycrew.v1.GetWaitingResponse
+	(*GetWorkspaceLimitsRequest)(nil),        // 183: quaycrew.v1.GetWorkspaceLimitsRequest
+	(*GetWorkspaceLimitsResponse)(nil),       // 184: quaycrew.v1.GetWorkspaceLimitsResponse
+	(*SetWorkspaceLimitsRequest)(nil),        // 185: quaycrew.v1.SetWorkspaceLimitsRequest
+	(*SetWorkspaceLimitsResponse)(nil),       // 186: quaycrew.v1.SetWorkspaceLimitsResponse
+	(*ListSessionEventsRequest)(nil),         // 187: quaycrew.v1.ListSessionEventsRequest
+	(*ListSessionEventsResponse)(nil),        // 188: quaycrew.v1.ListSessionEventsResponse
+	nil,                                      // 189: quaycrew.v1.FlowRun.StateEntry
+	nil,                                      // 190: quaycrew.v1.StartFlowRequest.StateEntry
+	nil,                                      // 191: quaycrew.v1.Job.LabelsEntry
+	nil,                                      // 192: quaycrew.v1.CreateJobRequest.LabelsEntry
+	(*timestamppb.Timestamp)(nil),            // 193: google.protobuf.Timestamp
+	(*SessionEvent)(nil),                     // 194: quaycrew.v1.SessionEvent
 }
 var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
-	190, // 0: quaycrew.v1.Workspace.created_at:type_name -> google.protobuf.Timestamp
-	190, // 1: quaycrew.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	193, // 0: quaycrew.v1.Workspace.created_at:type_name -> google.protobuf.Timestamp
+	193, // 1: quaycrew.v1.Project.created_at:type_name -> google.protobuf.Timestamp
 	6,   // 2: quaycrew.v1.Project.deploy_target:type_name -> quaycrew.v1.DeployTarget
-	190, // 3: quaycrew.v1.Session.created_at:type_name -> google.protobuf.Timestamp
-	190, // 4: quaycrew.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
-	190, // 5: quaycrew.v1.Session.archived_at:type_name -> google.protobuf.Timestamp
+	193, // 3: quaycrew.v1.Session.created_at:type_name -> google.protobuf.Timestamp
+	193, // 4: quaycrew.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
+	193, // 5: quaycrew.v1.Session.archived_at:type_name -> google.protobuf.Timestamp
 	10,  // 6: quaycrew.v1.Session.usage:type_name -> quaycrew.v1.Usage
 	9,   // 7: quaycrew.v1.Session.context_window:type_name -> quaycrew.v1.ContextWindow
-	190, // 8: quaycrew.v1.Session.reclaimed_at:type_name -> google.protobuf.Timestamp
+	193, // 8: quaycrew.v1.Session.reclaimed_at:type_name -> google.protobuf.Timestamp
 	0,   // 9: quaycrew.v1.Session.presence:type_name -> quaycrew.v1.SessionPresence
 	8,   // 10: quaycrew.v1.Session.context_spend:type_name -> quaycrew.v1.ContextSpend
 	3,   // 11: quaycrew.v1.CreateWorkspaceResponse.workspace:type_name -> quaycrew.v1.Workspace
@@ -13220,10 +13516,10 @@ var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
 	5,   // 16: quaycrew.v1.ListProjectsResponse.projects:type_name -> quaycrew.v1.Project
 	6,   // 17: quaycrew.v1.SetDeployTargetRequest.target:type_name -> quaycrew.v1.DeployTarget
 	5,   // 18: quaycrew.v1.SetDeployTargetResponse.project:type_name -> quaycrew.v1.Project
-	186, // 19: quaycrew.v1.FlowRun.state:type_name -> quaycrew.v1.FlowRun.StateEntry
-	190, // 20: quaycrew.v1.FlowRun.created_at:type_name -> google.protobuf.Timestamp
-	190, // 21: quaycrew.v1.FlowRun.updated_at:type_name -> google.protobuf.Timestamp
-	187, // 22: quaycrew.v1.StartFlowRequest.state:type_name -> quaycrew.v1.StartFlowRequest.StateEntry
+	189, // 19: quaycrew.v1.FlowRun.state:type_name -> quaycrew.v1.FlowRun.StateEntry
+	193, // 20: quaycrew.v1.FlowRun.created_at:type_name -> google.protobuf.Timestamp
+	193, // 21: quaycrew.v1.FlowRun.updated_at:type_name -> google.protobuf.Timestamp
+	190, // 22: quaycrew.v1.StartFlowRequest.state:type_name -> quaycrew.v1.StartFlowRequest.StateEntry
 	27,  // 23: quaycrew.v1.StartFlowResponse.run:type_name -> quaycrew.v1.FlowRun
 	27,  // 24: quaycrew.v1.GetFlowRunResponse.run:type_name -> quaycrew.v1.FlowRun
 	27,  // 25: quaycrew.v1.AnswerFlowRunResponse.run:type_name -> quaycrew.v1.FlowRun
@@ -13244,23 +13540,23 @@ var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
 	74,  // 40: quaycrew.v1.SetContextResponse.dir:type_name -> quaycrew.v1.ContextDir
 	77,  // 41: quaycrew.v1.ReadSessionWorkResponse.entries:type_name -> quaycrew.v1.SessionWorkEntry
 	2,   // 42: quaycrew.v1.LocateDirectoryResponse.kind:type_name -> quaycrew.v1.DirectoryKind
-	190, // 43: quaycrew.v1.SecretRef.updated_at:type_name -> google.protobuf.Timestamp
+	193, // 43: quaycrew.v1.SecretRef.updated_at:type_name -> google.protobuf.Timestamp
 	1,   // 44: quaycrew.v1.SecretRef.projection:type_name -> quaycrew.v1.SecretProjection
 	82,  // 45: quaycrew.v1.ListSecretsResponse.secrets:type_name -> quaycrew.v1.SecretRef
 	86,  // 46: quaycrew.v1.Skill.secrets:type_name -> quaycrew.v1.SkillSecret
-	190, // 47: quaycrew.v1.Skill.imported_at:type_name -> google.protobuf.Timestamp
+	193, // 47: quaycrew.v1.Skill.imported_at:type_name -> google.protobuf.Timestamp
 	87,  // 48: quaycrew.v1.ImportSkillRequest.files:type_name -> quaycrew.v1.SkillFile
 	85,  // 49: quaycrew.v1.ImportSkillResponse.skill:type_name -> quaycrew.v1.Skill
 	85,  // 50: quaycrew.v1.ListSkillsResponse.skills:type_name -> quaycrew.v1.Skill
 	85,  // 51: quaycrew.v1.AttachSkillResponse.skill:type_name -> quaycrew.v1.Skill
 	97,  // 52: quaycrew.v1.Hook.events:type_name -> quaycrew.v1.HookBinding
 	86,  // 53: quaycrew.v1.Hook.secrets:type_name -> quaycrew.v1.SkillSecret
-	190, // 54: quaycrew.v1.Hook.imported_at:type_name -> google.protobuf.Timestamp
+	193, // 54: quaycrew.v1.Hook.imported_at:type_name -> google.protobuf.Timestamp
 	98,  // 55: quaycrew.v1.ImportHookRequest.files:type_name -> quaycrew.v1.HookFile
 	96,  // 56: quaycrew.v1.ImportHookResponse.hook:type_name -> quaycrew.v1.Hook
 	96,  // 57: quaycrew.v1.ListHooksResponse.hooks:type_name -> quaycrew.v1.Hook
 	96,  // 58: quaycrew.v1.AttachHookResponse.hook:type_name -> quaycrew.v1.Hook
-	190, // 59: quaycrew.v1.Role.imported_at:type_name -> google.protobuf.Timestamp
+	193, // 59: quaycrew.v1.Role.imported_at:type_name -> google.protobuf.Timestamp
 	108, // 60: quaycrew.v1.Role.origin:type_name -> quaycrew.v1.RoleOrigin
 	109, // 61: quaycrew.v1.ImportRoleRequest.files:type_name -> quaycrew.v1.RoleFile
 	108, // 62: quaycrew.v1.ImportRoleRequest.origin:type_name -> quaycrew.v1.RoleOrigin
@@ -13273,217 +13569,223 @@ var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
 	7,   // 69: quaycrew.v1.SetSessionLabelResponse.session:type_name -> quaycrew.v1.Session
 	7,   // 70: quaycrew.v1.RestoreSessionResponse.session:type_name -> quaycrew.v1.Session
 	132, // 71: quaycrew.v1.GetHeadroomResponse.sandboxes:type_name -> quaycrew.v1.HeadroomSandbox
-	190, // 72: quaycrew.v1.GetHeadroomResponse.taken_at:type_name -> google.protobuf.Timestamp
+	193, // 72: quaycrew.v1.GetHeadroomResponse.taken_at:type_name -> google.protobuf.Timestamp
 	135, // 73: quaycrew.v1.GetHealthResponse.components:type_name -> quaycrew.v1.HealthComponent
-	190, // 74: quaycrew.v1.GetHealthResponse.checked_at:type_name -> google.protobuf.Timestamp
+	193, // 74: quaycrew.v1.GetHealthResponse.checked_at:type_name -> google.protobuf.Timestamp
 	10,  // 75: quaycrew.v1.GetUsageResponse.total:type_name -> quaycrew.v1.Usage
-	190, // 76: quaycrew.v1.GetHistoryRequest.since:type_name -> google.protobuf.Timestamp
-	190, // 77: quaycrew.v1.GetHistoryRequest.until:type_name -> google.protobuf.Timestamp
+	193, // 76: quaycrew.v1.GetHistoryRequest.since:type_name -> google.protobuf.Timestamp
+	193, // 77: quaycrew.v1.GetHistoryRequest.until:type_name -> google.protobuf.Timestamp
 	140, // 78: quaycrew.v1.GetHistoryResponse.total:type_name -> quaycrew.v1.HistoryTotals
 	141, // 79: quaycrew.v1.GetHistoryResponse.jobs:type_name -> quaycrew.v1.JobDigest
-	190, // 80: quaycrew.v1.GetHistoryResponse.since:type_name -> google.protobuf.Timestamp
-	190, // 81: quaycrew.v1.GetHistoryResponse.until:type_name -> google.protobuf.Timestamp
-	190, // 82: quaycrew.v1.JobDigest.created_at:type_name -> google.protobuf.Timestamp
-	190, // 83: quaycrew.v1.JobDigest.started_at:type_name -> google.protobuf.Timestamp
-	190, // 84: quaycrew.v1.JobDigest.finished_at:type_name -> google.protobuf.Timestamp
-	190, // 85: quaycrew.v1.Task.occurred_at:type_name -> google.protobuf.Timestamp
+	193, // 80: quaycrew.v1.GetHistoryResponse.since:type_name -> google.protobuf.Timestamp
+	193, // 81: quaycrew.v1.GetHistoryResponse.until:type_name -> google.protobuf.Timestamp
+	193, // 82: quaycrew.v1.JobDigest.created_at:type_name -> google.protobuf.Timestamp
+	193, // 83: quaycrew.v1.JobDigest.started_at:type_name -> google.protobuf.Timestamp
+	193, // 84: quaycrew.v1.JobDigest.finished_at:type_name -> google.protobuf.Timestamp
+	193, // 85: quaycrew.v1.Task.occurred_at:type_name -> google.protobuf.Timestamp
 	142, // 86: quaycrew.v1.ListTasksResponse.tasks:type_name -> quaycrew.v1.Task
-	190, // 87: quaycrew.v1.Job.deadline:type_name -> google.protobuf.Timestamp
-	188, // 88: quaycrew.v1.Job.labels:type_name -> quaycrew.v1.Job.LabelsEntry
-	190, // 89: quaycrew.v1.Job.pull_request_read_at:type_name -> google.protobuf.Timestamp
+	193, // 87: quaycrew.v1.Job.deadline:type_name -> google.protobuf.Timestamp
+	191, // 88: quaycrew.v1.Job.labels:type_name -> quaycrew.v1.Job.LabelsEntry
+	193, // 89: quaycrew.v1.Job.pull_request_read_at:type_name -> google.protobuf.Timestamp
 	148, // 90: quaycrew.v1.Job.steps:type_name -> quaycrew.v1.JobStep
 	149, // 91: quaycrew.v1.Job.handoffs:type_name -> quaycrew.v1.JobHandoff
 	147, // 92: quaycrew.v1.Job.questions:type_name -> quaycrew.v1.JobQuestion
 	146, // 93: quaycrew.v1.Job.attempted:type_name -> quaycrew.v1.JobAttempt
-	190, // 94: quaycrew.v1.Job.created_at:type_name -> google.protobuf.Timestamp
-	190, // 95: quaycrew.v1.Job.updated_at:type_name -> google.protobuf.Timestamp
-	190, // 96: quaycrew.v1.Job.started_at:type_name -> google.protobuf.Timestamp
-	190, // 97: quaycrew.v1.Job.finished_at:type_name -> google.protobuf.Timestamp
-	190, // 98: quaycrew.v1.JobAttempt.occurred_at:type_name -> google.protobuf.Timestamp
-	190, // 99: quaycrew.v1.JobQuestion.asked_at:type_name -> google.protobuf.Timestamp
-	190, // 100: quaycrew.v1.JobQuestion.settled_at:type_name -> google.protobuf.Timestamp
-	190, // 101: quaycrew.v1.JobStep.finished_at:type_name -> google.protobuf.Timestamp
-	190, // 102: quaycrew.v1.JobHandoff.written_at:type_name -> google.protobuf.Timestamp
-	190, // 103: quaycrew.v1.CreateJobRequest.deadline:type_name -> google.protobuf.Timestamp
-	189, // 104: quaycrew.v1.CreateJobRequest.labels:type_name -> quaycrew.v1.CreateJobRequest.LabelsEntry
-	145, // 105: quaycrew.v1.CreateJobResponse.job:type_name -> quaycrew.v1.Job
-	85,  // 106: quaycrew.v1.CreateJobResponse.left_out:type_name -> quaycrew.v1.Skill
-	145, // 107: quaycrew.v1.GetJobResponse.job:type_name -> quaycrew.v1.Job
-	190, // 108: quaycrew.v1.ListJobsRequest.finished_since:type_name -> google.protobuf.Timestamp
-	145, // 109: quaycrew.v1.ListJobsResponse.jobs:type_name -> quaycrew.v1.Job
-	145, // 110: quaycrew.v1.StopJobResponse.job:type_name -> quaycrew.v1.Job
-	145, // 111: quaycrew.v1.AskJobResponse.job:type_name -> quaycrew.v1.Job
-	145, // 112: quaycrew.v1.AnswerJobResponse.job:type_name -> quaycrew.v1.Job
-	145, // 113: quaycrew.v1.RecordJobStepResponse.job:type_name -> quaycrew.v1.Job
-	145, // 114: quaycrew.v1.RecordJobQuestionResponse.job:type_name -> quaycrew.v1.Job
-	145, // 115: quaycrew.v1.SettleJobQuestionResponse.job:type_name -> quaycrew.v1.Job
-	145, // 116: quaycrew.v1.RecordJobHandoffResponse.job:type_name -> quaycrew.v1.Job
-	145, // 117: quaycrew.v1.ResumeJobResponse.job:type_name -> quaycrew.v1.Job
-	145, // 118: quaycrew.v1.RefuseJobResponse.job:type_name -> quaycrew.v1.Job
-	190, // 119: quaycrew.v1.Steer.occurred_at:type_name -> google.protobuf.Timestamp
-	174, // 120: quaycrew.v1.RecordSteerResponse.steer:type_name -> quaycrew.v1.Steer
-	145, // 121: quaycrew.v1.RecordSteerResponse.root:type_name -> quaycrew.v1.Job
-	174, // 122: quaycrew.v1.ListSteersResponse.steers:type_name -> quaycrew.v1.Steer
-	145, // 123: quaycrew.v1.ListSteersResponse.root:type_name -> quaycrew.v1.Job
-	179, // 124: quaycrew.v1.GetWorkspaceLimitsResponse.limits:type_name -> quaycrew.v1.WorkspaceLimits
-	179, // 125: quaycrew.v1.SetWorkspaceLimitsRequest.limits:type_name -> quaycrew.v1.WorkspaceLimits
-	179, // 126: quaycrew.v1.SetWorkspaceLimitsResponse.limits:type_name -> quaycrew.v1.WorkspaceLimits
-	191, // 127: quaycrew.v1.ListSessionEventsResponse.events:type_name -> quaycrew.v1.SessionEvent
-	11,  // 128: quaycrew.v1.ControlPlaneService.CreateWorkspace:input_type -> quaycrew.v1.CreateWorkspaceRequest
-	13,  // 129: quaycrew.v1.ControlPlaneService.GetWorkspace:input_type -> quaycrew.v1.GetWorkspaceRequest
-	15,  // 130: quaycrew.v1.ControlPlaneService.ListWorkspaces:input_type -> quaycrew.v1.ListWorkspacesRequest
-	17,  // 131: quaycrew.v1.ControlPlaneService.DeleteWorkspace:input_type -> quaycrew.v1.DeleteWorkspaceRequest
-	19,  // 132: quaycrew.v1.ControlPlaneService.CreateProject:input_type -> quaycrew.v1.CreateProjectRequest
-	21,  // 133: quaycrew.v1.ControlPlaneService.GetProject:input_type -> quaycrew.v1.GetProjectRequest
-	23,  // 134: quaycrew.v1.ControlPlaneService.ListProjects:input_type -> quaycrew.v1.ListProjectsRequest
-	44,  // 135: quaycrew.v1.ControlPlaneService.DeleteProject:input_type -> quaycrew.v1.DeleteProjectRequest
-	25,  // 136: quaycrew.v1.ControlPlaneService.SetDeployTarget:input_type -> quaycrew.v1.SetDeployTargetRequest
-	46,  // 137: quaycrew.v1.ControlPlaneService.SetProjectRepository:input_type -> quaycrew.v1.SetProjectRepositoryRequest
-	28,  // 138: quaycrew.v1.ControlPlaneService.ImportFlow:input_type -> quaycrew.v1.ImportFlowRequest
-	30,  // 139: quaycrew.v1.ControlPlaneService.StartFlow:input_type -> quaycrew.v1.StartFlowRequest
-	32,  // 140: quaycrew.v1.ControlPlaneService.GetFlowRun:input_type -> quaycrew.v1.GetFlowRunRequest
-	42,  // 141: quaycrew.v1.ControlPlaneService.ListFlowRuns:input_type -> quaycrew.v1.ListFlowRunsRequest
-	40,  // 142: quaycrew.v1.ControlPlaneService.StopFlowRun:input_type -> quaycrew.v1.StopFlowRunRequest
-	34,  // 143: quaycrew.v1.ControlPlaneService.AnswerFlowRun:input_type -> quaycrew.v1.AnswerFlowRunRequest
-	36,  // 144: quaycrew.v1.ControlPlaneService.ScheduleFlow:input_type -> quaycrew.v1.ScheduleFlowRequest
-	38,  // 145: quaycrew.v1.ControlPlaneService.UnscheduleFlow:input_type -> quaycrew.v1.UnscheduleFlowRequest
-	48,  // 146: quaycrew.v1.ControlPlaneService.AttachChannel:input_type -> quaycrew.v1.AttachChannelRequest
-	50,  // 147: quaycrew.v1.ControlPlaneService.SetSecret:input_type -> quaycrew.v1.SetSecretRequest
-	83,  // 148: quaycrew.v1.ControlPlaneService.ListSecrets:input_type -> quaycrew.v1.ListSecretsRequest
-	52,  // 149: quaycrew.v1.ControlPlaneService.Dispatch:input_type -> quaycrew.v1.DispatchRequest
-	54,  // 150: quaycrew.v1.ControlPlaneService.OpenDriver:input_type -> quaycrew.v1.OpenDriverRequest
-	56,  // 151: quaycrew.v1.ControlPlaneService.ListSessions:input_type -> quaycrew.v1.ListSessionsRequest
-	58,  // 152: quaycrew.v1.ControlPlaneService.GetSession:input_type -> quaycrew.v1.GetSessionRequest
-	60,  // 153: quaycrew.v1.ControlPlaneService.AttachSession:input_type -> quaycrew.v1.AttachSessionRequest
-	62,  // 154: quaycrew.v1.ControlPlaneService.StopSession:input_type -> quaycrew.v1.StopSessionRequest
-	72,  // 155: quaycrew.v1.ControlPlaneService.StopTask:input_type -> quaycrew.v1.StopTaskRequest
-	70,  // 156: quaycrew.v1.ControlPlaneService.ReclaimSession:input_type -> quaycrew.v1.ReclaimSessionRequest
-	64,  // 157: quaycrew.v1.ControlPlaneService.DrainSessions:input_type -> quaycrew.v1.DrainSessionsRequest
-	66,  // 158: quaycrew.v1.ControlPlaneService.RestartSession:input_type -> quaycrew.v1.RestartSessionRequest
-	68,  // 159: quaycrew.v1.ControlPlaneService.ArchiveSession:input_type -> quaycrew.v1.ArchiveSessionRequest
-	126, // 160: quaycrew.v1.ControlPlaneService.RestoreSession:input_type -> quaycrew.v1.RestoreSessionRequest
-	122, // 161: quaycrew.v1.ControlPlaneService.SetSessionPermissionMode:input_type -> quaycrew.v1.SetSessionPermissionModeRequest
-	124, // 162: quaycrew.v1.ControlPlaneService.SetSessionLabel:input_type -> quaycrew.v1.SetSessionLabelRequest
-	120, // 163: quaycrew.v1.ControlPlaneService.ListContexts:input_type -> quaycrew.v1.ListContextsRequest
-	75,  // 164: quaycrew.v1.ControlPlaneService.SetContext:input_type -> quaycrew.v1.SetContextRequest
-	78,  // 165: quaycrew.v1.ControlPlaneService.ReadSessionWork:input_type -> quaycrew.v1.ReadSessionWorkRequest
-	80,  // 166: quaycrew.v1.ControlPlaneService.LocateDirectory:input_type -> quaycrew.v1.LocateDirectoryRequest
-	88,  // 167: quaycrew.v1.ControlPlaneService.ImportSkill:input_type -> quaycrew.v1.ImportSkillRequest
-	90,  // 168: quaycrew.v1.ControlPlaneService.ListSkills:input_type -> quaycrew.v1.ListSkillsRequest
-	92,  // 169: quaycrew.v1.ControlPlaneService.AttachSkill:input_type -> quaycrew.v1.AttachSkillRequest
-	94,  // 170: quaycrew.v1.ControlPlaneService.DetachSkill:input_type -> quaycrew.v1.DetachSkillRequest
-	99,  // 171: quaycrew.v1.ControlPlaneService.ImportHook:input_type -> quaycrew.v1.ImportHookRequest
-	101, // 172: quaycrew.v1.ControlPlaneService.ListHooks:input_type -> quaycrew.v1.ListHooksRequest
-	103, // 173: quaycrew.v1.ControlPlaneService.AttachHook:input_type -> quaycrew.v1.AttachHookRequest
-	105, // 174: quaycrew.v1.ControlPlaneService.DetachHook:input_type -> quaycrew.v1.DetachHookRequest
-	110, // 175: quaycrew.v1.ControlPlaneService.ImportRole:input_type -> quaycrew.v1.ImportRoleRequest
-	112, // 176: quaycrew.v1.ControlPlaneService.ListRoles:input_type -> quaycrew.v1.ListRolesRequest
-	114, // 177: quaycrew.v1.ControlPlaneService.AttachRole:input_type -> quaycrew.v1.AttachRoleRequest
-	116, // 178: quaycrew.v1.ControlPlaneService.DetachRole:input_type -> quaycrew.v1.DetachRoleRequest
-	118, // 179: quaycrew.v1.ControlPlaneService.GetRole:input_type -> quaycrew.v1.GetRoleRequest
-	143, // 180: quaycrew.v1.ControlPlaneService.ListTasks:input_type -> quaycrew.v1.ListTasksRequest
-	150, // 181: quaycrew.v1.ControlPlaneService.CreateJob:input_type -> quaycrew.v1.CreateJobRequest
-	152, // 182: quaycrew.v1.ControlPlaneService.GetJob:input_type -> quaycrew.v1.GetJobRequest
-	154, // 183: quaycrew.v1.ControlPlaneService.ListJobs:input_type -> quaycrew.v1.ListJobsRequest
-	156, // 184: quaycrew.v1.ControlPlaneService.StopJob:input_type -> quaycrew.v1.StopJobRequest
-	158, // 185: quaycrew.v1.ControlPlaneService.AskJob:input_type -> quaycrew.v1.AskJobRequest
-	160, // 186: quaycrew.v1.ControlPlaneService.AnswerJob:input_type -> quaycrew.v1.AnswerJobRequest
-	162, // 187: quaycrew.v1.ControlPlaneService.RecordJobStep:input_type -> quaycrew.v1.RecordJobStepRequest
-	168, // 188: quaycrew.v1.ControlPlaneService.RecordJobHandoff:input_type -> quaycrew.v1.RecordJobHandoffRequest
-	164, // 189: quaycrew.v1.ControlPlaneService.RecordJobQuestion:input_type -> quaycrew.v1.RecordJobQuestionRequest
-	166, // 190: quaycrew.v1.ControlPlaneService.SettleJobQuestion:input_type -> quaycrew.v1.SettleJobQuestionRequest
-	170, // 191: quaycrew.v1.ControlPlaneService.ResumeJob:input_type -> quaycrew.v1.ResumeJobRequest
-	172, // 192: quaycrew.v1.ControlPlaneService.RefuseJob:input_type -> quaycrew.v1.RefuseJobRequest
-	175, // 193: quaycrew.v1.ControlPlaneService.RecordSteer:input_type -> quaycrew.v1.RecordSteerRequest
-	177, // 194: quaycrew.v1.ControlPlaneService.ListSteers:input_type -> quaycrew.v1.ListSteersRequest
-	180, // 195: quaycrew.v1.ControlPlaneService.GetWorkspaceLimits:input_type -> quaycrew.v1.GetWorkspaceLimitsRequest
-	182, // 196: quaycrew.v1.ControlPlaneService.SetWorkspaceLimits:input_type -> quaycrew.v1.SetWorkspaceLimitsRequest
-	184, // 197: quaycrew.v1.ControlPlaneService.ListSessionEvents:input_type -> quaycrew.v1.ListSessionEventsRequest
-	128, // 198: quaycrew.v1.ControlPlaneService.GetInfo:input_type -> quaycrew.v1.GetInfoRequest
-	136, // 199: quaycrew.v1.ControlPlaneService.GetUsage:input_type -> quaycrew.v1.GetUsageRequest
-	138, // 200: quaycrew.v1.ControlPlaneService.GetHistory:input_type -> quaycrew.v1.GetHistoryRequest
-	130, // 201: quaycrew.v1.ControlPlaneService.GetHeadroom:input_type -> quaycrew.v1.GetHeadroomRequest
-	133, // 202: quaycrew.v1.ControlPlaneService.GetHealth:input_type -> quaycrew.v1.GetHealthRequest
-	12,  // 203: quaycrew.v1.ControlPlaneService.CreateWorkspace:output_type -> quaycrew.v1.CreateWorkspaceResponse
-	14,  // 204: quaycrew.v1.ControlPlaneService.GetWorkspace:output_type -> quaycrew.v1.GetWorkspaceResponse
-	16,  // 205: quaycrew.v1.ControlPlaneService.ListWorkspaces:output_type -> quaycrew.v1.ListWorkspacesResponse
-	18,  // 206: quaycrew.v1.ControlPlaneService.DeleteWorkspace:output_type -> quaycrew.v1.DeleteWorkspaceResponse
-	20,  // 207: quaycrew.v1.ControlPlaneService.CreateProject:output_type -> quaycrew.v1.CreateProjectResponse
-	22,  // 208: quaycrew.v1.ControlPlaneService.GetProject:output_type -> quaycrew.v1.GetProjectResponse
-	24,  // 209: quaycrew.v1.ControlPlaneService.ListProjects:output_type -> quaycrew.v1.ListProjectsResponse
-	45,  // 210: quaycrew.v1.ControlPlaneService.DeleteProject:output_type -> quaycrew.v1.DeleteProjectResponse
-	26,  // 211: quaycrew.v1.ControlPlaneService.SetDeployTarget:output_type -> quaycrew.v1.SetDeployTargetResponse
-	47,  // 212: quaycrew.v1.ControlPlaneService.SetProjectRepository:output_type -> quaycrew.v1.SetProjectRepositoryResponse
-	29,  // 213: quaycrew.v1.ControlPlaneService.ImportFlow:output_type -> quaycrew.v1.ImportFlowResponse
-	31,  // 214: quaycrew.v1.ControlPlaneService.StartFlow:output_type -> quaycrew.v1.StartFlowResponse
-	33,  // 215: quaycrew.v1.ControlPlaneService.GetFlowRun:output_type -> quaycrew.v1.GetFlowRunResponse
-	43,  // 216: quaycrew.v1.ControlPlaneService.ListFlowRuns:output_type -> quaycrew.v1.ListFlowRunsResponse
-	41,  // 217: quaycrew.v1.ControlPlaneService.StopFlowRun:output_type -> quaycrew.v1.StopFlowRunResponse
-	35,  // 218: quaycrew.v1.ControlPlaneService.AnswerFlowRun:output_type -> quaycrew.v1.AnswerFlowRunResponse
-	37,  // 219: quaycrew.v1.ControlPlaneService.ScheduleFlow:output_type -> quaycrew.v1.ScheduleFlowResponse
-	39,  // 220: quaycrew.v1.ControlPlaneService.UnscheduleFlow:output_type -> quaycrew.v1.UnscheduleFlowResponse
-	49,  // 221: quaycrew.v1.ControlPlaneService.AttachChannel:output_type -> quaycrew.v1.AttachChannelResponse
-	51,  // 222: quaycrew.v1.ControlPlaneService.SetSecret:output_type -> quaycrew.v1.SetSecretResponse
-	84,  // 223: quaycrew.v1.ControlPlaneService.ListSecrets:output_type -> quaycrew.v1.ListSecretsResponse
-	53,  // 224: quaycrew.v1.ControlPlaneService.Dispatch:output_type -> quaycrew.v1.DispatchResponse
-	55,  // 225: quaycrew.v1.ControlPlaneService.OpenDriver:output_type -> quaycrew.v1.OpenDriverResponse
-	57,  // 226: quaycrew.v1.ControlPlaneService.ListSessions:output_type -> quaycrew.v1.ListSessionsResponse
-	59,  // 227: quaycrew.v1.ControlPlaneService.GetSession:output_type -> quaycrew.v1.GetSessionResponse
-	61,  // 228: quaycrew.v1.ControlPlaneService.AttachSession:output_type -> quaycrew.v1.AttachSessionResponse
-	63,  // 229: quaycrew.v1.ControlPlaneService.StopSession:output_type -> quaycrew.v1.StopSessionResponse
-	73,  // 230: quaycrew.v1.ControlPlaneService.StopTask:output_type -> quaycrew.v1.StopTaskResponse
-	71,  // 231: quaycrew.v1.ControlPlaneService.ReclaimSession:output_type -> quaycrew.v1.ReclaimSessionResponse
-	65,  // 232: quaycrew.v1.ControlPlaneService.DrainSessions:output_type -> quaycrew.v1.DrainSessionsResponse
-	67,  // 233: quaycrew.v1.ControlPlaneService.RestartSession:output_type -> quaycrew.v1.RestartSessionResponse
-	69,  // 234: quaycrew.v1.ControlPlaneService.ArchiveSession:output_type -> quaycrew.v1.ArchiveSessionResponse
-	127, // 235: quaycrew.v1.ControlPlaneService.RestoreSession:output_type -> quaycrew.v1.RestoreSessionResponse
-	123, // 236: quaycrew.v1.ControlPlaneService.SetSessionPermissionMode:output_type -> quaycrew.v1.SetSessionPermissionModeResponse
-	125, // 237: quaycrew.v1.ControlPlaneService.SetSessionLabel:output_type -> quaycrew.v1.SetSessionLabelResponse
-	121, // 238: quaycrew.v1.ControlPlaneService.ListContexts:output_type -> quaycrew.v1.ListContextsResponse
-	76,  // 239: quaycrew.v1.ControlPlaneService.SetContext:output_type -> quaycrew.v1.SetContextResponse
-	79,  // 240: quaycrew.v1.ControlPlaneService.ReadSessionWork:output_type -> quaycrew.v1.ReadSessionWorkResponse
-	81,  // 241: quaycrew.v1.ControlPlaneService.LocateDirectory:output_type -> quaycrew.v1.LocateDirectoryResponse
-	89,  // 242: quaycrew.v1.ControlPlaneService.ImportSkill:output_type -> quaycrew.v1.ImportSkillResponse
-	91,  // 243: quaycrew.v1.ControlPlaneService.ListSkills:output_type -> quaycrew.v1.ListSkillsResponse
-	93,  // 244: quaycrew.v1.ControlPlaneService.AttachSkill:output_type -> quaycrew.v1.AttachSkillResponse
-	95,  // 245: quaycrew.v1.ControlPlaneService.DetachSkill:output_type -> quaycrew.v1.DetachSkillResponse
-	100, // 246: quaycrew.v1.ControlPlaneService.ImportHook:output_type -> quaycrew.v1.ImportHookResponse
-	102, // 247: quaycrew.v1.ControlPlaneService.ListHooks:output_type -> quaycrew.v1.ListHooksResponse
-	104, // 248: quaycrew.v1.ControlPlaneService.AttachHook:output_type -> quaycrew.v1.AttachHookResponse
-	106, // 249: quaycrew.v1.ControlPlaneService.DetachHook:output_type -> quaycrew.v1.DetachHookResponse
-	111, // 250: quaycrew.v1.ControlPlaneService.ImportRole:output_type -> quaycrew.v1.ImportRoleResponse
-	113, // 251: quaycrew.v1.ControlPlaneService.ListRoles:output_type -> quaycrew.v1.ListRolesResponse
-	115, // 252: quaycrew.v1.ControlPlaneService.AttachRole:output_type -> quaycrew.v1.AttachRoleResponse
-	117, // 253: quaycrew.v1.ControlPlaneService.DetachRole:output_type -> quaycrew.v1.DetachRoleResponse
-	119, // 254: quaycrew.v1.ControlPlaneService.GetRole:output_type -> quaycrew.v1.GetRoleResponse
-	144, // 255: quaycrew.v1.ControlPlaneService.ListTasks:output_type -> quaycrew.v1.ListTasksResponse
-	151, // 256: quaycrew.v1.ControlPlaneService.CreateJob:output_type -> quaycrew.v1.CreateJobResponse
-	153, // 257: quaycrew.v1.ControlPlaneService.GetJob:output_type -> quaycrew.v1.GetJobResponse
-	155, // 258: quaycrew.v1.ControlPlaneService.ListJobs:output_type -> quaycrew.v1.ListJobsResponse
-	157, // 259: quaycrew.v1.ControlPlaneService.StopJob:output_type -> quaycrew.v1.StopJobResponse
-	159, // 260: quaycrew.v1.ControlPlaneService.AskJob:output_type -> quaycrew.v1.AskJobResponse
-	161, // 261: quaycrew.v1.ControlPlaneService.AnswerJob:output_type -> quaycrew.v1.AnswerJobResponse
-	163, // 262: quaycrew.v1.ControlPlaneService.RecordJobStep:output_type -> quaycrew.v1.RecordJobStepResponse
-	169, // 263: quaycrew.v1.ControlPlaneService.RecordJobHandoff:output_type -> quaycrew.v1.RecordJobHandoffResponse
-	165, // 264: quaycrew.v1.ControlPlaneService.RecordJobQuestion:output_type -> quaycrew.v1.RecordJobQuestionResponse
-	167, // 265: quaycrew.v1.ControlPlaneService.SettleJobQuestion:output_type -> quaycrew.v1.SettleJobQuestionResponse
-	171, // 266: quaycrew.v1.ControlPlaneService.ResumeJob:output_type -> quaycrew.v1.ResumeJobResponse
-	173, // 267: quaycrew.v1.ControlPlaneService.RefuseJob:output_type -> quaycrew.v1.RefuseJobResponse
-	176, // 268: quaycrew.v1.ControlPlaneService.RecordSteer:output_type -> quaycrew.v1.RecordSteerResponse
-	178, // 269: quaycrew.v1.ControlPlaneService.ListSteers:output_type -> quaycrew.v1.ListSteersResponse
-	181, // 270: quaycrew.v1.ControlPlaneService.GetWorkspaceLimits:output_type -> quaycrew.v1.GetWorkspaceLimitsResponse
-	183, // 271: quaycrew.v1.ControlPlaneService.SetWorkspaceLimits:output_type -> quaycrew.v1.SetWorkspaceLimitsResponse
-	185, // 272: quaycrew.v1.ControlPlaneService.ListSessionEvents:output_type -> quaycrew.v1.ListSessionEventsResponse
-	129, // 273: quaycrew.v1.ControlPlaneService.GetInfo:output_type -> quaycrew.v1.GetInfoResponse
-	137, // 274: quaycrew.v1.ControlPlaneService.GetUsage:output_type -> quaycrew.v1.GetUsageResponse
-	139, // 275: quaycrew.v1.ControlPlaneService.GetHistory:output_type -> quaycrew.v1.GetHistoryResponse
-	131, // 276: quaycrew.v1.ControlPlaneService.GetHeadroom:output_type -> quaycrew.v1.GetHeadroomResponse
-	134, // 277: quaycrew.v1.ControlPlaneService.GetHealth:output_type -> quaycrew.v1.GetHealthResponse
-	203, // [203:278] is the sub-list for method output_type
-	128, // [128:203] is the sub-list for method input_type
-	128, // [128:128] is the sub-list for extension type_name
-	128, // [128:128] is the sub-list for extension extendee
-	0,   // [0:128] is the sub-list for field type_name
+	193, // 94: quaycrew.v1.Job.created_at:type_name -> google.protobuf.Timestamp
+	193, // 95: quaycrew.v1.Job.updated_at:type_name -> google.protobuf.Timestamp
+	193, // 96: quaycrew.v1.Job.started_at:type_name -> google.protobuf.Timestamp
+	193, // 97: quaycrew.v1.Job.finished_at:type_name -> google.protobuf.Timestamp
+	193, // 98: quaycrew.v1.Job.asked_at:type_name -> google.protobuf.Timestamp
+	193, // 99: quaycrew.v1.Job.raised_at:type_name -> google.protobuf.Timestamp
+	193, // 100: quaycrew.v1.JobAttempt.occurred_at:type_name -> google.protobuf.Timestamp
+	193, // 101: quaycrew.v1.JobQuestion.asked_at:type_name -> google.protobuf.Timestamp
+	193, // 102: quaycrew.v1.JobQuestion.settled_at:type_name -> google.protobuf.Timestamp
+	193, // 103: quaycrew.v1.JobStep.finished_at:type_name -> google.protobuf.Timestamp
+	193, // 104: quaycrew.v1.JobHandoff.written_at:type_name -> google.protobuf.Timestamp
+	193, // 105: quaycrew.v1.CreateJobRequest.deadline:type_name -> google.protobuf.Timestamp
+	192, // 106: quaycrew.v1.CreateJobRequest.labels:type_name -> quaycrew.v1.CreateJobRequest.LabelsEntry
+	145, // 107: quaycrew.v1.CreateJobResponse.job:type_name -> quaycrew.v1.Job
+	85,  // 108: quaycrew.v1.CreateJobResponse.left_out:type_name -> quaycrew.v1.Skill
+	145, // 109: quaycrew.v1.GetJobResponse.job:type_name -> quaycrew.v1.Job
+	193, // 110: quaycrew.v1.ListJobsRequest.finished_since:type_name -> google.protobuf.Timestamp
+	145, // 111: quaycrew.v1.ListJobsResponse.jobs:type_name -> quaycrew.v1.Job
+	145, // 112: quaycrew.v1.StopJobResponse.job:type_name -> quaycrew.v1.Job
+	145, // 113: quaycrew.v1.AskJobResponse.job:type_name -> quaycrew.v1.Job
+	145, // 114: quaycrew.v1.AnswerJobResponse.job:type_name -> quaycrew.v1.Job
+	145, // 115: quaycrew.v1.RecordJobStepResponse.job:type_name -> quaycrew.v1.Job
+	145, // 116: quaycrew.v1.RecordJobQuestionResponse.job:type_name -> quaycrew.v1.Job
+	145, // 117: quaycrew.v1.SettleJobQuestionResponse.job:type_name -> quaycrew.v1.Job
+	145, // 118: quaycrew.v1.RecordJobHandoffResponse.job:type_name -> quaycrew.v1.Job
+	145, // 119: quaycrew.v1.ResumeJobResponse.job:type_name -> quaycrew.v1.Job
+	145, // 120: quaycrew.v1.RefuseJobResponse.job:type_name -> quaycrew.v1.Job
+	193, // 121: quaycrew.v1.Steer.occurred_at:type_name -> google.protobuf.Timestamp
+	174, // 122: quaycrew.v1.RecordSteerResponse.steer:type_name -> quaycrew.v1.Steer
+	145, // 123: quaycrew.v1.RecordSteerResponse.root:type_name -> quaycrew.v1.Job
+	174, // 124: quaycrew.v1.ListSteersResponse.steers:type_name -> quaycrew.v1.Steer
+	145, // 125: quaycrew.v1.ListSteersResponse.root:type_name -> quaycrew.v1.Job
+	193, // 126: quaycrew.v1.Waiting.since:type_name -> google.protobuf.Timestamp
+	180, // 127: quaycrew.v1.GetWaitingResponse.waiting:type_name -> quaycrew.v1.Waiting
+	179, // 128: quaycrew.v1.GetWorkspaceLimitsResponse.limits:type_name -> quaycrew.v1.WorkspaceLimits
+	179, // 129: quaycrew.v1.SetWorkspaceLimitsRequest.limits:type_name -> quaycrew.v1.WorkspaceLimits
+	179, // 130: quaycrew.v1.SetWorkspaceLimitsResponse.limits:type_name -> quaycrew.v1.WorkspaceLimits
+	194, // 131: quaycrew.v1.ListSessionEventsResponse.events:type_name -> quaycrew.v1.SessionEvent
+	11,  // 132: quaycrew.v1.ControlPlaneService.CreateWorkspace:input_type -> quaycrew.v1.CreateWorkspaceRequest
+	13,  // 133: quaycrew.v1.ControlPlaneService.GetWorkspace:input_type -> quaycrew.v1.GetWorkspaceRequest
+	15,  // 134: quaycrew.v1.ControlPlaneService.ListWorkspaces:input_type -> quaycrew.v1.ListWorkspacesRequest
+	17,  // 135: quaycrew.v1.ControlPlaneService.DeleteWorkspace:input_type -> quaycrew.v1.DeleteWorkspaceRequest
+	19,  // 136: quaycrew.v1.ControlPlaneService.CreateProject:input_type -> quaycrew.v1.CreateProjectRequest
+	21,  // 137: quaycrew.v1.ControlPlaneService.GetProject:input_type -> quaycrew.v1.GetProjectRequest
+	23,  // 138: quaycrew.v1.ControlPlaneService.ListProjects:input_type -> quaycrew.v1.ListProjectsRequest
+	44,  // 139: quaycrew.v1.ControlPlaneService.DeleteProject:input_type -> quaycrew.v1.DeleteProjectRequest
+	25,  // 140: quaycrew.v1.ControlPlaneService.SetDeployTarget:input_type -> quaycrew.v1.SetDeployTargetRequest
+	46,  // 141: quaycrew.v1.ControlPlaneService.SetProjectRepository:input_type -> quaycrew.v1.SetProjectRepositoryRequest
+	28,  // 142: quaycrew.v1.ControlPlaneService.ImportFlow:input_type -> quaycrew.v1.ImportFlowRequest
+	30,  // 143: quaycrew.v1.ControlPlaneService.StartFlow:input_type -> quaycrew.v1.StartFlowRequest
+	32,  // 144: quaycrew.v1.ControlPlaneService.GetFlowRun:input_type -> quaycrew.v1.GetFlowRunRequest
+	42,  // 145: quaycrew.v1.ControlPlaneService.ListFlowRuns:input_type -> quaycrew.v1.ListFlowRunsRequest
+	40,  // 146: quaycrew.v1.ControlPlaneService.StopFlowRun:input_type -> quaycrew.v1.StopFlowRunRequest
+	34,  // 147: quaycrew.v1.ControlPlaneService.AnswerFlowRun:input_type -> quaycrew.v1.AnswerFlowRunRequest
+	36,  // 148: quaycrew.v1.ControlPlaneService.ScheduleFlow:input_type -> quaycrew.v1.ScheduleFlowRequest
+	38,  // 149: quaycrew.v1.ControlPlaneService.UnscheduleFlow:input_type -> quaycrew.v1.UnscheduleFlowRequest
+	48,  // 150: quaycrew.v1.ControlPlaneService.AttachChannel:input_type -> quaycrew.v1.AttachChannelRequest
+	50,  // 151: quaycrew.v1.ControlPlaneService.SetSecret:input_type -> quaycrew.v1.SetSecretRequest
+	83,  // 152: quaycrew.v1.ControlPlaneService.ListSecrets:input_type -> quaycrew.v1.ListSecretsRequest
+	52,  // 153: quaycrew.v1.ControlPlaneService.Dispatch:input_type -> quaycrew.v1.DispatchRequest
+	54,  // 154: quaycrew.v1.ControlPlaneService.OpenDriver:input_type -> quaycrew.v1.OpenDriverRequest
+	56,  // 155: quaycrew.v1.ControlPlaneService.ListSessions:input_type -> quaycrew.v1.ListSessionsRequest
+	58,  // 156: quaycrew.v1.ControlPlaneService.GetSession:input_type -> quaycrew.v1.GetSessionRequest
+	60,  // 157: quaycrew.v1.ControlPlaneService.AttachSession:input_type -> quaycrew.v1.AttachSessionRequest
+	62,  // 158: quaycrew.v1.ControlPlaneService.StopSession:input_type -> quaycrew.v1.StopSessionRequest
+	72,  // 159: quaycrew.v1.ControlPlaneService.StopTask:input_type -> quaycrew.v1.StopTaskRequest
+	70,  // 160: quaycrew.v1.ControlPlaneService.ReclaimSession:input_type -> quaycrew.v1.ReclaimSessionRequest
+	64,  // 161: quaycrew.v1.ControlPlaneService.DrainSessions:input_type -> quaycrew.v1.DrainSessionsRequest
+	66,  // 162: quaycrew.v1.ControlPlaneService.RestartSession:input_type -> quaycrew.v1.RestartSessionRequest
+	68,  // 163: quaycrew.v1.ControlPlaneService.ArchiveSession:input_type -> quaycrew.v1.ArchiveSessionRequest
+	126, // 164: quaycrew.v1.ControlPlaneService.RestoreSession:input_type -> quaycrew.v1.RestoreSessionRequest
+	122, // 165: quaycrew.v1.ControlPlaneService.SetSessionPermissionMode:input_type -> quaycrew.v1.SetSessionPermissionModeRequest
+	124, // 166: quaycrew.v1.ControlPlaneService.SetSessionLabel:input_type -> quaycrew.v1.SetSessionLabelRequest
+	120, // 167: quaycrew.v1.ControlPlaneService.ListContexts:input_type -> quaycrew.v1.ListContextsRequest
+	75,  // 168: quaycrew.v1.ControlPlaneService.SetContext:input_type -> quaycrew.v1.SetContextRequest
+	78,  // 169: quaycrew.v1.ControlPlaneService.ReadSessionWork:input_type -> quaycrew.v1.ReadSessionWorkRequest
+	80,  // 170: quaycrew.v1.ControlPlaneService.LocateDirectory:input_type -> quaycrew.v1.LocateDirectoryRequest
+	88,  // 171: quaycrew.v1.ControlPlaneService.ImportSkill:input_type -> quaycrew.v1.ImportSkillRequest
+	90,  // 172: quaycrew.v1.ControlPlaneService.ListSkills:input_type -> quaycrew.v1.ListSkillsRequest
+	92,  // 173: quaycrew.v1.ControlPlaneService.AttachSkill:input_type -> quaycrew.v1.AttachSkillRequest
+	94,  // 174: quaycrew.v1.ControlPlaneService.DetachSkill:input_type -> quaycrew.v1.DetachSkillRequest
+	99,  // 175: quaycrew.v1.ControlPlaneService.ImportHook:input_type -> quaycrew.v1.ImportHookRequest
+	101, // 176: quaycrew.v1.ControlPlaneService.ListHooks:input_type -> quaycrew.v1.ListHooksRequest
+	103, // 177: quaycrew.v1.ControlPlaneService.AttachHook:input_type -> quaycrew.v1.AttachHookRequest
+	105, // 178: quaycrew.v1.ControlPlaneService.DetachHook:input_type -> quaycrew.v1.DetachHookRequest
+	110, // 179: quaycrew.v1.ControlPlaneService.ImportRole:input_type -> quaycrew.v1.ImportRoleRequest
+	112, // 180: quaycrew.v1.ControlPlaneService.ListRoles:input_type -> quaycrew.v1.ListRolesRequest
+	114, // 181: quaycrew.v1.ControlPlaneService.AttachRole:input_type -> quaycrew.v1.AttachRoleRequest
+	116, // 182: quaycrew.v1.ControlPlaneService.DetachRole:input_type -> quaycrew.v1.DetachRoleRequest
+	118, // 183: quaycrew.v1.ControlPlaneService.GetRole:input_type -> quaycrew.v1.GetRoleRequest
+	143, // 184: quaycrew.v1.ControlPlaneService.ListTasks:input_type -> quaycrew.v1.ListTasksRequest
+	150, // 185: quaycrew.v1.ControlPlaneService.CreateJob:input_type -> quaycrew.v1.CreateJobRequest
+	152, // 186: quaycrew.v1.ControlPlaneService.GetJob:input_type -> quaycrew.v1.GetJobRequest
+	154, // 187: quaycrew.v1.ControlPlaneService.ListJobs:input_type -> quaycrew.v1.ListJobsRequest
+	156, // 188: quaycrew.v1.ControlPlaneService.StopJob:input_type -> quaycrew.v1.StopJobRequest
+	158, // 189: quaycrew.v1.ControlPlaneService.AskJob:input_type -> quaycrew.v1.AskJobRequest
+	160, // 190: quaycrew.v1.ControlPlaneService.AnswerJob:input_type -> quaycrew.v1.AnswerJobRequest
+	162, // 191: quaycrew.v1.ControlPlaneService.RecordJobStep:input_type -> quaycrew.v1.RecordJobStepRequest
+	168, // 192: quaycrew.v1.ControlPlaneService.RecordJobHandoff:input_type -> quaycrew.v1.RecordJobHandoffRequest
+	164, // 193: quaycrew.v1.ControlPlaneService.RecordJobQuestion:input_type -> quaycrew.v1.RecordJobQuestionRequest
+	166, // 194: quaycrew.v1.ControlPlaneService.SettleJobQuestion:input_type -> quaycrew.v1.SettleJobQuestionRequest
+	170, // 195: quaycrew.v1.ControlPlaneService.ResumeJob:input_type -> quaycrew.v1.ResumeJobRequest
+	172, // 196: quaycrew.v1.ControlPlaneService.RefuseJob:input_type -> quaycrew.v1.RefuseJobRequest
+	175, // 197: quaycrew.v1.ControlPlaneService.RecordSteer:input_type -> quaycrew.v1.RecordSteerRequest
+	177, // 198: quaycrew.v1.ControlPlaneService.ListSteers:input_type -> quaycrew.v1.ListSteersRequest
+	181, // 199: quaycrew.v1.ControlPlaneService.GetWaiting:input_type -> quaycrew.v1.GetWaitingRequest
+	183, // 200: quaycrew.v1.ControlPlaneService.GetWorkspaceLimits:input_type -> quaycrew.v1.GetWorkspaceLimitsRequest
+	185, // 201: quaycrew.v1.ControlPlaneService.SetWorkspaceLimits:input_type -> quaycrew.v1.SetWorkspaceLimitsRequest
+	187, // 202: quaycrew.v1.ControlPlaneService.ListSessionEvents:input_type -> quaycrew.v1.ListSessionEventsRequest
+	128, // 203: quaycrew.v1.ControlPlaneService.GetInfo:input_type -> quaycrew.v1.GetInfoRequest
+	136, // 204: quaycrew.v1.ControlPlaneService.GetUsage:input_type -> quaycrew.v1.GetUsageRequest
+	138, // 205: quaycrew.v1.ControlPlaneService.GetHistory:input_type -> quaycrew.v1.GetHistoryRequest
+	130, // 206: quaycrew.v1.ControlPlaneService.GetHeadroom:input_type -> quaycrew.v1.GetHeadroomRequest
+	133, // 207: quaycrew.v1.ControlPlaneService.GetHealth:input_type -> quaycrew.v1.GetHealthRequest
+	12,  // 208: quaycrew.v1.ControlPlaneService.CreateWorkspace:output_type -> quaycrew.v1.CreateWorkspaceResponse
+	14,  // 209: quaycrew.v1.ControlPlaneService.GetWorkspace:output_type -> quaycrew.v1.GetWorkspaceResponse
+	16,  // 210: quaycrew.v1.ControlPlaneService.ListWorkspaces:output_type -> quaycrew.v1.ListWorkspacesResponse
+	18,  // 211: quaycrew.v1.ControlPlaneService.DeleteWorkspace:output_type -> quaycrew.v1.DeleteWorkspaceResponse
+	20,  // 212: quaycrew.v1.ControlPlaneService.CreateProject:output_type -> quaycrew.v1.CreateProjectResponse
+	22,  // 213: quaycrew.v1.ControlPlaneService.GetProject:output_type -> quaycrew.v1.GetProjectResponse
+	24,  // 214: quaycrew.v1.ControlPlaneService.ListProjects:output_type -> quaycrew.v1.ListProjectsResponse
+	45,  // 215: quaycrew.v1.ControlPlaneService.DeleteProject:output_type -> quaycrew.v1.DeleteProjectResponse
+	26,  // 216: quaycrew.v1.ControlPlaneService.SetDeployTarget:output_type -> quaycrew.v1.SetDeployTargetResponse
+	47,  // 217: quaycrew.v1.ControlPlaneService.SetProjectRepository:output_type -> quaycrew.v1.SetProjectRepositoryResponse
+	29,  // 218: quaycrew.v1.ControlPlaneService.ImportFlow:output_type -> quaycrew.v1.ImportFlowResponse
+	31,  // 219: quaycrew.v1.ControlPlaneService.StartFlow:output_type -> quaycrew.v1.StartFlowResponse
+	33,  // 220: quaycrew.v1.ControlPlaneService.GetFlowRun:output_type -> quaycrew.v1.GetFlowRunResponse
+	43,  // 221: quaycrew.v1.ControlPlaneService.ListFlowRuns:output_type -> quaycrew.v1.ListFlowRunsResponse
+	41,  // 222: quaycrew.v1.ControlPlaneService.StopFlowRun:output_type -> quaycrew.v1.StopFlowRunResponse
+	35,  // 223: quaycrew.v1.ControlPlaneService.AnswerFlowRun:output_type -> quaycrew.v1.AnswerFlowRunResponse
+	37,  // 224: quaycrew.v1.ControlPlaneService.ScheduleFlow:output_type -> quaycrew.v1.ScheduleFlowResponse
+	39,  // 225: quaycrew.v1.ControlPlaneService.UnscheduleFlow:output_type -> quaycrew.v1.UnscheduleFlowResponse
+	49,  // 226: quaycrew.v1.ControlPlaneService.AttachChannel:output_type -> quaycrew.v1.AttachChannelResponse
+	51,  // 227: quaycrew.v1.ControlPlaneService.SetSecret:output_type -> quaycrew.v1.SetSecretResponse
+	84,  // 228: quaycrew.v1.ControlPlaneService.ListSecrets:output_type -> quaycrew.v1.ListSecretsResponse
+	53,  // 229: quaycrew.v1.ControlPlaneService.Dispatch:output_type -> quaycrew.v1.DispatchResponse
+	55,  // 230: quaycrew.v1.ControlPlaneService.OpenDriver:output_type -> quaycrew.v1.OpenDriverResponse
+	57,  // 231: quaycrew.v1.ControlPlaneService.ListSessions:output_type -> quaycrew.v1.ListSessionsResponse
+	59,  // 232: quaycrew.v1.ControlPlaneService.GetSession:output_type -> quaycrew.v1.GetSessionResponse
+	61,  // 233: quaycrew.v1.ControlPlaneService.AttachSession:output_type -> quaycrew.v1.AttachSessionResponse
+	63,  // 234: quaycrew.v1.ControlPlaneService.StopSession:output_type -> quaycrew.v1.StopSessionResponse
+	73,  // 235: quaycrew.v1.ControlPlaneService.StopTask:output_type -> quaycrew.v1.StopTaskResponse
+	71,  // 236: quaycrew.v1.ControlPlaneService.ReclaimSession:output_type -> quaycrew.v1.ReclaimSessionResponse
+	65,  // 237: quaycrew.v1.ControlPlaneService.DrainSessions:output_type -> quaycrew.v1.DrainSessionsResponse
+	67,  // 238: quaycrew.v1.ControlPlaneService.RestartSession:output_type -> quaycrew.v1.RestartSessionResponse
+	69,  // 239: quaycrew.v1.ControlPlaneService.ArchiveSession:output_type -> quaycrew.v1.ArchiveSessionResponse
+	127, // 240: quaycrew.v1.ControlPlaneService.RestoreSession:output_type -> quaycrew.v1.RestoreSessionResponse
+	123, // 241: quaycrew.v1.ControlPlaneService.SetSessionPermissionMode:output_type -> quaycrew.v1.SetSessionPermissionModeResponse
+	125, // 242: quaycrew.v1.ControlPlaneService.SetSessionLabel:output_type -> quaycrew.v1.SetSessionLabelResponse
+	121, // 243: quaycrew.v1.ControlPlaneService.ListContexts:output_type -> quaycrew.v1.ListContextsResponse
+	76,  // 244: quaycrew.v1.ControlPlaneService.SetContext:output_type -> quaycrew.v1.SetContextResponse
+	79,  // 245: quaycrew.v1.ControlPlaneService.ReadSessionWork:output_type -> quaycrew.v1.ReadSessionWorkResponse
+	81,  // 246: quaycrew.v1.ControlPlaneService.LocateDirectory:output_type -> quaycrew.v1.LocateDirectoryResponse
+	89,  // 247: quaycrew.v1.ControlPlaneService.ImportSkill:output_type -> quaycrew.v1.ImportSkillResponse
+	91,  // 248: quaycrew.v1.ControlPlaneService.ListSkills:output_type -> quaycrew.v1.ListSkillsResponse
+	93,  // 249: quaycrew.v1.ControlPlaneService.AttachSkill:output_type -> quaycrew.v1.AttachSkillResponse
+	95,  // 250: quaycrew.v1.ControlPlaneService.DetachSkill:output_type -> quaycrew.v1.DetachSkillResponse
+	100, // 251: quaycrew.v1.ControlPlaneService.ImportHook:output_type -> quaycrew.v1.ImportHookResponse
+	102, // 252: quaycrew.v1.ControlPlaneService.ListHooks:output_type -> quaycrew.v1.ListHooksResponse
+	104, // 253: quaycrew.v1.ControlPlaneService.AttachHook:output_type -> quaycrew.v1.AttachHookResponse
+	106, // 254: quaycrew.v1.ControlPlaneService.DetachHook:output_type -> quaycrew.v1.DetachHookResponse
+	111, // 255: quaycrew.v1.ControlPlaneService.ImportRole:output_type -> quaycrew.v1.ImportRoleResponse
+	113, // 256: quaycrew.v1.ControlPlaneService.ListRoles:output_type -> quaycrew.v1.ListRolesResponse
+	115, // 257: quaycrew.v1.ControlPlaneService.AttachRole:output_type -> quaycrew.v1.AttachRoleResponse
+	117, // 258: quaycrew.v1.ControlPlaneService.DetachRole:output_type -> quaycrew.v1.DetachRoleResponse
+	119, // 259: quaycrew.v1.ControlPlaneService.GetRole:output_type -> quaycrew.v1.GetRoleResponse
+	144, // 260: quaycrew.v1.ControlPlaneService.ListTasks:output_type -> quaycrew.v1.ListTasksResponse
+	151, // 261: quaycrew.v1.ControlPlaneService.CreateJob:output_type -> quaycrew.v1.CreateJobResponse
+	153, // 262: quaycrew.v1.ControlPlaneService.GetJob:output_type -> quaycrew.v1.GetJobResponse
+	155, // 263: quaycrew.v1.ControlPlaneService.ListJobs:output_type -> quaycrew.v1.ListJobsResponse
+	157, // 264: quaycrew.v1.ControlPlaneService.StopJob:output_type -> quaycrew.v1.StopJobResponse
+	159, // 265: quaycrew.v1.ControlPlaneService.AskJob:output_type -> quaycrew.v1.AskJobResponse
+	161, // 266: quaycrew.v1.ControlPlaneService.AnswerJob:output_type -> quaycrew.v1.AnswerJobResponse
+	163, // 267: quaycrew.v1.ControlPlaneService.RecordJobStep:output_type -> quaycrew.v1.RecordJobStepResponse
+	169, // 268: quaycrew.v1.ControlPlaneService.RecordJobHandoff:output_type -> quaycrew.v1.RecordJobHandoffResponse
+	165, // 269: quaycrew.v1.ControlPlaneService.RecordJobQuestion:output_type -> quaycrew.v1.RecordJobQuestionResponse
+	167, // 270: quaycrew.v1.ControlPlaneService.SettleJobQuestion:output_type -> quaycrew.v1.SettleJobQuestionResponse
+	171, // 271: quaycrew.v1.ControlPlaneService.ResumeJob:output_type -> quaycrew.v1.ResumeJobResponse
+	173, // 272: quaycrew.v1.ControlPlaneService.RefuseJob:output_type -> quaycrew.v1.RefuseJobResponse
+	176, // 273: quaycrew.v1.ControlPlaneService.RecordSteer:output_type -> quaycrew.v1.RecordSteerResponse
+	178, // 274: quaycrew.v1.ControlPlaneService.ListSteers:output_type -> quaycrew.v1.ListSteersResponse
+	182, // 275: quaycrew.v1.ControlPlaneService.GetWaiting:output_type -> quaycrew.v1.GetWaitingResponse
+	184, // 276: quaycrew.v1.ControlPlaneService.GetWorkspaceLimits:output_type -> quaycrew.v1.GetWorkspaceLimitsResponse
+	186, // 277: quaycrew.v1.ControlPlaneService.SetWorkspaceLimits:output_type -> quaycrew.v1.SetWorkspaceLimitsResponse
+	188, // 278: quaycrew.v1.ControlPlaneService.ListSessionEvents:output_type -> quaycrew.v1.ListSessionEventsResponse
+	129, // 279: quaycrew.v1.ControlPlaneService.GetInfo:output_type -> quaycrew.v1.GetInfoResponse
+	137, // 280: quaycrew.v1.ControlPlaneService.GetUsage:output_type -> quaycrew.v1.GetUsageResponse
+	139, // 281: quaycrew.v1.ControlPlaneService.GetHistory:output_type -> quaycrew.v1.GetHistoryResponse
+	131, // 282: quaycrew.v1.ControlPlaneService.GetHeadroom:output_type -> quaycrew.v1.GetHeadroomResponse
+	134, // 283: quaycrew.v1.ControlPlaneService.GetHealth:output_type -> quaycrew.v1.GetHealthResponse
+	208, // [208:284] is the sub-list for method output_type
+	132, // [132:208] is the sub-list for method input_type
+	132, // [132:132] is the sub-list for extension type_name
+	132, // [132:132] is the sub-list for extension extendee
+	0,   // [0:132] is the sub-list for field type_name
 }
 
 func init() { file_quaycrew_v1_controlplane_proto_init() }
@@ -13498,7 +13800,7 @@ func file_quaycrew_v1_controlplane_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_quaycrew_v1_controlplane_proto_rawDesc), len(file_quaycrew_v1_controlplane_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   187,
+			NumMessages:   190,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

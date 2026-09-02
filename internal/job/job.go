@@ -246,6 +246,15 @@ type Job struct {
 	UpdatedAt  time.Time
 	StartedAt  *time.Time
 	FinishedAt *time.Time
+
+	// AskedAt is when this job put its question to a person, and RaisedAt is when the first surface
+	// named it as waiting. Both are nil where the moment has not happened.
+	//
+	// The gap between them is the time a person spent not knowing that something waited on them, and
+	// it is the number the telling is judged on. Neither can be read off UpdatedAt: anything that
+	// touches the row afterwards moves that, and the raise deliberately does not.
+	AskedAt  *time.Time
+	RaisedAt *time.Time
 }
 
 // Event is one thing that happened to a job. It is written in the same transaction as the
@@ -288,6 +297,13 @@ const (
 	// rather than a note.
 	EventAsked = "job.asked"
 	EventTold  = "job.told"
+	// EventRaised is written when the first surface names a waiting job to a person: the console, a
+	// command, or the line under a conversation. It carries which surface carried it.
+	//
+	// It is written once for each wait rather than once for each poll, so the gap from EventAsked is
+	// the time the person spent not knowing rather than the time since the last redraw. Nothing read
+	// EventAsked before this existed, which is how four jobs came to wait more than an hour.
+	EventRaised = "job.raised"
 	// EventStepped is written when the session doing a job says it finished one step. It is not a
 	// movement: the job is running before it and running after it, and what it adds is the record a
 	// second attempt carries on from.
@@ -646,6 +662,9 @@ type Limits struct {
 	// ArchiveSeconds is how long a reclaimed session here waits before the system files it away. Zero
 	// is unset, and it ships unset for the same reason.
 	ArchiveSeconds int
+	// WaitingSeconds is how long a job may wait for a person here before the telling names the age
+	// beside it. Zero takes the system's own, which is DefaultWaiting: see Waiting.
+	WaitingSeconds int
 	// ContextCeilingPercent is how full a session's context window may be here before the system gives
 	// it no new task. Zero takes the system's own, which is DefaultContextCeiling: this is the one
 	// number on this row that ships set, and ceiling.go says where it came from.

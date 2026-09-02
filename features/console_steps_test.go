@@ -34,6 +34,10 @@ type consoleWorld struct {
 	terminalErr error
 	// contextFile is a file a scenario wrote for the guided setup.s context stage to read.
 	contextFile string
+	// rung is how many times the console rang the bell, which is the part of the telling that reaches
+	// somebody looking at another tab. A count rather than a flag: the whole rule is one ring for each
+	// rise rather than one for each redraw.
+	rung int
 	// panes is the panel the console is in, and besideEach is the conversation that was open beside it
 	// after each key, which is what the operator was looking at each time.
 	panes      *panelPanes

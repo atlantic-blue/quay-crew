@@ -102,3 +102,18 @@ func WindowSize(payload []byte) (int64, bool) {
 	}
 	return said.Window.Size, true
 }
+
+// Beside puts what waits for a person on the same line, after the context.
+//
+// One line is all this surface has, and it is the one place always in front of the person typing.
+// The context is what the conversation costs and the telling is what somebody has to do, so the
+// telling is drawn as a warning: it is the only part of this line anybody acts on.
+//
+// Empty telling leaves the line exactly as it was. A status line that said "nothing waits for you"
+// on every redraw would be a line nobody reads by the second day.
+func Beside(line, waiting string) string {
+	if waiting == "" {
+		return line
+	}
+	return line + "  " + warning(waiting)
+}

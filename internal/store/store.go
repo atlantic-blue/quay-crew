@@ -527,6 +527,12 @@ type Store interface {
 	// Any phase. A job that carries a run is held back while its steps work, so a rule that only let
 	// a running job be corrected would refuse the one case this exists for.
 	ReplaceJobProduct(ctx context.Context, id, product string, event *job.Event) (*job.Job, error)
+	// RaiseJob writes that a surface named this job as waiting, with the record of the telling, and
+	// says whether this call was the one that wrote it. Only where nothing has raised it yet, so a
+	// console redrawing every three seconds writes one job.raised for each wait rather than one for
+	// each poll. It moves nothing else on the row: the moment the wait started is what a surface
+	// measures the age from.
+	RaiseJob(ctx context.Context, id string, event *job.Event) (bool, error)
 	// ListJobEvents returns one job's own history, oldest first.
 	ListJobEvents(ctx context.Context, id string) ([]*job.Event, error)
 	// What reads back the pull requests the crew opened. UnsettledPullRequests is the job whose pull
