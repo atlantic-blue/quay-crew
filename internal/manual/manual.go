@@ -1,8 +1,8 @@
 // Package manual is krewe describing itself, in a form meant to be read by whatever is running in a
 // session rather than by somebody scanning a terminal.
 //
-// It exists because a session sitting in the panel beside the console knows nothing about the system it
-// is next to, so it is told with this.
+// It exists because a session sitting in a conversation knows nothing about the system it is part of,
+// so it is told with this.
 //
 // Most of it is assembled rather than written: the commands are the same usage text `krewe` shows with
 // no arguments, and what the system can do comes from the behaviour specification embedded in the

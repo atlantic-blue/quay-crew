@@ -2110,7 +2110,7 @@ func (s *Server) withStaleness(ctx context.Context, sessions []*quaycrewv1.Sessi
 // withUsage puts what a session's conversation has cost onto it, read from the transcript the model
 // keeps rather than from anything the system recorded.
 //
-// It has to come from there: the conversations worth counting are the ones held in the panel, and
+// It has to come from there: the conversations worth counting are the ones held in a sandbox, and
 // those never pass through the control plane at all. A session nobody has spoken in is left without a
 // figure rather than reported as costing nothing, because those are different things.
 func (s *Server) withUsage(session *quaycrewv1.Session) {

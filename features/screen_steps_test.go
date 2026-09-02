@@ -6,8 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -131,66 +129,6 @@ func initializeScreenSteps(sc *godog.ScenarioContext) {
 		}
 		return fmt.Errorf("the pane outlived its command, so the reason was readable after all")
 	})
-
-	// The panel as the tool builds it, on a socket of its own. Everything about this behaviour is
-	// what the multiplexer does with the panes, so nothing here stands in for one.
-	sc.Step(`^a panel with a console and a conversation$`, func(ctx context.Context) error {
-		s := screenFrom(ctx)
-		if err := s.own(); err != nil {
-			return err
-		}
-		if err := s.openSystem(panel.Terminal{}); err != nil {
-			return err
-		}
-		return s.readHalves()
-	})
-
-	// ctrl-q detaches the client inside the sandbox, the command in the pane ends, and the pane goes
-	// with it. Killing the pane is that, without a sandbox to do it in.
-	sc.Step(`^the conversation is closed the way leaving it closes it$`, func(ctx context.Context) error {
-		s := screenFrom(ctx)
-		if _, err := s.tmux("kill-pane", "-t", s.conversation); err != nil {
-			return err
-		}
-		return nil
-	})
-
-	sc.Step(`^the operator opens the system again$`, func(ctx context.Context) error {
-		s := screenFrom(ctx)
-		// The same question the tool asks, through the same function, so a scenario cannot be kinder
-		// about a missing half than the tool is.
-		return s.openSystem(panel.Terminal{
-			AlreadyOpen: true,
-			LostAHalf:   !panel.Whole(s.layout(), s.ask),
-		})
-	})
-
-	sc.Step(`^the panel has a console and a conversation again$`, func(ctx context.Context) error {
-		s := screenFrom(ctx)
-		panes, err := s.panes()
-		if err != nil {
-			return err
-		}
-		if len(panes) != 2 {
-			screen, _ := s.tmux("capture-pane", "-p", "-t", screenTarget+".0")
-			return fmt.Errorf("the panel has %d pane(s), want a console and a conversation. It shows %q",
-				len(panes), screen)
-		}
-		return nil
-	})
-
-	sc.Step(`^the conversation is the one that was already there$`, func(ctx context.Context) error {
-		s := screenFrom(ctx)
-		was := s.conversation
-		if err := s.readHalves(); err != nil {
-			return err
-		}
-		if s.conversation != was {
-			return fmt.Errorf("the conversation is now in pane %s, and it was in %s: opening the "+
-				"system took the one that was there away", s.conversation, was)
-		}
-		return nil
-	})
 }
 
 // beside puts a conversation next to the console the way the console does it, with argv standing in
@@ -230,69 +168,6 @@ func (s *screenWorld) own() error {
 		return godog.ErrSkip
 	}
 	s.socket = fmt.Sprintf("krewe-screen-%d", os.Getpid())
-	return nil
-}
-
-// layout is the panel this scenario opens. Both halves are commands that stay, because what is being
-// checked is the shape of the window rather than what is drawn in it.
-func (s *screenWorld) layout() panel.Layout {
-	return panel.Layout{
-		Session: "screen",
-		Left:    []string{"sh", "-c", "sleep 300"},
-		Right:   []string{"sh", "-c", "sleep 300"},
-		Width:   120,
-		Height:  20,
-	}
-}
-
-// openSystem runs every tmux invocation the layout asks for, except the last one. That one puts a
-// person in front of the panel, and a scenario has nobody to put there.
-func (s *screenWorld) openSystem(term panel.Terminal) error {
-	commands, err := s.layout().Commands(term)
-	if err != nil {
-		return err
-	}
-	for _, argv := range commands[:len(commands)-1] {
-		if _, err := s.tmux(argv[1:]...); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// ask is how the layout puts its one question to this scenario's multiplexer.
-func (s *screenWorld) ask(argv []string) (string, error) {
-	return s.tmux(argv[1:]...)
-}
-
-// readHalves is which pane holds the console and which holds the conversation, taken from where each
-// one starts rather than from the order they happen to be listed in.
-func (s *screenWorld) readHalves() error {
-	out, err := s.tmux("list-panes", "-F", "#{pane_left} #{pane_id}", "-t", screenTarget)
-	if err != nil {
-		return err
-	}
-	type half struct {
-		left int
-		pane string
-	}
-	halves := make([]half, 0, 2)
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		parts := strings.Fields(line)
-		if len(parts) != 2 {
-			continue
-		}
-		left, err := strconv.Atoi(parts[0])
-		if err != nil {
-			continue
-		}
-		halves = append(halves, half{left: left, pane: parts[1]})
-	}
-	if len(halves) != 2 {
-		return fmt.Errorf("the panel is not two halves: tmux lists %q", strings.TrimSpace(out))
-	}
-	sort.Slice(halves, func(i, j int) bool { return halves[i].left < halves[j].left })
-	s.console, s.conversation = halves[0].pane, halves[1].pane
 	return nil
 }
 
