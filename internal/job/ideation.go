@@ -11,6 +11,13 @@ import (
 // A job that states the sentence says what it understood before it writes a plan, and a person
 // answers in their own words.
 //
+// The reading is as long as the work needs. The three numbers below are guides a session is asked to
+// write to, and no longer ceilings the reader refuses text at: a reading over one of them is kept
+// word for word and reaches the person who asked for it. Job a3d72b11 wrote a correct 859 byte
+// reading against a guide of 600, and the reading was refused, asked for a second time, and the job
+// was stopped with nobody having read a word of it. Ten million tokens went to that job and nothing
+// was delivered. The length of a reading belongs to the person who reads it.
+//
 // The plan gate already stops a job before any work, and it stopped it one step too late. The
 // session read a sentence, read a brief, and wrote seven steps out of whatever it had made of the
 // two. Nobody was ever asked what the sentence meant, so the plan was the session marking its own
@@ -38,19 +45,13 @@ const (
 	// IdeationPoints is how many lines each of the lists may carry: what was told, what was assumed,
 	// and what is not known.
 	IdeationPoints = 5
-	// IdeationLineLimit is how long one of those lines may be. It is the title's ceiling, because both
-	// are one line a person reads.
+	// IdeationLineLimit is how long one of those lines is expected to be. It is the title's guide,
+	// because both are one line a person reads.
 	IdeationLineLimit = TitleLimit
-	// UnderstandingLimit is how long what the work is, and what it is not, may each be. Wider than a
-	// line and narrower than a brief: it is the paragraph a person reads first, and it is the half
-	// that has to be readable at a glance.
+	// UnderstandingLimit is how long what the work is, and what it is not, are each expected to be.
+	// Wider than a line and narrower than a brief: it is the paragraph a person reads first.
 	UnderstandingLimit = 3 * TitleLimit
-	// IdeationLimit is how long the whole record may be once the system renders it.
-	//
-	// It exists because the record is put to a person as a question, and a question has its own
-	// ceiling in asking.go. The two have to agree, and the way they agree is that the record plus the
-	// lines around it fits inside QuestionLimit. A record that does not fit would be a question the
-	// system could not ask.
+	// IdeationLimit is how long the whole record is expected to be once the system renders it.
 	IdeationLimit = 3000
 )
 
@@ -159,10 +160,6 @@ func readIdeationQuestions(reply string) ([]IdeationQuestion, error) {
 		if text == "" {
 			continue
 		}
-		if len(text) > IdeationLineLimit {
-			return nil, fmt.Errorf("question %d is %d bytes and a question may be %d: it is one line a "+
-				"person reads in a terminal", number, len(text), IdeationLineLimit)
-		}
 		if where := askingToProceed.FindString(text); where != "" {
 			return nil, fmt.Errorf("question %d asks %q, which asks whether to go on rather than asking "+
 				"something you cannot answer: the record already stops the job, so ask about the work",
@@ -191,6 +188,10 @@ func numbersAsked(questions []IdeationQuestion) string {
 }
 
 // readable is every rule the record is held to, in one place, and the refusal that teaches the shape.
+//
+// Shape rather than size. Each rule here is about something a reader cannot work with at all: a
+// record with no understanding in it, a record that excludes nothing, a record that asks a person
+// nothing. Length is not one of them, because text a person can read is text the system keeps.
 func (one Ideation) readable() error {
 	switch {
 	case one.Understood == "":
@@ -212,15 +213,6 @@ func (one Ideation) readable() error {
 		return fmt.Errorf("this reply asks %d questions and it may ask %d: a person reads these in a "+
 			"terminal, so ask the %d that decide the work",
 			len(one.Questions), IdeationQuestions, IdeationQuestions)
-	case len(one.Understood) > UnderstandingLimit:
-		return fmt.Errorf("what you understood is %d bytes and it may be %d: it is the paragraph a "+
-			"person reads first", len(one.Understood), UnderstandingLimit)
-	case len(one.NotThis) > UnderstandingLimit:
-		return fmt.Errorf("what the work is not is %d bytes and it may be %d",
-			len(one.NotThis), UnderstandingLimit)
-	case len(one.Confidence) > IdeationLineLimit:
-		return fmt.Errorf("your confidence is %d bytes and it may be %d: it is one line",
-			len(one.Confidence), IdeationLineLimit)
 	}
 	for _, list := range []struct {
 		heading string
@@ -231,16 +223,6 @@ func (one Ideation) readable() error {
 			return fmt.Errorf("this reply carries %d %s lines and it may carry %d",
 				len(lines), heading, IdeationPoints)
 		}
-		for _, said := range lines {
-			if len(said) > IdeationLineLimit {
-				return fmt.Errorf("a %s line is %d bytes and it may be %d: it is one line a person reads",
-					heading, len(said), IdeationLineLimit)
-			}
-		}
-	}
-	if kept := IdeationText(one); len(kept) > IdeationLimit {
-		return fmt.Errorf("this record is %d bytes and it may be %d: it is put to a person as one "+
-			"question, so say less in each line rather than more", len(kept), IdeationLimit)
 	}
 	return nil
 }
