@@ -38,7 +38,15 @@ const SeedHooksDir = "/hooks"
 // and nothing to revert. It reads only the command, so it needs no credential, and it declares no
 // binary, so no image can refuse a task over it. `krewe hook detach system process-gate` is how
 // somebody decides otherwise, and KREWE_MAY_END_A_PROCESS lifts it for one session.
-var SeedHooksToSystem = []string{"merge-gate", "prompt-analyser", "deploy-identity-gate", "process-gate"}
+// The test gate is here on the same rule, and it is the one that refuses least. It is off in every
+// session but one: the system sets a name on the task of a worker in the build stage, and the gate
+// reads that name, so a session writing the tests is refused nothing and a session building against
+// them cannot change one. Changing the test a build is measured by is never a session's to do, the
+// refusal names the file and says to answer that the test is wrong instead, and
+// `krewe hook detach system test-gate` is how somebody decides otherwise.
+var SeedHooksToSystem = []string{
+	"merge-gate", "prompt-analyser", "deploy-identity-gate", "process-gate", "test-gate",
+}
 
 // SeedHooks offers the hooks this build ships, and puts a system that holds none under them.
 //

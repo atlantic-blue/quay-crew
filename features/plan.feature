@@ -68,11 +68,13 @@ Feature: A person approves the plan before any work starts
     When the operator answers the job with "yes"
     And the controller ticks again
     Then the plan is approved
-    And the session is sent the brief and the plan it is held to
+    When its verticals were built and a person accepted them
+    Then the session is sent the brief and the plan it is held to
 
   # Approval is worth nothing if the work can walk away from the thing that was approved.
   Scenario: A plan approved and then not followed stops the job
     Given a job whose plan was approved
+    And its verticals were built and a person accepted them
     And the session records step "1: read the design" and nothing else
     When the task the controller sent lands
     And the controller ticks again
@@ -82,6 +84,7 @@ Feature: A person approves the plan before any work starts
   # A check that always fires is the same as no check.
   Scenario: A plan approved and followed finishes, and says nothing
     Given a job whose plan was approved
+    And its verticals were built and a person accepted them
     And the session records every step of the plan
     When the task the controller sent lands
     And the controller ticks again

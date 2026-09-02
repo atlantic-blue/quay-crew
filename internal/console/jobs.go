@@ -80,9 +80,10 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			if err != nil {
 				return nil, err
 			}
+			working := sessionsUnder(resp.GetJobs())
 			rows := make([]Row, 0, len(resp.GetJobs()))
 			for _, one := range resp.GetJobs() {
-				rows = append(rows, jobRow(one))
+				rows = append(rows, jobRow(one, working[one.GetId()]))
 			}
 			return rows, nil
 		},
@@ -123,15 +124,39 @@ func phaseOfRow(row Row) string {
 // as something missing, and this is a job waiting its turn rather than a job with a hole in it.
 const noSessionYet = "not yet"
 
+// sessionsUnder is how many sessions are running under each job, counted off the same listing.
+//
+// A job that fans out has no session of its own and is not idle: the build stage runs one worker for
+// each vertical, all at once, and the row that declared them waits. Counted here rather than asked
+// for, because the workers are rows in this same answer and a second call to count them would be a
+// second call for a number already on the screen.
+func sessionsUnder(jobs []*quaycrewv1.Job) map[string]int {
+	working := map[string]int{}
+	for _, one := range jobs {
+		if one.GetParent() == "" || job.Terminal(one.GetPhase()) {
+			continue
+		}
+		working[one.GetParent()]++
+	}
+	return working
+}
+
 // jobRow is one job as a listing row.
 //
 // Parent is the session rather than the project, because the parent is what a drilled down view
 // scopes by, and what this view descends into is the session's tasks.
-func jobRow(one *quaycrewv1.Job) Row {
+//
+// working is how many sessions are running under this job, which is what the session cell says on a
+// row that has none of its own. A fan out of three reading "not yet" says nothing is happening while
+// three sessions build, and that is the row a person watching a build is looking straight at.
+func jobRow(one *quaycrewv1.Job, working int) Row {
 	// The identifiers stay whole: they are what stopping and descending use. Only the cells shorten.
 	session := noSessionYet
 	if one.GetSession() != "" {
 		session = display.ShortID(one.GetSession())
+	}
+	if one.GetSession() == "" && working > 0 {
+		session = fmt.Sprintf("%d working", working)
 	}
 	return Row{
 		ID:     one.GetId(),

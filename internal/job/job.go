@@ -167,6 +167,25 @@ type Job struct {
 	// built at all, and what it wants is the opposite answer.
 	Tests string
 
+	// Build is the record of what this job's verticals became: every vertical a person accepted, how
+	// many tests the run covering it executed, the tests that pass now, and the files that were written
+	// to make them pass. See build.go.
+	//
+	// No flag beside it, for the reason Tests has none. The record lands only when every vertical is
+	// green, so the record being there is the fact, and the job holds for a person's acceptance in the
+	// same movement that writes it.
+	Build string
+
+	// Building says this job builds against tests it did not write and may not change. The system sets
+	// it on a worker the build stage declares, and on nothing else.
+	//
+	// It is on the row rather than worked out from the stage, because what reads it is the dispatch,
+	// which knows the job and nothing about where the job came from. What it buys is the boundary: the
+	// system tells the session's runtime, and the test gate then refuses a write to a test in that
+	// session alone. A session under no gate is a session under advice, and the shortest way to a green
+	// suite is to change the assertion.
+	Building bool
+
 	// Steers is how many times the operator had to say something this job should have known, counted
 	// on the job the steer landed on and on every job above it. On the job at the top it is the score
 	// of the whole tree, which is the number the acceptance job exists to move. See steer.go.
@@ -331,6 +350,11 @@ const (
 	// way a step is not: the job is pending before it and pending after it, and what it adds is the
 	// record the plan is then written against.
 	EventTested = "job.tested"
+	// EventBuilt is written when every vertical a person accepted has been built against its failing
+	// tests: each one had a worker, the runs executed, nothing fails, and the files that made them pass
+	// are named. Unlike the record above it is a movement, because the job holds for a person's
+	// acceptance in the same write: a build nobody has looked at is not a build that arrived.
+	EventBuilt = "job.built"
 	// EventRaised is written when the first surface names a waiting job to a person: the console, a
 	// command, or the line under a conversation. It carries which surface carried it.
 	//

@@ -954,3 +954,65 @@ func (m *Memory) AskAboutJobTests(_ context.Context, id, question string,
 	kept := cloneJob(*found)
 	return &kept, nil
 }
+
+// HoldJobForAcceptance writes what a job's verticals were built into and stops the job for a person
+// to accept it.
+//
+// One movement rather than two, which is the same pair of conditions the real engine holds it to in
+// one statement. A record without the hold would let a built job carry on as though somebody had
+// looked at it, and a hold without the record would fan the same verticals out again on the next
+// tick.
+func (m *Memory) HoldJobForAcceptance(_ context.Context, id, built, question string,
+	events ...*job.Event) (*job.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != job.PhasePending || found.Build != "" {
+		return nil, job.ErrNotPending
+	}
+	found.Build, found.Reason = built, ""
+	found.Phase, found.Question, found.Told = job.PhaseAsking, question, ""
+	asked := time.Now().UTC()
+	found.AskedAt, found.RaisedAt = &asked, nil
+	found.Resuming = ""
+	found.LeaseOwner, found.LeaseUntil = "", nil
+	found.UpdatedAt = time.Now().UTC()
+	for _, event := range events {
+		if err := m.appendJobEvent(event); err != nil {
+			return nil, err
+		}
+	}
+	kept := cloneJob(*found)
+	return &kept, nil
+}
+
+// AskAboutJobBuild puts the question about verticals that are not built to a person, and stops the
+// job there. It applies from the pending phase, because the row was never running while its workers
+// built: what ran was one job for each vertical.
+func (m *Memory) AskAboutJobBuild(_ context.Context, id, question string,
+	event *job.Event) (*job.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	found, held := m.jobs[id]
+	if !held {
+		return nil, ErrNotFound
+	}
+	if found.Phase != job.PhasePending || found.Build != "" {
+		return nil, job.ErrNotPending
+	}
+	found.Phase, found.Question, found.Told, found.Reason =
+		job.PhaseAsking, question, "", ""
+	asked := time.Now().UTC()
+	found.AskedAt, found.RaisedAt = &asked, nil
+	found.Resuming = ""
+	found.LeaseOwner, found.LeaseUntil = "", nil
+	found.UpdatedAt = time.Now().UTC()
+	if err := m.appendJobEvent(event); err != nil {
+		return nil, err
+	}
+	kept := cloneJob(*found)
+	return &kept, nil
+}

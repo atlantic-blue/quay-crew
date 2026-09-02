@@ -63,7 +63,7 @@ func (s *Server) PublishSessionWork(ctx context.Context, sessionID string) publi
 	// The session's own environment travels with each command, so git reaches the remote with the
 	// workspace's credential the way a task would. The container already carries these values; sending
 	// them again is what makes this work on a container born before the operator set the token.
-	return publish.Read(ctx, carrying{box: box, env: environ(s.taskEnv(ctx, session, ""))}, place)
+	return publish.Read(ctx, carrying{box: box, env: environ(s.taskEnv(ctx, session, "", false))}, place)
 }
 
 // carrying is a sandbox whose every command is given the session's environment.

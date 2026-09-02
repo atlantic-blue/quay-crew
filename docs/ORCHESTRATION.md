@@ -649,7 +649,9 @@ flowchart TD
     READ -->|"yes"| ASK{"asking: here is the sentence,<br/>here is the plan"}
     ASK -->|"anything but yes"| AGAIN["the answer is the correction,<br/>and the session writes the plan again"]
     AGAIN --> ASK
-    ASK -->|"yes"| WORK["the work, carrying the approved plan"]
+    ASK -->|"yes"| BUILD["the build stage: one worker for each vertical,<br/>none of them able to change a test"]
+    BUILD --> ACCEPT{"asking: every vertical is built,<br/>did the value arrive?"}
+    ACCEPT -->|"the person answers"| WORK["the work, carrying the approved plan"]
     WORK --> HELD{"does the record account for<br/>every step of the plan?"}
     HELD -->|"yes"| DONE(["done"])
     HELD -->|"no"| DRIFT(["stopped, naming the steps<br/>nothing accounted for"])

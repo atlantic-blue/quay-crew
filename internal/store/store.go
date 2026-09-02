@@ -463,9 +463,25 @@ type Store interface {
 	// for the reasons the stage needs, so the question goes to a person. It applies from the pending
 	// phase, unlike every other ask, because the row was never running while its workers wrote.
 	AskAboutJobTests(ctx context.Context, id, question string, event *job.Event) (*job.Job, error)
+	// HoldJobForAcceptance writes the record of what a job's verticals were built into, and stops the
+	// job for a person to accept it, in one movement. The last stage ends here.
+	//
+	// One movement rather than two because the two halves are one fact. A record written without the
+	// hold would leave a built job carrying on as though a person had already looked at it, and a hold
+	// written without the record would fan the same verticals out again on the next tick.
+	//
+	// It applies to a pending job that carries no record yet, so two controllers reading one finished
+	// fan out hold the job once and ask once.
+	HoldJobForAcceptance(ctx context.Context, id, built, question string,
+		events ...*job.Event) (*job.Job, error)
+	// AskAboutJobBuild is the other way that stage ends: the workers finished and the verticals are not
+	// green for the reasons the stage needs, so the question goes to a person. It applies from the
+	// pending phase, for the reason the ask about the tests does.
+	AskAboutJobBuild(ctx context.Context, id, question string, event *job.Event) (*job.Job, error)
 	// JobsClaiming is the jobs in one workspace claiming any of these pieces of work, whole. It is how
 	// the test stage finds the workers it declared, each of which holds the claim on one requirement,
-	// and what it needs back from them is the answer each one gave.
+	// and how the build stage finds the workers it declared, each of which holds the claim on one
+	// vertical. What it needs back from them is the answer each one gave.
 	//
 	// Holding is not asked. A worker that finished has let its claim go, and that worker's answer is
 	// exactly what the job that fanned out is reading.

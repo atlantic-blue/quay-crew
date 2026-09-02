@@ -1,6 +1,9 @@
 package job
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestAJobThatHasNotStartedIsInIdeation(t *testing.T) {
 	one := &Job{Product: "you paste a link and get the text back", Phase: PhasePending}
@@ -17,8 +20,8 @@ func TestAJobThatHasNotStartedIsInIdeation(t *testing.T) {
 	if stage.Opens != "design opens on your answer to what it understood" {
 		t.Fatalf("ideation says the next stage opens on %q", stage.Opens)
 	}
-	if stage.Unbuilt != "" {
-		t.Fatalf("a job in ideation is told its stage is not built: %q", stage.Unbuilt)
+	if stage.Doing != "" {
+		t.Fatalf("a job in ideation is told where it stands inside it: %q", stage.Doing)
 	}
 }
 
@@ -39,10 +42,10 @@ func TestAnAnsweredReadingPutsAJobInDesign(t *testing.T) {
 	if stage.Opens != "test opens on your acceptance of the list it would build" {
 		t.Fatalf("design says the next stage opens on %q", stage.Opens)
 	}
-	// Built, and it says nothing about being unbuilt. This is the way off the old reading: design used
-	// to be a name with nothing behind it, and a job standing in it was told so.
-	if !stage.Built || stage.Unbuilt != "" {
-		t.Fatalf("design reads as unbuilt, saying %q", stage.Unbuilt)
+	// Built, and it holds one standing only. This is the way off the old reading: design used to be a
+	// name with nothing behind it, and a job standing in it was told so.
+	if !stage.Built || stage.Doing != "" {
+		t.Fatalf("design reads as unbuilt, or says where a job stands in it: %q", stage.Doing)
 	}
 }
 
@@ -64,10 +67,10 @@ func TestAnAcceptedListPutsAJobInTest(t *testing.T) {
 	if stage.Opens != "build opens on a failing test for every requirement on that list" {
 		t.Fatalf("test says the next stage opens on %q", stage.Opens)
 	}
-	// Built, and it says nothing about being unbuilt. This is the way off the old reading: test used to
-	// be a name with nothing behind it, and a job standing in it was told so.
-	if !stage.Built || stage.Unbuilt != "" {
-		t.Fatalf("test reads as unbuilt, saying %q", stage.Unbuilt)
+	// Built, and it holds one standing only. This is the way off the old reading: test used to be a
+	// name with nothing behind it, and a job standing in it was told so.
+	if !stage.Built || stage.Doing != "" {
+		t.Fatalf("test reads as unbuilt, or says where a job stands in it: %q", stage.Doing)
 	}
 }
 
@@ -91,20 +94,21 @@ func TestAFailingSuitePutsAJobInBuild(t *testing.T) {
 	}
 }
 
-// The honest reading of a stage nobody has written. A job past the list is running, and saying so
-// without saying test does nothing would be the job claiming work that does not exist.
-func TestAJobInAnUnbuiltStageSaysSo(t *testing.T) {
+// All four stages are built now, and this is the way off the old reading. The sentence a job in build
+// used to carry named a stage that did nothing, and a reader who met it again would believe the work
+// had not landed.
+func TestNoJobIsToldItsStageIsNotBuilt(t *testing.T) {
 	stage := StageOf(&Job{
 		Product:        "you paste a link and get the text back",
 		IdeationAnswer: "1: on the command line",
 		DesignAccepted: true,
 		Tests:          "Requirement 1: a person pastes a link\nRan 1: 12\nFails 1: TestItFails",
 	})
-	if stage.Built {
-		t.Fatalf("build reads as built, and build is a later slice")
+	if !stage.Built {
+		t.Fatalf("build reads as a stage that is not built, and it is built")
 	}
-	if stage.Unbuilt == "" {
-		t.Fatalf("a job in build is told nothing about build not being built")
+	if strings.Contains(stage.Doing, "not built") {
+		t.Fatalf("a job in build is told %q", stage.Doing)
 	}
 	if stage.Where() != "stage 4 of 4: build" {
 		t.Fatalf("a job in build reads as %q", stage.Where())
@@ -202,15 +206,15 @@ func TestWhatClosesAndOpensEachStage(t *testing.T) {
 	if StageOpenedBy(StageBuild) == "" {
 		t.Fatalf("nothing opens build, and a failing test for every requirement does")
 	}
-	for _, name := range []string{StageIdeation, StageDesign, StageTest} {
+	for _, name := range Stages {
 		if !StageBuilt(name) {
 			t.Fatalf("%s reads as not built", name)
 		}
 	}
-	// Build is the one that is not, and a reader standing in it is told so rather than left to find
-	// out from a stage that names itself and does nothing.
-	if StageBuilt(StageBuild) {
-		t.Fatalf("build reads as built, and it is a later slice")
+	// A name that is not one of the four is not a stage, so it does not read as a stage that works.
+	// That is what the day a fifth is named rests on: it has to read differently until it does.
+	if StageBuilt("acceptance") {
+		t.Fatalf("a stage nobody has written reads as built")
 	}
 }
 
@@ -231,10 +235,8 @@ func TestAJobInBuildIsToldWhatItIsActuallyDoing(t *testing.T) {
 		DesignAccepted: true,
 		Tests:          red,
 	})
-	want := "build is not built yet, so this job writes its plan next, and a person approves it " +
-		"before any work starts"
-	if justRed.Unbuilt != want {
-		t.Fatalf("a job whose suite has just gone red is told %q", justRed.Unbuilt)
+	if !strings.Contains(justRed.Doing, "writes the plan that turns those tests green next") {
+		t.Fatalf("a job whose suite has just gone red is told %q", justRed.Doing)
 	}
 
 	written := StageOf(&Job{
@@ -244,11 +246,11 @@ func TestAJobInBuildIsToldWhatItIsActuallyDoing(t *testing.T) {
 		Tests:          red,
 		Plan:           "Step 1: read the design",
 	})
-	if written.Unbuilt != "build is not built yet, so this job holds a plan nobody has approved yet" {
-		t.Fatalf("a job whose plan nobody answered is told %q", written.Unbuilt)
+	if !strings.Contains(written.Doing, "holds a plan nobody has approved yet") {
+		t.Fatalf("a job whose plan nobody answered is told %q", written.Doing)
 	}
 
-	approved := StageOf(&Job{
+	building := StageOf(&Job{
 		Product:        "you paste a link and get the text back",
 		IdeationAnswer: "1: on the command line",
 		DesignAccepted: true,
@@ -256,8 +258,26 @@ func TestAJobInBuildIsToldWhatItIsActuallyDoing(t *testing.T) {
 		Plan:           "Step 1: read the design",
 		PlanApproved:   true,
 	})
-	working := "build is not built yet, so this job carries on under the plan a person approved"
-	if approved.Unbuilt != working {
-		t.Fatalf("a job working to an approved plan is told %q", approved.Unbuilt)
+	// The two halves of the sentence this stage serves: several sessions at once, and none of them
+	// able to change a test.
+	for _, want := range []string{"one session for each vertical", "none of them can change a test"} {
+		if !strings.Contains(building.Doing, want) {
+			t.Fatalf("a job whose verticals are being built is told %q", building.Doing)
+		}
+	}
+
+	// And once they are all green the job is waiting for a person, which is a different thing again
+	// from building. A reader told only "build" cannot tell those two apart.
+	held := StageOf(&Job{
+		Product:        "you paste a link and get the text back",
+		IdeationAnswer: "1: on the command line",
+		DesignAccepted: true,
+		Tests:          red,
+		Plan:           "Step 1: read the design",
+		PlanApproved:   true,
+		Build:          "Vertical 1: a person pastes a link\nRan 1: 14\nPasses 1: TestItFails",
+	})
+	if !strings.Contains(held.Doing, "waits for you to accept") {
+		t.Fatalf("a job whose verticals are all built is told %q", held.Doing)
 	}
 }

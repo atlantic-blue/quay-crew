@@ -1505,6 +1505,17 @@ message Job {
   // requirement, which the system reads rather than a person, so the record being there is the fact.
   // It is not tested, which is the settle gate over finished work.
   string tests = 66;
+  // build is the record of what the verticals became: one line per vertical, the number of tests the
+  // run covering it executed, one line for each test that passes now, and one line for each file that
+  // was written to make them pass, all written under the vertical they came from.
+  //
+  // No flag beside it either. The record lands only when every vertical is green, and the job is
+  // stopped for a person to accept it in the same write, so the record being there is the fact.
+  string build = 67;
+  // building says this job builds against tests it did not write and may not change. The system sets
+  // it on a worker the build stage declares and on nothing else, and a session it is set on is refused
+  // a write to a test by the test gate.
+  bool building = 68;
   // escalation is what this job does when it goes in circles, as it was declared: "ask", or
   // "role:<name>". Empty is asking.
   string escalation = 41;

@@ -183,3 +183,30 @@ func (s *Server) credentialFor(ctx context.Context, id string) string {
 func (s *Server) JobCredentialForTest(ctx context.Context, id string) (string, bool) {
 	return s.jobCredential(ctx, id)
 }
+
+// buildingEnv is what a session under the build stage's boundary is told, and it is the name the test
+// gate reads. Spelled here rather than imported, because the gate is a separate module: it is a
+// plugin somebody reviews and hands to another system, so it shares no code with this one, and the
+// name is the whole of the contract between them.
+const buildingEnv = "KREWE_BUILDING"
+
+// buildingUnderTheBoundary says whether the job this task runs builds against tests it may not
+// change.
+//
+// Read off the job row rather than worked out from the stage, because this is the dispatch: it knows
+// the job it was given and nothing about where that job came from. The build stage writes the field
+// on the workers it declares and on nothing else.
+//
+// A job that cannot be read is not under the boundary. That is the safe answer for the system and the
+// unsafe one for the rule, and it is deliberate: a store that cannot answer would otherwise refuse
+// every write of every session, which stops the work rather than guarding it.
+func (s *Server) buildingUnderTheBoundary(ctx context.Context, id string) bool {
+	if id == "" {
+		return false
+	}
+	one, err := s.store.GetJob(ctx, id)
+	if err != nil {
+		return false
+	}
+	return one.Building
+}
