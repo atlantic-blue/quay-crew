@@ -174,8 +174,14 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 	if built.Name != job.StageBuild {
 		t.Fatalf("a built job reads off the wire as stage %q, want build", built.Name)
 	}
-	if !strings.Contains(built.Doing, "waits for you to accept") {
-		t.Fatalf("a built job is told %q", built.Doing)
+	// And it says so in the words a person acts on: what they are being asked to look at, how many
+	// pictures there are, and what they are being asked to say about them. A line that holds for a
+	// person without telling them any of that is the failure this asserts phrase by phrase.
+	for _, ask := range []string{"waits for you to look at", "2 pictures of them running",
+		"say whether the value arrived"} {
+		if !strings.Contains(built.Doing, ask) {
+			t.Fatalf("a built job is told %q, which does not say %q", built.Doing, ask)
+		}
 	}
 
 	// It holds for a person rather than calling itself done, and the question names what they are
