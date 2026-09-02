@@ -1,7 +1,6 @@
 package panel
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 )
@@ -16,461 +15,99 @@ func lines(commands [][]string) string {
 	return strings.Join(out, "\n")
 }
 
-// TestThePanelIsTwoHalvesSideBySide: the whole point of it. Half the screen each, split left and
-// right, the console in one and the conversation in the other, and nothing above either of them.
-func TestThePanelIsTwoHalvesSideBySide(t *testing.T) {
-	commands, err := Layout{Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"}}.Commands(Terminal{})
+// TestAConversationOpensBesideTheConsoleAndNowhereElse. The console keeps the keyboard and half the
+// width, and the conversation takes the other half of the same window.
+func TestAConversationOpensBesideTheConsoleAndNowhereElse(t *testing.T) {
+	commands, err := Beside("%3", []string{"krewe", "attach", "5ae35d77"})
 	if err != nil {
-		t.Fatalf("Commands: %v", err)
+		t.Fatalf("Beside: %v", err)
 	}
 	got := lines(commands)
-
-	for _, want := range []string{
-		"tmux new-session -d -s krewe-panel -n panel krewe console",
-		"tmux split-window -h -l 50% -t krewe-panel:panel.0 krewe attach s1",
-		"tmux attach-session -t krewe-panel",
-	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("the panel does not run %q:\n%s", want, got)
-		}
+	if strings.Count(got, "split-window") != 1 {
+		t.Fatalf("opening a conversation runs %q, want one split", got)
+	}
+	if !strings.Contains(got, "split-window -h") {
+		t.Fatalf("the split is %q, want it side by side rather than stacked", got)
+	}
+	if !strings.Contains(got, "-l 50%") {
+		t.Fatalf("the halves are %q, want them equal", got)
+	}
+	// -d leaves the keyboard in the console. The operator asked to see a conversation, not to start
+	// typing into it.
+	if !strings.Contains(got, "split-window -h -d") {
+		t.Fatalf("opening a conversation runs %q, and it takes the keyboard with it", got)
+	}
+	if !strings.Contains(got, "krewe attach 5ae35d77") {
+		t.Fatalf("the pane runs %q, want the conversation that was asked for", got)
 	}
 }
 
-// TestThePanelSplitsSideBySideRatherThanStacked: -h is the difference. Without it tmux stacks the
-// panes and the console loses half its rows instead of half its width.
-func TestThePanelSplitsSideBySideRatherThanStacked(t *testing.T) {
-	commands, err := Layout{Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"}}.Commands(Terminal{})
-	if err != nil {
-		t.Fatalf("Commands: %v", err)
-	}
-	// One split, and it is the one that divides the two halves.
-	for _, argv := range commands {
-		if argv[1] != "split-window" {
-			continue
-		}
-		if !strings.Contains(line(argv), " -h ") {
-			t.Fatalf("the two halves are stacked, not side by side: %s", line(argv))
-		}
-		if strings.Contains(line(argv), " -v ") {
-			t.Fatalf("the two halves are divided vertically: %s", line(argv))
-		}
-		return
-	}
-	t.Fatal("the panel never splits, so there are no two halves")
-}
-
-// TestTheConsoleHasTheKeyboard: the operator opened the panel to use the console, so the cursor lands
-// there rather than in the conversation, which is one pane away.
-func TestTheConsoleHasTheKeyboard(t *testing.T) {
-	commands, err := Layout{Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"}}.Commands(Terminal{})
-	if err != nil {
-		t.Fatalf("Commands: %v", err)
-	}
-	selected := ""
-	for _, argv := range commands {
-		if argv[1] == "select-pane" {
-			selected = line(argv)
-		}
-	}
-	if selected == "" {
-		t.Fatal("the panel never says which pane has the keyboard, so it is whichever was made last")
-	}
-	// Pane 0 is the console, because it is made first and the conversation splits off it.
-	if !strings.HasSuffix(selected, ".0") {
-		t.Fatalf("the keyboard starts in %q, want the console", selected)
-	}
-}
-
-// TestOpeningAPanelThatIsAlreadyOpenDoesNotSplitItAgain: the layout is built once. Splitting on every
-// open is how a two pane panel becomes eleven panes by lunchtime.
-func TestOpeningAPanelThatIsAlreadyOpenDoesNotSplitItAgain(t *testing.T) {
-	commands, err := Layout{Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"}}.Commands(Terminal{AlreadyOpen: true})
-	if err != nil {
-		t.Fatalf("Commands: %v", err)
-	}
-	got := lines(commands)
-
-	if strings.Contains(got, "split-window") {
-		t.Fatalf("opening an open panel split it again:\n%s", got)
-	}
-	if strings.Contains(got, "new-session") {
-		t.Fatalf("opening an open panel built a second one:\n%s", got)
-	}
-	if len(commands) != 1 || commands[0][1] != "attach-session" {
-		t.Fatalf("opening an open panel should only attach, and it runs:\n%s", got)
-	}
-}
-
-// TestTheSessionNameIsTheSameEveryTime, because that is what makes opening it twice come back to the
-// one already open rather than starting a second.
-func TestTheSessionNameIsTheSameEveryTime(t *testing.T) {
-	layout := Layout{Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"}}
-	asked := line(layout.HasSession())
-
-	commands, err := layout.Commands(Terminal{})
-	if err != nil {
-		t.Fatalf("Commands: %v", err)
-	}
-	if !strings.Contains(asked, SessionName) {
-		t.Fatalf("it asks about %q, which does not name the panel", asked)
-	}
-	if !strings.Contains(lines(commands), SessionName) {
-		t.Fatalf("it asks about one session and builds another:\n%s", lines(commands))
-	}
-}
-
-// TestAHalfEmptyPanelIsRefused: a pane with nothing in it exits immediately and tmux closes it, so
-// the layout collapses back to one pane and reads as the panel being broken.
-func TestAHalfEmptyPanelIsRefused(t *testing.T) {
-	for _, test := range []struct {
+// TestNothingIsSplitWithNowhereToSplitIt. A pane identifier is tmux's, so an empty one would split
+// whatever pane tmux thinks is current, which is somebody else's screen.
+func TestNothingIsSplitWithNowhereToSplitIt(t *testing.T) {
+	for _, one := range []struct {
 		name   string
-		layout Layout
+		target string
+		right  []string
 	}{
-		{"no console", Layout{Right: []string{"krewe", "attach", "s1"}}},
-		{"no conversation", Layout{Left: []string{"krewe", "console"}}},
-		{"none of it", Layout{}},
+		{name: "no pane to open beside", target: " ", right: []string{"krewe", "attach", "5ae35d77"}},
+		{name: "nothing to put in it", target: "%3"},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			if _, err := test.layout.Commands(Terminal{}); err == nil {
-				t.Fatal("a half empty panel was built")
+		t.Run(one.name, func(t *testing.T) {
+			if _, err := Beside(one.target, one.right); err == nil {
+				t.Fatal("a conversation opened with nothing to open")
 			}
 		})
 	}
 }
 
-// TestThePanelOpensFromInsideTmux. Building the layout and then failing to show it is the same as not
-// building it: tmux refuses to attach a client that is already inside one, so the panel was made,
-// left running, and never appeared.
-//
-// The terminal said `sessions should be nested with care, unset $TMUX to force`, and the two panes
-// were sitting there the whole time.
-func TestThePanelOpensFromInsideTmux(t *testing.T) {
-	layout := Layout{Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"}}
-
-	commands, err := layout.Commands(Terminal{InsideTmux: true})
+// TestTheConversationIsTakenAwayAgain, which is the same key pressed a second time.
+func TestTheConversationIsTakenAwayAgain(t *testing.T) {
+	commands, err := Away("%4")
 	if err != nil {
-		t.Fatalf("Commands: %v", err)
+		t.Fatalf("Away: %v", err)
 	}
-	got := lines(commands)
-
-	if strings.Contains(got, "attach-session") {
-		t.Fatalf("it attaches from inside tmux, which tmux refuses:\n%s", got)
+	if got := lines(commands); got != "tmux kill-pane -t %4" {
+		t.Fatalf("closing the conversation runs %q, want the pane killed", got)
 	}
-	if !strings.Contains(got, "switch-client -t "+SessionName) {
-		t.Fatalf("it never moves the client to the panel:\n%s", got)
-	}
-	// It still has to be built, or there is nothing to switch to.
-	if !strings.Contains(got, "new-session") || !strings.Contains(got, "split-window") {
-		t.Fatalf("it switches to a panel it never built:\n%s", got)
+	if _, err := Away("  "); err == nil {
+		t.Fatal("a pane with no identifier was killed, which is whichever pane tmux thinks is current")
 	}
 }
 
-// TestThePanelSwitchesToOneAlreadyOpenFromInsideTmux: same refusal, on the path that only reattaches.
-func TestThePanelSwitchesToOneAlreadyOpenFromInsideTmux(t *testing.T) {
-	commands, err := Layout{Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"}}.
-		Commands(Terminal{AlreadyOpen: true, InsideTmux: true})
-	if err != nil {
-		t.Fatalf("Commands: %v", err)
+// TestThePanesAreAskedOfTmuxRatherThanRemembered. The operator can split their own window, so the
+// console finds the pane beside it by asking where every pane starts.
+func TestThePanesAreAskedOfTmuxRatherThanRemembered(t *testing.T) {
+	if got := line(Opened("%3")); got != "tmux list-panes -F #{pane_id} -t %3" {
+		t.Fatalf("the panes are listed with %q", got)
 	}
-	got := lines(commands)
-
-	if strings.Contains(got, "attach-session") {
-		t.Fatalf("it attaches from inside tmux, which tmux refuses:\n%s", got)
-	}
-	if !strings.Contains(got, "switch-client") {
-		t.Fatalf("it does not move the client to the open panel:\n%s", got)
-	}
-}
-
-// TestThePanelStillAttachesFromAPlainTerminal is the way off the other path (rule 46 in this
-// repository): switching a client that does not exist is not a thing, so a plain terminal must keep
-// attaching rather than being swept up in the fix for the nested one.
-func TestThePanelStillAttachesFromAPlainTerminal(t *testing.T) {
-	for _, open := range []bool{false, true} {
-		commands, err := Layout{Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"}}.
-			Commands(Terminal{AlreadyOpen: open})
-		if err != nil {
-			t.Fatalf("Commands: %v", err)
-		}
-		got := lines(commands)
-		if !strings.Contains(got, "attach-session") {
-			t.Fatalf("a plain terminal no longer attaches (already open: %v):\n%s", open, got)
-		}
-		if strings.Contains(got, "switch-client") {
-			t.Fatalf("a plain terminal switches a client it does not have (already open: %v):\n%s", open, got)
+	got := line(Rightward("%3"))
+	for _, field := range []string{"#{pane_id}", "#{pane_left}", "#{pane_top}"} {
+		if !strings.Contains(got, field) {
+			t.Fatalf("asking where the panes are runs %q, and it never asks for %s", got, field)
 		}
 	}
 }
 
-// TestThePanelIsBuiltAtTheTerminalsSize. tmux scales the panes a session already has when a client of
-// a different size attaches, so a header given ten rows in tmux's default eighty by twenty four came
-// back as twenty one rows in a taller terminal. Building it at the real size is what makes the rows
-// the header asked for the rows it gets.
-func TestThePanelIsBuiltAtTheTerminalsSize(t *testing.T) {
-	commands, err := Layout{
-		Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
-		Width: 180, Height: 46,
-	}.Commands(Terminal{})
+// TestNothingHereBuildsAWindowOfItsOwn is rule 46 in this package: `krewe` opened a tmux session
+// called krewe-panel with the console in one half, and it does not any more. A conversation is a pane
+// beside a console that is already running, so nothing here may start a session, name a window, or
+// attach a client.
+func TestNothingHereBuildsAWindowOfItsOwn(t *testing.T) {
+	built, err := Beside("%3", []string{"krewe", "attach", "5ae35d77"})
 	if err != nil {
-		t.Fatalf("Commands: %v", err)
+		t.Fatalf("Beside: %v", err)
 	}
-	if !strings.Contains(lines(commands), "-x 180 -y 46") {
-		t.Fatalf("the panel is not built at the terminal's size:\n%s", lines(commands))
-	}
-}
-
-// TestAPanelWithNoSizeStillOpens: a terminal that cannot be measured is not a reason to refuse, and
-// tmux has a default for exactly this.
-func TestAPanelWithNoSizeStillOpens(t *testing.T) {
-	commands, err := Layout{
-		Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
-	}.Commands(Terminal{})
+	away, err := Away("%4")
 	if err != nil {
-		t.Fatalf("Commands: %v", err)
+		t.Fatalf("Away: %v", err)
 	}
-	if strings.Contains(lines(commands), " -x ") {
-		t.Fatalf("it passed a size it does not have:\n%s", lines(commands))
-	}
-}
-
-// TestAPanelBuiltByAnOlderToolIsMadeAgain. Reattaching to an open panel is right until the tool has
-// been upgraded: the panes are still running the old binary, so the fix that shipped this morning is
-// not in what you are looking at, however many times you upgrade.
-//
-// It is what "still cant see the bloody logo man" turned out to be. The logo was drawn correctly by
-// the new build, and the panel on screen was the old one.
-func TestAPanelBuiltByAnOlderToolIsMadeAgain(t *testing.T) {
-	layout := Layout{
-		Version: "038fdd6",
-		Left:    []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
-	}
-	commands, err := layout.Commands(Terminal{AlreadyOpen: true, Stale: true})
-	if err != nil {
-		t.Fatalf("Commands: %v", err)
-	}
-	got := lines(commands)
-
-	if !strings.HasPrefix(got, "tmux kill-session -t krewe-panel") {
-		t.Fatalf("the old panel is not taken down first, so new-session reattaches to it:\n%s", got)
-	}
-	if !strings.Contains(got, "new-session") || strings.Count(got, "split-window") != 1 {
-		t.Fatalf("the panel is not built again:\n%s", got)
-	}
-}
-
-// TestAPanelBuiltByThisToolIsJustReattachedTo, or every open would tear down the conversation you were
-// reading and start it again.
-func TestAPanelBuiltByThisToolIsJustReattachedTo(t *testing.T) {
-	commands, err := Layout{
-		Version: "038fdd6",
-		Left:    []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
-	}.Commands(Terminal{AlreadyOpen: true})
-	if err != nil {
-		t.Fatalf("Commands: %v", err)
-	}
-	got := lines(commands)
-
-	for _, never := range []string{"kill-session", "new-session", "split-window"} {
-		if strings.Contains(got, never) {
-			t.Fatalf("opening a current panel runs %s:\n%s", never, got)
+	everything := strings.Join([]string{
+		lines(built), lines(away), line(Opened("%3")), line(Rightward("%3")),
+	}, "\n")
+	for _, gone := range []string{"new-session", "attach-session", "switch-client", "krewe-panel", "krewe console"} {
+		if strings.Contains(everything, gone) {
+			t.Fatalf("this package still runs %q:\n%s", gone, everything)
 		}
-	}
-}
-
-// TestThePanelRecordsWhatBuiltIt, or nothing can tell that it is stale.
-func TestThePanelRecordsWhatBuiltIt(t *testing.T) {
-	commands, err := Layout{
-		Version: "038fdd6",
-		Left:    []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
-	}.Commands(Terminal{})
-	if err != nil {
-		t.Fatalf("Commands: %v", err)
-	}
-	if !strings.Contains(lines(commands), VersionOption+" 038fdd6") {
-		t.Fatalf("the panel does not record the build that made it:\n%s", lines(commands))
-	}
-	// And the same option is what gets read back.
-	if !strings.Contains(strings.Join(Built(""), " "), VersionOption) {
-		t.Fatalf("what is read back is not what was written: %v", Built(""))
-	}
-}
-
-// TestTheActivePaneIsVisiblyTheActiveOne. Two panes and an unlit border
-// between them: the operator could not tell which half had the keyboard without typing something to
-// find out.
-func TestTheActivePaneIsVisiblyTheActiveOne(t *testing.T) {
-	commands, err := Layout{
-		Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
-	}.Commands(Terminal{})
-	if err != nil {
-		t.Fatalf("Commands: %v", err)
-	}
-
-	// The style itself, not the command line it arrives on. Comparing whole lines compares the option
-	// names too, which differ whatever the colours are, so the check below would pass with both
-	// borders drawn identically.
-	active, inactive := "", ""
-	activeLine, inactiveLine := "", ""
-	for _, argv := range commands {
-		switch {
-		case contains(argv, "pane-active-border-style"):
-			active, activeLine = argv[len(argv)-1], line(argv)
-		case contains(argv, "pane-border-style"):
-			inactive, inactiveLine = argv[len(argv)-1], line(argv)
-		}
-	}
-	if active == "" {
-		t.Fatal("the pane with the keyboard is drawn the same as the ones without it")
-	}
-	if inactive == "" {
-		t.Fatal("only the active border is styled, so it is lit against whatever the terminal defaults to")
-	}
-	if active == inactive {
-		t.Fatalf("both borders are drawn %q, which says nothing about where the keyboard is", active)
-	}
-	for _, styled := range []string{activeLine, inactiveLine} {
-		if !contains(strings.Fields(styled), "-w") {
-			t.Fatalf("the style is not scoped to the panel's window, so it changes tmux everywhere:\n%s", styled)
-		}
-	}
-}
-
-// contains says whether argv holds a word, so a test can find a command by what it does rather than
-// by counting its position in the list.
-func contains(argv []string, want string) bool {
-	for _, arg := range argv {
-		if arg == want {
-			return true
-		}
-	}
-	return false
-}
-
-// TestThePanelHasNoThirdPaneAboveTheHalves is the way off the header (rule 46 in this crew's rules).
-// The panel used to cut a full width row across the top for a header, and the console has that row
-// back: a third pane would take it again, and the two halves would each lose it silently.
-func TestThePanelHasNoThirdPaneAboveTheHalves(t *testing.T) {
-	commands, err := Layout{
-		Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
-	}.Commands(Terminal{})
-	if err != nil {
-		t.Fatalf("Commands: %v", err)
-	}
-	got := lines(commands)
-
-	if splits := strings.Count(got, "split-window"); splits != 1 {
-		t.Fatalf("the panel makes %d splits, so it is not two panes:\n%s", splits, got)
-	}
-	// The vertical cut is the one that made room for a header. Nothing else in this layout wants one.
-	if strings.Contains(got, "split-window -v") {
-		t.Fatalf("the panel still cuts the window top and bottom:\n%s", got)
-	}
-	if strings.Contains(got, "krewe header") {
-		t.Fatalf("the panel still runs the header command:\n%s", got)
-	}
-}
-
-// TestNoPaneIsHeldToAFixedHeight. The header pane was resized to its own line count on every attach
-// and every client resize, because tmux scales panes when a client of a different size arrives. Two
-// full height panes want none of that, and a resize hook left behind would shrink one of them to the
-// rows the header used to take.
-func TestNoPaneIsHeldToAFixedHeight(t *testing.T) {
-	commands, err := Layout{
-		Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
-	}.Commands(Terminal{})
-	if err != nil {
-		t.Fatalf("Commands: %v", err)
-	}
-	got := lines(commands)
-
-	for _, gone := range []string{"resize-pane", "client-resized", "client-attached"} {
-		if strings.Contains(got, gone) {
-			t.Fatalf("the panel still runs %q, which was the header pane's:\n%s", gone, got)
-		}
-	}
-}
-
-// TestSelectingTheConsoleDoesNotBounceTheKeyboardOut. A hook sent the keyboard away from pane 0 to
-// pane 1, because pane 0 was the header and had nothing to type into. Pane 0 is the console now, so
-// that hook would throw the operator out of the half they came to use, every time they selected it.
-func TestSelectingTheConsoleDoesNotBounceTheKeyboardOut(t *testing.T) {
-	commands, err := Layout{
-		Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
-	}.Commands(Terminal{})
-	if err != nil {
-		t.Fatalf("Commands: %v", err)
-	}
-	got := lines(commands)
-
-	if strings.Contains(got, "after-select-pane") {
-		t.Fatalf("selecting a pane still bounces the keyboard somewhere else:\n%s", got)
-	}
-	if strings.Contains(got, "pane_index") {
-		t.Fatalf("the panel still decides anything by pane index:\n%s", got)
-	}
-}
-
-// TestAPanelDownToOnePaneIsBuiltAgain. Leaving the conversation closes the pane it was in, so the
-// panel is a single console by the time the operator opens the system again, and opening it used to
-// come back to that single console for ever.
-func TestAPanelDownToOnePaneIsBuiltAgain(t *testing.T) {
-	commands, err := Layout{
-		Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
-	}.Commands(Terminal{AlreadyOpen: true, LostAHalf: true})
-	if err != nil {
-		t.Fatalf("Commands: %v", err)
-	}
-	got := lines(commands)
-
-	for _, want := range []string{"kill-session", "split-window", "krewe attach s1"} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("opening a panel that lost a half does not %q:\n%s", want, got)
-		}
-	}
-}
-
-// And a panel with both halves is shown rather than built, or every open would take the conversation
-// away and put a fresh one in its place.
-func TestAWholePanelIsShownRatherThanBuiltAgain(t *testing.T) {
-	commands, err := Layout{
-		Left: []string{"krewe", "console"}, Right: []string{"krewe", "attach", "s1"},
-	}.Commands(Terminal{AlreadyOpen: true})
-	if err != nil {
-		t.Fatalf("Commands: %v", err)
-	}
-	got := lines(commands)
-
-	if strings.Contains(got, "kill-session") || strings.Contains(got, "split-window") {
-		t.Fatalf("opening a whole panel builds it again:\n%s", got)
-	}
-}
-
-// Whole is asked of tmux rather than remembered, and a tmux that cannot answer is not evidence that
-// a half is missing: rebuilding on that would take a working panel away from somebody.
-func TestWhetherThePanelStillHasBothHalves(t *testing.T) {
-	for _, c := range []struct {
-		name    string
-		listing string
-		failed  error
-		want    bool
-	}{
-		{name: "a console and a conversation", listing: "%0\n%1\n", want: true},
-		{name: "a console on its own", listing: "%0\n", want: false},
-		{name: "nothing at all", listing: "", want: false},
-		{name: "tmux did not answer", failed: fmt.Errorf("no server running"), want: true},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			asked := ""
-			got := Whole(Layout{Session: "krewe-panel"}, func(argv []string) (string, error) {
-				asked = strings.Join(argv, " ")
-				return c.listing, c.failed
-			})
-			if got != c.want {
-				t.Fatalf("with %q tmux said %q, want %v", c.name, c.listing, c.want)
-			}
-			if !strings.Contains(asked, "krewe-panel:panel") {
-				t.Fatalf("the panel asked tmux %q, want it to ask about its own window", asked)
-			}
-		})
 	}
 }

@@ -450,6 +450,7 @@ func asJob(from *job.Job) *quaycrewv1.Job {
 		Attempted:   asJobAttempts(from.Attempted),
 		Steps:       asJobSteps(from.Steps),
 		Handoffs:    asJobHandoffs(from.Handoffs),
+		Questions:   asJobQuestions(from.Questions),
 		SpentTokens: from.SpentTokens, ObservedVersion: int32(from.ObservedVersion),
 		TraceId: from.TraceID, ParentSpanId: from.ParentSpanID,
 		CreatedAt: timestamppb.New(from.CreatedAt), UpdatedAt: timestamppb.New(from.UpdatedAt),
@@ -680,3 +681,23 @@ func (s *Server) RunPullRequests(ctx context.Context) { s.pullRequests.Run(ctx) 
 // ReadPullRequests reads every unsettled pull request once, now. The timer above calls this too; a
 // caller that cannot wait for a tick calls it directly, which is what a test and a scenario do.
 func (s *Server) ReadPullRequests(ctx context.Context) { s.pullRequests.Tick(ctx) }
+
+// asJobQuestions puts what the readings of this job's plan could not settle on the wire, with what a
+// later reading settled beside each row.
+func asJobQuestions(from []job.Question) []*quaycrewv1.JobQuestion {
+	if len(from) == 0 {
+		return nil
+	}
+	questions := make([]*quaycrewv1.JobQuestion, 0, len(from))
+	for _, one := range from {
+		asked := &quaycrewv1.JobQuestion{
+			Seq: int32(one.Seq), Text: one.Text, AskedBy: one.AskedBy, Status: one.Status,
+			Answer: one.Answer, SettledBy: one.SettledBy, AskedAt: timestamppb.New(one.AskedAt),
+		}
+		if !one.SettledAt.IsZero() {
+			asked.SettledAt = timestamppb.New(one.SettledAt)
+		}
+		questions = append(questions, asked)
+	}
+	return questions
+}

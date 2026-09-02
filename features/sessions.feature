@@ -297,7 +297,7 @@ Feature: Sessions run in isolated sandboxes
     And the command opens the conversation the system holds
 
   # Tokens are what a system costs, and the conversations that cost the most never pass through the
-  # control plane: an operator talking in the panel is talking to the sandbox. The model's own
+  # control plane: an operator talking in a conversation is talking to the sandbox. The model's own
   # transcript is the only record, so that is what the system reads.
   Scenario: A session reports what its conversation has cost
     Given a session started by dispatching "hello"
@@ -312,7 +312,7 @@ Feature: Sessions run in isolated sandboxes
     Then the driver reports no cost, rather than a cost of nothing
 
   # A conversation started inside a sandbox picks its own identifier and tells nobody, so every
-  # conversation opened from the panel was one the system could not name: no history to read back, no
+  # conversation opened beside the console was one the system could not name: no history to read back, no
   # tokens to count, and no way to tell one transcript in a workspace from another. The system names it
   # instead.
   Scenario: The system names a conversation when it opens one
@@ -425,27 +425,31 @@ Feature: Sessions run in isolated sandboxes
     And the refusal says "krewe room"
     And the refusal says "container went away"
 
-  # The console shows the system and a conversation shows one session, and using both meant losing sight
-  # of one. The panel puts them on the screen at once, half the width each, side by side.
+  # `krewe` used to build a window with the console in one half and a conversation in the other, so a
+  # person who typed the name of the tool got a split terminal and a conversation they had not asked
+  # for. It opens the console, full width, and nothing beside it.
   #
-  # tmux does the splitting, the same tmux that already keeps an open conversation alive behind
-  # ctrl-q. These assert on the commands the panel would run rather than running them, the way the
-  # attach scenarios do, because a scenario that took over the terminal could not report anything.
-  Scenario: The panel puts the console and a conversation side by side
-    Given a session started by dispatching "hello"
-    When the operator opens the panel
-    Then the panel puts the console in one half and that conversation in the other
-    And each half is 50% of the width
-    And the console has the keyboard
-    And nothing is drawn above either half
+  # This runs the real tool in a real terminal multiplexer, on a socket of its own, because what is
+  # being checked is what the command does to the screen. Asserting on the commands it would run is
+  # what let the split ship in the first place.
+  Scenario: krewe opens the console and nothing beside it
+    Given the system listens on an address the tool can dial
+    And a terminal to type krewe in
+    When the operator types krewe
+    Then the terminal holds one pane
+    And no second window was built to hold a conversation
 
-  Scenario: The panel opens the conversation you were last in
-    Given a session started by dispatching "the older one"
-    And a session started by dispatching "the newer one" on a new session
-    When the operator opens the panel
-    Then the panel opens the newer conversation
+  # A removed word is tested as well as the thing that replaced it. It is in somebody's fingers and in
+  # their notes, so it refuses by name and says what to press now.
+  Scenario: The panel command is refused and says what to press instead
+    Given the system listens on an address the tool can dial
+    When the operator asks the tool to open the panel
+    Then standard error says "the panel is gone"
+    And standard error says "opens the console"
+    And standard error says "press p"
+    And the command fails
 
-  # A pane closes the moment its command exits, and the conversation half of the screen is a pane
+  # A pane closes the moment its command exits, and a conversation beside the console is a pane
   # running one command. So a conversation that could not be opened printed the reason and had it
   # destroyed in the same instant. The operator pressed the key, the screen flickered, and nothing on
   # it ever said why. Attach stays instead: it says what happened and waits there, the way a finished
@@ -465,28 +469,6 @@ Feature: Sessions run in isolated sandboxes
     Given a terminal with the console in it
     When a conversation that says why and exits is put beside the console
     Then the pane is gone, and the reason with it
-
-# Leaving the conversation closes the pane it was in, and quitting the console closes the other, so
-  # a panel is very often half of one by the time somebody opens the system again. Opening it used to
-  # come back to that half and leave it there: the console had no room to open a conversation, and a
-  # conversation on its own had no console to go back to.
-  Scenario: Opening the system rebuilds a panel that lost a half
-    Given a panel with a console and a conversation
-    When the conversation is closed the way leaving it closes it
-    And the operator opens the system again
-    Then the panel has a console and a conversation again
-
-  # And the panel that is whole is left exactly as it is, or every open would take the conversation
-  # away and put a fresh one back, which is the fault above with the halves the other way round.
-  Scenario: Opening the system again leaves a whole panel alone
-    Given a panel with a console and a conversation
-    When the operator opens the system again
-    Then the conversation is the one that was already there
-
-  Scenario: The panel refuses rather than opening half of one
-    When the operator opens the panel
-    Then the panel says there is no conversation to put beside the console
-    And it says how to start one
 
   # A session that can reach the control plane can drive the system: make a workspace, start a session,
   # write a context, the same way the operator does. It is a real widening, so it is turned on rather

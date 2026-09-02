@@ -1,8 +1,8 @@
 // Package manual is krewe describing itself, in a form meant to be read by whatever is running in a
 // session rather than by somebody scanning a terminal.
 //
-// It exists because a session sitting in the panel beside the console knows nothing about the system it
-// is next to, so it is told with this.
+// It exists because a session sitting in a conversation knows nothing about the system it is part of,
+// so it is told with this.
 //
 // Most of it is assembled rather than written: the commands are the same usage text `krewe` shows with
 // no arguments, and what the system can do comes from the behaviour specification embedded in the
@@ -124,6 +124,12 @@ commands:
                                           it. If the job dies part way, what is on that record is
                                           where it carries on from, and what is not on it is done a
                                           second time
+  job question "<what you could not      write down one thing this reading of the plan could not
+    settle>"                              settle. The reading after yours is handed the row and may
+                                          answer it, and what no reading settles is what a person is
+                                          asked. Three rows to one reading
+  job settle <number> "<what settles     answer a row an earlier reading left open, by the number
+    it>"                                  you were handed. A settled row does not reach a person
   job handoff "<what is left>"            hand the rest of the job you are running to a fresh
     ["<what you tried>"]                  session, which is what the system asks you for when your
                                           context window reaches this workspace's ceiling. The next

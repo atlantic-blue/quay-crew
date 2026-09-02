@@ -273,8 +273,8 @@ type Model struct {
 	// than whichever pane happens to be beside it now. Empty means none is open.
 	conversation string
 	// conversationOf is whose conversation is in that pane, so the console can say which one the
-	// operator is sitting beside. Empty means it does not know: `krewe` opens the panel itself, and
-	// the console did not put that first conversation there.
+	// operator is sitting beside. Empty means it does not know, which is a pane the operator split for
+	// themselves rather than one this console opened.
 	conversationOf string
 	// panes is how the console opens and closes the conversation beside it. Nil is tmux itself, which
 	// is what runs in front of an operator.

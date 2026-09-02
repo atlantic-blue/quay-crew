@@ -7,156 +7,61 @@ import (
 	"io"
 	"strings"
 	"testing"
-	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-krewe/internal/workspace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func at(minutes int) *timestamppb.Timestamp {
-	return timestamppb.New(time.Date(2026, 8, 7, 12, minutes, 0, 0, time.UTC))
-}
-
-// TestThePanelOpensTheConversationYouWereLastIn. With nothing named, the right half is the session the
-// operator was last talking to, which is the one they meant.
-func TestThePanelOpensTheConversationYouWereLastIn(t *testing.T) {
-	got, found := newestSession([]*quaycrewv1.Session{
-		{Id: "older", ModelSessionId: "c1", UpdatedAt: at(10)},
-		{Id: "newest", ModelSessionId: "c2", UpdatedAt: at(40)},
-		{Id: "middle", ModelSessionId: "c3", UpdatedAt: at(25)},
-	})
-	if !found {
-		t.Fatal("no conversation was chosen from three")
+// TestKreweWithNoArgumentsOpensTheConsoleAndNothingElse.
+//
+// `krewe` used to open a tmux window with the console in one half and a conversation in the other, so
+// a person who typed the name of the tool got a split terminal and a conversation they had not asked
+// for. There is one thing left for it to open.
+func TestKreweWithNoArgumentsOpensTheConsoleAndNothingElse(t *testing.T) {
+	if got := kreweOpens(nil, true); got != theConsole {
+		t.Fatalf("krewe with no arguments opens %v, want the console on its own", got)
 	}
-	if got != "newest" {
-		t.Fatalf("the panel opens %q, want the one last spoken to", got)
+	if got := kreweOpens([]string{}, true); got != theConsole {
+		t.Fatalf("krewe with an empty argument list opens %v, want the console on its own", got)
 	}
 }
 
-// TestThePanelSkipsWhatCannotBeOpened. A session with no conversation behind it refuses to attach, so
-// choosing one would build a panel whose right half dies the moment it opens.
-func TestThePanelSkipsWhatCannotBeOpened(t *testing.T) {
-	got, found := newestSession([]*quaycrewv1.Session{
-		{Id: "has-a-conversation", ModelSessionId: "c1", UpdatedAt: at(10)},
-		{Id: "never-had-a-task", UpdatedAt: at(40)},
-		{Id: "put-away", ModelSessionId: "c2", UpdatedAt: at(50), ArchivedAt: at(50)},
-	})
-	if !found {
-		t.Fatal("nothing was chosen, though one session can be opened")
-	}
-	if got != "has-a-conversation" {
-		t.Fatalf("the panel opens %q, which cannot be attached to", got)
+// TestKreweWithNoTerminalStillPrintsLines, so `krewe | grep` keeps working.
+func TestKreweWithNoTerminalStillPrintsLines(t *testing.T) {
+	if got := kreweOpens(nil, false); got != plainLines {
+		t.Fatalf("krewe into a pipe opens %v, want plain lines", got)
 	}
 }
 
-// TestThePanelRefusesRatherThanOpeningHalfOfOne, and says what to type. A pane whose command exits is
-// closed by tmux, so the layout would collapse to one pane and read as the panel being broken.
-func TestThePanelRefusesRatherThanOpeningHalfOfOne(t *testing.T) {
-	if _, found := newestSession(nil); found {
-		t.Fatal("a conversation was chosen from an empty system")
-	}
-	if _, found := newestSession([]*quaycrewv1.Session{{Id: "never-had-a-task", UpdatedAt: at(10)}}); found {
-		t.Fatal("a session that has never had a task was offered as something to open")
-	}
-}
-
-// TestWhereNamesTheAddressInTheRefusal, so the refusal says which system it looked in rather than
-// leaving the operator to guess whether they are standing somewhere unexpected.
-func TestWhereNamesTheAddressInTheRefusal(t *testing.T) {
-	for _, test := range []struct {
-		name              string
-		workspace, projct string
-		want              string
-	}{
-		{"standing nowhere", "", "", ""},
-		{"in a workspace", "juliantellez", "", " in juliantellez"},
-		{"in a project", "juliantellez", "quay-crew", " in juliantellez/quay-crew"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			got := where(workspace.Path{Workspace: test.workspace, Project: test.projct})
-			if got != test.want {
-				t.Fatalf("where = %q, want %q", got, test.want)
-			}
-		})
-	}
-}
-
-// TestKreweOpensTheSystemNotJustTheConsole. One command: `krewe` opens the header, the console and a
-// conversation. Nothing tested this until a mutation that made `krewe` open the console alone stayed
-// green, which is the whole of what was asked for going unwatched.
-func TestKreweOpensTheSystemNotJustTheConsole(t *testing.T) {
-	panelRan, aloneRan := false, false
-	err := openTheSystem(
-		func() error { panelRan = true; return nil },
-		func() error { aloneRan = true; return nil },
-	)
-	if err != nil {
-		t.Fatalf("openTheSystem: %v", err)
-	}
-	if !panelRan {
-		t.Fatal("krewe did not open the system")
-	}
-	if aloneRan {
-		t.Fatal("krewe opened the console as well as the system")
-	}
-}
-
-// TestKreweOpensTheConsoleWhenThereIsNothingToPutBesideIt: a system with no conversation in it is the
-// first run, and refusing to open at all then would be absurd.
-func TestKreweOpensTheConsoleWhenThereIsNothingToPutBesideIt(t *testing.T) {
-	aloneRan := false
-	err := openTheSystem(
-		func() error { return fmt.Errorf("%w: no conversation yet", errNothingBeside) },
-		func() error { aloneRan = true; return nil },
-	)
-	if err != nil {
-		t.Fatalf("openTheSystem: %v", err)
-	}
-	if !aloneRan {
-		t.Fatal("krewe refused to open at all with nothing to put beside the console")
+// TestKreweWithAWordRunsThatCommand, terminal or not: a named command is never the console.
+func TestKreweWithAWordRunsThatCommand(t *testing.T) {
+	for _, terminal := range []bool{true, false} {
+		if got := kreweOpens([]string{"sessions"}, terminal); got != aCommand {
+			t.Fatalf("krewe sessions with terminal %v opens %v, want the command", terminal, got)
+		}
 	}
 }
 
 // TestThePanelCommandIsRefused is rule 46 in this repository: when a command is removed, test the way
 // off it. `krewe panel` is in somebody's fingers and in these notes, so it has to fail loudly and name
 // what to type instead rather than being taken for an unknown word.
+//
+// The words changed with the panel. A refusal that still said `krewe` opens the system would send a
+// person back to the split screen this took away.
 func TestThePanelCommandIsRefused(t *testing.T) {
 	err := run(context.Background(), testClient(t), []string{"panel"}, io.Discard, "")
 	if err == nil {
 		t.Fatal("krewe panel was accepted")
 	}
-	if !strings.Contains(err.Error(), "`krewe` on its own") {
-		t.Fatalf("the refusal is %q, want it to name what to type instead", err)
+	for _, says := range []string{"the panel is gone", "opens the console", "press p", "krewe attach"} {
+		if !strings.Contains(err.Error(), says) {
+			t.Fatalf("the refusal is %q, and it never says %q", err, says)
+		}
 	}
 	// And it is gone from the usage, or it reads as still being a command.
 	if strings.Contains(usage, "panel [<session id>]") {
 		t.Fatal("the usage still lists a panel command")
-	}
-}
-
-// TestKreweSaysWhyTheSystemCouldNotOpen. Every failure to open the panel used to come out as a single
-// console pane: tmux missing, a system with two projects and nowhere named to open, a header with no
-// room to draw in. All of them looked the same from the outside, so the panel read as a thing that
-// sometimes does not appear, and the reason was never printed anywhere.
-func TestKreweSaysWhyTheSystemCouldNotOpen(t *testing.T) {
-	aloneRan := false
-	err := openTheSystem(
-		func() error {
-			return fmt.Errorf("panel: new-session: exec: \"tmux\": executable file not found in $PATH")
-		},
-		func() error { aloneRan = true; return nil },
-	)
-	if err == nil {
-		t.Fatal("opening the system failed and krewe said nothing about it")
-	}
-	if !strings.Contains(err.Error(), "tmux") {
-		t.Fatalf("the failure is reported as %q, and it does not say what went wrong", err)
-	}
-	if aloneRan {
-		t.Fatal("krewe opened a single console pane over a failure that was not about having nothing to put beside it")
 	}
 }
 
@@ -272,14 +177,13 @@ func TestASessionSaysWhenItWasNotToldWhereTheSystemIs(t *testing.T) {
 	}
 }
 
-// Which project the driver opens in, which is what `krewe` on its own has to decide before it can put
-// a conversation beside the console.
+// Which project the driver opens in, which is what p in the console has to decide before it can put a
+// conversation beside it.
 //
-// It had no test at all, and it was wrong in the way an untested branch usually is: it read where you
-// are standing only when you stood in a project, then counted projects across the whole system. So
-// `krewe use atlantic-blue` printed "now in atlantic-blue", and `krewe` then refused to open, because
-// the system held eight projects and it would not choose between them. The workspace the operator had
-// just named counted for nothing.
+// It read where you are standing only when you stood in a project, then counted projects across the
+// whole system. So `krewe use atlantic-blue` printed "now in atlantic-blue", and asking for a
+// conversation refused, because the system held eight projects and it would not choose between them.
+// The workspace the operator had just named counted for nothing.
 func TestTheDriverOpensWhereYouAreStanding(t *testing.T) {
 	for _, one := range []struct {
 		name     string
@@ -300,12 +204,12 @@ func TestTheDriverOpensWhereYouAreStanding(t *testing.T) {
 			beside:   true,
 		},
 		{
-			name:     "standing in a workspace with two projects opens the console alone",
+			name:     "standing in a workspace with two projects refuses and says which to name",
 			standing: []string{"use", "acme"},
 			beside:   false,
 		},
 		{
-			name:   "standing nowhere with projects in reach opens the console alone",
+			name:   "standing nowhere with projects in reach refuses and says which to name",
 			beside: false,
 		},
 	} {
@@ -327,11 +231,12 @@ func TestTheDriverOpensWhereYouAreStanding(t *testing.T) {
 			project, err := driverProject(context.Background(), client)
 			if !one.beside {
 				if err == nil {
-					return
+					t.Fatal("a project was chosen where the operator has to say which")
 				}
-				if !errors.Is(err, errNothingBeside) {
-					t.Fatalf("driverProject refused with %v, and every refusal here has to let the "+
-						"console open on its own: krewe opens the system", err)
+				// The console holds this on the screen, so it is the whole of what the operator gets.
+				// A refusal that does not say what to do next reads as the key being broken.
+				if !strings.Contains(err.Error(), "krewe use") && !strings.Contains(err.Error(), "press o") {
+					t.Fatalf("the refusal is %q, and it never says what to type or press", err)
 				}
 				return
 			}

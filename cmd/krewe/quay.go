@@ -133,7 +133,8 @@ var removedCommands = map[string]string{
 	"header": "the header is gone. Which build this is and the way to help are on the console.s own\n" +
 		"footer row now, on the right of the line that says where you are standing. What the machine has\n" +
 		"left is a command\n\n  krewe room",
-	"panel": "`krewe` on its own opens the system, and p shows or hides the conversation beside it",
+	"panel": "the panel is gone. `krewe` on its own opens the console, full width, and nothing beside\n" +
+		"it. A conversation is asked for: press p in the console from inside tmux, or open one on its own\n\n  krewe attach <session>",
 	"work": "declared intent is called a job now, because that is what Kubernetes calls the same " +
 		"thing: run to completion, watched by a controller, with a disposable container underneath" +
 		"\n\n  krewe job <create|list|show|stop>",
@@ -228,8 +229,9 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runRender(args[1:], out)
 	case "room":
 		return runRoom(ctx, client, out)
-	// Internal: the panes krewe opens run these, and the model runtime in a sandbox runs the last of
-	// them. Not in the usage, because they are not commands anybody types.
+	// Internal: a status line under a conversation runs the first, `krewe` on its own runs the second,
+	// and the model runtime in a sandbox runs the last of them. Not in the usage, because they are not
+	// commands anybody types.
 	case "statusline":
 		return runStatusLine(ctx, client, args[1:], os.Stdin, out)
 	case "console":
