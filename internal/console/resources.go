@@ -640,6 +640,10 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 			Key:   "enter",
 			Also:  []string{"a"},
 			Label: "Open",
+			// In a panel the conversation opens beside the console, so the row the cursor is on is
+			// the conversation the operator ends up talking to. Every open used to land on the pane
+			// the panel had built, whatever the cursor was on.
+			Conversation: true,
 			Shell: func(row Row) (*exec.Cmd, error) {
 				if row.ID == "" {
 					return nil, fmt.Errorf("no session selected")

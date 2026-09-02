@@ -153,21 +153,30 @@ func terminalSize() (int, int) {
 
 // conversationBeside is what the console runs when it is asked to put a conversation next to itself.
 //
-// Always the driver, whatever the cursor is on. Following the cursor reads well until the key for a
-// fresh conversation is pressed: that would end whichever session the cursor happened to be over,
-// while the pane beside the console carried on showing the driver.
+// The session the console hands over is the one that opens, because that is the row the operator has
+// their cursor on. Handing over nothing asks for the driver, which is what opening the system with no
+// argument means and is deliberate.
 func conversationBeside(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) func(string) ([]string, error) {
-	return func(string) ([]string, error) {
+	return func(selected string) ([]string, error) {
 		self, err := os.Executable()
 		if err != nil {
 			self = "krewe"
 		}
-		sessionID, err := panelSession(ctx, client, nil)
+		sessionID, err := panelSession(ctx, client, pointedAt(selected))
 		if err != nil {
 			return nil, err
 		}
 		return []string{self, "attach", sessionID}, nil
 	}
+}
+
+// pointedAt is the session the console pointed at, in the form the panel takes its arguments in. Nothing
+// pointed at is no argument at all, which is the driver.
+func pointedAt(selected string) []string {
+	if selected == "" {
+		return nil
+	}
+	return []string{selected}
 }
 
 // runBareConsole is the panel.s left half. It is the same console `krewe console` opens on its own:
@@ -259,8 +268,10 @@ func whyNoConversation(current workspace.Path, projects int) string {
 // is already there, which is what makes coming back to it job. Ending that session is what makes the
 // next open a fresh start.
 func endConversationBeside(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) func(string) error {
-	return func(string) error {
-		sessionID, err := panelSession(ctx, client, nil)
+	return func(selected string) error {
+		// The same session the fresh one opens in. Ending one conversation and opening another leaves
+		// the operator looking at a conversation they did not end, and ends one they cannot see.
+		sessionID, err := panelSession(ctx, client, pointedAt(selected))
 		if err != nil {
 			return err
 		}

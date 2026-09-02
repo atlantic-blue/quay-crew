@@ -16,6 +16,66 @@ import (
 // `krewe panel` builds this in one go. This is the same thing around a console already running, so the
 // operator does not have to decide before opening it whether they wanted a conversation next to it.
 
+// Panes is how the console opens and closes the conversation beside it. tmux is the one that runs in
+// front of an operator, and a scenario gives it one whose panes it can read: without a seam here a
+// test can only assert on the command a key produced, which is the half that already worked.
+type Panes interface {
+	// Beside is the pane the conversation sits in, and whether there is one at all.
+	Beside(here string) (string, bool)
+	// Open puts a command in a pane beside here, and says which pane it landed in.
+	Open(here string, argv []string) (string, error)
+	// Close takes a pane away.
+	Close(pane string) error
+}
+
+// panesOrTmux is what this console opens panes with, which is tmux unless it was given something else.
+func (m Model) panesOrTmux() Panes {
+	if m.panes != nil {
+		return m.panes
+	}
+	return tmuxPanes{}
+}
+
+// openConversationFor puts one session's conversation in the pane beside the console, and says
+// whether it could. It could not when there is no pane beside it to open into, and the caller then
+// hands over the console's own screen, which is all a console on its own can do.
+//
+// This is what enter on a session row does in a panel. The session travels to the command line, which
+// decides what to run for it: handing over nothing is how the driver is asked for, and that is what
+// opening the system with no argument means.
+func (m Model) openConversationFor(row Row) (Model, tea.Cmd, bool) {
+	if m.beside == nil || row.ID == "" {
+		return m, nil, false
+	}
+	here := os.Getenv("TMUX_PANE")
+	if here == "" {
+		return m, nil, false
+	}
+	panes := m.panesOrTmux()
+	beside, found := panes.Beside(here)
+	if !found {
+		return m, nil, false
+	}
+	right, err := m.beside(row.ID)
+	if err != nil {
+		// A session that cannot be opened is refused by name. The pane beside keeps the conversation
+		// it had: replacing it with somebody else's is the fault this key is for, and it would be
+		// worse arriving through the refusal.
+		m.err, m.held = err, true
+		return m, nil, true
+	}
+	return m, func() tea.Msg {
+		if err := panes.Close(beside); err != nil {
+			return conversationMsg{err: err}
+		}
+		pane, err := panes.Open(here, right)
+		if err != nil {
+			return conversationMsg{err: err}
+		}
+		return conversationMsg{pane: pane, session: row.ID}
+	}, true
+}
+
 // toggleConversation shows the conversation beside the console, or hides the one already there.
 func (m Model) toggleConversation() (Model, tea.Cmd) {
 	if m.beside == nil {
@@ -34,8 +94,9 @@ func (m Model) toggleConversation() (Model, tea.Cmd) {
 	// Asked of tmux rather than remembered, because `krewe` opens the conversation itself and the
 	// console did not put it there. A console that only knew about the ones it opened would answer
 	// the first p by opening a second.
-	if beside, found := m.besideMe(here); found {
-		return m, closeConversationCmd(beside)
+	panes := m.panesOrTmux()
+	if beside, found := panes.Beside(here); found {
+		return m, closeConversationCmd(panes, beside)
 	}
 	selected := ""
 	if row, found := m.selectedRowValue(); found {
@@ -46,61 +107,91 @@ func (m Model) toggleConversation() (Model, tea.Cmd) {
 		m.err = err
 		return m, nil
 	}
-	return m, openConversationCmd(here, right)
+	return m, openConversationCmd(panes, here, selected, right)
 }
 
-// openConversationCmd splits the console's pane and reports which pane the conversation landed in.
-func openConversationCmd(here string, right []string) tea.Cmd {
+// openConversationCmd puts a conversation beside the console and reports which pane it landed in.
+func openConversationCmd(panes Panes, here, session string, right []string) tea.Cmd {
 	return func() tea.Msg {
-		before, err := panesBeside(here)
+		pane, err := panes.Open(here, right)
 		if err != nil {
 			return conversationMsg{err: err}
 		}
-		commands, err := panel.Beside(here, right)
-		if err != nil {
-			return conversationMsg{err: err}
-		}
-		for _, argv := range commands {
-			if output, err := exec.Command(argv[0], argv[1:]...).CombinedOutput(); err != nil {
-				return conversationMsg{err: fmt.Errorf("open the conversation: %s: %w",
-					strings.TrimSpace(string(output)), err)}
-			}
-		}
-
-		after, err := panesBeside(here)
-		if err != nil {
-			return conversationMsg{err: err}
-		}
-		// Whichever pane is there now and was not before. Asked of tmux rather than assumed, because
-		// the identifier it hands out is not something to guess at.
-		for pane := range after {
-			if !before[pane] {
-				return conversationMsg{pane: pane}
-			}
-		}
-		// It did not open. The pane was made and its command was gone before this could list the
-		// panes, which is what a conversation that could not be opened looks like from out here: the
-		// reason was printed into a pane that no longer exists. Say that, rather than reporting an
-		// open conversation nobody can find.
-		return conversationMsg{err: fmt.Errorf("the conversation closed as soon as it opened, so the " +
-			"reason went with it. Run krewe attach on this session in a terminal to read it")}
+		return conversationMsg{pane: pane, session: session}
 	}
 }
 
-// closeConversationCmd removes the pane the console opened and gives it back its own header.
-func closeConversationCmd(pane string) tea.Cmd {
+// closeConversationCmd removes the pane the conversation is in and gives the console its width back.
+func closeConversationCmd(panes Panes, pane string) tea.Cmd {
 	return func() tea.Msg {
-		commands, err := panel.Away(pane)
-		if err != nil {
+		if err := panes.Close(pane); err != nil {
 			return conversationMsg{err: err}
-		}
-		for _, argv := range commands {
-			// A pane the operator already closed themselves is not an error worth reporting: the
-			// conversation is gone either way, which is what was asked for.
-			_ = exec.Command(argv[0], argv[1:]...).Run()
 		}
 		return conversationMsg{}
 	}
+}
+
+// tmuxPanes is the real one: the panes are tmux's, and every answer is asked of it rather than
+// remembered, because `krewe` opens the panel itself and the console did not put that pane there.
+type tmuxPanes struct{}
+
+// Beside is the pane immediately to the right of this one, which is where a conversation beside the
+// console sits.
+func (tmuxPanes) Beside(here string) (string, bool) {
+	argv := panel.Rightward(here)
+	output, err := exec.Command(argv[0], argv[1:]...).Output()
+	if err != nil {
+		return "", false
+	}
+	return rightOf(string(output), here)
+}
+
+// Open splits the console's pane and answers which pane the conversation landed in.
+func (tmuxPanes) Open(here string, right []string) (string, error) {
+	before, err := panesBeside(here)
+	if err != nil {
+		return "", err
+	}
+	commands, err := panel.Beside(here, right)
+	if err != nil {
+		return "", err
+	}
+	for _, argv := range commands {
+		if output, err := exec.Command(argv[0], argv[1:]...).CombinedOutput(); err != nil {
+			return "", fmt.Errorf("open the conversation: %s: %w", strings.TrimSpace(string(output)), err)
+		}
+	}
+
+	after, err := panesBeside(here)
+	if err != nil {
+		return "", err
+	}
+	// Whichever pane is there now and was not before. Asked of tmux rather than assumed, because the
+	// identifier it hands out is not something to guess at.
+	for pane := range after {
+		if !before[pane] {
+			return pane, nil
+		}
+	}
+	// It did not open. The pane was made and its command was gone before this could list the panes,
+	// which is what a conversation that could not be opened looks like from out here: the reason was
+	// printed into a pane that no longer exists. Say that, rather than reporting an open conversation
+	// nobody can find.
+	return "", fmt.Errorf("the conversation closed as soon as it opened, so the reason went with it. " +
+		"Run krewe attach on this session in a terminal to read it")
+}
+
+// Close removes a pane, and a pane the operator already closed themselves is not a failure: the
+// conversation is gone either way, which is what was asked for.
+func (tmuxPanes) Close(pane string) error {
+	commands, err := panel.Away(pane)
+	if err != nil {
+		return err
+	}
+	for _, argv := range commands {
+		_ = exec.Command(argv[0], argv[1:]...).Run()
+	}
+	return nil
 }
 
 // panesBeside is every pane in the window the console is in, by tmux's own identifier.
@@ -117,17 +208,6 @@ func panesBeside(here string) (map[string]bool, error) {
 		}
 	}
 	return panes, nil
-}
-
-// besideMe is the pane immediately to the right of this one, which is where a conversation beside the
-// console sits. Same top, further left: a pane above or below is the header, not the conversation.
-func (m Model) besideMe(here string) (string, bool) {
-	argv := panel.Rightward(here)
-	output, err := exec.Command(argv[0], argv[1:]...).Output()
-	if err != nil {
-		return "", false
-	}
-	return rightOf(string(output), here)
 }
 
 // rightOf is the pane immediately to the right of here, from what tmux listed. Same top, further left:
@@ -207,7 +287,8 @@ func (m Model) startFreshConversation() (Model, tea.Cmd) {
 	// The pane beside the console, asked of tmux rather than remembered: `krewe` opens the conversation
 	// itself, so the console did not put it there and does not know its identifier. Remembering was
 	// how this opened a fourth pane instead of replacing the third.
-	beside, _ := m.besideMe(here)
+	panes := m.panesOrTmux()
+	beside, _ := panes.Beside(here)
 	freshen := m.freshen
 	return m, func() tea.Msg {
 		// The old one goes first, or reopening comes straight back to it: the conversation runs in a
@@ -216,8 +297,8 @@ func (m Model) startFreshConversation() (Model, tea.Cmd) {
 			return conversationMsg{err: err}
 		}
 		if beside != "" {
-			closeConversationCmd(beside)()
+			closeConversationCmd(panes, beside)()
 		}
-		return openConversationCmd(here, right)()
+		return openConversationCmd(panes, here, selected, right)()
 	}
 }

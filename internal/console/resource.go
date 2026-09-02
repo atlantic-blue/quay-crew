@@ -145,6 +145,11 @@ type Action struct {
 	// the case: it lists the tasks of one session, and shelling into that session has to work on the
 	// job that has produced no task yet, where there is no row to stand on at all.
 	OnScope bool
+	// Conversation says this key opens the row's conversation. Where the console already has one
+	// beside it, which is what a panel is, that is where it opens: the listing stays on screen and
+	// the conversation the operator is talking to becomes the one they pointed at. A console with
+	// nothing beside it has only its own screen to give, and Shell is what it hands over.
+	Conversation bool
 	// Descend opens another resource scoped to the selected row, the way enter does where a view has
 	// somewhere to drill into. It exists because a session already spends enter on opening the
 	// conversation, which is the thing an operator does most, and a history is worth a key of its own

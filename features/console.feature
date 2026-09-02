@@ -106,6 +106,21 @@ Feature: The operator sees the system from the console
     And the operator presses enter on the selected session
     Then the console opens that session's conversation
 
+  # The console in a panel has a conversation beside it, and enter is how the operator changes which
+  # one. Every open used to land on the driver, whatever the cursor was on, because the session the
+  # console handed over was dropped on the way to the pane. The list had several conversations in it
+  # and every key gave back the same one.
+  #
+  # This drives the console's own reducer over the live control plane and reads the pane the operator
+  # is looking at. A scenario that stopped at the call the key made is what let this ship.
+  Scenario: Enter opens the conversation under the cursor, three times over
+    Given a session started by dispatching "the first one"
+    And a session started by dispatching "the second one" on a new session
+    And a session started by dispatching "the third one" on a new session
+    When the operator opens the console beside a conversation
+    And the operator presses enter on each session in turn
+    Then the conversation beside the console was that session's own each time
+
   # A first task that failed leaves a session holding no conversation. Enter said so and stopped,
   # which left a row in the listing nobody could open. The system names a conversation for it instead.
   Scenario: Enter on a session whose first task failed opens a conversation the system names
