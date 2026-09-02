@@ -137,7 +137,7 @@ func TestAJobWhoseReadingWasLongMovesToTheNextStage(t *testing.T) {
 	}
 }
 
-// aVeryLongReading is the same reading with a paragraph of 4,000 bytes in it, which is longer than
+// aVeryLongReading is the same reading with a paragraph of 4,483 bytes in it, which is longer than
 // the whole record was ever allowed to be and longer than the question a person is asked.
 //
 // "At any length" is the requirement, so 859 bytes is the case that happened and this is the case
