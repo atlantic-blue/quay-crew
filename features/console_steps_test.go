@@ -3,6 +3,7 @@ package features_test
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -31,8 +32,12 @@ type consoleWorld struct {
 	// than stopping at the command the key produced.
 	handedOver  []*exec.Cmd
 	terminalErr error
-	// contextFile is a file a scenario wrote for the guided setup's context stage to read.
+	// contextFile is a file a scenario wrote for the guided setup.s context stage to read.
 	contextFile string
+	// panes is the panel the console is in, and besideEach is the conversation that was open beside it
+	// after each key, which is what the operator was looking at each time.
+	panes      *panelPanes
+	besideEach []string
 }
 
 type consoleKey struct{}
@@ -905,4 +910,133 @@ func (c *consoleWorld) openModelOn(w *world, view string) error {
 		}
 	}
 	return c.press(tea.KeyMsg{Type: tea.KeyEnter})
+}
+
+// panelPanes is the console in a panel: its own pane, and a conversation beside it. It records what
+// each pane runs, so a scenario reads the conversation the operator is looking at rather than the
+// command the key produced. That distinction is the whole of this defect.
+type panelPanes struct {
+	made    int
+	running map[string][]string
+	beside  string
+}
+
+func aConversationBesideTheConsole(what []string) *panelPanes {
+	panes := &panelPanes{made: 1, running: map[string][]string{"%1": what}, beside: "%1"}
+	return panes
+}
+
+func (p *panelPanes) Beside(string) (string, bool) { return p.beside, p.beside != "" }
+
+func (p *panelPanes) Open(_ string, argv []string) (string, error) {
+	p.made++
+	pane := fmt.Sprintf("%%%d", p.made)
+	p.running[pane] = argv
+	p.beside = pane
+	return pane, nil
+}
+
+func (p *panelPanes) Close(pane string) error {
+	delete(p.running, pane)
+	p.beside = ""
+	return nil
+}
+
+// showing is the conversation open beside the console right now.
+func (p *panelPanes) showing() string {
+	if p.beside == "" {
+		return "no conversation is open beside the console"
+	}
+	return strings.Join(p.running[p.beside], " ")
+}
+
+// conversationOfSession is what the command line makes of the session the console hands over: the
+// conversation that session holds, asked of the system rather than written down. It is the shape
+// `krewe` builds for the pane, and handing over nothing asks for the driver.
+func conversationOfSession(w *world) func(string) ([]string, error) {
+	return func(selected string) ([]string, error) {
+		if selected == "" {
+			return []string{"krewe", "attach", "the-driver"}, nil
+		}
+		spec, err := w.client.AttachSession(context.Background(), &quaycrewv1.AttachSessionRequest{Id: selected})
+		if err != nil {
+			return nil, err
+		}
+		return append([]string{"krewe", "attach", selected}, spec.GetArgv()...), nil
+	}
+}
+
+func initializeConversationBesideSteps(sc *godog.ScenarioContext) {
+	// tmux names the pane every command it starts is in, and that is how the console knows it is in a
+	// panel at all. Put back afterwards, because a scenario that leaves it set would tell every later
+	// one it is in a panel it is not in.
+	sc.After(func(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
+		return ctx, os.Unsetenv("TMUX_PANE")
+	})
+
+	sc.Step(`^the operator opens the console beside a conversation$`, func(ctx context.Context) error {
+		w, c := worldFrom(ctx), consoleFrom(ctx)
+		if err := os.Setenv("TMUX_PANE", "%0"); err != nil {
+			return err
+		}
+		c.panes = aConversationBesideTheConsole([]string{"krewe", "attach", "the-driver"})
+		if err := c.openModelOn(w, "sessions"); err != nil {
+			return err
+		}
+		c.model = c.model.Beside(conversationOfSession(w)).WithPanes(c.panes)
+		return nil
+	})
+
+	sc.Step(`^the operator presses enter on each session in turn$`, func(ctx context.Context) error {
+		c := consoleFrom(ctx)
+		listed := c.model.Listed()
+		if len(listed) != 3 {
+			return fmt.Errorf("the console lists %d sessions, and this is about telling three apart", len(listed))
+		}
+		c.opened, c.openErr = nil, nil
+		for at := range listed {
+			if err := c.pressAt(at, tea.KeyMsg{Type: tea.KeyEnter}); err != nil {
+				return err
+			}
+			c.besideEach = append(c.besideEach, c.panes.showing())
+		}
+		return nil
+	})
+
+	sc.Step(`^the conversation beside the console was that session's own each time$`, func(ctx context.Context) error {
+		w, c := worldFrom(ctx), consoleFrom(ctx)
+		listed := c.model.Listed()
+		if len(c.besideEach) != len(listed) {
+			return fmt.Errorf("%d sessions were opened and %d rows were listed", len(c.besideEach), len(listed))
+		}
+		for at, row := range listed {
+			spec, err := w.client.AttachSession(context.Background(), &quaycrewv1.AttachSessionRequest{Id: row.ID})
+			if err != nil {
+				return fmt.Errorf("asking the system for %s's conversation: %w", row.ID, err)
+			}
+			held := strings.Join(spec.GetArgv(), " ")
+			if !strings.Contains(c.besideEach[at], held) {
+				return fmt.Errorf("the cursor was on %s, whose conversation is %q, and the console was "+
+					"beside %q", row.ID, held, c.besideEach[at])
+			}
+		}
+		return nil
+	})
+}
+
+// pressAt puts the cursor on one row and sends a key, which is what an operator does when they move
+// down a listing and act on what they land on.
+func (c *consoleWorld) pressAt(at int, key tea.Msg) error {
+	if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")}); err != nil {
+		return err
+	}
+	if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")}); err != nil {
+		return err
+	}
+	for range at {
+		if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")}); err != nil {
+			return err
+		}
+	}
+	return c.press(key)
 }

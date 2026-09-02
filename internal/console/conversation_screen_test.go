@@ -17,7 +17,7 @@ import (
 func TestTheConsoleSaysAConversationClosedRatherThanClaimingItOpened(t *testing.T) {
 	here := aWindowOfOurOwn(t)
 
-	msg := openConversationCmd(here, []string{"sh", "-c", "exit 1"})().(conversationMsg)
+	msg := openConversationCmd(tmuxPanes{}, here, "a-session", []string{"sh", "-c", "exit 1"})().(conversationMsg)
 
 	if msg.err == nil {
 		t.Fatalf("the console reported pane %q, want the reason it never opened", msg.pane)
@@ -35,7 +35,7 @@ func TestTheConsoleSaysAConversationClosedRatherThanClaimingItOpened(t *testing.
 func TestTheConsoleFindsTheConversationItOpened(t *testing.T) {
 	here := aWindowOfOurOwn(t)
 
-	msg := openConversationCmd(here, []string{"sleep", "30"})().(conversationMsg)
+	msg := openConversationCmd(tmuxPanes{}, here, "a-session", []string{"sleep", "30"})().(conversationMsg)
 
 	if msg.err != nil {
 		t.Fatalf("opening a conversation that stays: %v", msg.err)

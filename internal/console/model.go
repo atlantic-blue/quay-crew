@@ -178,10 +178,12 @@ type (
 	// behindMsg says the control plane is too old to answer at all.
 	behindMsg struct{}
 	// conversationMsg is a conversation opened beside the console, or closed. pane is the one that
-	// was opened, and is empty when it was closed.
+	// was opened, and is empty when it was closed. session is whose conversation went in it, so the
+	// console can say which one the operator is beside rather than only that one is open.
 	conversationMsg struct {
-		pane string
-		err  error
+		pane    string
+		session string
+		err     error
 	}
 	// wizardChoicesMsg carries what a wizard step can be answered with. It names its step so a
 	// listing that came back after the operator moved on is discarded rather than offered for the
@@ -270,6 +272,13 @@ type Model struct {
 	// conversation is the tmux pane the console opened, so the key closes the one it opened rather
 	// than whichever pane happens to be beside it now. Empty means none is open.
 	conversation string
+	// conversationOf is whose conversation is in that pane, so the console can say which one the
+	// operator is sitting beside. Empty means it does not know: `krewe` opens the panel itself, and
+	// the console did not put that first conversation there.
+	conversationOf string
+	// panes is how the console opens and closes the conversation beside it. Nil is tmux itself, which
+	// is what runs in front of an operator.
+	panes Panes
 	// terminal is how the console hands the screen to a command it starts. Nil means the terminal
 	// library's own way, which is what runs in front of an operator.
 	terminal Terminal
@@ -311,6 +320,19 @@ func (m Model) WithInfo(info Info) Model {
 func (m Model) Beside(open func(selected string) ([]string, error)) Model {
 	m.beside = open
 	return m
+}
+
+// WithPanes says how the console opens and closes the conversation beside it. Without one it is tmux,
+// which is what runs in front of an operator.
+func (m Model) WithPanes(panes Panes) Model {
+	m.panes = panes
+	return m
+}
+
+// OpenBeside is the session whose conversation sits beside the console, and whether it knows. It does
+// not know about the one `krewe` opened with the panel, because the console did not put it there.
+func (m Model) OpenBeside() (string, bool) {
+	return m.conversationOf, m.conversationOf != ""
 }
 
 // WithClient gives the console the system to ask when it makes something. Listing goes through each
@@ -444,7 +466,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 			return m, nil
 		}
-		m.conversation, m.err = msg.pane, nil
+		m.conversation, m.conversationOf, m.err = msg.pane, msg.session, nil
 		return m, nil
 	case tea.KeyMsg:
 		// Where the operator is standing can change without the view changing, which is drilling from

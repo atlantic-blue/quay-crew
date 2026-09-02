@@ -354,3 +354,68 @@ func TestTheDriverOpensWhereYouAreStanding(t *testing.T) {
 		})
 	}
 }
+
+// The console hands over the row the cursor is on, and that session is the one the pane opens. It
+// used to be dropped, so every open landed on the driver whatever the operator pointed at, and the
+// console's own test for it passed because it asserted the call rather than the conversation.
+func TestTheConversationBesideTheConsoleIsTheOneTheCursorIsOn(t *testing.T) {
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "acme")
+	mustRun(t, client, "project", "create", "house-bills")
+	mustRun(t, client, "task", "one")
+	mustRun(t, client, "task", "two")
+
+	sessions, err := client.ListSessions(context.Background(), &quaycrewv1.ListSessionsRequest{})
+	if err != nil {
+		t.Fatalf("listing the sessions: %v", err)
+	}
+	if len(sessions.GetSessions()) < 2 {
+		t.Fatalf("the system holds %d sessions, want the two the tasks made", len(sessions.GetSessions()))
+	}
+	beside := conversationBeside(context.Background(), client)
+
+	for _, session := range sessions.GetSessions() {
+		argv, err := beside(session.GetId())
+		if err != nil {
+			t.Fatalf("opening %s beside the console: %v", session.GetId(), err)
+		}
+		if line := strings.Join(argv, " "); !strings.HasSuffix(line, "attach "+session.GetId()) {
+			t.Fatalf("the cursor is on %s and the pane opens %q", session.GetId(), line)
+		}
+	}
+}
+
+// Nothing pointed at is the driver, which is what opening the system with no argument means. That
+// half is deliberate and stays.
+func TestNothingUnderTheCursorOpensTheDriver(t *testing.T) {
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "acme")
+	mustRun(t, client, "project", "create", "house-bills")
+
+	argv, err := conversationBeside(context.Background(), client)("")
+	if err != nil {
+		t.Fatalf("opening the driver beside the console: %v", err)
+	}
+	driver, err := client.OpenDriver(context.Background(), &quaycrewv1.OpenDriverRequest{
+		Project: mustProject(t, client),
+	})
+	if err != nil {
+		t.Fatalf("asking the system for its driver: %v", err)
+	}
+	if line := strings.Join(argv, " "); !strings.HasSuffix(line, "attach "+driver.GetSession().GetId()) {
+		t.Fatalf("with nothing under the cursor the pane opens %q, want the driver", line)
+	}
+}
+
+// mustProject is the one project the system holds, for a scenario that has just made it.
+func mustProject(t *testing.T, client quaycrewv1.ControlPlaneServiceClient) string {
+	t.Helper()
+	listed, err := client.ListProjects(context.Background(), &quaycrewv1.ListProjectsRequest{})
+	if err != nil {
+		t.Fatalf("listing the projects: %v", err)
+	}
+	if len(listed.GetProjects()) != 1 {
+		t.Fatalf("the system holds %d projects, want the one this made", len(listed.GetProjects()))
+	}
+	return listed.GetProjects()[0].GetId()
+}

@@ -370,6 +370,11 @@ func (m Model) perform(action Action, row Row) (Model, tea.Cmd) {
 	if action.Descend != "" {
 		return m.descendInto(action.Descend, row)
 	}
+	if action.Conversation {
+		if next, cmd, opened := m.openConversationFor(row); opened {
+			return next, cmd
+		}
+	}
 	if action.Shell != nil {
 		return m, m.shellCmd(action, row)
 	}

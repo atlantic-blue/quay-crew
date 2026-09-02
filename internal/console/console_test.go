@@ -75,11 +75,17 @@ func (f *fakeClient) ListWorkspaces(context.Context, *quaycrewv1.ListWorkspacesR
 	return &quaycrewv1.ListWorkspacesResponse{Workspaces: f.workspaces}, nil
 }
 
-func (f *fakeClient) AttachSession(context.Context, *quaycrewv1.AttachSessionRequest, ...grpc.CallOption) (*quaycrewv1.AttachSessionResponse, error) {
+// AttachSession answers for the session it was asked about, the way the real one does. A double that
+// answers with one conversation whatever it is asked cannot tell the right conversation from the
+// wrong one, and every test written against it passes while the console opens the same chat.
+func (f *fakeClient) AttachSession(_ context.Context, req *quaycrewv1.AttachSessionRequest, _ ...grpc.CallOption) (*quaycrewv1.AttachSessionResponse, error) {
 	if f.attachErr != nil {
 		return nil, f.attachErr
 	}
-	return &quaycrewv1.AttachSessionResponse{Sandbox: "quaycrew-s1", Argv: []string{"claude", "--resume", "c1"}}, nil
+	return &quaycrewv1.AttachSessionResponse{
+		Sandbox: "quaycrew-" + req.GetId(),
+		Argv:    []string{"claude", "--resume", "conversation-of-" + req.GetId()},
+	}, nil
 }
 
 func (f *fakeClient) ListProjects(_ context.Context, req *quaycrewv1.ListProjectsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListProjectsResponse, error) {
@@ -665,7 +671,7 @@ func TestEnterAndAOpenTheSameConversation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("attach: %v", err)
 	}
-	want := "docker exec --interactive --tty quaycrew-s1 claude --resume c1"
+	want := "docker exec --interactive --tty quaycrew-s1 claude --resume conversation-of-s1"
 	if got := strings.Join(command.Args, " "); got != want {
 		t.Fatalf("command = %q, want %q", got, want)
 	}
