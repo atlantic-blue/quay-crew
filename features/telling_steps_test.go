@@ -316,7 +316,99 @@ func initializeTellingSteps(sc *godog.ScenarioContext) {
 			}
 			return nil
 		})
+
+	// Requirement 4 of quay-krewe#647: an operator reads a question that fits the terminal, and
+	// reaches the whole text behind it.
+	//
+	// The question runs past the ceiling a question used to be refused at, so the record keeps it
+	// whole and the line an operator reads cuts it. Driven the way a person meets it: the session
+	// asks, the next command says it above its own output, and the command that line names answers
+	// with all of it.
+	sc.Step(`^the session running that job asked a question longer than a terminal line$`,
+		func(ctx context.Context) error {
+			if err := askAsTheSession(ctx, theLongQuestion, ""); err != nil {
+				return err
+			}
+			return worldFrom(ctx).lastErr
+		})
+
+	sc.Step(`^the telling fits a narrow terminal, and says where the whole question is$`,
+		func(ctx context.Context) error {
+			one, err := readJob(ctx, 0)
+			if err != nil {
+				return err
+			}
+			said, found := lineNaming(toolFrom(ctx).stderr, one.GetId()[:8])
+			if !found {
+				return fmt.Errorf("no line names the waiting job:\n%s", toolFrom(ctx).stderr)
+			}
+			// Eighty columns is the narrowest terminal this line is written for, and it prints above
+			// the command the operator actually typed.
+			if len(said) > 80 {
+				return fmt.Errorf("the line is %d characters and a narrow terminal is 80: %q",
+					len(said), said)
+			}
+			if !strings.Contains(said, "aurora serverless") {
+				return fmt.Errorf("the line does not say what the job asks: %q", said)
+			}
+			// The words, not a mark. A cut that says the text stopped and not where the rest is reads
+			// as the whole question, and a person answers half a question.
+			if !strings.Contains(said, "krewe job show") {
+				return fmt.Errorf("the line does not say where the whole question is: %q", said)
+			}
+			return nil
+		})
+
+	sc.Step(`^krewe job show prints the whole question$`, func(ctx context.Context) error {
+		one, err := readJob(ctx, 0)
+		if err != nil {
+			return err
+		}
+		if err := listenForTool(ctx); err != nil {
+			return err
+		}
+		if err := runTool(ctx, "job", "show", one.GetId()); err != nil {
+			return err
+		}
+		t := toolFrom(ctx)
+		// The last words are the decision. A reading that carries the reasoning and drops the choice
+		// leaves a person with the evidence for a question nobody asked them.
+		if err := says("standard output", t.stdout, "which do you want?"); err != nil {
+			return err
+		}
+		// Counted, because a reading can carry the first words and the last and still throw the
+		// middle away.
+		if held := strings.Count(t.stdout, theRepeatedSentence); held != longQuestionSentences {
+			return fmt.Errorf("krewe job show prints %d of the %d sentences the session wrote",
+				held, longQuestionSentences)
+		}
+		return nil
+	})
 }
+
+// lineNaming is the one line of a stream that names this job, which is the line the operator reads
+// about the wait.
+func lineNaming(stream, id string) (string, bool) {
+	for _, line := range strings.Split(stream, "\n") {
+		if strings.Contains(line, id) {
+			return strings.TrimRight(line, "\r"), true
+		}
+	}
+	return "", false
+}
+
+// theRepeatedSentence is the reasoning a session wrote out, and longQuestionSentences is how many
+// times it wrote it. Counting them is what tells a whole question from a question with its middle
+// removed.
+const theRepeatedSentence = "Aurora Serverless version two bills a minimum capacity continuously."
+
+const longQuestionSentences = 200
+
+// theLongQuestion is a real question at a length no ceiling allows: the choice, the reasoning for it
+// at the length the reasoning takes, and the choice again at the end.
+var theLongQuestion = "aurora serverless or a key value store, and the cost decides it. " +
+	strings.Repeat(theRepeatedSentence+" ", longQuestionSentences) +
+	"So: the key value store on demand, or aurora, and which do you want?"
 
 // whatWaits asks the system what waits for a person, as one surface.
 func whatWaits(ctx context.Context, surface string) ([]*quaycrewv1.Waiting, error) {
