@@ -93,13 +93,36 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 	if moved.Closed != "ideation closed on your answer to what it understood" {
 		t.Fatalf("it says ideation was closed by %q", moved.Closed)
 	}
-	if moved.Built || moved.Unbuilt == "" {
-		t.Fatalf("design reads as built, and design is a later slice")
+	if !moved.Built || moved.Unbuilt != "" {
+		t.Fatalf("design reads as unbuilt, saying %q", moved.Unbuilt)
 	}
-	// And what it says the job is doing instead is true of this job: it answered its reading a moment
+
+	// Then the list, and the same trap one stage further on: the acceptance is a column too, and a
+	// flag that is written and never selected reads back false, which would hold the job in design
+	// after a person had moved it out.
+	tickUntilThePhase(t, ctx, server, client, id, job.PhaseAsking)
+	listed := readJob(t, ctx, client, id)
+	if listed.GetDesign() == "" {
+		t.Fatalf("the job is asking and carries no list, so there is nothing to accept")
+	}
+	if _, err := client.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{Id: id, Answer: "yes"}); err != nil {
+		t.Fatalf("AnswerJob: %v", err)
+	}
+
+	accepted := stageOnTheWire(t, ctx, client, id)
+	if accepted.Name != job.StageTest {
+		t.Fatalf("a job whose list was accepted reads off the wire as stage %q, want test", accepted.Name)
+	}
+	if accepted.Closed != "design closed on your acceptance of the list it would build" {
+		t.Fatalf("it says design was closed by %q", accepted.Closed)
+	}
+	if accepted.Built || accepted.Unbuilt == "" {
+		t.Fatalf("test reads as built, and test is a later slice")
+	}
+	// And what it says the job is doing instead is true of this job: its list was accepted a moment
 	// ago, so it has no plan, and nobody has approved anything.
-	if !strings.Contains(moved.Unbuilt, "writes its plan next") {
-		t.Fatalf("a job with no plan is told %q", moved.Unbuilt)
+	if !strings.Contains(accepted.Unbuilt, "writes its plan next") {
+		t.Fatalf("a job with no plan is told %q", accepted.Unbuilt)
 	}
 }
 
@@ -111,7 +134,8 @@ func stageOnTheWire(t *testing.T, ctx context.Context,
 	return job.StageOf(&job.Job{
 		Product: one.GetProduct(), Parent: one.GetParent(),
 		IdeationAnswer: one.GetIdeationAnswer(),
-		Plan:           one.GetPlan(), PlanApproved: one.GetPlanApproved(),
+		Design:         one.GetDesign(), DesignAccepted: one.GetDesignAccepted(),
+		Plan: one.GetPlan(), PlanApproved: one.GetPlanApproved(),
 	})
 }
 
