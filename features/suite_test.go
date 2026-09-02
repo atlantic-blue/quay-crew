@@ -896,7 +896,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeHookVersionSteps(sc)
 	initializeImportedSkillSteps(sc)
 	initializeFailureSteps(sc)
-	initializePanelSteps(sc)
+	initializeOpensSteps(sc)
 	initializeScreenSteps(sc)
 	initializeRenderSteps(sc)
 	initializeProvingSteps(sc)

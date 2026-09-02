@@ -137,8 +137,8 @@ func (m Model) updateBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		// which shows and hides that same conversation, so the pair reads as one subject.
 		return m.startFreshConversation()
 	case "p":
-		// Show the conversation beside the console, or hide the one already there. The panel builds
-		// this in one go; this is the same thing without having to decide before opening the console.
+		// Show the conversation beside the console, or hide the one already there. `krewe` opens the
+		// console alone, so this key is the only way one arrives beside it.
 		return m.toggleConversation()
 	case "r":
 		// Refreshing is the key reached for constantly, so it holds the short obvious letter.

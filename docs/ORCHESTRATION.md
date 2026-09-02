@@ -2962,42 +2962,29 @@ stateDiagram-v2
   three runs still has to be done by hand against the `tasks` table.
 - Nothing reclaims on a `local` sandbox, which has no container to take back.
 
-## 12. The panel is the orchestrator's seat
+## 12. The console is the orchestrator's seat
 
-The panel is where an operator sits. This section says what the two halves should hold once job
-exists, and why the right half cannot be an ordinary session.
+The console is where an operator sits. This section says what the operator's screen should hold once
+job exists, and why a conversation beside it cannot be an ordinary session.
 
-### What the panel is today, checked against the code
+### What the console is today, checked against the code
 
-Two corrections first, because the design brief for this section described it differently.
+**`krewe` opens the console, full width, and nothing else.** It used to build a tmux window with the
+console in one half and a conversation in the other, and an operator who typed `krewe` got a split
+screen they never asked for. `cmd/krewe/quay.go` refuses the word `panel` and names what to type
+instead.
 
-**There is no `krewe panel` command.** `cmd/krewe/quay.go:159` refuses the word and says that `krewe` on
-its own opens the system, and that `p` shows or hides the conversation beside the console. The layout
-itself lives in `internal/panel/panel.go`.
-
-**The right half already opens the driver, not an ordinary worker session.**
-`cmd/krewe/panel.go:116` calls `OpenDriver` for the project the operator is standing in. The comment
-beside it says why. Opening the system should not drop the operator into somebody else's job. Naming a
-session on the command line opens that one instead.
-
-What `internal/panel/panel.go` builds, from `Layout.Commands` at line 62:
-
-- The console on the left, running `krewe console`, the full height of the window.
-- A conversation on the right, at fifty per cent width, running `krewe attach <session>`.
-- The keyboard starts in the console pane.
-
-There were three panes until `quay-crew#608`. A header pane ran across the full width above the other
-two, held to its own line count by a hook on client resize and on client attach. It carried a wordmark,
-one build string and one memory figure, and it cost three rows of every window. The console draws one
-footer row of its own instead, so those rows are the listing's.
+**A conversation is asked for by name.** `p` in the console splits the window and puts one beside it,
+from inside tmux, and `krewe attach <session>` opens one on its own. `panelSession` in
+`cmd/krewe/panel.go` calls `OpenDriver` for the project the operator is standing in, so pressing `p`
+on no session opens the driver rather than dropping the operator into somebody else's job. The
+commands that split the window live in `internal/panel/panel.go`.
 
 ```mermaid
 flowchart TD
-    subgraph WINDOW["one tmux window, session krewe-panel"]
-        LEFT["pane 0: krewe console, with its own footer row"]
-        RIGHT["pane 1: krewe attach, the driver"]
-    end
-    LEFT --- RIGHT
+    KREWE["krewe"] --> CONSOLE["the console, full width"]
+    CONSOLE -->|"p, inside tmux"| BESIDE["a conversation beside it"]
+    CONSOLE -->|"q"| GONE["the terminal back"]
 ```
 
 ### Why a driver session cannot be an ordinary session
