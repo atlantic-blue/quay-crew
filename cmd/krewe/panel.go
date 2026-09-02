@@ -64,8 +64,8 @@ func pointedAt(selected string) []string {
 	return []string{selected}
 }
 
-// runBareConsole is `krewe console`, which is the same console `krewe` on its own opens. Two names for
-// one screen, because the panes a conversation runs in still spell it out.
+// runBareConsole is `krewe console`, which opens the same console `krewe` on its own opens. It is in
+// scripts and in notes, and it is what the left half of the panel used to run, so it keeps working.
 func runBareConsole(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, addr string) error {
 	if len(args) != 0 {
 		return fmt.Errorf("usage: krewe console, and krewe runs it for you")

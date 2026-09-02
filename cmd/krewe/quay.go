@@ -229,8 +229,9 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runRender(args[1:], out)
 	case "room":
 		return runRoom(ctx, client, out)
-	// Internal: the panes krewe opens run these, and the model runtime in a sandbox runs the last of
-	// them. Not in the usage, because they are not commands anybody types.
+	// Internal: a status line under a conversation runs the first, `krewe` on its own runs the second,
+	// and the model runtime in a sandbox runs the last of them. Not in the usage, because they are not
+	// commands anybody types.
 	case "statusline":
 		return runStatusLine(args[1:], os.Stdin, out)
 	case "console":
