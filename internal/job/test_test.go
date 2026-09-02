@@ -443,3 +443,45 @@ func TestTheDoubleAnswersAReportTheSystemCanRead(t *testing.T) {
 		}
 	}
 }
+
+// A worker never fans out again. It is one part of a plan the job above it is still writing, so it
+// runs its brief like any other declared job: a worker that entered this stage would declare workers
+// of its own, and the whole tree would be nothing but test writers.
+func TestAWorkerOfTheFanOutNeverFansOutItself(t *testing.T) {
+	controller, kept, plane := aController(t)
+	one := kept.add(testingJob())
+	ctx := context.Background()
+
+	controller.Tick(ctx)
+	workers := kept.children(one.ID)
+	for _, worker := range workers {
+		if job.WaitingForItsTests(worker) {
+			t.Fatalf("worker %q owes failing tests of its own", worker.Title)
+		}
+		if len(kept.children(worker.ID)) != 0 {
+			t.Fatalf("worker %q declared workers of its own", worker.Title)
+		}
+	}
+
+	// And the reason it does not, held on its own: a job under another is one part of a plan somebody
+	// already approved, so it is outside these stages however far through them its row looks.
+	under := testingJob()
+	under.Parent, under.Depth = one.ID, 1
+	if job.WaitingForItsTests(under) {
+		t.Fatal("a job declared under another owes failing tests of its own")
+	}
+
+	controller.Tick(ctx)
+	for _, worker := range workers {
+		got := kept.get(worker.ID)
+		if got.Session == "" {
+			t.Fatalf("worker %q was given no session, so nothing writes its tests", worker.Title)
+		}
+		if len(kept.children(worker.ID)) != 0 {
+			t.Fatalf("worker %q declared workers of its own once it started", worker.Title)
+		}
+	}
+	if plane.sent() != len(workers) {
+		t.Fatalf("the system was asked to run %d tasks for %d workers", plane.sent(), len(workers))
+	}
+}
