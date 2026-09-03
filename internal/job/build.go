@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // The failing tests become an implementation, written by workers that may read every test and change
@@ -81,7 +80,7 @@ func BuildingVertical(wanted Requirement) string {
 // little of each and the fan out buys nothing. It is given the names of the failing tests, because
 // those names are what the stage reads its answer against: a worker that does not know which tests it
 // owns cannot report on them.
-func BuildTheVertical(one *Job, wanted Requirement, failing []string) string {
+func BuildTheVertical(one *Job, wanted Requirement, failing []string, opened Opened) string {
 	said := []string{
 		fmt.Sprintf("Vertical %d of the list a person accepted for this job. %s",
 			wanted.Number, TheBuildAsk),
@@ -95,14 +94,16 @@ func BuildTheVertical(one *Job, wanted Requirement, failing []string) string {
 		said = append(said, fmt.Sprintf("These tests fail now, and they are yours to turn green:\n%s",
 			"- "+strings.Join(failing, "\n- ")))
 	}
+	// Where those tests are. A worker told to read tests it never fetched reads nothing, and from
+	// inside the session a test that is absent and a test that says nothing look the same.
+	if opened.Branch != "" {
+		said = append(said, ContinueOnTheBranch(opened))
+	}
 	said = append(said, "Read the tests as much as you need to. You may not change one. A build that "+
 		"changes the test makes the suite agree with the code, and the suite is the only thing holding "+
 		"the requirement, so the system refuses the write rather than trusting this sentence. If you "+
 		"believe a test is wrong, say so in your answer, name the file and the assertion, and say what "+
 		"it should assert instead. A person decides that.")
-	if branch := TestBranch(one); branch != "" {
-		said = append(said, TheTestsAreOnABranch(branch))
-	}
 	said = append(said, "Build this vertical only. Another worker is building each of the others at "+
 		"the same time, and it holds that vertical. The whole suite is red until all of them land, so "+
 		"judge yourself on your own tests rather than on the suite.")
@@ -467,20 +468,19 @@ func WaitingForItsBuild(one *Job) bool {
 // red for every vertical that has not landed yet, so it would refuse the first worker home for work
 // the others have not done. What checks a build worker instead is this stage: its own tests, named by
 // the stage that wrote them, have to pass.
-func BuildWorkers(one *Job, wanted []Requirement, failing map[int][]string) []*Job {
-	var workers []*Job
+func BuildExecutions(one *Job, wanted []Requirement, opened map[int]Opened) []*Execution {
+	var runs []*Execution
 	for _, vertical := range wanted {
-		workers = append(workers, &Job{
-			ID: newRowID(), Workspace: one.Workspace, Project: one.Project,
-			Parent: one.ID, Depth: one.Depth + 1, Version: 1, Phase: PhasePending,
-			Title: BuildingVertical(vertical),
-			Brief: BuildTheVertical(one, vertical, failing[vertical.Number]),
-			Mode:  one.Mode, Repository: one.Repository, Product: one.Product, Request: one.Request,
-			Claim: ClaimOnBuild(one.ID, vertical), Ungated: true, Building: true,
+		runs = append(runs, &Execution{
+			ID: newRowID(), Job: one.ID, Stage: StageBuild, Number: vertical.Number,
+			Claim: ClaimOnBuild(one.ID, vertical), Phase: PhasePending,
+			// The branch the run that wrote this vertical's tests left them on, so this one lands its
+			// implementation in the same pull request rather than opening a second one.
+			Branch:  opened[vertical.Number].Branch,
 			TraceID: one.TraceID, ParentSpanID: one.ParentSpanID,
 		})
 	}
-	return workers
+	return runs
 }
 
 // BuildingIt is what an operator reads on a job whose workers are running: which verticals are built
@@ -529,9 +529,18 @@ func (c *Controller) buildIt(ctx context.Context, one *Job) {
 		c.askAboutTheBuild(ctx, one, oneLine(BuiltGreen(wanted, failing, nil).Error()))
 		return
 	}
-	workers, err := c.buildersOn(ctx, one, wanted)
+	runs, err := c.runsOfTheStage(ctx, one, StageBuild)
 	if err != nil {
 		c.logger.WarnContext(ctx, "could not read which verticals are being built",
+			"job", one.ID, "error", err)
+		return
+	}
+	// What the stage before this one left on a branch for each vertical. It is read off those workers'
+	// rows rather than out of the record this job keeps, because the record is the system's rendering
+	// of the runs and a second copy of the branch could only disagree with the row it came from.
+	opened, err := c.openedFor(ctx, one, wanted)
+	if err != nil {
+		c.logger.WarnContext(ctx, "could not read the branches this job's failing tests are on",
 			"job", one.ID, "error", err)
 		return
 	}
@@ -540,8 +549,8 @@ func (c *Controller) buildIt(ctx context.Context, one *Job) {
 	reports := map[int]BuildReport{}
 	var refused []string
 	for _, vertical := range wanted {
-		theirs := workers[ClaimOnBuild(one.ID, vertical)]
-		if live(theirs) {
+		theirs := runs[vertical.Number]
+		if LiveExecution(theirs) {
 			running++
 			continue
 		}
@@ -564,7 +573,7 @@ func (c *Controller) buildIt(ctx context.Context, one *Job) {
 		// carry on, and otherwise it is what that person is asked about.
 		if len(theirs) < BuildAttempts && (len(theirs) == 0 || one.Told != "") {
 			missing++
-			c.declareTheBuilder(ctx, one, vertical, failing[vertical.Number])
+			c.runTheBuild(ctx, one, vertical, opened[vertical.Number])
 			continue
 		}
 		refused = append(refused, why)
@@ -599,28 +608,24 @@ func (c *Controller) buildIt(ctx context.Context, one *Job) {
 	c.exported(ctx, record, asked)
 }
 
-// buildersOn is every worker declared for each of this job's verticals, by the claim it holds, oldest
-// first.
+// openedFor is the branch and the pull request the test stage left for each vertical, by vertical
+// number.
 //
-// Keyed on the claim rather than on the parent, because the claim is what says which vertical a worker
-// holds and a parent says only that the worker belongs to this job. A job's test workers are under the
-// same parent and answer a different question, and their claims say requirement where these say build,
-// so neither stage reads the other's answers.
-func (c *Controller) buildersOn(ctx context.Context, one *Job, wanted []Requirement) (
-	map[string][]*Job, error) {
-	claims := make([]string, 0, len(wanted))
-	for _, vertical := range wanted {
-		claims = append(claims, ClaimOnBuild(one.ID, vertical))
-	}
-	held, err := c.store.JobsClaiming(ctx, one.Workspace, claims)
+// It reads the same rows the test stage read, by the claim that stage's workers hold, because that
+// claim is what says which requirement a worker wrote for. A vertical whose test worker left nothing
+// reads as nothing, and its build worker is then briefed the way every build worker was before a
+// requirement had a branch: on a checkout of its own.
+func (c *Controller) openedFor(ctx context.Context, one *Job, wanted []Requirement) (
+	map[int]Opened, error) {
+	runs, err := c.runsOfTheStage(ctx, one, StageTest)
 	if err != nil {
 		return nil, err
 	}
-	workers := map[string][]*Job{}
-	for _, worker := range held {
-		workers[worker.Claim] = append(workers[worker.Claim], worker)
+	opened := map[int]Opened{}
+	for _, requirement := range wanted {
+		opened[requirement.Number] = OpenedFor(runs[requirement.Number])
 	}
-	return workers, nil
+	return opened, nil
 }
 
 // BuiltBy is the report the worker holding one vertical answered with, and the refusal where no worker
@@ -633,14 +638,14 @@ func (c *Controller) buildersOn(ctx context.Context, one *Job, wanted []Requirem
 // its answer. The two disagreeing is a worker that reported on somebody else's vertical, and it is
 // refused: a report filed under the wrong number would leave one vertical covered twice and another
 // not at all.
-func BuiltBy(workers []*Job, vertical Requirement, failing []string) (BuildReport, string) {
-	if len(workers) == 0 {
+func BuiltBy(runs []*Execution, vertical Requirement, failing []string) (BuildReport, string) {
+	if len(runs) == 0 {
 		return BuildReport{}, fmt.Sprintf("vertical %d, %q: nothing has built it",
 			vertical.Number, vertical.Text)
 	}
-	worker := workers[len(workers)-1]
+	worker := runs[len(runs)-1]
 	if worker.Answer == "" {
-		return BuildReport{}, fmt.Sprintf("vertical %d, %q: the worker holding it %s and said nothing, %s",
+		return BuildReport{}, fmt.Sprintf("vertical %d, %q: the run holding it %s and said nothing, %s",
 			vertical.Number, vertical.Text, worker.Phase, oneLine(worker.Reason))
 	}
 	report, err := ReadBuildReport(worker.Answer)
@@ -649,7 +654,7 @@ func BuiltBy(workers []*Job, vertical Requirement, failing []string) (BuildRepor
 			vertical.Number, vertical.Text, oneLine(err.Error()))
 	}
 	if report.Vertical != vertical.Number {
-		return BuildReport{}, fmt.Sprintf("vertical %d, %q: the worker holding it reported on "+
+		return BuildReport{}, fmt.Sprintf("vertical %d, %q: the run holding it reported on "+
 			"vertical %d instead", vertical.Number, vertical.Text, report.Vertical)
 	}
 	// Early, and again at the close of the stage. A worker that answered with the wrong kind is asked
@@ -665,27 +670,23 @@ func BuiltBy(workers []*Job, vertical Requirement, failing []string) (BuildRepor
 	return report, ""
 }
 
-// declareTheBuilder declares the one job that builds one vertical.
+// runTheBuild writes the one run that builds one vertical.
 //
-// A claim refused here is the mechanism working rather than a failure: another controller declared this
-// worker a moment ago, and two workers building one vertical is exactly what the claim exists to stop.
-// The row waits either way, and the next tick reads the worker that other controller declared.
-func (c *Controller) declareTheBuilder(ctx context.Context, one *Job, vertical Requirement,
-	failing []string) {
-	worker := BuildWorkers(one, []Requirement{vertical}, map[int][]string{vertical.Number: failing})[0]
-	record := &Event{
-		ID: newRowID(), Job: worker.ID, Kind: EventDeclared, Workspace: worker.Workspace,
-		Project: worker.Project, Parent: worker.Parent, Depth: worker.Depth,
-		Detail: fmt.Sprintf("the build of vertical %d of job %s, %q",
-			vertical.Number, one.ID, vertical.Text),
-		TraceID: worker.TraceID, OccurredAt: time.Now().UTC(),
-	}
-	if err := c.store.CreateJob(ctx, worker, record); err != nil {
+// A claim refused here is the mechanism working rather than a failure: another controller wrote this
+// run a moment ago, and two sessions building one vertical is exactly what the claim exists to stop.
+// The row waits either way, and the next tick reads the run that other controller wrote.
+func (c *Controller) runTheBuild(ctx context.Context, one *Job, vertical Requirement,
+	opened Opened) {
+	run := BuildExecutions(one, []Requirement{vertical}, map[int]Opened{vertical.Number: opened})[0]
+	record := c.executionEvent(ctx, one, run, EventRan,
+		fmt.Sprintf("the build of vertical %d of job %s, %q",
+			vertical.Number, one.ID, vertical.Text))
+	if err := c.store.CreateExecution(ctx, run, record); err != nil {
 		var taken *Held
 		if errors.As(err, &taken) {
 			return
 		}
-		c.logger.WarnContext(ctx, "could not declare the worker that builds a vertical",
+		c.logger.WarnContext(ctx, "could not write the run that builds a vertical",
 			"job", one.ID, "vertical", vertical.Number, "error", err)
 		return
 	}

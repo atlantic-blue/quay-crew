@@ -25,10 +25,12 @@ import (
 
 // system is the control plane as the engine sees it.
 type system struct {
-	store    store.Store
-	maxDepth int
+	store store.Store
+	// maxDeclared is how many jobs one session may declare here, which the run's own job is held to
+	// and a step of the run is not: a step belongs to the run.
+	maxDeclared int
 	// refuse is what PrepareJob answers instead, once the run itself has been declared, for the case
-	// where the system will not take a step: too deep, a role the workspace does not hold.
+	// where the system will not take a step: a role the workspace does not hold, a ceiling reached.
 	refuse   error
 	prepared int
 	// exported is every record offered to the log, and archived every session put away.
@@ -36,7 +38,7 @@ type system struct {
 	archived []string
 }
 
-func (c *system) PrepareJob(ctx context.Context, under string, declaration job.Declaration) (*job.Job, *job.Event, error) {
+func (c *system) PrepareJob(ctx context.Context, at job.Placement, declaration job.Declaration) (*job.Job, *job.Event, error) {
 	c.prepared++
 	if c.refuse != nil && c.prepared > 1 {
 		return nil, nil, c.refuse
@@ -52,30 +54,39 @@ func (c *system) PrepareJob(ctx context.Context, under string, declaration job.D
 		Product: tidy.Product,
 		Version: 1, Phase: job.PhasePending, TraceID: "trace-of-the-tree",
 	}
-	if under != "" {
-		parent, err := c.store.GetJob(ctx, under)
+	// The same rules the control plane keeps. A step of a flow run belongs to the run and answers to
+	// no ceiling, because the ceiling was asked of whoever started the run; anything else records what
+	// caused it and counts against what one session may declare. A double looser than the real thing
+	// manufactures a green run.
+	declared.Run, declared.Cause = at.Run, at.Cause
+	if at.Trace != "" {
+		declared.TraceID = at.Trace
+	}
+	if at.Run != "" {
+		return declared, c.declaredEvent(declared), nil
+	}
+	if at.Cause != "" {
+		cause, err := c.store.GetJob(ctx, at.Cause)
 		if err != nil {
 			return nil, nil, err
 		}
-		declared.Parent, declared.Depth = parent.ID, parent.Depth+1
-		// The same rule the control plane keeps: a job under another carries the sentence that one
-		// serves, and one stating a different sentence is refused. It is here because what a step of a
-		// run is given depends on it, and a double that let a step keep its own would prove nothing
-		// about the run.
-		carried, err := job.Inherited(parent.Product, declared.Product)
+		already, err := c.store.JobsCausedBy(ctx, cause.ID)
 		if err != nil {
 			return nil, nil, err
 		}
-		declared.Product = carried
+		if already >= c.maxDeclared {
+			return nil, nil, fmt.Errorf("this workspace lets one session declare %d jobs, and this session "+
+				"declared %d already", c.maxDeclared, already)
+		}
 	}
-	if declared.Depth > c.maxDepth {
-		return nil, nil, fmt.Errorf("this workspace allows job no deeper than %d, and this would be at depth %d",
-			c.maxDepth, declared.Depth)
-	}
-	return declared, &job.Event{
+	return declared, c.declaredEvent(declared), nil
+}
+
+func (c *system) declaredEvent(declared *job.Job) *job.Event {
+	return &job.Event{
 		ID: store.NewID(), Kind: job.EventDeclared, Job: declared.ID,
 		Workspace: declared.Workspace, Project: declared.Project, OccurredAt: time.Now().UTC(),
-	}, nil
+	}
 }
 
 func (c *system) ExportJob(_ context.Context, events ...*job.Event) {
@@ -109,7 +120,7 @@ func aSystem(t *testing.T, graph string) (*flow.Engine, *system, string, string)
 	}
 	// Deep enough that a run and its steps fit: the run's own job sits at the top and every step
 	// one below it.
-	it := &system{store: kept, maxDepth: 4}
+	it := &system{store: kept, maxDeclared: 4}
 	return flow.NewEngine(kept, it, nil, it), it, workspace.GetId(), project.GetId()
 }
 

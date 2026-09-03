@@ -1771,23 +1771,29 @@ workspace alone gives no review, so a session in a permitted workspace would hol
 workspace holds, and the boundary between a role that plans and a role that writes code would be
 prose in a brief asking nicely.
 
-### How depth is bounded
+### How declaring is bounded
 
-`depth` is derived from the credential, never declared, so the count cannot be skipped. The
-workspace's `max_depth` refuses a write above it. The refusal names the limit and the command that
-raises it.
+**This section is overtaken. What follows the two paragraphs below is the design as it was decided,
+kept because the reasoning still explains the shape.** A job cannot be under another job: the
+hierarchy is workspaces, then projects, then jobs, then executions, so there is no depth to derive
+and no tree to bound. See `changelog.d/666-a-job-cannot-be-under-a-job.md` and section 2 of
+`docs/DATABASE.md` for what is true now.
 
-**What stops a job starting itself.** Depth alone, and that is enough. Job at depth d
-creates at d+1, so a cycle of any shape terminates at `max_depth`. There is no cycle check between
-job rows and none is needed: the parent relation is a tree by construction, because the parent is
+What the workspace carries is `max_declared`, which is how many jobs one session may declare. It is
+derived from the credential the same way, so the count cannot be skipped, and the refusal names the
+limit and the command that raises it. The default is 0, which means no session in that workspace may
+declare a job at all: default deny, raised deliberately and per workspace. It bounds what one session
+starts rather than how far a chain of them can go, and what bounds the crew as a whole is
+`max_running` and the budget.
+
+`depth` was derived from the credential, never declared, so the count could not be skipped. The
+workspace's `max_depth` refused a write above it. The refusal named the limit and the command that
+raised it.
+
+**What stopped a job starting itself.** Depth alone, and that was enough. Job at depth d
+created at d+1, so a cycle of any shape terminated at `max_depth`. There was no cycle check between
+job rows and none was needed: the parent relation was a tree by construction, because the parent was
 assigned rather than chosen.
-
-The default for `max_depth` is 0, which means no session in that workspace may declare a job at all.
-Default deny. An operator raises it deliberately, per workspace.
-
-The value an operator should raise it to is provisional. There is no measurement yet. The one that
-would set it is the greatest `depth` over completed root trees after the first month, plus one. A
-number chosen now would either stop real work or protect nothing.
 
 ### How spend is bounded
 
@@ -2086,7 +2092,7 @@ Nothing measures how long the task took. `quay-crew#333` is that gap.
 **What a person opens.**
 
 - *Where is this now.* `krewe sessions` for the status, `krewe task list <session>` for the prompt and
-  whether it is still running. Both exist. The console's `sessions` and `tasks` views show the same
+  whether it is still running. Both exist. The console's `sessions` and `exec` views show the same
   thing.
 - *Why did it stop.* `krewe task list <session>` prints `failed:` and the reason. Exists.
 - *What did it cost.* Grafana, Prometheus data source, `sum by (workspace) (quaycrew_cost_usd_total)`.

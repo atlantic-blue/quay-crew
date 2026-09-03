@@ -63,6 +63,23 @@ func initializeKeysSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// The other half of what a key did. A key that draws the right thing and also hands the terminal
+	// to a container has done something the operator did not ask for.
+	sc.Step(`^the console screen does not say "([^"]*)"$`, func(ctx context.Context, unwanted string) error {
+		if drawn := consoleFrom(ctx).model.View(); strings.Contains(drawn, unwanted) {
+			return fmt.Errorf("the console still says %q:\n%s", unwanted, drawn)
+		}
+		return nil
+	})
+
+	sc.Step(`^the console handed the terminal to nothing$`, func(ctx context.Context) error {
+		handed := consoleFrom(ctx).handedOver
+		if len(handed) == 0 {
+			return nil
+		}
+		return fmt.Errorf("the console handed the terminal %q", strings.Join(handed[0].Args, " "))
+	})
+
 	sc.Step(`^the console is on the "([^"]*)" view$`, func(ctx context.Context, view string) error {
 		drawn := consoleFrom(ctx).model.View()
 		if !strings.Contains(drawn, "<"+view+">") {

@@ -34,7 +34,7 @@ func (s *Server) CreateJob(ctx context.Context, req *quaycrewv1.CreateJobRequest
 		Requires: req.GetRequires(), Repository: req.GetRepository(), Product: req.GetProduct(),
 		Claim: req.GetClaim(), Escalation: req.GetEscalation(),
 		Ungated: req.GetUngated(),
-		ID:      req.GetId(), Parent: req.GetParent(),
+		ID:      req.GetId(),
 	}
 	if req.GetDeadline() != nil {
 		at := req.GetDeadline().AsTime()
@@ -46,7 +46,7 @@ func (s *Server) CreateJob(ctx context.Context, req *quaycrewv1.CreateJobRequest
 	if err := job.Declared(declaration.Brief); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	declared, declaredEvent, err := s.PrepareJob(ctx, "", declaration)
+	declared, declaredEvent, err := s.PrepareJob(ctx, job.Placement{}, declaration)
 	if err != nil {
 		return nil, err
 	}
@@ -119,11 +119,11 @@ func (s *Server) jobLeftOut(ctx context.Context, declared *job.Job) []*quaycrewv
 // writing it. It writes nothing: the caller decides which transaction the row lands in, which is what
 // lets a flow run declare its step in the same transaction as the movement that asked for it.
 //
-// `under` names the job this one hangs under, and empty means the parent comes from the
-// credential the caller presented. Only the system itself passes one, and only ever an identifier it
-// read off a row of its own: a caller that could name its own parent could name none and start again
-// at the top, which is why a parent in a request is refused rather than ignored.
-func (s *Server) PrepareJob(ctx context.Context, under string, declaration job.Declaration) (*job.Job, *job.Event, error) {
+// `at` is what the system itself knows about the job it is declaring: what caused it, and the flow
+// run it is one step of. Only the system passes either, and only ever an identifier it read off a
+// row of its own. A caller says neither: what caused a job is the credential's to say, and a caller
+// that could name its own cause could name none.
+func (s *Server) PrepareJob(ctx context.Context, at job.Placement, declaration job.Declaration) (*job.Job, *job.Event, error) {
 	// Before the project is read, so a caller that got the shape wrong is told what is wrong with
 	// the shape rather than being sent to look for a project.
 	if err := declaration.Validate(); err != nil {
@@ -178,22 +178,12 @@ func (s *Server) PrepareJob(ctx context.Context, under string, declaration job.D
 	if err := s.modeReachesTheRepository(declared); err != nil {
 		return nil, nil, err
 	}
-	if err := s.underTheCaller(ctx, under, declared); err != nil {
+	if err := s.causedByTheCaller(ctx, at, declared); err != nil {
 		return nil, nil, err
 	}
-	// The parent, read once and used twice: the trace follows it, and so does the one sentence the
-	// job serves. Both are read after underTheCaller has set it, because the parent is the
-	// credential's to say and never the request's.
-	parent := s.parentOf(ctx, declared)
-	// One trace covers a whole tree, and a child that minted its own would leave the tree in as many
-	// traces as it has nodes.
-	s.traceJob(ctx, declared, parent)
-	if err := carryTheSentence(declared, parent); err != nil {
-		return nil, nil, err
-	}
-	if err := carryTheRequest(declared, parent); err != nil {
-		return nil, nil, err
-	}
+	// The trace this job belongs to. One trace covers a piece of work and everything it caused, so a
+	// job takes the trace of what caused it and mints one only where nothing did.
+	s.traceJob(ctx, declared, s.causeOf(ctx, declared), at.Trace)
 	if err := s.pinRole(ctx, declared, tidy.Role); err != nil {
 		return nil, nil, err
 	}
@@ -204,46 +194,6 @@ func (s *Server) PrepareJob(ctx context.Context, under string, declaration job.D
 		return nil, nil, err
 	}
 	return declared, s.jobEvent(ctx, declared, job.EventDeclared, declared.Title), nil
-}
-
-// carryTheSentence gives a child the one sentence its parent serves, and refuses a child that states
-// a different one.
-//
-// The sentence belongs to the job at the top. Every job under it carries the same one, so a session
-// three levels down is given what a person does with what is being built, without anybody typing it
-// again. That is the half that makes the sentence worth having: the failure it answers happened
-// inside jobs that never saw it.
-//
-// A root, and a child under a parent that carries none, keep whatever they declared. A tree that
-// started without a sentence can still gain one.
-func carryTheSentence(declared *job.Job, parent *job.Job) error {
-	if parent == nil {
-		return nil
-	}
-	carried, err := job.Inherited(parent.Product, declared.Product)
-	if err != nil {
-		return status.Error(codes.InvalidArgument, err.Error())
-	}
-	declared.Product = carried
-	return nil
-}
-
-// carryTheRequest gives a child the request its parent was asked in, and refuses a child that states
-// a different one.
-//
-// It is the rule carryTheSentence gives the product, and for the same reason: a tree with two
-// requests has none. The half that makes it worth having is that a session three levels down reads
-// what was asked for, in the words it was asked in, without anybody typing it again.
-func carryTheRequest(declared *job.Job, parent *job.Job) error {
-	if parent == nil {
-		return nil
-	}
-	carried, err := job.InheritedRequest(parent.Request, declared.Request)
-	if err != nil {
-		return status.Error(codes.InvalidArgument, err.Error())
-	}
-	declared.Request = carried
-	return nil
 }
 
 // pinRole attaches the role at the version the workspace holds now, and refuses job the role could
@@ -336,7 +286,9 @@ func (s *Server) GetJob(ctx context.Context, req *quaycrewv1.GetJobRequest) (*qu
 		}
 		return nil, storeError(err, "job")
 	}
-	return &quaycrewv1.GetJobResponse{Job: asJob(found)}, nil
+	on := asJob(found)
+	s.sayWhatIsRunning(ctx, []*quaycrewv1.Job{on})
+	return &quaycrewv1.GetJobResponse{Job: on}, nil
 }
 
 // ListJob says what the system holds, newest first and without answers.
@@ -359,7 +311,7 @@ func (s *Server) ListJobs(ctx context.Context, req *quaycrewv1.ListJobsRequest) 
 	}
 	filter := job.Filter{
 		Workspace: req.GetWorkspace(), Project: req.GetProject(),
-		Parent: req.GetParent(), Root: req.GetRootsOnly(), Phase: req.GetPhase(),
+		Run: req.GetRun(), Phase: req.GetPhase(),
 		Outcome:  req.GetOutcome(),
 		LabelKey: req.GetLabelKey(), LabelValue: req.GetLabelValue(),
 		Limit: int(req.GetLimit()),
@@ -376,7 +328,36 @@ func (s *Server) ListJobs(ctx context.Context, req *quaycrewv1.ListJobsRequest) 
 	for _, one := range listed {
 		out = append(out, asJob(one))
 	}
+	s.sayWhatIsRunning(ctx, out)
 	return &quaycrewv1.ListJobsResponse{Jobs: out}, nil
+}
+
+// sayWhatIsRunning fills in how many runs of each job's stages are still going.
+//
+// One call for the whole listing, so a hundred jobs cost one. A job whose stage fanned out has no
+// session of its own and is not idle: the work is in one session for each requirement, and this is
+// the only thing on the row that says so. The runs were job rows once, so a surface could count them
+// in the listing it already had.
+//
+// A count that cannot be read leaves every job saying nothing is running, which is what a job with no
+// runs says anyway. The alternative is failing a listing over a number beside the rows.
+func (s *Server) sayWhatIsRunning(ctx context.Context, jobs []*quaycrewv1.Job) {
+	if len(jobs) == 0 {
+		return
+	}
+	ids := make([]string, 0, len(jobs))
+	for _, one := range jobs {
+		ids = append(ids, one.GetId())
+	}
+	running, err := s.store.RunningExecutions(ctx, ids)
+	if err != nil {
+		slog.WarnContext(ctx, "could not count the runs of these jobs, so none of them says what it "+
+			"is running", "jobs", len(ids), "error", err)
+		return
+	}
+	for _, one := range jobs {
+		one.RunningExecutions = int32(running[one.GetId()])
+	}
 }
 
 // StopJob halts job that has not ended, keeping the reason.
@@ -424,7 +405,7 @@ func (s *Server) StopJob(ctx context.Context, req *quaycrewv1.StopJobRequest) (*
 func (s *Server) jobEvent(ctx context.Context, of *job.Job, kind, detail string) *job.Event {
 	return &job.Event{
 		ID: store.NewID(), Kind: kind, Job: of.ID,
-		Workspace: of.Workspace, Project: of.Project, Parent: of.Parent, Depth: of.Depth,
+		Workspace: of.Workspace, Project: of.Project,
 		Detail:     oneShortLine(model.Redact(detail, s.sealedForWorkspace(ctx, of.Workspace))),
 		TraceID:    of.TraceID,
 		OccurredAt: timestamppb.Now().AsTime(),
@@ -444,8 +425,8 @@ func asJob(from *job.Job) *quaycrewv1.Job {
 		Plan: from.Plan, PlanApproved: from.PlanApproved,
 		Ideation: from.Ideation, IdeationAnswer: from.IdeationAnswer,
 		Design: from.Design, DesignAccepted: from.DesignAccepted, Tests: from.Tests,
-		Build: from.Build, Building: from.Building, Accepted: from.Accepted,
-		Parent: from.Parent, Depth: int32(from.Depth), Version: int32(from.Version),
+		Build: from.Build, Accepted: from.Accepted,
+		Cause: from.Cause, Run: from.Run, Version: int32(from.Version),
 		Phase: from.Phase, Session: from.Session, Attempts: int32(from.Attempts),
 		Answer: from.Answer, Outcome: from.Outcome,
 		Reason: from.Reason, Question: from.Question, Told: from.Told, Resuming: from.Resuming,
@@ -590,65 +571,66 @@ func ControllerName(hostname func() (string, error)) string {
 	return "controlplane-" + strings.TrimSpace(name)
 }
 
-// underTheCaller reads the parent from the credential the caller presented, and holds the result to
-// the workspace's ceiling.
+// causeOf is the job whose session declared this one, and nil where nothing did.
 //
-// An operator's call carries no credential of that kind and so declares a root. A session running a
-// job carries one, and everything it declares hangs under that job, one level deeper. The
-// caller cannot say otherwise, which is why depth bounds anything at all: job at depth d creates at
-// depth d+1, so a loop of any shape stops at the limit.
-// parentOf is the job this one hangs under, and nil for a root.
-//
-// Read after underTheCaller has set the parent, because the parent is the credential's to say and
-// never the request's. It exists so a child can inherit its parent's trace: one trace covers a whole
-// tree, and a child that minted its own would leave the tree in as many traces as it has nodes.
-func (s *Server) parentOf(ctx context.Context, declared *job.Job) *job.Job {
-	if declared.Parent == "" {
+// Read after causedByTheCaller has written it, because what caused a job is the credential's to say
+// and never the request's. It exists so the trace follows the work: one trace covers a job and
+// everything that job's session caused.
+func (s *Server) causeOf(ctx context.Context, declared *job.Job) *job.Job {
+	if declared.Cause == "" {
 		return nil
 	}
-	parent, err := s.store.GetJob(ctx, declared.Parent)
+	cause, err := s.store.GetJob(ctx, declared.Cause)
 	if err != nil {
-		// The parent was read a moment ago to set the depth, so this is a store that went away
-		// between the two. The job is declared either way and takes a trace of its own, which is a
-		// tree in two traces rather than a job nobody has.
-		slog.WarnContext(ctx, "the parent of this job could not be read, so it starts a trace of its own",
-			"job", declared.ID, "parent", declared.Parent, "error", err)
+		// The row was read a moment ago to count what it had declared, so this is a store that went
+		// away between the two. The job is declared either way and takes a trace of its own, which is
+		// one piece of work in two traces rather than a job nobody has.
+		slog.WarnContext(ctx, "the job that caused this one could not be read, so it starts a trace of its own",
+			"job", declared.ID, "cause", declared.Cause, "error", err)
 		return nil
 	}
-	return parent
+	return cause
 }
 
-func (s *Server) underTheCaller(ctx context.Context, under string, declared *job.Job) error {
-	// The system declaring job for something it is already running, which today is one thing: a step
-	// of a flow run. The ceiling was checked when the run's own job was declared, against the
-	// credential of whoever started it, so a step is not a second chance to cross it. What bounds the
-	// steps themselves is the graph: it is a finite set of nodes with a transition cap, and a run
-	// started from inside a session is bounded by the check that session already passed.
-	if under != "" {
-		parent, err := s.store.GetJob(ctx, under)
-		if err != nil {
-			return storeError(err, "the job this one hangs under")
-		}
-		declared.Parent, declared.Depth = parent.ID, parent.Depth+1
+// causedByTheCaller writes what caused this job, read from the credential the caller presented, and
+// holds a session to how many jobs this workspace lets one declare.
+//
+// An operator's call carries no credential of that kind, so it causes nothing and answers to no
+// ceiling: an operator declaring work is the work arriving rather than a session multiplying it. A
+// session running a job carries one, and everything it declares names that job as its cause and
+// counts against the ceiling.
+//
+// A step of a flow run is neither. It belongs to the run, the graph a person imported is a finite
+// set of nodes with a transition cap, and the ceiling was already asked of whoever started the run,
+// so a step is not a second chance to cross it.
+func (s *Server) causedByTheCaller(ctx context.Context, at job.Placement, declared *job.Job) error {
+	if at.Run != "" {
+		declared.Run = at.Run
 		return nil
 	}
-	if grant, carried := auth.GrantFrom(ctx); carried && grant.Job != "" {
-		parent, err := s.store.GetJob(ctx, grant.Job)
-		if err != nil {
-			return storeError(err, "the job this session is running")
+	declared.Cause = at.Cause
+	if declared.Cause == "" {
+		if grant, carried := auth.GrantFrom(ctx); carried && grant.Job != "" {
+			declared.Cause = grant.Job
 		}
-		declared.Parent, declared.Depth = parent.ID, parent.Depth+1
+	}
+	if declared.Cause == "" {
+		return nil
 	}
 	limits, err := s.store.WorkspaceLimits(ctx, declared.Workspace)
 	if err != nil {
 		return storeError(err, "the workspace's limits")
 	}
-	if declared.Depth > limits.MaxDepth {
+	already, err := s.store.JobsCausedBy(ctx, declared.Cause)
+	if err != nil {
+		return storeError(err, "what this session declared already")
+	}
+	if already >= limits.MaxDeclared {
 		return status.Errorf(codes.PermissionDenied,
-			"this workspace allows job no deeper than %d, and this would be at depth %d. "+
-				"Raise it with krewe limits <workspace> --max-depth %d, which an operator does deliberately: "+
-				"a session that could raise its own ceiling has none",
-			limits.MaxDepth, declared.Depth, declared.Depth)
+			"this workspace lets one session declare %d jobs, and this session declared %d already. "+
+				"Raise it with krewe limits <workspace> --max-declared %d, which an operator does "+
+				"deliberately: a session that could raise its own ceiling has none",
+			limits.MaxDeclared, already, already+1)
 	}
 	return nil
 }

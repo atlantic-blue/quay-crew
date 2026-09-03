@@ -446,9 +446,7 @@ func matchesJob(held *job.Job, filter job.Filter) bool {
 		return false
 	case filter.Project == "" && filter.Workspace != "" && held.Workspace != filter.Workspace:
 		return false
-	case filter.Parent != "" && held.Parent != filter.Parent:
-		return false
-	case filter.Parent == "" && filter.Root && held.Parent != "":
+	case filter.Run != "" && held.Run != filter.Run:
 		return false
 	case filter.Phase != "" && held.Phase != filter.Phase:
 		return false
@@ -542,6 +540,14 @@ func (m *Memory) AnythingMoving(_ context.Context) (bool, error) {
 	defer m.mu.RUnlock()
 	for _, one := range m.jobs {
 		if one.Phase == job.PhaseRunning || one.Phase == job.PhaseAsking {
+			return true, nil
+		}
+	}
+	// A run of a stage is the system doing something too. A job that fanned out waits while its runs
+	// work, so a probe that read only the jobs would find nothing moving and take a container back
+	// from the very sessions the work is in.
+	for _, one := range m.executions {
+		if one.Phase == job.PhaseRunning {
 			return true, nil
 		}
 	}
@@ -817,12 +823,18 @@ func (m *Memory) JobHistory(_ context.Context, query job.HistoryQuery) ([]*job.D
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
+	// The runs of every job, gathered once rather than scanned for each job in the window.
+	runs := map[string][]*job.Execution{}
+	for _, one := range m.executions {
+		runs[one.Job] = append(runs[one.Job], one)
+	}
+
 	history := make([]*job.Digest, 0, len(m.jobs))
 	for _, held := range m.jobs {
 		if !inHistory(held, query) {
 			continue
 		}
-		history = append(history, job.DigestOf(held))
+		history = append(history, job.DigestOf(held, runs[held.ID]))
 	}
 	job.SortDigests(history)
 	return history, nil
@@ -1074,4 +1086,17 @@ func (m *Memory) AskAboutJobBuild(_ context.Context, id, question string,
 	}
 	kept := cloneJob(*found)
 	return &kept, nil
+}
+
+// JobsCausedBy is how many jobs the session running this one declared.
+func (m *Memory) JobsCausedBy(_ context.Context, cause string) (int, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	caused := 0
+	for _, held := range m.jobs {
+		if held.Cause == cause {
+			caused++
+		}
+	}
+	return caused, nil
 }

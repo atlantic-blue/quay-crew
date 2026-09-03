@@ -45,8 +45,8 @@ func refusalOf(t *testing.T, s *controlplane.Server, req *quaycrewv1.CreateJobRe
 	return err
 }
 
-// A job opens pending, at depth zero, with the system's own identifier on it.
-func TestDeclaredJobOpensPendingAtDepthZero(t *testing.T) {
+// A job opens pending, under nothing, with the system's own identifier on it.
+func TestDeclaredJobOpensPendingUnderNothing(t *testing.T) {
 	s := newServer(&model.FakeRunner{})
 	_, project := newProject(t, s)
 
@@ -58,8 +58,9 @@ func TestDeclaredJobOpensPendingAtDepthZero(t *testing.T) {
 	if len(declared.GetId()) != 24 {
 		t.Fatalf("the identifier is %q, want the 24 characters the system mints", declared.GetId())
 	}
-	if declared.GetParent() != "" || declared.GetDepth() != 0 {
-		t.Fatalf("the job has parent %q at depth %d, want a root", declared.GetParent(), declared.GetDepth())
+	if declared.GetCause() != "" || declared.GetRun() != "" {
+		t.Fatalf("the job says %q caused it and it is a step of run %q, want neither",
+			declared.GetCause(), declared.GetRun())
 	}
 	if declared.GetVersion() != 1 || declared.GetObservedVersion() != 0 {
 		t.Fatalf("the job is version %d observed at %d, want 1 and 0", declared.GetVersion(), declared.GetObservedVersion())
@@ -112,17 +113,15 @@ func TestAnIdentifierTheCallerChoseIsRefused(t *testing.T) {
 	}
 }
 
-// The parent bounds depth, and it only bounds anything while the caller cannot set it.
-func TestAParentInTheRequestIsRefused(t *testing.T) {
-	s := newServer(&model.FakeRunner{})
-	_, project := newProject(t, s)
-
-	err := refusalOf(t, s, &quaycrewv1.CreateJobRequest{
-		Project: project, Title: "read the bill", Brief: "open it", Parent: "0123456789abcdef01234567",
-	})
-
-	if !strings.Contains(err.Error(), "credential") {
-		t.Fatalf("the refusal says %q, want it to say the parent comes from the credential", err)
+// The way off the old interface. A caller that used to put a job under another one gets a refusal
+// that names what to type instead, on the tool, and the field it used to send is gone from the wire:
+// a request carrying it is refused before anything is written.
+func TestTheParentFlagIsRefusedNamingWhatToTypeInstead(t *testing.T) {
+	fields := (&quaycrewv1.CreateJobRequest{}).ProtoReflect().Descriptor().Fields()
+	for at := 0; at < fields.Len(); at++ {
+		if name := string(fields.Get(at).Name()); name == "parent" || name == "depth" {
+			t.Fatalf("a request still carries %q, so a caller can still ask for a job under a job", name)
+		}
 	}
 }
 

@@ -22,19 +22,22 @@ Feature: A job is a record the system keeps
     When the caller goes away and the system is asked again
     Then the job is still there, pending, with its brief whole
 
-  Scenario: A job opens pending, at depth zero, with no parent
+  Scenario: A job opens pending, under nothing
     Given a job titled "read the electricity bill"
     Then the job is pending
-    And the job is at depth 0 with no parent
+    And the job sits under nothing
     And the job carries the moment it was declared
 
   Scenario: The system assigns the identifier
     When the caller declares a job carrying an identifier of its own
     Then the system refuses it and says it assigns the identifier
 
-  Scenario: The parent is never taken from the request
-    When the caller declares a job carrying a parent
-    Then the system refuses it and says the parent comes from the credential
+  # The way off the old interface. A caller that used to put a job under another one has nothing to
+  # send: the field is gone from the wire, and the tool refuses the flag by name.
+  Scenario: A caller has no way to put a job under another job
+    Given the system listens on an address the tool can dial
+    Then a declaration carries no way to say what a job sits under
+    And the tool refuses --parent and says a job cannot be under another job
 
   Scenario: Job with no title is refused
     When the caller declares a job with no title

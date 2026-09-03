@@ -47,7 +47,7 @@ func aRoleThatMay(t *testing.T, s *controlplane.Server, workspace, name string, 
 	}
 }
 
-func TestAWorkspaceWithNoRowAllowsNoDepthInPostgres(t *testing.T) {
+func TestAWorkspaceWithNoRowLetsASessionDeclareNothingInPostgres(t *testing.T) {
 	kept := openPostgres(t)
 	s := aSystemNamed(t, kept, "controller-a", 0, &model.FakeRunner{Reply: "done"})
 	ctx := context.Background()
@@ -57,8 +57,8 @@ func TestAWorkspaceWithNoRowAllowsNoDepthInPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetWorkspaceLimits: %v", err)
 	}
-	if held.GetLimits().GetMaxDepth() != 0 {
-		t.Fatalf("a workspace with no row allows depth %d, want 0", held.GetLimits().GetMaxDepth())
+	if held.GetLimits().GetMaxDeclared() != 0 {
+		t.Fatalf("a workspace with no row lets a session declare %d jobs, want 0", held.GetLimits().GetMaxDeclared())
 	}
 
 	// And a session in it declares nothing, which is what that default is for.
@@ -77,7 +77,7 @@ func TestAWorkspaceWithNoRowAllowsNoDepthInPostgres(t *testing.T) {
 }
 
 // The whole path, against the database that holds it: an operator raises the ceiling, a session
-// declares job under its own, and the row carries the parent and the depth the system assigned.
+// declares a job of its own, and the row carries the cause the system assigned.
 func TestASessionDeclaresJobWithinTheCeilingInPostgres(t *testing.T) {
 	kept := openPostgres(t)
 	s := aSystemNamed(t, kept, "controller-a", 0, &model.FakeRunner{Reply: "done"})
@@ -86,7 +86,7 @@ func TestASessionDeclaresJobWithinTheCeilingInPostgres(t *testing.T) {
 	aRoleThatMay(t, s, workspace, "backlog-clearer", role.VerbJobCreate)
 
 	if _, err := s.SetWorkspaceLimits(ctx, &quaycrewv1.SetWorkspaceLimitsRequest{
-		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDepth: 1, MaxRunning: 4, LeaseSeconds: 90},
+		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDeclared: 1, MaxRunning: 4, LeaseSeconds: 90},
 	}); err != nil {
 		t.Fatalf("SetWorkspaceLimits: %v", err)
 	}
@@ -105,26 +105,27 @@ func TestASessionDeclaresJobWithinTheCeilingInPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateJob as the session: %v", err)
 	}
-	if child.GetJob().GetParent() != root.GetJob().GetId() || child.GetJob().GetDepth() != 1 {
-		t.Fatalf("the child is at depth %d under %q", child.GetJob().GetDepth(), child.GetJob().GetParent())
+	if child.GetJob().GetCause() != root.GetJob().GetId() {
+		t.Fatalf("the job a session declared says %q caused it", child.GetJob().GetCause())
 	}
 
-	// Read back off the database rather than from the answer, because the parent is a foreign key and
-	// the depth is a column.
+	// Read back off the database rather than from the answer, because the cause is a column and this
+	// is the tier that reads columns.
 	found, err := kept.GetJob(ctx, child.GetJob().GetId())
 	if err != nil {
 		t.Fatalf("GetJob: %v", err)
 	}
-	if found.Parent != root.GetJob().GetId() || found.Depth != 1 {
-		t.Fatalf("the row says depth %d under %q", found.Depth, found.Parent)
+	if found.Cause != root.GetJob().GetId() || found.Run != "" {
+		t.Fatalf("the row says %q caused it and it is a step of run %q", found.Cause, found.Run)
 	}
 
-	// One deeper is refused, and the refusal names the limit rather than the role.
+	// A second one from the same session is refused, and the refusal names the limit rather than the
+	// role.
 	_, err = s.CreateJob(auth.WithGrant(ctx, auth.Grant{
-		Job: child.GetJob().GetId(), Verbs: []string{role.VerbJobCreate},
+		Job: root.GetJob().GetId(), Verbs: []string{role.VerbJobCreate},
 	}), &quaycrewv1.CreateJobRequest{Project: project, Title: "write a test", Brief: "write it"})
 	if status.Code(err) != codes.PermissionDenied {
-		t.Fatalf("job below the ceiling answered %v, want PermissionDenied", status.Code(err))
+		t.Fatalf("a job past the ceiling answered %v, want PermissionDenied", status.Code(err))
 	}
 }
 
@@ -136,7 +137,7 @@ func TestACeilingOutlivesTheProcessThatSetItInPostgres(t *testing.T) {
 	workspace, _ := aProjectOnPostgres(t, s)
 
 	if _, err := s.SetWorkspaceLimits(ctx, &quaycrewv1.SetWorkspaceLimitsRequest{
-		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDepth: 3, BudgetTokens: 5000},
+		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDeclared: 3, BudgetTokens: 5000},
 	}); err != nil {
 		t.Fatalf("SetWorkspaceLimits: %v", err)
 	}
@@ -151,7 +152,7 @@ func TestACeilingOutlivesTheProcessThatSetItInPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WorkspaceLimits: %v", err)
 	}
-	if limits.MaxDepth != 3 || limits.BudgetTokens != 5000 {
+	if limits.MaxDeclared != 3 || limits.BudgetTokens != 5000 {
 		t.Fatalf("the ceiling reads back as %+v from a new process", limits)
 	}
 }

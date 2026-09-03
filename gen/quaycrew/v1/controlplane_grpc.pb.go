@@ -76,6 +76,8 @@ const (
 	ControlPlaneService_GetJob_FullMethodName                   = "/quaycrew.v1.ControlPlaneService/GetJob"
 	ControlPlaneService_ListJobs_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/ListJobs"
 	ControlPlaneService_StopJob_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/StopJob"
+	ControlPlaneService_ListExecutions_FullMethodName           = "/quaycrew.v1.ControlPlaneService/ListExecutions"
+	ControlPlaneService_StopExecution_FullMethodName            = "/quaycrew.v1.ControlPlaneService/StopExecution"
 	ControlPlaneService_AskJob_FullMethodName                   = "/quaycrew.v1.ControlPlaneService/AskJob"
 	ControlPlaneService_AnswerJob_FullMethodName                = "/quaycrew.v1.ControlPlaneService/AnswerJob"
 	ControlPlaneService_RecordJobStep_FullMethodName            = "/quaycrew.v1.ControlPlaneService/RecordJobStep"
@@ -171,6 +173,11 @@ type ControlPlaneServiceClient interface {
 	GetJob(ctx context.Context, in *GetJobRequest, opts ...grpc.CallOption) (*GetJobResponse, error)
 	ListJobs(ctx context.Context, in *ListJobsRequest, opts ...grpc.CallOption) (*ListJobsResponse, error)
 	StopJob(ctx context.Context, in *StopJobRequest, opts ...grpc.CallOption) (*StopJobResponse, error)
+	// An execution is one run of one stage of one job. Nobody declares one, so there is nothing here
+	// that writes one: a stage of a job fans out and the system writes the runs. What a caller may do
+	// is read them, and stop one that has not ended.
+	ListExecutions(ctx context.Context, in *ListExecutionsRequest, opts ...grpc.CallOption) (*ListExecutionsResponse, error)
+	StopExecution(ctx context.Context, in *StopExecutionRequest, opts ...grpc.CallOption) (*StopExecutionResponse, error)
 	// AskJob is a session putting a question to a person about the job it is running, and
 	// AnswerJob is the person answering. Nothing else moves the job in between.
 	AskJob(ctx context.Context, in *AskJobRequest, opts ...grpc.CallOption) (*AskJobResponse, error)
@@ -792,6 +799,26 @@ func (c *controlPlaneServiceClient) StopJob(ctx context.Context, in *StopJobRequ
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ListExecutions(ctx context.Context, in *ListExecutionsRequest, opts ...grpc.CallOption) (*ListExecutionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListExecutionsResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListExecutions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) StopExecution(ctx context.Context, in *StopExecutionRequest, opts ...grpc.CallOption) (*StopExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StopExecutionResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_StopExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) AskJob(ctx context.Context, in *AskJobRequest, opts ...grpc.CallOption) (*AskJobResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AskJobResponse)
@@ -1056,6 +1083,11 @@ type ControlPlaneServiceServer interface {
 	GetJob(context.Context, *GetJobRequest) (*GetJobResponse, error)
 	ListJobs(context.Context, *ListJobsRequest) (*ListJobsResponse, error)
 	StopJob(context.Context, *StopJobRequest) (*StopJobResponse, error)
+	// An execution is one run of one stage of one job. Nobody declares one, so there is nothing here
+	// that writes one: a stage of a job fans out and the system writes the runs. What a caller may do
+	// is read them, and stop one that has not ended.
+	ListExecutions(context.Context, *ListExecutionsRequest) (*ListExecutionsResponse, error)
+	StopExecution(context.Context, *StopExecutionRequest) (*StopExecutionResponse, error)
 	// AskJob is a session putting a question to a person about the job it is running, and
 	// AnswerJob is the person answering. Nothing else moves the job in between.
 	AskJob(context.Context, *AskJobRequest) (*AskJobResponse, error)
@@ -1277,6 +1309,12 @@ func (UnimplementedControlPlaneServiceServer) ListJobs(context.Context, *ListJob
 }
 func (UnimplementedControlPlaneServiceServer) StopJob(context.Context, *StopJobRequest) (*StopJobResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StopJob not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ListExecutions(context.Context, *ListExecutionsRequest) (*ListExecutionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListExecutions not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) StopExecution(context.Context, *StopExecutionRequest) (*StopExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StopExecution not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) AskJob(context.Context, *AskJobRequest) (*AskJobResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AskJob not implemented")
@@ -2382,6 +2420,42 @@ func _ControlPlaneService_StopJob_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ListExecutions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListExecutionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ListExecutions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ListExecutions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ListExecutions(ctx, req.(*ListExecutionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_StopExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).StopExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_StopExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).StopExecution(ctx, req.(*StopExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_AskJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AskJobRequest)
 	if err := dec(in); err != nil {
@@ -2958,6 +3032,14 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StopJob",
 			Handler:    _ControlPlaneService_StopJob_Handler,
+		},
+		{
+			MethodName: "ListExecutions",
+			Handler:    _ControlPlaneService_ListExecutions_Handler,
+		},
+		{
+			MethodName: "StopExecution",
+			Handler:    _ControlPlaneService_StopExecution_Handler,
 		},
 		{
 			MethodName: "AskJob",

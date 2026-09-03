@@ -91,7 +91,7 @@ Feature: A job says what it understood, and a person answers, before it plans
   # A job declared under another is one part of a plan a person already approved. Stopping at each
   # one puts a person back in the loop for every job in the tree.
   Scenario: A job declared under another is never asked what it understood
-    Given the workspace allows jobs down to depth 2
+    Given the workspace lets one session declare 2 jobs
     And a job titled "build the transcript page" saying a person "pastes a link and gets the text back"
     When the session running it declares a job
     Then the new job was never asked what it understood

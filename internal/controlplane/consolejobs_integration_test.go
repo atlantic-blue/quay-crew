@@ -91,19 +91,20 @@ func TestTheConsoleListsTheJobsTheSystemActuallyHolds(t *testing.T) {
 	if running.Parent == "" {
 		t.Fatalf("the started job carries no session, so there is nothing to descend into: %q", running.Cells)
 	}
-	if running.Cells[5] == "not yet" {
+	sessionAt, phaseAt := cellAt(t, jobs, "session"), cellAt(t, jobs, "phase")
+	if running.Cells[sessionAt] == "not yet" {
 		t.Fatal("the started job says it has no session yet, and the controller gave it one")
 	}
-	if running.Cells[1] != job.PhaseRunning && running.Cells[1] != job.PhaseDone {
-		t.Fatalf("the started job reads %q, want a phase the controller moved it to", running.Cells[1])
+	if running.Cells[phaseAt] != job.PhaseRunning && running.Cells[phaseAt] != job.PhaseDone {
+		t.Fatalf("the started job reads %q, want a phase the controller moved it to", running.Cells[phaseAt])
 	}
 
 	waitingRow, ok := rowFor(rows, pending.GetId())
 	if !ok {
 		t.Fatalf("the pending job is not in the listing: %v", rows)
 	}
-	if waitingRow.Cells[5] != "not yet" {
-		t.Fatalf("a job nothing has started says its session is %q", waitingRow.Cells[5])
+	if waitingRow.Cells[sessionAt] != "not yet" {
+		t.Fatalf("a job nothing has started says its session is %q", waitingRow.Cells[sessionAt])
 	}
 
 	// Scoped to one project, which is the same call the view makes when it is drilled into from one.
@@ -120,11 +121,13 @@ func TestTheConsoleListsTheJobsTheSystemActuallyHolds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("descending into what the job did: %v", err)
 	}
-	tasks, foundTasks := registry.Get("tasks")
-	if !foundTasks {
-		t.Fatal("the console has no tasks view")
+	// Resolved rather than read by name, because the word an operator types and the name the view
+	// carries are two different things: this view is called exec and tasks is one of its spellings.
+	ranView, foundRan := registry.Resolve("tasks")
+	if !foundRan {
+		t.Fatal("the console does not open what a session ran")
 	}
-	ran, err := tasks.List(ctx, scoped)
+	ran, err := ranView.List(ctx, scoped)
 	if err != nil {
 		t.Fatalf("listing the job's tasks: %v", err)
 	}
@@ -149,8 +152,8 @@ func TestTheConsoleListsTheJobsTheSystemActuallyHolds(t *testing.T) {
 	if !ok {
 		t.Fatalf("the stopped job left the listing: %v", after)
 	}
-	if stopped.Cells[1] != job.PhaseStopped {
-		t.Fatalf("the job reads %q after being stopped from the console, want stopped", stopped.Cells[1])
+	if stopped.Cells[phaseAt] != job.PhaseStopped {
+		t.Fatalf("the job reads %q after being stopped from the console, want stopped", stopped.Cells[phaseAt])
 	}
 }
 
@@ -186,4 +189,18 @@ func actionNamed(resource console.Resource, label string) (console.Action, bool)
 		}
 	}
 	return console.Action{}, false
+}
+
+// cellAt is where a column sits in a row, read off the view rather than written here. A number in a
+// test goes stale the moment somebody adds a column, and the row then reads one cell to the left of
+// the heading that names it, which is how this test failed on a stage column it knew nothing about.
+func cellAt(t *testing.T, resource console.Resource, title string) int {
+	t.Helper()
+	for at, column := range resource.Columns {
+		if column.Title == title {
+			return at
+		}
+	}
+	t.Fatalf("the %s view has no %q column: %v", resource.Name, title, resource.Columns)
+	return 0
 }

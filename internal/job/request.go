@@ -119,21 +119,6 @@ func AskedInTheseWords(request, brief string) string {
 	return said
 }
 
-// InheritedRequest is the request a job declared under this one carries, and the refusal where the
-// child stated a different one.
-//
-// It is the rule Inherited already gives the product sentence, for the same reason: a tree with two
-// requests has none, and a field dropped in silence leaves the caller believing the request moved.
-func InheritedRequest(parent, child string) (string, error) {
-	carried, ok := inherited(parent, child)
-	if !ok {
-		return "", fmt.Errorf("this job states a different request from the job it hangs under, which was "+
-			"asked for in these words: %s. The request belongs to the job at the top and every job under it "+
-			"carries the same one, so declare this one without it", parent)
-	}
-	return carried, nil
-}
-
 // theWords is a list of words as a sentence carries them, so a refusal reads as English rather than
 // as a dump of a slice.
 func theWords(words []string) string {

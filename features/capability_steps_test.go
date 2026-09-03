@@ -39,12 +39,12 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		return context.WithValue(ctx, capabilityKey{}, &capabilityWorld{}), nil
 	})
 
-	sc.Step(`^the workspace allows jobs down to depth (\d+)$`, func(ctx context.Context, depth int) error {
-		return setLimits(ctx, int32(depth))
+	sc.Step(`^the workspace lets one session declare (\d+) jobs$`, func(ctx context.Context, many int) error {
+		return setLimits(ctx, int32(many))
 	})
 
-	sc.Step(`^the operator allows jobs down to depth (\d+)$`, func(ctx context.Context, depth int) error {
-		return setLimits(ctx, int32(depth))
+	sc.Step(`^the operator lets one session declare (\d+) jobs$`, func(ctx context.Context, many int) error {
+		return setLimits(ctx, int32(many))
 	})
 
 	sc.Step(`^the operator reads the limits of the workspace$`, func(ctx context.Context) error {
@@ -60,9 +60,9 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the limits allow no depth at all$`, func(ctx context.Context) error {
-		if got := capabilityFrom(ctx).limits.GetMaxDepth(); got != 0 {
-			return fmt.Errorf("the workspace allows depth %d, want none until somebody raises it", got)
+	sc.Step(`^the limits let a session declare nothing at all$`, func(ctx context.Context) error {
+		if got := capabilityFrom(ctx).limits.GetMaxDeclared(); got != 0 {
+			return fmt.Errorf("the workspace lets one session declare %d jobs, want none until somebody raises it", got)
 		}
 		return nil
 	})
@@ -75,7 +75,7 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the limits allow jobs down to depth (\d+)$`, func(ctx context.Context, depth int) error {
+	sc.Step(`^the limits let one session declare (\d+) jobs$`, func(ctx context.Context, many int) error {
 		w := worldFrom(ctx)
 		held, err := w.client.GetWorkspaceLimits(ctx, &quaycrewv1.GetWorkspaceLimitsRequest{
 			Workspace: w.workspaceID,
@@ -83,8 +83,8 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		if got := held.GetLimits().GetMaxDepth(); got != int32(depth) {
-			return fmt.Errorf("the workspace allows depth %d, want %d", got, depth)
+		if got := held.GetLimits().GetMaxDeclared(); got != int32(many) {
+			return fmt.Errorf("the workspace lets one session declare %d jobs, want %d", got, many)
 		}
 		return nil
 	})
@@ -135,25 +135,7 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// The job the session declared is itself a job, so the system mints a credential for it
-	// the same way, and that credential is what declares one level deeper.
-	sc.Step(`^the job at depth (\d+) declares another$`, func(ctx context.Context, depth int) error {
-		scenario := capabilityFrom(ctx)
-		if len(scenario.declared) == 0 {
-			return fmt.Errorf("this scenario declared nothing at depth %d", depth)
-		}
-		deeper := scenario.declared[len(scenario.declared)-1]
-		if deeper.GetDepth() != int32(depth) {
-			return fmt.Errorf("the job is at depth %d, want %d", deeper.GetDepth(), depth)
-		}
-		token, minted := worldFrom(ctx).server.JobCredentialForTest(ctx, deeper.GetId())
-		if !minted {
-			return fmt.Errorf("the system minted no credential for the job at depth %d", depth)
-		}
-		return declareCarrying(ctx, token, "write a test")
-	})
-
-	sc.Step(`^the new job hangs under the job that declared it, one level deeper$`, func(ctx context.Context) error {
+	sc.Step(`^the new job records the job that declared it as its cause$`, func(ctx context.Context) error {
 		scenario := capabilityFrom(ctx)
 		if worldFrom(ctx).lastErr != nil {
 			return fmt.Errorf("the declaration was refused: %w", worldFrom(ctx).lastErr)
@@ -162,16 +144,36 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("nothing was declared")
 		}
 		newest := scenario.declared[len(scenario.declared)-1]
-		if newest.GetParent() == "" {
-			return fmt.Errorf("the job has no parent, so nothing bounds how deep it goes")
+		if newest.GetCause() != scenario.running {
+			return fmt.Errorf("the new job says %q caused it, want the job the session is running %q",
+				newest.GetCause(), scenario.running)
 		}
-		parent, err := worldFrom(ctx).client.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: newest.GetParent()})
+		if newest.GetRun() != "" {
+			return fmt.Errorf("the new job is a step of run %q, and no run declared it", newest.GetRun())
+		}
+		return nil
+	})
+
+	// The cause is a plain reference and never containment, so both rows stand in the project's
+	// listing. A job folded away under another is the shape this whole change took out.
+	sc.Step(`^the new job is listed in the project beside the job that declared it$`, func(ctx context.Context) error {
+		scenario := capabilityFrom(ctx)
+		w := worldFrom(ctx)
+		if len(scenario.declared) == 0 {
+			return fmt.Errorf("nothing was declared")
+		}
+		newest := scenario.declared[len(scenario.declared)-1]
+		listed, err := w.client.ListJobs(ctx, &quaycrewv1.ListJobsRequest{Project: w.projectID})
 		if err != nil {
 			return err
 		}
-		if newest.GetDepth() != parent.GetJob().GetDepth()+1 {
-			return fmt.Errorf("the job is at depth %d under job at depth %d",
-				newest.GetDepth(), parent.GetJob().GetDepth())
+		held := map[string]bool{}
+		for _, one := range listed.GetJobs() {
+			held[one.GetId()] = true
+		}
+		if !held[newest.GetId()] || !held[scenario.running] {
+			return fmt.Errorf("the project lists %d jobs, want both the job that declared and the one it declared",
+				len(listed.GetJobs()))
 		}
 		return nil
 	})
@@ -181,7 +183,7 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 	})
 
 	sc.Step(`^the system refuses it and names the limit and the command that raises it$`, func(ctx context.Context) error {
-		for _, want := range []string{"no deeper than", "krewe limits"} {
+		for _, want := range []string{"declared 1 already", "krewe limits"} {
 			if err := theRefusalSays(want)(ctx); err != nil {
 				return err
 			}
@@ -205,7 +207,7 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 	sc.Step(`^that session tries to raise the ceiling$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		_, w.lastErr = asTheSession(ctx).SetWorkspaceLimits(ctx, &quaycrewv1.SetWorkspaceLimitsRequest{
-			Limits: &quaycrewv1.WorkspaceLimits{Workspace: w.workspaceID, MaxDepth: 9},
+			Limits: &quaycrewv1.WorkspaceLimits{Workspace: w.workspaceID, MaxDeclared: 9},
 		})
 		return nil
 	})
@@ -420,14 +422,14 @@ func initializeCapabilitySteps(sc *godog.ScenarioContext) {
 }
 
 // setLimits writes the workspace's ceiling as the operator.
-func setLimits(ctx context.Context, depth int32) error {
+func setLimits(ctx context.Context, many int32) error {
 	w := worldFrom(ctx)
 	held, err := w.client.GetWorkspaceLimits(ctx, &quaycrewv1.GetWorkspaceLimitsRequest{Workspace: w.workspaceID})
 	if err != nil {
 		return err
 	}
 	asked := held.GetLimits()
-	asked.MaxDepth = depth
+	asked.MaxDeclared = many
 	_, err = w.client.SetWorkspaceLimits(ctx, &quaycrewv1.SetWorkspaceLimitsRequest{Limits: asked})
 	w.lastErr = err
 	return err

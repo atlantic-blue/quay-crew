@@ -139,10 +139,13 @@ func TestWhoOwesAReadingAndWhoDoesNot(t *testing.T) {
 		{"a job at the top that states the sentence",
 			&job.Job{Product: "you paste a link and get the text back"}, true},
 		{"an errand, which states no sentence", &job.Job{Title: "read the bill"}, false},
-		// A child is one part of a plan a person already approved. Stopping at every job in a tree puts
-		// them back in the loop for all of them, which is the cost the system exists to remove.
-		{"a job declared under another",
-			&job.Job{Product: "you paste a link and get the text back", Parent: "parent-job"}, false},
+		// A step of a flow run follows the graph a person imported. Stopping at every node puts them
+		// back in the loop for all of them, which is the cost the system exists to remove.
+		{"a step of a flow run",
+			&job.Job{Product: "you paste a link and get the text back", Run: "a-run"}, false},
+		// And a job a session declared is a job like any other: what caused it changes nothing.
+		{"a job a session declared",
+			&job.Job{Product: "you paste a link and get the text back", Cause: "the-job-above"}, true},
 		{"a job whose reading a person answered",
 			&job.Job{Product: "you paste a link and get the text back", Ideation: "Understood: a page",
 				IdeationAnswer: "1: on the command line"}, false},

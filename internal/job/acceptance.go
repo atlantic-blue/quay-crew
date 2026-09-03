@@ -77,7 +77,7 @@ func WaitingForItsAcceptance(one *Job) bool {
 // reaches done one way, which is a person accepting them, and every other road into done on such a
 // row is a session settling its own work.
 func NotYetAccepted(one *Job) bool {
-	return one != nil && one.Parent == "" && Built(one) && !Accepted(one)
+	return one != nil && Built(one) && !Accepted(one)
 }
 
 // SentBackToBuild says whether the workers already on this vertical answered before a person looked at what

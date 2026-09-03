@@ -1,10 +1,12 @@
 package console
 
 import (
+	"strings"
 	"testing"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/display"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -110,5 +112,32 @@ func TestTheListingShowsTheNameAndFallsBackToTheIdentifier(t *testing.T) {
 	// The name cell itself does not fall back at all: it is empty until somebody names the session.
 	if got := display.SessionLabel(bare); got != "" {
 		t.Errorf("the name cell of an unnamed session says %q, want nothing", got)
+	}
+}
+
+// Two keys type into the same line and they disagree about what an empty one means. Naming clears a
+// name; answering a job is refused, so the hint must not offer to clear anything there.
+func TestTheLineSaysWhatAnEmptyOneDoesOnThisKey(t *testing.T) {
+	naming := aSessionNamed(t, &fakeClient{}, "")
+	naming, _ = update(t, naming, runes("L"))
+	if drawn := naming.View(); !strings.Contains(drawn, "empty clears it") {
+		t.Fatalf("naming a session does not say an empty line clears the name:\n%s", drawn)
+	}
+
+	client := &jobClient{jobs: []*quaycrewv1.Job{
+		aJob("1111111111111111aaaaaaaa", job.PhaseAsking, func(one *quaycrewv1.Job) {
+			one.Question = "which meter?"
+		}),
+	}}
+	answering := newTestModel(t, Jobs(client))
+	answering, _ = update(t, answering, rowsFor(answering, jobRow(client.jobs[0])))
+	answering, _ = update(t, answering, runes("a"))
+
+	drawn := answering.View()
+	if strings.Contains(drawn, "clears") {
+		t.Fatalf("the answer line offers to clear something, and an empty answer is refused:\n%s", drawn)
+	}
+	if !strings.Contains(drawn, "enter accepts") {
+		t.Fatalf("the answer line does not say what enter does:\n%s", drawn)
 	}
 }

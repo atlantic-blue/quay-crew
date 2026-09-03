@@ -36,9 +36,10 @@ const (
 	// where the command bar draws, rather than a floating window: the console has no overlay
 	// machinery and this does not need any.
 	modeConfirm
-	// modeOutput is what a command printed, over the rows, scrolled and closed like the help
-	// overlay because it is the same kind of thing: something to read.
-	modeOutput
+	// modeReading is text over the rows, scrolled and closed like the help overlay because it is the
+	// same kind of thing: something to read. What a command printed arrives here, and so does the
+	// whole of a row whose cells hold a fragment of it.
+	modeReading
 	// modeWizard is making something: a workspace, a project, and whatever else was offered along the
 	// way. Nothing is made until the last step, so leaving it creates nothing.
 	modeWizard
@@ -248,12 +249,15 @@ type Model struct {
 	waiting  pending
 	// making is what the wizard has been told so far, and client is what it will ask.
 	making wizard
-	// runCommand runs a krewe command typed into the bar, and the three below are what it said.
-	// Nil in a console that cannot run one, which says so rather than doing nothing.
-	runCommand    CommandRunner
-	commandTyped  string
-	commandOutput []string
-	commandTop    int
+	// runCommand runs a krewe command typed into the bar. Nil in a console that cannot run one,
+	// which says so rather than doing nothing.
+	runCommand CommandRunner
+	// The three below are what is being read over the rows: the title of it, its lines, and how far
+	// down them the panel is scrolled. What a command printed is one of these, and what a row is
+	// about is the other.
+	readingTitle string
+	reading      []string
+	readingTop   int
 	// offeredSetup says the guided setup has had its one chance this run, so an emptied listing
 	// later cannot reopen it over whatever the operator is doing.
 	offeredSetup bool
