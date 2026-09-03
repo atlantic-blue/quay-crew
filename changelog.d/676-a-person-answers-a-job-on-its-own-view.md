@@ -14,3 +14,6 @@ answered is looking for their answer.
 two. It answers the job the view is open on rather than the line under the cursor, because the lines
 here are the runs working under the job and a run has no question. A job that is not asking says so
 before the line opens, and an empty answer is refused.
+
+A run drawn beneath a job in the listing is not a job. Enter on one of those rows still opens what
+that run did, because a run is one session working on one part of the job.

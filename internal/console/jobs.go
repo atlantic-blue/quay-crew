@@ -71,6 +71,16 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		// refused a job that had reached no session at all: the row somebody watches most is the row
 		// it would not open. What that session ran is a level below the job now.
 		DrillTo: "onejob",
+		// A run drawn beneath a job is not a job: it is one session working on one part of it, and
+		// enter on it keeps opening what that session did. The two rows are one keystroke apart in
+		// the same listing.
+		DrillWhere: func(row Row) string {
+			if row.Under != "" {
+				return "exec"
+			}
+			return "onejob"
+		},
+		DrillBy: scopeOfJobRow,
 		Actions: []Action{
 			{
 				// A job that fans out has one part for each requirement, and all of them used to be
@@ -128,6 +138,25 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			return rows, nil
 		},
 	}
+}
+
+// scopeOfJobRow is what enter opens each kind of row on, scoped by.
+//
+// A job is scoped by itself: what opens under it is the job. A run drawn beneath a job is scoped by
+// the session it works in, because what opens under it is what that one session did, and a run that
+// has reached no session yet says so rather than opening an empty listing.
+func scopeOfJobRow(row Row) (string, error) {
+	if row.ID == "" {
+		return "", fmt.Errorf("no job selected")
+	}
+	if row.Under == "" {
+		return row.ID, nil
+	}
+	if row.Parent == "" {
+		return "", fmt.Errorf("%s is %s, so there is nothing it has done yet: a job reaches a session when a controller starts it",
+			display.ShortID(row.ID), phaseOfRow(row))
+	}
+	return row.Parent, nil
 }
 
 // answerAJob is the key that tells a job that stopped for a person what to do. A job that stops rings
