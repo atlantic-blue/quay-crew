@@ -477,10 +477,11 @@ a job under another is never asked, and an errand has nothing to be read against
 
 **`ideation`, text, written by the controller.** What the session said it understood, in the system's
 own rendering rather than as the reply: what the work is, what it is not, what it was told, what it
-assumed, what it does not know, how sure it is, and the questions it cannot answer for itself. Each
-line is held to the title's ceiling, each list to five lines, at most five questions, and the whole
-record to `job.IdeationLimit`, because the record is put to a person as one question and a question
-has its own ceiling.
+assumed, what it does not know, how sure it is, and the questions it cannot answer for itself. The
+line, the paragraph, each list and the whole record carry a guide a session is asked to write to.
+Nothing is held to any of them. A reading over a guide is kept word for word, and a line above it
+says which part is long and by how much: a reading is as long as the work needs, and the person who
+asked for it reads it whole.
 
 **`ideation_answer`, text, written by the control plane.** What the person wrote, whole and
 unrewritten. There is no flag beside it, which is where this differs from the plan: an approval is one

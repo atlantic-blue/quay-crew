@@ -11,6 +11,13 @@ import (
 // A job that states the sentence says what it understood before it writes a plan, and a person
 // answers in their own words.
 //
+// The reading is as long as the work needs. The three numbers below are guides a session is asked to
+// write to, and no longer ceilings the reader refuses text at: a reading over one of them is kept
+// word for word and reaches the person who asked for it. Job a3d72b11 wrote a correct 859 byte
+// reading against a guide of 600, and the reading was refused, asked for a second time, and the job
+// was stopped with nobody having read a word of it. Ten million tokens went to that job and nothing
+// was delivered. The length of a reading belongs to the person who reads it.
+//
 // The plan gate already stops a job before any work, and it stopped it one step too late. The
 // session read a sentence, read a brief, and wrote seven steps out of whatever it had made of the
 // two. Nobody was ever asked what the sentence meant, so the plan was the session marking its own
@@ -27,16 +34,18 @@ import (
 // prose, the prose is kept whole, and the plan is then written against it. A question the answer
 // leaves untouched stays unknown rather than becoming an assumption nobody made.
 const (
-	// IdeationQuestions is how many questions one of these may carry.
+	// IdeationQuestions is how many questions one of these is expected to carry.
 	//
-	// Low for the reason the plan's ceiling is low: a person reads this in a terminal while doing
+	// Low for the reason the plan's guide is low: a person reads this in a terminal while doing
 	// something else, and a list of fifteen questions is a list nobody answers. Five is chosen rather
 	// than measured. What replaces it is the distribution of questions a person actually answers,
 	// which the record now holds: after fifty of these, the ninety fifth percentile of questions
 	// answered is the number.
+	//
+	// A sixth question is kept and warned about, because the sixth one is worth reading.
 	IdeationQuestions = 5
-	// IdeationPoints is how many lines each of the lists may carry: what was told, what was assumed,
-	// and what is not known.
+	// IdeationPoints is how many lines each of the lists is expected to carry: what was told, what
+	// was assumed, and what is not known. A sixth line is kept and warned about too.
 	IdeationPoints = 5
 	// IdeationLineLimit is the guide for one of those lines. It is the title's guide, because both are
 	// one line a person reads.
@@ -185,6 +194,10 @@ func numbersAsked(questions []IdeationQuestion) string {
 }
 
 // readable is every rule the record is held to, in one place, and the refusal that teaches the shape.
+//
+// Shape rather than size. Each rule here is about something a reader cannot work with at all: a
+// record with no understanding in it, a record that excludes nothing, a record that asks a person
+// nothing. Length is not one of them, because text a person can read is text the system keeps.
 func (one Ideation) readable() error {
 	switch {
 	case one.Understood == "":
