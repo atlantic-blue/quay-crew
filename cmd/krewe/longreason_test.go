@@ -25,6 +25,10 @@ const theWidthAReasonIsDrawnIn = 40
 // character the claim column already cuts with.
 const theMarkOfMoreText = "…"
 
+// enoughOfATextToFindItAgain is the shortest run of a text this file will accept as that text on a
+// row. A shorter run can be a coincidence of the other columns.
+const enoughOfATextToFindItAgain = 8
+
 // theReasonAJobStoppedOn is what an operator types when the cause takes a sentence. It is 87
 // characters, so the row draws 39 of them and no more.
 func theReasonAJobStoppedOn() string {
@@ -80,6 +84,57 @@ func TestAReasonThatFitsTheColumnIsDrawnWholeAndUnmarked(t *testing.T) {
 	if strings.Contains(row, theMarkOfMoreText) {
 		t.Errorf("the row is:\n%s\nand it says the reason goes on, and %q is all of it", row, reason)
 	}
+}
+
+// The mark on a cut reason is the mark the claim column cuts with. The two columns sit beside each
+// other on the one row, so a row that cuts a claim with one character and a reason with another
+// reads as two different kinds of cut, and a person learns the mark twice.
+//
+// Neither cut is counted here. Each mark is read off the row itself, so this test holds an opinion
+// about the two agreeing and no opinion about where either column ends.
+func TestAReasonIsCutWithTheMarkTheClaimColumnCutsWith(t *testing.T) {
+	claim := "atlantic-blue/quay-krewe#675 the row says why the job stopped"
+	reason := theReasonAJobStoppedOn()
+	client := aSystemToJobIn(t)
+	said := mustRun(t, client, "job", "create", "--title", "read the electricity bill",
+		"--brief", "open the bill and say when it is due", "--claim", claim)
+	id := strings.Fields(said)[1]
+	mustRun(t, client, "job", "stop", id, reason)
+
+	row := theRowFor(t, mustRun(t, client, "job", "list"), "read the electricity bill")
+
+	onTheClaim := theMarkTheRowCutWith(t, row, claim)
+	onTheReason := theMarkTheRowCutWith(t, row, reason)
+	if onTheReason != onTheClaim {
+		t.Errorf("the row is:\n%s\nand it cuts the claim with %q and the reason with %q",
+			row, onTheClaim, onTheReason)
+	}
+}
+
+// theMarkTheRowCutWith is the character a row put after a text it drew part of. It takes the longest
+// run of the text the row carries and reads the character that follows it, so it says where the row
+// stopped without being told where that should be.
+func theMarkTheRowCutWith(t *testing.T, row, text string) string {
+	t.Helper()
+	if strings.Contains(row, text) {
+		t.Fatalf("the row is:\n%s\nand it carries the whole of %q, so nothing on it was cut", row, text)
+	}
+	letters := []rune(text)
+	for n := len(letters) - 1; n >= enoughOfATextToFindItAgain; n-- {
+		part := string(letters[:n])
+		at := strings.Index(row, part)
+		if at < 0 {
+			continue
+		}
+		after := []rune(row[at+len(part):])
+		if len(after) == 0 {
+			t.Fatalf("the row is:\n%s\nand it ends on %q, with nothing to say the text goes on", row, part)
+		}
+		return string(after[0])
+	}
+	t.Fatalf("the row is:\n%s\nand no run of %q reaches it, so the row does not draw that text at all",
+		row, text)
+	return ""
 }
 
 // A reason with a line break in it reads as one line. The server writes its own words when nobody
@@ -143,15 +198,16 @@ func theRowFor(t *testing.T, listed, title string) string {
 // changelog.d/647-every-length-cap-and-what-it-became.md, and the tests in internal/job hold the
 // list to every cap the source declares.
 func TestTheCapListNamesTheWidthAReasonIsDrawnIn(t *testing.T) {
-	list := theCapList(t)
+	entries := theEntriesOfTheCapList(t)
 
-	entry := ""
-	for _, line := range strings.Split(list, "\n") {
-		if strings.Contains(line, "cmd/krewe/job.go") && strings.Contains(line, "reason") {
-			entry = line
-			break
-		}
+	// The reader is proved on the column beside this one, which the list already names. A reader
+	// that finds nothing at all would otherwise report the same thing as a list with no entry.
+	if theEntryNaming(entries, "cmd/krewe/job.go", "claimWidth") == "" {
+		t.Fatalf("this reading of the cap list finds %d entries and none of them is claimWidth, "+
+			"which the list already carries, so the reading is wrong", len(entries))
 	}
+
+	entry := theEntryNaming(entries, "cmd/krewe/job.go", "reason")
 	if entry == "" {
 		t.Fatalf("the cap list says nothing about the width a reason is drawn in, in cmd/krewe/job.go")
 	}
@@ -160,6 +216,38 @@ func TestTheCapListNamesTheWidthAReasonIsDrawnIn(t *testing.T) {
 			t.Errorf("the cap list entry reads %q, and it does not say %q", entry, want)
 		}
 	}
+}
+
+// theEntryNaming is the one entry of the list that names a file and a word.
+func theEntryNaming(entries []string, file, word string) string {
+	for _, one := range entries {
+		if strings.Contains(one, file) && strings.Contains(one, word) {
+			return one
+		}
+	}
+	return ""
+}
+
+// theEntriesOfTheCapList reads the list as entries rather than as lines. One entry is one cap: it
+// starts at a bullet and runs to the blank line or the next bullet, because the prose in that
+// document wraps, and a cap's number and its marking can sit on the second line of its own entry.
+func theEntriesOfTheCapList(t *testing.T) []string {
+	t.Helper()
+	var entries []string
+	running := false
+	for _, line := range strings.Split(theCapList(t), "\n") {
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "- "):
+			entries = append(entries, trimmed)
+			running = true
+		case trimmed == "":
+			running = false
+		case running:
+			entries[len(entries)-1] += " " + trimmed
+		}
+	}
+	return entries
 }
 
 // theCapList is the document that names every length cap in this system.
