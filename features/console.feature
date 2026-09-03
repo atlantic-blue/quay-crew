@@ -462,6 +462,14 @@ Feature: The operator sees the system from the console
     And the operator presses enter on the selected job
     Then the console shows what the job's session was asked
 
+  # A row of this listing is nine cells, a brief is a paragraph, and the answer is not in a listing
+  # at all. Enter opens the job, and the page reads that job: the brief and the answer are on it
+  # whole, which a page built out of the row could not do.
+  Scenario: Enter on a job reads the brief and the answer whole
+    Given a job titled "put a conversation on a page" that answered "the bill is due on the 14th, and the standing charge moved in March"
+    When the operator opens that job in the console
+    Then the console shows that job's brief and answer whole
+
   # A job with nothing behind it yet is the case enter has to refuse, and the refusal names the phase,
   # so it says why rather than only that it will not.
   Scenario: Enter on a job with no session yet says why

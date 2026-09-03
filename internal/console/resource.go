@@ -8,6 +8,9 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // State is how a row is doing, so the console can colour it without knowing what the row is.
@@ -175,6 +178,11 @@ type Action struct {
 	// anything to the system. It is the way onto a part: the listing holds the work a person
 	// declared, and this is how the parts of one job are read without the other jobs losing theirs.
 	Folds bool
+	// DescendBy is the identifier this key's child is scoped by, when it is not the one the view
+	// descends by. The jobs listing is the case: enter goes down into the conversations running under
+	// a job, which is scoped by the job, and the key for what the job did is scoped by the one
+	// conversation the job runs in. Nil takes the view's own DrillBy.
+	DescendBy func(row Row) (string, error)
 	// Descend opens another resource scoped to the selected row, the way enter does where a view has
 	// somewhere to drill into. It exists because a session already spends enter on opening the
 	// conversation, which is the thing an operator does most, and a history is worth a key of its own
@@ -223,6 +231,17 @@ type Resource struct {
 	// view is the one so far: eighteen rows of megabytes never said what the machine had left.
 	Summary Summariser
 	Actions []Action
+	// Opens is what enter reads on this view, for a view where the row itself is what a person asked
+	// for rather than a level under it. Jobs is the case: the row is nine cells, and the brief, every
+	// question with the answer it got, the plan, the build record and the answer are all somewhere
+	// else.
+	//
+	// It is handed the system rather than the row alone, because what it reads is fetched: the
+	// listing behind it is up to three seconds old and a person opens a job for the field that just
+	// changed. A nil command is a row this view does not open, and enter then descends into it the
+	// way it does everywhere else: a part of a job is a run rather than a job, and has no record of
+	// its own. Nil leaves every row to DrillTo, which is every other view.
+	Opens func(client quaycrewv1.ControlPlaneServiceClient, row Row) tea.Cmd
 	// DrillTo is the resource enter descends into, scoped to the selected row. Empty means enter
 	// does nothing here.
 	DrillTo string

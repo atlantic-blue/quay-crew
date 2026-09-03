@@ -57,6 +57,8 @@ func (m Model) routeKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.updateWizardKey(msg)
 	case modeReading:
 		return m.updateReadingKey(msg)
+	case modeJob:
+		return m.updateJobRecordKey(msg)
 	case modeHelp:
 		// Moving scrolls it, because it is taller than a short window. Any other key closes it, and
 		// nothing in here acts on anything, so there is nothing to get wrong.
@@ -147,6 +149,9 @@ func (m Model) updateBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		// Enter descends where there is somewhere to descend to, and otherwise does whatever this
 		// view has bound to it. On a list of conversations that is opening the one under the cursor,
 		// which is the obvious meaning of the key and the reason it used to do nothing at all.
+		if next, cmd, opened := m.open(); opened {
+			return next, cmd
+		}
 		if m.active.DrillTo != "" {
 			return m.drill()
 		}
@@ -381,6 +386,9 @@ func (m Model) perform(action Action, row Row) (Model, tea.Cmd) {
 		return m.fold(row), nil
 	}
 	if action.Descend != "" {
+		if action.DescendBy != nil {
+			return m.descendScoped(action.Descend, row, action.DescendBy)
+		}
 		return m.descendInto(action.Descend, row)
 	}
 	if action.Conversation {
@@ -471,6 +479,28 @@ func runCmd(action Action, row Row) tea.Cmd {
 	}
 }
 
+// open reads the row under the cursor, for a view where what a person pointed at is the thing they
+// want rather than a level under it. A job is the case: the row is nine cells and what the job holds
+// is a page.
+func (m Model) open() (Model, tea.Cmd, bool) {
+	if m.active.Opens == nil {
+		return m, nil, false
+	}
+	row, hasRow := m.selectedRowValue()
+	if !hasRow {
+		return m, nil, false
+	}
+	// The system the console is connected to is handed over, rather than the one the view lists
+	// through, because this reads one row again rather than the listing.
+	cmd := m.active.Opens(m.client, row)
+	if cmd == nil {
+		// A row this view does not open, on a view that opens most of them: a part of a job is a run
+		// rather than a job, so enter goes down into it the way it always did.
+		return m, nil, false
+	}
+	return m, cmd, true
+}
+
 // drill descends into the selected row's child resource, remembering where to come back to.
 func (m Model) drill() (Model, tea.Cmd) {
 	if m.active.DrillTo == "" {
@@ -498,6 +528,12 @@ func (m Model) drillFor(row Row) string {
 // descendInto opens a resource scoped to one row, remembering where to come back to. It is what both
 // enter and a key bound to Descend do, so escape behaves the same however you got there.
 func (m Model) descendInto(name string, row Row) (Model, tea.Cmd) {
+	return m.descendScoped(name, row, m.active.DrillBy)
+}
+
+// descendScoped is the same, with the identifier the child is narrowed by named by whatever asked for
+// it. A key that goes somewhere the view does not brings its own.
+func (m Model) descendScoped(name string, row Row, by func(row Row) (string, error)) (Model, tea.Cmd) {
 	// What the child is scoped by, which is the row itself everywhere except jobs: a job descends
 	// into the conversations running under it, and a job that has reached none says so rather than
 	// opening an empty listing under a heading that promises one.
@@ -505,8 +541,8 @@ func (m Model) descendInto(name string, row Row) (Model, tea.Cmd) {
 	// The row is asked before the view is looked up, because a refusal about the row is the one a
 	// person can act on.
 	scope := row.ID
-	if m.active.DrillBy != nil {
-		narrowed, err := m.active.DrillBy(row)
+	if by != nil {
+		narrowed, err := by(row)
 		if err != nil {
 			m.err = err
 			return m, nil
