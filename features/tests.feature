@@ -84,6 +84,32 @@ Feature: The requirements a person accepted become failing tests before anything
     Then the job is asking, and the row carries no failing tests
     And the question says nothing failed
 
+  # The number is on the row. The stage wrote it when it made the run, so asking the worker for it
+  # buys nothing and costs a report: on 3 September 2026 seven of eleven workers were refused for a
+  # line they left out or wrote the number two on, because the refusal said "Requirement: 2" whatever
+  # requirement the run was for.
+  Scenario: A worker is asked for its run and never for the number its row holds
+    Given a job whose list of 2 verticals a person accepted
+    When the controller ticks
+    Then no worker is asked which requirement it holds
+    When every worker answers with its run
+    Then no worker named a requirement in its report
+    When the controller ticks again
+    Then the row carries a failing test for every requirement
+    And every failure says which requirement it came from
+
+  # A reply is not a source of truth about which requirement it is for. The tests stay under the
+  # requirement the row holds, and the disagreement is said out loud where a person reads it.
+  Scenario: A worker that names another requirement is recorded as a fault
+    Given a job whose list of 2 verticals a person accepted
+    And the worker for requirement 1 will answer naming requirement 2
+    When the controller ticks
+    And every worker answers with its run
+    And the controller ticks again
+    Then the row carries a failing test for every requirement
+    When the caller reads that job back through the tool
+    Then the reading says the run holding requirement 1 named requirement 2
+
   Scenario: A requirement whose worker died stops the job for a person
     Given a job whose list of 2 verticals a person accepted
     When the controller ticks

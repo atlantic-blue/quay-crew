@@ -138,10 +138,9 @@ const (
 
 // FakeTestReport is what this double says when it is asked for the failing tests of one requirement.
 //
-// It reads the requirement number out of the task rather than stating one, because the stage refuses
-// a report filed against a requirement its worker does not hold. A double that always said the same
-// number would be refused for every worker but the first, and every test about a fan out would become
-// a test about the double ignoring its task.
+// It names no requirement on a report line, because the stage no longer asks for one: it reads that
+// number off the run. What the double reads out of the task is which requirement it was handed, and
+// it uses that for the test it names and for the branch its work goes to.
 func FakeTestReport(asked string) string {
 	requirement := 1
 	if found := whichRequirement.FindStringSubmatch(asked); found != nil {
@@ -149,8 +148,8 @@ func FakeTestReport(asked string) string {
 	}
 	return namingWhereTheWorkWent(fmt.Sprintf(
 		"I wrote the tests for requirement %d and ran the suite.\n\n"+
-			"Requirement: %d\nRan: 12\nFailing 1: TestRequirement%dFailsUntilSomethingBuildsIt",
-		requirement, requirement, requirement), asked, requirement)
+			"Ran: 12\nFailing 1: TestRequirement%dFailsUntilSomethingBuildsIt",
+		requirement, requirement), asked, requirement)
 }
 
 // namingWhereTheWorkWent ends a report the way a session that read its task ends one: a task that
@@ -195,11 +194,10 @@ const (
 
 // FakeBuildReport is what this double says when it is asked to build one vertical.
 //
-// It reads the vertical and the failing tests out of the task rather than stating either, because the
-// stage refuses a report filed against a vertical its worker does not hold, and refuses one that does
-// not name the tests that were failing. A double that always said the same thing would be refused for
-// every worker but the first, and every test about a fan out would become a test about the double
-// ignoring its task.
+// It names no vertical on a report line, because the stage no longer asks for one: it reads that
+// number off the run. It does read the vertical and the failing tests out of the task, because the
+// stage refuses a report that does not name the tests that were failing, and a double that always
+// named the same tests would be refused for every worker but the first.
 func FakeBuildReport(asked string) string {
 	vertical := 1
 	if found := whichVertical.FindStringSubmatch(asked); found != nil {
@@ -213,9 +211,9 @@ func FakeBuildReport(asked string) string {
 		passing = []string{fmt.Sprintf("Passing 1: TestVertical%dPasses", vertical)}
 	}
 	return namingWhereTheWorkWent(fmt.Sprintf(
-		"I built vertical %d and ran the suite.\n\nVertical: %d\nRan: 14\nRed: 0\n%s\n"+
+		"I built vertical %d and ran the suite.\n\nRan: 14\nRed: 0\n%s\n"+
 			"Changed 1: internal/vertical%d.go\n%s",
-		vertical, vertical, strings.Join(passing, "\n"), vertical, fakeEvidence(asked, vertical)),
+		vertical, strings.Join(passing, "\n"), vertical, fakeEvidence(asked, vertical)),
 		asked, vertical)
 }
 

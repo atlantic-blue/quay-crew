@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -132,15 +134,15 @@ func TestASuiteThatRanNothingAndOneThatPassedAreBothRefused(t *testing.T) {
 	for _, one := range []struct {
 		name, reply, says string
 	}{
-		{"nothing ran", "Requirement: 1\nRan: 0\nFailing 1: TestNothing", "finds nothing to execute"},
-		{"nothing failed", "Requirement: 1\nRan: 12", "none of them failed"},
-		{"no requirement", "Ran: 12\nFailing 1: TestOne", "does not say which requirement"},
-		{"no run at all", "Requirement: 1\nFailing 1: TestOne", "how many tests the run executed"},
-		{"more failures than tests", "Requirement: 1\nRan: 1\nFailing 1: A\nFailing 2: B",
+		{"nothing ran", "Ran: 0\nFailing 1: TestNothing", "finds nothing to execute"},
+		{"nothing failed", "Ran: 12", "none of them failed"},
+		{"nothing about the run at all", "I wrote the tests", "how many tests the run executed"},
+		{"no run at all", "Failing 1: TestOne", "how many tests the run executed"},
+		{"more failures than tests", "Ran: 1\nFailing 1: A\nFailing 2: B",
 			"2 failing tests out of 1"},
 	} {
 		t.Run(one.name, func(t *testing.T) {
-			got, err := job.ReadTestReport(one.reply)
+			got, err := job.ReadTestReport(one.reply, 1)
 			if err == nil {
 				t.Fatalf("%q was read as a report of %+v", one.reply, got)
 			}
@@ -150,7 +152,7 @@ func TestASuiteThatRanNothingAndOneThatPassedAreBothRefused(t *testing.T) {
 		})
 	}
 
-	report, err := job.ReadTestReport(aReport(2))
+	report, err := job.ReadTestReport(aReport(2), 2)
 	if err != nil {
 		t.Fatalf("ReadTestReport: %v", err)
 	}
@@ -217,26 +219,169 @@ func TestTheRecordNamesTheRequirementEachFailureCameFrom(t *testing.T) {
 	}
 }
 
-// A run that wrote for a requirement it does not hold is refused. A report filed under the wrong
-// number would leave one requirement covered twice and another not at all.
-func TestARunThatReportedOnSomebodyElsesRequirementIsRefused(t *testing.T) {
+// The requirement a report is filed under comes off the run, so a report that names none is read
+// just the same. The stage wrote that number when it made the run, and the worker is asked for the
+// run instead: how many tests it executed, and which of them fail.
+func TestAReportThatNamesNoRequirementIsReadOffTheRow(t *testing.T) {
 	one := testingJob()
 	wanted := job.RequirementsOf(one)
 	runs := job.TestExecutions(one, wanted)
-	runs[0].Answer, runs[0].Phase = aReport(2), job.PhaseDone
+	// The report the ask now asks for, which names no requirement anywhere in it.
+	runs[1].Answer, runs[1].Phase = "I wrote the tests and ran the suite.\n\nRan: 9\n"+
+		"Failing 1: TestTheTranscriptPageRendersAtItsAddress", job.PhaseDone
 
-	report, why := job.ReportFrom(one, runs[:1], wanted[0])
-	if why == "" {
-		t.Fatalf("a run reporting on another requirement was read as %+v", report)
+	report, why := job.ReportFrom(one, runs[1:2], wanted[1])
+	if why != "" {
+		t.Fatalf("a report that names no requirement is refused: %s", why)
 	}
-	if !strings.Contains(why, "reported on requirement 2 instead") {
-		t.Fatalf("the refusal is %q", why)
+	if report.Requirement != 2 {
+		t.Fatalf("the report is filed under requirement %d, and the run it came from says 2",
+			report.Requirement)
+	}
+	if report.Ran != 9 || len(report.Failing) != 1 {
+		t.Fatalf("the report reads %+v", report)
+	}
+	if report.NamedAnotherRequirement() {
+		t.Fatal("a report that named no requirement reads as naming another one")
+	}
+
+	// And the ask is what makes that true of a real worker: nothing in it asks for the number.
+	asked := job.WriteFailingTests(one, wanted[1])
+	for _, line := range []string{"Requirement: 2", "Requirement: <n>", "the number of the requirement"} {
+		if strings.Contains(asked, line) {
+			t.Fatalf("the worker is asked for %q, which the row already holds:\n%s", line, asked)
+		}
+	}
+	for _, needed := range []string{"Ran: how many tests the run executed", "Failing 1:"} {
+		if !strings.Contains(asked, needed) {
+			t.Fatalf("the worker is not asked for %q:\n%s", needed, asked)
+		}
 	}
 
 	// And a requirement nothing has written for is named rather than passed over.
 	if _, why := job.ReportFrom(one, nil, wanted[1]); !strings.Contains(why, "nothing has written its tests") {
 		t.Fatalf("a requirement with no run reads %q", why)
 	}
+}
+
+// A reply that names a requirement the row does not is a fault a person reads in the record. It does
+// not move the tests to that other requirement: the row is what the stage wrote, and a report filed
+// under a number a worker typed would leave one requirement covered twice and another not at all.
+func TestAReplyNamingAnotherRequirementIsAFaultAndNotASourceOfTruth(t *testing.T) {
+	one := testingJob()
+	wanted := job.RequirementsOf(one)
+	runs := job.TestExecutions(one, wanted)
+	if runs[0].Number != 1 {
+		t.Fatalf("the run of the first requirement carries number %d", runs[0].Number)
+	}
+	runs[0].Answer, runs[0].Phase = aReport(2), job.PhaseDone
+
+	report, why := job.ReportFrom(one, runs[:1], wanted[0])
+	if why != "" {
+		t.Fatalf("a run whose reply named another requirement is refused: %s", why)
+	}
+	if report.Requirement != 1 {
+		t.Fatalf("the report is filed under requirement %d, and the run it came from says 1",
+			report.Requirement)
+	}
+	if report.Named != 2 || !report.NamedAnotherRequirement() {
+		t.Fatalf("the report reads %+v, want it to hold the requirement the reply named as a fault",
+			report)
+	}
+
+	// What a person reads: the failing test stays under requirement 1, and the record says out loud
+	// that the run's own words disagreed with its row.
+	kept := job.TestsText(one, wanted[:1], map[int]job.TestReport{1: report})
+	for _, line := range []string{
+		"Requirement 1: " + wanted[0].Text,
+		"Fails 1: TestRequirement2FailsUntilItIsBuilt",
+		"Fault 1: the run holding this requirement named requirement 2 in its report, and the row it " +
+			"ran under says 1",
+	} {
+		if !strings.Contains(kept, line) {
+			t.Fatalf("the record is %q, want it to carry %q", kept, line)
+		}
+	}
+	if strings.Contains(kept, "Requirement 2:") || strings.Contains(kept, "Fails 2:") {
+		t.Fatalf("the record filed this run's tests under requirement 2: %q", kept)
+	}
+	// The fault is a line for a person and not a requirement or a failure, so the size of the record
+	// does not move.
+	if requirements, failing := job.TestsOn(kept); requirements != 1 || failing != 1 {
+		t.Fatalf("the record reads as %d requirements and %d failing tests", requirements, failing)
+	}
+	// And the stage closes on it. The tests are red for requirement 1, which is what this stage is for.
+	if err := job.TestsRed(wanted[:1], map[int]job.TestReport{1: report}); err != nil {
+		t.Fatalf("a red suite whose worker misnamed its requirement is refused: %v", err)
+	}
+}
+
+// Every example in a refusal carries the run's own number, and no refusal fabricates one. A worker on
+// requirement 4 that is told to write the number two is told something wrong, and it is right to be
+// confused: seven of eleven workers were refused for this on 3 September 2026.
+func TestNoRefusalNamesANumberThatIsNotTheRunsOwn(t *testing.T) {
+	one := testingJob()
+	one.Design = "Vertical 1: a person pastes a link and gets the text back\n" +
+		"Shown 1: the transcript prints in the terminal for a link the person chooses\n" +
+		"Vertical 2: a person opens that transcript in a browser and shares the address\n" +
+		"Shown 2: the page renders the transcript at an address the person can send on\n" +
+		"Vertical 3: a person searches their own transcripts for a phrase\n" +
+		"Shown 3: the matches print with the link each one came from\n" +
+		"Vertical 4: a person exports a transcript as a file they can keep\n" +
+		"Shown 4: the file lands in the folder the person chose and opens\n"
+	wanted := job.RequirementsOf(one)
+	if len(wanted) != 4 {
+		t.Fatalf("the list reads as %d requirements, want 4", len(wanted))
+	}
+	// The fourth, because a run for requirement 4 that is told to write the number two is the fault
+	// this measures: a literal in the refusal reads as an instruction.
+	fourth := wanted[3:]
+	if fourth[0].Number != 4 {
+		t.Fatalf("the fourth requirement is numbered %d", fourth[0].Number)
+	}
+
+	// Every shape of reply this stage refuses, read for a run that holds requirement 4.
+	for _, reply := range []string{
+		"I wrote the tests", "Ran: 0\nFailing 1: TestOne", "Ran: 12", "Ran: lots\nFailing 1: TestOne",
+		"Ran: 1\nFailing 1: A\nFailing 2: B",
+	} {
+		runs := job.TestExecutions(one, fourth)
+		runs[0].Answer, runs[0].Phase = reply, job.PhaseDone
+		_, why := job.ReportFrom(one, runs, fourth[0])
+		if why == "" {
+			t.Fatalf("%q was read as a report", reply)
+		}
+		// What a person is actually handed, which is the question the stage puts to them.
+		asked := job.NoRedSuite(why)
+		if !strings.Contains(asked, "requirement 4") {
+			t.Fatalf("the question does not say which requirement it is about:\n%s", asked)
+		}
+		for _, number := range numbersBesideAReportWord(asked) {
+			if number != 4 {
+				t.Fatalf("the question tells a worker on requirement 4 to write the number %d:\n%s",
+					number, asked)
+			}
+		}
+	}
+}
+
+// numbersBesideAReportWord is every number this prose writes next to the word for a requirement or
+// for the count of a run, which is the shape an example line in a refusal has.
+//
+// "Failing 1:" is left out on purpose. That number is which failure is being named and it is the
+// same for every run, so it is the one number in these refusals that is not a claim about the
+// requirement.
+func numbersBesideAReportWord(said string) []int {
+	var found []int
+	for _, one := range regexp.MustCompile(`(?i)(requirement|ran)[ :]+(\d+)`).
+		FindAllStringSubmatch(said, -1) {
+		number, err := strconv.Atoi(one[2])
+		if err != nil {
+			continue
+		}
+		found = append(found, number)
+	}
+	return found
 }
 
 // The whole stage through the controller: the job fans out, waits while its workers write, and the
@@ -432,19 +577,24 @@ func TestTheDoubleAnswersAReportTheSystemCanRead(t *testing.T) {
 		t.Fatalf("the double marks a report with %q and the system reads %q",
 			model.TestMarker, job.TestMarker)
 	}
-	// And it reports on the requirement it was handed rather than on one of its own, which is what the
-	// stage refuses: a double that always said the same number would be refused for every worker but
-	// the first.
+	// And it names no requirement on a report line, because the ask asks for none: the number comes
+	// off the run. A double that stated one would prove the reading of a line the stage no longer
+	// asks any worker to write.
 	one := testingJob()
 	for _, requirement := range job.RequirementsOf(one) {
 		asked := job.WriteFailingTests(one, requirement)
-		report, err := job.ReadTestReport(model.FakeTestReport(asked))
+		answered := model.FakeTestReport(asked)
+		if strings.Contains(answered, "\nRequirement:") {
+			t.Fatalf("the double names its requirement on a report line, which nothing asks for:\n%s",
+				answered)
+		}
+		report, err := job.ReadTestReport(answered, requirement.Number)
 		if err != nil {
 			t.Fatalf("the double answers a report the system refuses: %v", err)
 		}
-		if report.Requirement != requirement.Number {
-			t.Fatalf("the double was handed requirement %d and reported on %d",
-				requirement.Number, report.Requirement)
+		if report.Requirement != requirement.Number || report.Named != 0 {
+			t.Fatalf("the report is filed under requirement %d and names %d",
+				report.Requirement, report.Named)
 		}
 	}
 }
@@ -490,10 +640,10 @@ func TestARunOfTheFanOutIsNoJobAtAll(t *testing.T) {
 	}
 }
 
-// A worker says which requirement it holds in either shape: the number after the word, which is what
-// the ask asks for, or the number the requirement itself is written under, which is how the ask
-// states it. Both are the same claim, and refusing one of them would cost a task to find out.
-func TestAReportNamesItsRequirementInEitherShape(t *testing.T) {
+// A reply that names a requirement is read in either shape: the number after the word, or the number
+// the requirement itself is written under, which is how the ask states it. What that number is for is
+// the comparison with the row, so both shapes have to reach it.
+func TestAReplyNamingARequirementIsReadInEitherShape(t *testing.T) {
 	for _, one := range []struct {
 		name, reply string
 	}{
@@ -502,12 +652,24 @@ func TestAReportNamesItsRequirementInEitherShape(t *testing.T) {
 			"Requirement 3: a person pastes a link\nRan: 12\nFailing 1: TestOne"},
 	} {
 		t.Run(one.name, func(t *testing.T) {
-			report, err := job.ReadTestReport(one.reply)
+			report, err := job.ReadTestReport(one.reply, 3)
 			if err != nil {
 				t.Fatalf("ReadTestReport: %v", err)
 			}
-			if report.Requirement != 3 {
-				t.Fatalf("the report reads as requirement %d, want 3", report.Requirement)
+			if report.Named != 3 {
+				t.Fatalf("the reply reads as naming requirement %d, want 3", report.Named)
+			}
+			if report.NamedAnotherRequirement() {
+				t.Fatal("a reply naming the requirement its row holds reads as a fault")
+			}
+
+			// And the same two shapes on a run holding another requirement, which is the fault.
+			elsewhere, err := job.ReadTestReport(one.reply, 4)
+			if err != nil {
+				t.Fatalf("ReadTestReport: %v", err)
+			}
+			if elsewhere.Requirement != 4 || !elsewhere.NamedAnotherRequirement() {
+				t.Fatalf("the report reads %+v, want it filed under 4 and marked as a fault", elsewhere)
 			}
 		})
 	}

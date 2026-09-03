@@ -165,7 +165,7 @@ func TestAVerticalIsNotBuiltUntilSomethingShowsItWorking(t *testing.T) {
 func TestABuildReportWithoutAPictureIsNotABuild(t *testing.T) {
 	green := "Vertical: 1\nRan: 14\nRed: 0\nPassing 1: TestIt\nChanged 1: main.go\n"
 
-	report, err := job.ReadBuildReport(green + "Picture: home.png\nTaken: " + aLabel)
+	report, err := job.ReadBuildReport(green+"Picture: home.png\nTaken: "+aLabel, 1)
 	if err != nil {
 		t.Fatalf("a report with a picture is refused: %v", err)
 	}
@@ -173,13 +173,13 @@ func TestABuildReportWithoutAPictureIsNotABuild(t *testing.T) {
 		t.Fatalf("the report carries picture %q and label %q", report.Picture, report.Taken)
 	}
 
-	if _, err := job.ReadBuildReport(green); err == nil {
+	if _, err := job.ReadBuildReport(green, 1); err == nil {
 		t.Fatal("a report with no picture was read as a build")
 	} else if !strings.Contains(err.Error(), "nothing shows this vertical working") {
 		t.Fatalf("the refusal is %q", err)
 	}
 
-	if _, err := job.ReadBuildReport(green + "Picture: home.png"); err == nil {
+	if _, err := job.ReadBuildReport(green+"Picture: home.png", 1); err == nil {
 		t.Fatal("a picture with no label was read as a build")
 	} else if !strings.Contains(err.Error(), "carries no label") {
 		t.Fatalf("the refusal is %q", err)
@@ -187,7 +187,7 @@ func TestABuildReportWithoutAPictureIsNotABuild(t *testing.T) {
 
 	// A path is kept as a name. The picture goes in the workspace's shared folder, which a session
 	// sees at one path and a person sees at another, so the file is what travels.
-	pathed, err := job.ReadBuildReport(green + "Picture: /home/agent/shared/home.png\nTaken: " + aLabel)
+	pathed, err := job.ReadBuildReport(green+"Picture: /home/agent/shared/home.png\nTaken: "+aLabel, 1)
 	if err != nil {
 		t.Fatalf("a report naming the picture by its path is refused: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestTheRecordKeepsEachPictureUnderItsVertical(t *testing.T) {
 	wanted := job.RequirementsOf(one)
 	reports := map[int]job.BuildReport{}
 	for _, vertical := range wanted {
-		report, err := job.ReadBuildReport(aBuildReport(vertical.Number, theFailures[vertical.Number]))
+		report, err := job.ReadBuildReport(aBuildReport(vertical.Number, theFailures[vertical.Number]), vertical.Number)
 		if err != nil {
 			t.Fatalf("vertical %d: %v", vertical.Number, err)
 		}
@@ -292,7 +292,7 @@ func TestTheQuestionCarriesThePicturesAndWhereToOpenThem(t *testing.T) {
 	wanted := job.RequirementsOf(one)
 	reports := map[int]job.BuildReport{}
 	for _, vertical := range wanted {
-		report, err := job.ReadBuildReport(aBuildReport(vertical.Number, theFailures[vertical.Number]))
+		report, err := job.ReadBuildReport(aBuildReport(vertical.Number, theFailures[vertical.Number]), vertical.Number)
 		if err != nil {
 			t.Fatalf("vertical %d: %v", vertical.Number, err)
 		}
