@@ -171,6 +171,11 @@ type Action struct {
 	// the case: its asked column holds 34 characters, so the row is a fragment of a sentence and the
 	// rest of it used to be at the command line.
 	Reads func(row Row) string
+	// Opens is the row read on its own, in place of the listing, for a row a person points at to find
+	// out what it is. A job is the case: it states a sentence, it stands in one of four stages and
+	// sessions work on it, and a row of cells can hold none of that. It is fetched rather than built
+	// from the row, because what a listing holds is a summary of what a person opens.
+	Opens func(ctx context.Context, row Row) (Screen, error)
 	// Folds says this key opens and closes the rows drawn under the selected one, rather than doing
 	// anything to the system. It is the way onto a part: the listing holds the work a person
 	// declared, and this is how the parts of one job are read without the other jobs losing theirs.

@@ -59,13 +59,57 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		// way, because these cells are rendered text and sorting them compares "10d" against "1d" as
 		// words.
 		SortBy: -1,
-		// What the job did, rather than the row it runs in. A job's session is one row and a listing
-		// of one row says nothing the line above it did not; the tasks are the whole account of what
-		// was asked and what came back. The sessions view cannot be scoped to a session either: its
-		// lister reads its parent as a project, so descending there would list nothing at all.
-		DrillTo: "exec",
+		// Enter reads the job rather than descending, so nothing is drilled into from here on its own.
+		// What the job did is still one key away, on t, and DrillBy is what narrows that key to the
+		// session the row names: the sessions view cannot be scoped to a session either, since its
+		// lister reads its parent as a project.
 		DrillBy: sessionOfJob,
 		Actions: []Action{
+			{
+				// The job itself, which is what a person pointed at. Enter used to open the
+				// conversation of the session under it, one level past the row, so the job had no
+				// screen at all: what it is, the sentence it serves and which of the four stages it
+				// stands in were only at the command line.
+				Key:   "enter",
+				Label: "Read",
+				Opens: func(ctx context.Context, row Row) (Screen, error) {
+					if row.ID == "" {
+						return Screen{}, fmt.Errorf("no job selected")
+					}
+					// A run of a stage is drawn in this listing under the job that declared it, and it
+					// is not a job: it states no sentence and runs no stages. It says which key reads
+					// what it did rather than doing nothing.
+					if row.Under != "" {
+						return Screen{}, fmt.Errorf("%s is a run of a stage rather than a job, so there is "+
+							"nothing to read about it here: press t for what its session did",
+							display.ShortID(row.ID))
+					}
+					got, err := client.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: row.ID})
+					if err != nil {
+						return Screen{}, err
+					}
+					// And the sessions working on it. A job that fanned out runs one for each vertical
+					// and holds none of its own, so a screen reading the row alone says nobody is
+					// working on the job somebody is watching. A call that fails costs the sessions
+					// rather than the reading: what a person came for is the job.
+					var running []*quaycrewv1.Execution
+					if runs, err := client.ListExecutions(ctx, &quaycrewv1.ListExecutionsRequest{
+						Job: row.ID,
+					}); err == nil {
+						running = runs.GetExecutions()
+					}
+					return oneJob(got.GetJob(), running), nil
+				},
+			},
+			{
+				// What the job did, rather than the row it runs in. A job's session is one row and a
+				// listing of one row says nothing the line above it did not; the tasks are the whole
+				// account of what was asked and what came back. It is on t because that is the key
+				// the sessions view already opens a history under, and enter reads the job now.
+				Key:     "t",
+				Label:   "History",
+				Descend: "exec",
+			},
 			{
 				// A job that fans out has one part for each requirement, and all of them used to be
 				// rows beside the job that declared them: six rows, five of them machinery, and the
