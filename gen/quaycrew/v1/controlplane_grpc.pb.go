@@ -29,14 +29,6 @@ const (
 	ControlPlaneService_DeleteProject_FullMethodName            = "/quaycrew.v1.ControlPlaneService/DeleteProject"
 	ControlPlaneService_SetDeployTarget_FullMethodName          = "/quaycrew.v1.ControlPlaneService/SetDeployTarget"
 	ControlPlaneService_SetProjectRepository_FullMethodName     = "/quaycrew.v1.ControlPlaneService/SetProjectRepository"
-	ControlPlaneService_ImportFlow_FullMethodName               = "/quaycrew.v1.ControlPlaneService/ImportFlow"
-	ControlPlaneService_StartFlow_FullMethodName                = "/quaycrew.v1.ControlPlaneService/StartFlow"
-	ControlPlaneService_GetFlowRun_FullMethodName               = "/quaycrew.v1.ControlPlaneService/GetFlowRun"
-	ControlPlaneService_ListFlowRuns_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ListFlowRuns"
-	ControlPlaneService_StopFlowRun_FullMethodName              = "/quaycrew.v1.ControlPlaneService/StopFlowRun"
-	ControlPlaneService_AnswerFlowRun_FullMethodName            = "/quaycrew.v1.ControlPlaneService/AnswerFlowRun"
-	ControlPlaneService_ScheduleFlow_FullMethodName             = "/quaycrew.v1.ControlPlaneService/ScheduleFlow"
-	ControlPlaneService_UnscheduleFlow_FullMethodName           = "/quaycrew.v1.ControlPlaneService/UnscheduleFlow"
 	ControlPlaneService_AttachChannel_FullMethodName            = "/quaycrew.v1.ControlPlaneService/AttachChannel"
 	ControlPlaneService_SetSecret_FullMethodName                = "/quaycrew.v1.ControlPlaneService/SetSecret"
 	ControlPlaneService_ListSecrets_FullMethodName              = "/quaycrew.v1.ControlPlaneService/ListSecrets"
@@ -66,36 +58,10 @@ const (
 	ControlPlaneService_ListHooks_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ListHooks"
 	ControlPlaneService_AttachHook_FullMethodName               = "/quaycrew.v1.ControlPlaneService/AttachHook"
 	ControlPlaneService_DetachHook_FullMethodName               = "/quaycrew.v1.ControlPlaneService/DetachHook"
-	ControlPlaneService_ImportRole_FullMethodName               = "/quaycrew.v1.ControlPlaneService/ImportRole"
-	ControlPlaneService_ListRoles_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ListRoles"
-	ControlPlaneService_AttachRole_FullMethodName               = "/quaycrew.v1.ControlPlaneService/AttachRole"
-	ControlPlaneService_DetachRole_FullMethodName               = "/quaycrew.v1.ControlPlaneService/DetachRole"
-	ControlPlaneService_GetRole_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/GetRole"
 	ControlPlaneService_ListTasks_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ListTasks"
-	ControlPlaneService_CreateJob_FullMethodName                = "/quaycrew.v1.ControlPlaneService/CreateJob"
-	ControlPlaneService_GetJob_FullMethodName                   = "/quaycrew.v1.ControlPlaneService/GetJob"
-	ControlPlaneService_ListJobs_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/ListJobs"
-	ControlPlaneService_StopJob_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/StopJob"
-	ControlPlaneService_ListExecutions_FullMethodName           = "/quaycrew.v1.ControlPlaneService/ListExecutions"
-	ControlPlaneService_StopExecution_FullMethodName            = "/quaycrew.v1.ControlPlaneService/StopExecution"
-	ControlPlaneService_AskJob_FullMethodName                   = "/quaycrew.v1.ControlPlaneService/AskJob"
-	ControlPlaneService_AnswerJob_FullMethodName                = "/quaycrew.v1.ControlPlaneService/AnswerJob"
-	ControlPlaneService_RecordJobStep_FullMethodName            = "/quaycrew.v1.ControlPlaneService/RecordJobStep"
-	ControlPlaneService_RecordJobHandoff_FullMethodName         = "/quaycrew.v1.ControlPlaneService/RecordJobHandoff"
-	ControlPlaneService_RecordJobQuestion_FullMethodName        = "/quaycrew.v1.ControlPlaneService/RecordJobQuestion"
-	ControlPlaneService_SettleJobQuestion_FullMethodName        = "/quaycrew.v1.ControlPlaneService/SettleJobQuestion"
-	ControlPlaneService_ResumeJob_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ResumeJob"
-	ControlPlaneService_RefuseJob_FullMethodName                = "/quaycrew.v1.ControlPlaneService/RefuseJob"
-	ControlPlaneService_RecordSteer_FullMethodName              = "/quaycrew.v1.ControlPlaneService/RecordSteer"
-	ControlPlaneService_ListSteers_FullMethodName               = "/quaycrew.v1.ControlPlaneService/ListSteers"
-	ControlPlaneService_GetWaiting_FullMethodName               = "/quaycrew.v1.ControlPlaneService/GetWaiting"
-	ControlPlaneService_GetWorkspaceLimits_FullMethodName       = "/quaycrew.v1.ControlPlaneService/GetWorkspaceLimits"
-	ControlPlaneService_SetWorkspaceLimits_FullMethodName       = "/quaycrew.v1.ControlPlaneService/SetWorkspaceLimits"
 	ControlPlaneService_ListSessionEvents_FullMethodName        = "/quaycrew.v1.ControlPlaneService/ListSessionEvents"
 	ControlPlaneService_GetInfo_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/GetInfo"
 	ControlPlaneService_GetUsage_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/GetUsage"
-	ControlPlaneService_GetHistory_FullMethodName               = "/quaycrew.v1.ControlPlaneService/GetHistory"
-	ControlPlaneService_GetHeadroom_FullMethodName              = "/quaycrew.v1.ControlPlaneService/GetHeadroom"
 	ControlPlaneService_GetHealth_FullMethodName                = "/quaycrew.v1.ControlPlaneService/GetHealth"
 )
 
@@ -115,14 +81,6 @@ type ControlPlaneServiceClient interface {
 	DeleteProject(ctx context.Context, in *DeleteProjectRequest, opts ...grpc.CallOption) (*DeleteProjectResponse, error)
 	SetDeployTarget(ctx context.Context, in *SetDeployTargetRequest, opts ...grpc.CallOption) (*SetDeployTargetResponse, error)
 	SetProjectRepository(ctx context.Context, in *SetProjectRepositoryRequest, opts ...grpc.CallOption) (*SetProjectRepositoryResponse, error)
-	ImportFlow(ctx context.Context, in *ImportFlowRequest, opts ...grpc.CallOption) (*ImportFlowResponse, error)
-	StartFlow(ctx context.Context, in *StartFlowRequest, opts ...grpc.CallOption) (*StartFlowResponse, error)
-	GetFlowRun(ctx context.Context, in *GetFlowRunRequest, opts ...grpc.CallOption) (*GetFlowRunResponse, error)
-	ListFlowRuns(ctx context.Context, in *ListFlowRunsRequest, opts ...grpc.CallOption) (*ListFlowRunsResponse, error)
-	StopFlowRun(ctx context.Context, in *StopFlowRunRequest, opts ...grpc.CallOption) (*StopFlowRunResponse, error)
-	AnswerFlowRun(ctx context.Context, in *AnswerFlowRunRequest, opts ...grpc.CallOption) (*AnswerFlowRunResponse, error)
-	ScheduleFlow(ctx context.Context, in *ScheduleFlowRequest, opts ...grpc.CallOption) (*ScheduleFlowResponse, error)
-	UnscheduleFlow(ctx context.Context, in *UnscheduleFlowRequest, opts ...grpc.CallOption) (*UnscheduleFlowResponse, error)
 	AttachChannel(ctx context.Context, in *AttachChannelRequest, opts ...grpc.CallOption) (*AttachChannelResponse, error)
 	SetSecret(ctx context.Context, in *SetSecretRequest, opts ...grpc.CallOption) (*SetSecretResponse, error)
 	ListSecrets(ctx context.Context, in *ListSecretsRequest, opts ...grpc.CallOption) (*ListSecretsResponse, error)
@@ -159,62 +117,12 @@ type ControlPlaneServiceClient interface {
 	ListHooks(ctx context.Context, in *ListHooksRequest, opts ...grpc.CallOption) (*ListHooksResponse, error)
 	AttachHook(ctx context.Context, in *AttachHookRequest, opts ...grpc.CallOption) (*AttachHookResponse, error)
 	DetachHook(ctx context.Context, in *DetachHookRequest, opts ...grpc.CallOption) (*DetachHookResponse, error)
-	ImportRole(ctx context.Context, in *ImportRoleRequest, opts ...grpc.CallOption) (*ImportRoleResponse, error)
-	ListRoles(ctx context.Context, in *ListRolesRequest, opts ...grpc.CallOption) (*ListRolesResponse, error)
-	AttachRole(ctx context.Context, in *AttachRoleRequest, opts ...grpc.CallOption) (*AttachRoleResponse, error)
-	DetachRole(ctx context.Context, in *DetachRoleRequest, opts ...grpc.CallOption) (*DetachRoleResponse, error)
-	// GetRole reads one role back whole, the brief included, which is the only way to audit what a
-	// session running as it was told.
-	GetRole(ctx context.Context, in *GetRoleRequest, opts ...grpc.CallOption) (*GetRoleResponse, error)
 	ListTasks(ctx context.Context, in *ListTasksRequest, opts ...grpc.CallOption) (*ListTasksResponse, error)
-	// Job is declared intent the system keeps. A caller writes it, and a controller makes reality
-	// match it. Nothing here dispatches anything.
-	CreateJob(ctx context.Context, in *CreateJobRequest, opts ...grpc.CallOption) (*CreateJobResponse, error)
-	GetJob(ctx context.Context, in *GetJobRequest, opts ...grpc.CallOption) (*GetJobResponse, error)
-	ListJobs(ctx context.Context, in *ListJobsRequest, opts ...grpc.CallOption) (*ListJobsResponse, error)
-	StopJob(ctx context.Context, in *StopJobRequest, opts ...grpc.CallOption) (*StopJobResponse, error)
-	// An execution is one run of one stage of one job. Nobody declares one, so there is nothing here
-	// that writes one: a stage of a job fans out and the system writes the runs. What a caller may do
-	// is read them, and stop one that has not ended.
-	ListExecutions(ctx context.Context, in *ListExecutionsRequest, opts ...grpc.CallOption) (*ListExecutionsResponse, error)
-	StopExecution(ctx context.Context, in *StopExecutionRequest, opts ...grpc.CallOption) (*StopExecutionResponse, error)
-	// AskJob is a session putting a question to a person about the job it is running, and
-	// AnswerJob is the person answering. Nothing else moves the job in between.
-	AskJob(ctx context.Context, in *AskJobRequest, opts ...grpc.CallOption) (*AskJobResponse, error)
-	AnswerJob(ctx context.Context, in *AnswerJobRequest, opts ...grpc.CallOption) (*AnswerJobResponse, error)
-	// RecordJobStep is the session saying what it finished, as it finishes it. ResumeJob continues a
-	// job that failed from the first step it did not finish, and RefuseJob is the other answer to a
-	// failure: end it, so nobody continues it.
-	RecordJobStep(ctx context.Context, in *RecordJobStepRequest, opts ...grpc.CallOption) (*RecordJobStepResponse, error)
-	// RecordJobHandoff is the session at the context ceiling saying what it leaves behind, so the next
-	// session carries the job on rather than starting it again.
-	RecordJobHandoff(ctx context.Context, in *RecordJobHandoffRequest, opts ...grpc.CallOption) (*RecordJobHandoffResponse, error)
-	// RecordJobQuestion is a reader of a plan saying what it could not settle, and SettleJobQuestion is
-	// a later reader answering that row from its own lens. What no reader settled is what a person is
-	// asked.
-	RecordJobQuestion(ctx context.Context, in *RecordJobQuestionRequest, opts ...grpc.CallOption) (*RecordJobQuestionResponse, error)
-	SettleJobQuestion(ctx context.Context, in *SettleJobQuestionRequest, opts ...grpc.CallOption) (*SettleJobQuestionResponse, error)
-	ResumeJob(ctx context.Context, in *ResumeJobRequest, opts ...grpc.CallOption) (*ResumeJobResponse, error)
-	RefuseJob(ctx context.Context, in *RefuseJobRequest, opts ...grpc.CallOption) (*RefuseJobResponse, error)
-	// The score of a job: one command marks a moment, and the report reads the marks back.
-	RecordSteer(ctx context.Context, in *RecordSteerRequest, opts ...grpc.CallOption) (*RecordSteerResponse, error)
-	ListSteers(ctx context.Context, in *ListSteersRequest, opts ...grpc.CallOption) (*ListSteersResponse, error)
-	// What a workspace lets its sessions declare. The operator reads and sets these; a session may do
-	// neither, because a caller that could raise its own ceiling has no ceiling.
-	// What waits for a person, in one read, so every surface tells them the same thing.
-	GetWaiting(ctx context.Context, in *GetWaitingRequest, opts ...grpc.CallOption) (*GetWaitingResponse, error)
-	GetWorkspaceLimits(ctx context.Context, in *GetWorkspaceLimitsRequest, opts ...grpc.CallOption) (*GetWorkspaceLimitsResponse, error)
-	SetWorkspaceLimits(ctx context.Context, in *SetWorkspaceLimitsRequest, opts ...grpc.CallOption) (*SetWorkspaceLimitsResponse, error)
 	ListSessionEvents(ctx context.Context, in *ListSessionEventsRequest, opts ...grpc.CallOption) (*ListSessionEventsResponse, error)
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
 	// GetUsage adds up what every conversation in the system has cost. It is a running total rather than
 	// configuration, which is why it is not part of GetInfo.
 	GetUsage(ctx context.Context, in *GetUsageRequest, opts ...grpc.CallOption) (*GetUsageResponse, error)
-	// What the crew did over a window: the read a session makes instead of being told.
-	GetHistory(ctx context.Context, in *GetHistoryRequest, opts ...grpc.CallOption) (*GetHistoryResponse, error)
-	// GetHeadroom is the system's last reading of the machine it runs on. It answers from that reading
-	// and never from the daemon, so the header may ask it every second.
-	GetHeadroom(ctx context.Context, in *GetHeadroomRequest, opts ...grpc.CallOption) (*GetHeadroomResponse, error)
 	// GetHealth is the system's last probe of the parts it has to write to before a dispatch can start.
 	// It is a verdict, which is why it is not part of GetInfo, and it answers from the last probe for
 	// the reason GetHeadroom answers from the last sample.
@@ -323,86 +231,6 @@ func (c *controlPlaneServiceClient) SetProjectRepository(ctx context.Context, in
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetProjectRepositoryResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_SetProjectRepository_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ImportFlow(ctx context.Context, in *ImportFlowRequest, opts ...grpc.CallOption) (*ImportFlowResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ImportFlowResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ImportFlow_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) StartFlow(ctx context.Context, in *StartFlowRequest, opts ...grpc.CallOption) (*StartFlowResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(StartFlowResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_StartFlow_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetFlowRun(ctx context.Context, in *GetFlowRunRequest, opts ...grpc.CallOption) (*GetFlowRunResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetFlowRunResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetFlowRun_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListFlowRuns(ctx context.Context, in *ListFlowRunsRequest, opts ...grpc.CallOption) (*ListFlowRunsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListFlowRunsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListFlowRuns_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) StopFlowRun(ctx context.Context, in *StopFlowRunRequest, opts ...grpc.CallOption) (*StopFlowRunResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(StopFlowRunResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_StopFlowRun_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) AnswerFlowRun(ctx context.Context, in *AnswerFlowRunRequest, opts ...grpc.CallOption) (*AnswerFlowRunResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AnswerFlowRunResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_AnswerFlowRun_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ScheduleFlow(ctx context.Context, in *ScheduleFlowRequest, opts ...grpc.CallOption) (*ScheduleFlowResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ScheduleFlowResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ScheduleFlow_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) UnscheduleFlow(ctx context.Context, in *UnscheduleFlowRequest, opts ...grpc.CallOption) (*UnscheduleFlowResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(UnscheduleFlowResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_UnscheduleFlow_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -699,250 +527,10 @@ func (c *controlPlaneServiceClient) DetachHook(ctx context.Context, in *DetachHo
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ImportRole(ctx context.Context, in *ImportRoleRequest, opts ...grpc.CallOption) (*ImportRoleResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ImportRoleResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ImportRole_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListRoles(ctx context.Context, in *ListRolesRequest, opts ...grpc.CallOption) (*ListRolesResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListRolesResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListRoles_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) AttachRole(ctx context.Context, in *AttachRoleRequest, opts ...grpc.CallOption) (*AttachRoleResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AttachRoleResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_AttachRole_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) DetachRole(ctx context.Context, in *DetachRoleRequest, opts ...grpc.CallOption) (*DetachRoleResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DetachRoleResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_DetachRole_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetRole(ctx context.Context, in *GetRoleRequest, opts ...grpc.CallOption) (*GetRoleResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetRoleResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetRole_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *controlPlaneServiceClient) ListTasks(ctx context.Context, in *ListTasksRequest, opts ...grpc.CallOption) (*ListTasksResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListTasksResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_ListTasks_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) CreateJob(ctx context.Context, in *CreateJobRequest, opts ...grpc.CallOption) (*CreateJobResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CreateJobResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_CreateJob_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetJob(ctx context.Context, in *GetJobRequest, opts ...grpc.CallOption) (*GetJobResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetJobResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetJob_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListJobs(ctx context.Context, in *ListJobsRequest, opts ...grpc.CallOption) (*ListJobsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListJobsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListJobs_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) StopJob(ctx context.Context, in *StopJobRequest, opts ...grpc.CallOption) (*StopJobResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(StopJobResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_StopJob_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListExecutions(ctx context.Context, in *ListExecutionsRequest, opts ...grpc.CallOption) (*ListExecutionsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListExecutionsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListExecutions_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) StopExecution(ctx context.Context, in *StopExecutionRequest, opts ...grpc.CallOption) (*StopExecutionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(StopExecutionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_StopExecution_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) AskJob(ctx context.Context, in *AskJobRequest, opts ...grpc.CallOption) (*AskJobResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AskJobResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_AskJob_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) AnswerJob(ctx context.Context, in *AnswerJobRequest, opts ...grpc.CallOption) (*AnswerJobResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AnswerJobResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_AnswerJob_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RecordJobStep(ctx context.Context, in *RecordJobStepRequest, opts ...grpc.CallOption) (*RecordJobStepResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RecordJobStepResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RecordJobStep_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RecordJobHandoff(ctx context.Context, in *RecordJobHandoffRequest, opts ...grpc.CallOption) (*RecordJobHandoffResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RecordJobHandoffResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RecordJobHandoff_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RecordJobQuestion(ctx context.Context, in *RecordJobQuestionRequest, opts ...grpc.CallOption) (*RecordJobQuestionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RecordJobQuestionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RecordJobQuestion_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) SettleJobQuestion(ctx context.Context, in *SettleJobQuestionRequest, opts ...grpc.CallOption) (*SettleJobQuestionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SettleJobQuestionResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_SettleJobQuestion_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ResumeJob(ctx context.Context, in *ResumeJobRequest, opts ...grpc.CallOption) (*ResumeJobResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ResumeJobResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ResumeJob_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RefuseJob(ctx context.Context, in *RefuseJobRequest, opts ...grpc.CallOption) (*RefuseJobResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RefuseJobResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RefuseJob_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) RecordSteer(ctx context.Context, in *RecordSteerRequest, opts ...grpc.CallOption) (*RecordSteerResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RecordSteerResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_RecordSteer_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) ListSteers(ctx context.Context, in *ListSteersRequest, opts ...grpc.CallOption) (*ListSteersResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListSteersResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListSteers_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetWaiting(ctx context.Context, in *GetWaitingRequest, opts ...grpc.CallOption) (*GetWaitingResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetWaitingResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetWaiting_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetWorkspaceLimits(ctx context.Context, in *GetWorkspaceLimitsRequest, opts ...grpc.CallOption) (*GetWorkspaceLimitsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetWorkspaceLimitsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetWorkspaceLimits_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) SetWorkspaceLimits(ctx context.Context, in *SetWorkspaceLimitsRequest, opts ...grpc.CallOption) (*SetWorkspaceLimitsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SetWorkspaceLimitsResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_SetWorkspaceLimits_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -979,26 +567,6 @@ func (c *controlPlaneServiceClient) GetUsage(ctx context.Context, in *GetUsageRe
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) GetHistory(ctx context.Context, in *GetHistoryRequest, opts ...grpc.CallOption) (*GetHistoryResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetHistoryResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetHistory_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *controlPlaneServiceClient) GetHeadroom(ctx context.Context, in *GetHeadroomRequest, opts ...grpc.CallOption) (*GetHeadroomResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetHeadroomResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_GetHeadroom_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *controlPlaneServiceClient) GetHealth(ctx context.Context, in *GetHealthRequest, opts ...grpc.CallOption) (*GetHealthResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetHealthResponse)
@@ -1025,14 +593,6 @@ type ControlPlaneServiceServer interface {
 	DeleteProject(context.Context, *DeleteProjectRequest) (*DeleteProjectResponse, error)
 	SetDeployTarget(context.Context, *SetDeployTargetRequest) (*SetDeployTargetResponse, error)
 	SetProjectRepository(context.Context, *SetProjectRepositoryRequest) (*SetProjectRepositoryResponse, error)
-	ImportFlow(context.Context, *ImportFlowRequest) (*ImportFlowResponse, error)
-	StartFlow(context.Context, *StartFlowRequest) (*StartFlowResponse, error)
-	GetFlowRun(context.Context, *GetFlowRunRequest) (*GetFlowRunResponse, error)
-	ListFlowRuns(context.Context, *ListFlowRunsRequest) (*ListFlowRunsResponse, error)
-	StopFlowRun(context.Context, *StopFlowRunRequest) (*StopFlowRunResponse, error)
-	AnswerFlowRun(context.Context, *AnswerFlowRunRequest) (*AnswerFlowRunResponse, error)
-	ScheduleFlow(context.Context, *ScheduleFlowRequest) (*ScheduleFlowResponse, error)
-	UnscheduleFlow(context.Context, *UnscheduleFlowRequest) (*UnscheduleFlowResponse, error)
 	AttachChannel(context.Context, *AttachChannelRequest) (*AttachChannelResponse, error)
 	SetSecret(context.Context, *SetSecretRequest) (*SetSecretResponse, error)
 	ListSecrets(context.Context, *ListSecretsRequest) (*ListSecretsResponse, error)
@@ -1069,62 +629,12 @@ type ControlPlaneServiceServer interface {
 	ListHooks(context.Context, *ListHooksRequest) (*ListHooksResponse, error)
 	AttachHook(context.Context, *AttachHookRequest) (*AttachHookResponse, error)
 	DetachHook(context.Context, *DetachHookRequest) (*DetachHookResponse, error)
-	ImportRole(context.Context, *ImportRoleRequest) (*ImportRoleResponse, error)
-	ListRoles(context.Context, *ListRolesRequest) (*ListRolesResponse, error)
-	AttachRole(context.Context, *AttachRoleRequest) (*AttachRoleResponse, error)
-	DetachRole(context.Context, *DetachRoleRequest) (*DetachRoleResponse, error)
-	// GetRole reads one role back whole, the brief included, which is the only way to audit what a
-	// session running as it was told.
-	GetRole(context.Context, *GetRoleRequest) (*GetRoleResponse, error)
 	ListTasks(context.Context, *ListTasksRequest) (*ListTasksResponse, error)
-	// Job is declared intent the system keeps. A caller writes it, and a controller makes reality
-	// match it. Nothing here dispatches anything.
-	CreateJob(context.Context, *CreateJobRequest) (*CreateJobResponse, error)
-	GetJob(context.Context, *GetJobRequest) (*GetJobResponse, error)
-	ListJobs(context.Context, *ListJobsRequest) (*ListJobsResponse, error)
-	StopJob(context.Context, *StopJobRequest) (*StopJobResponse, error)
-	// An execution is one run of one stage of one job. Nobody declares one, so there is nothing here
-	// that writes one: a stage of a job fans out and the system writes the runs. What a caller may do
-	// is read them, and stop one that has not ended.
-	ListExecutions(context.Context, *ListExecutionsRequest) (*ListExecutionsResponse, error)
-	StopExecution(context.Context, *StopExecutionRequest) (*StopExecutionResponse, error)
-	// AskJob is a session putting a question to a person about the job it is running, and
-	// AnswerJob is the person answering. Nothing else moves the job in between.
-	AskJob(context.Context, *AskJobRequest) (*AskJobResponse, error)
-	AnswerJob(context.Context, *AnswerJobRequest) (*AnswerJobResponse, error)
-	// RecordJobStep is the session saying what it finished, as it finishes it. ResumeJob continues a
-	// job that failed from the first step it did not finish, and RefuseJob is the other answer to a
-	// failure: end it, so nobody continues it.
-	RecordJobStep(context.Context, *RecordJobStepRequest) (*RecordJobStepResponse, error)
-	// RecordJobHandoff is the session at the context ceiling saying what it leaves behind, so the next
-	// session carries the job on rather than starting it again.
-	RecordJobHandoff(context.Context, *RecordJobHandoffRequest) (*RecordJobHandoffResponse, error)
-	// RecordJobQuestion is a reader of a plan saying what it could not settle, and SettleJobQuestion is
-	// a later reader answering that row from its own lens. What no reader settled is what a person is
-	// asked.
-	RecordJobQuestion(context.Context, *RecordJobQuestionRequest) (*RecordJobQuestionResponse, error)
-	SettleJobQuestion(context.Context, *SettleJobQuestionRequest) (*SettleJobQuestionResponse, error)
-	ResumeJob(context.Context, *ResumeJobRequest) (*ResumeJobResponse, error)
-	RefuseJob(context.Context, *RefuseJobRequest) (*RefuseJobResponse, error)
-	// The score of a job: one command marks a moment, and the report reads the marks back.
-	RecordSteer(context.Context, *RecordSteerRequest) (*RecordSteerResponse, error)
-	ListSteers(context.Context, *ListSteersRequest) (*ListSteersResponse, error)
-	// What a workspace lets its sessions declare. The operator reads and sets these; a session may do
-	// neither, because a caller that could raise its own ceiling has no ceiling.
-	// What waits for a person, in one read, so every surface tells them the same thing.
-	GetWaiting(context.Context, *GetWaitingRequest) (*GetWaitingResponse, error)
-	GetWorkspaceLimits(context.Context, *GetWorkspaceLimitsRequest) (*GetWorkspaceLimitsResponse, error)
-	SetWorkspaceLimits(context.Context, *SetWorkspaceLimitsRequest) (*SetWorkspaceLimitsResponse, error)
 	ListSessionEvents(context.Context, *ListSessionEventsRequest) (*ListSessionEventsResponse, error)
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
 	// GetUsage adds up what every conversation in the system has cost. It is a running total rather than
 	// configuration, which is why it is not part of GetInfo.
 	GetUsage(context.Context, *GetUsageRequest) (*GetUsageResponse, error)
-	// What the crew did over a window: the read a session makes instead of being told.
-	GetHistory(context.Context, *GetHistoryRequest) (*GetHistoryResponse, error)
-	// GetHeadroom is the system's last reading of the machine it runs on. It answers from that reading
-	// and never from the daemon, so the header may ask it every second.
-	GetHeadroom(context.Context, *GetHeadroomRequest) (*GetHeadroomResponse, error)
 	// GetHealth is the system's last probe of the parts it has to write to before a dispatch can start.
 	// It is a verdict, which is why it is not part of GetInfo, and it answers from the last probe for
 	// the reason GetHeadroom answers from the last sample.
@@ -1168,30 +678,6 @@ func (UnimplementedControlPlaneServiceServer) SetDeployTarget(context.Context, *
 }
 func (UnimplementedControlPlaneServiceServer) SetProjectRepository(context.Context, *SetProjectRepositoryRequest) (*SetProjectRepositoryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetProjectRepository not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ImportFlow(context.Context, *ImportFlowRequest) (*ImportFlowResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ImportFlow not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) StartFlow(context.Context, *StartFlowRequest) (*StartFlowResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method StartFlow not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetFlowRun(context.Context, *GetFlowRunRequest) (*GetFlowRunResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetFlowRun not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListFlowRuns(context.Context, *ListFlowRunsRequest) (*ListFlowRunsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListFlowRuns not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) StopFlowRun(context.Context, *StopFlowRunRequest) (*StopFlowRunResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method StopFlowRun not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) AnswerFlowRun(context.Context, *AnswerFlowRunRequest) (*AnswerFlowRunResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AnswerFlowRun not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ScheduleFlow(context.Context, *ScheduleFlowRequest) (*ScheduleFlowResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ScheduleFlow not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) UnscheduleFlow(context.Context, *UnscheduleFlowRequest) (*UnscheduleFlowResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method UnscheduleFlow not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) AttachChannel(context.Context, *AttachChannelRequest) (*AttachChannelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AttachChannel not implemented")
@@ -1280,80 +766,8 @@ func (UnimplementedControlPlaneServiceServer) AttachHook(context.Context, *Attac
 func (UnimplementedControlPlaneServiceServer) DetachHook(context.Context, *DetachHookRequest) (*DetachHookResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DetachHook not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) ImportRole(context.Context, *ImportRoleRequest) (*ImportRoleResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ImportRole not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListRoles(context.Context, *ListRolesRequest) (*ListRolesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListRoles not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) AttachRole(context.Context, *AttachRoleRequest) (*AttachRoleResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AttachRole not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) DetachRole(context.Context, *DetachRoleRequest) (*DetachRoleResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method DetachRole not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetRole(context.Context, *GetRoleRequest) (*GetRoleResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetRole not implemented")
-}
 func (UnimplementedControlPlaneServiceServer) ListTasks(context.Context, *ListTasksRequest) (*ListTasksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListTasks not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) CreateJob(context.Context, *CreateJobRequest) (*CreateJobResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CreateJob not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetJob(context.Context, *GetJobRequest) (*GetJobResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetJob not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListJobs(context.Context, *ListJobsRequest) (*ListJobsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListJobs not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) StopJob(context.Context, *StopJobRequest) (*StopJobResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method StopJob not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListExecutions(context.Context, *ListExecutionsRequest) (*ListExecutionsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListExecutions not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) StopExecution(context.Context, *StopExecutionRequest) (*StopExecutionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method StopExecution not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) AskJob(context.Context, *AskJobRequest) (*AskJobResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AskJob not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) AnswerJob(context.Context, *AnswerJobRequest) (*AnswerJobResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method AnswerJob not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RecordJobStep(context.Context, *RecordJobStepRequest) (*RecordJobStepResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RecordJobStep not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RecordJobHandoff(context.Context, *RecordJobHandoffRequest) (*RecordJobHandoffResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RecordJobHandoff not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RecordJobQuestion(context.Context, *RecordJobQuestionRequest) (*RecordJobQuestionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RecordJobQuestion not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) SettleJobQuestion(context.Context, *SettleJobQuestionRequest) (*SettleJobQuestionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SettleJobQuestion not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ResumeJob(context.Context, *ResumeJobRequest) (*ResumeJobResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ResumeJob not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RefuseJob(context.Context, *RefuseJobRequest) (*RefuseJobResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RefuseJob not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) RecordSteer(context.Context, *RecordSteerRequest) (*RecordSteerResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RecordSteer not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) ListSteers(context.Context, *ListSteersRequest) (*ListSteersResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListSteers not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetWaiting(context.Context, *GetWaitingRequest) (*GetWaitingResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetWaiting not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetWorkspaceLimits(context.Context, *GetWorkspaceLimitsRequest) (*GetWorkspaceLimitsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetWorkspaceLimits not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) SetWorkspaceLimits(context.Context, *SetWorkspaceLimitsRequest) (*SetWorkspaceLimitsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SetWorkspaceLimits not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ListSessionEvents(context.Context, *ListSessionEventsRequest) (*ListSessionEventsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSessionEvents not implemented")
@@ -1363,12 +777,6 @@ func (UnimplementedControlPlaneServiceServer) GetInfo(context.Context, *GetInfoR
 }
 func (UnimplementedControlPlaneServiceServer) GetUsage(context.Context, *GetUsageRequest) (*GetUsageResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUsage not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetHistory(context.Context, *GetHistoryRequest) (*GetHistoryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetHistory not implemented")
-}
-func (UnimplementedControlPlaneServiceServer) GetHeadroom(context.Context, *GetHeadroomRequest) (*GetHeadroomResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetHeadroom not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) GetHealth(context.Context, *GetHealthRequest) (*GetHealthResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetHealth not implemented")
@@ -1570,150 +978,6 @@ func _ControlPlaneService_SetProjectRepository_Handler(srv interface{}, ctx cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).SetProjectRepository(ctx, req.(*SetProjectRepositoryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ImportFlow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ImportFlowRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ImportFlow(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ImportFlow_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ImportFlow(ctx, req.(*ImportFlowRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_StartFlow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(StartFlowRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).StartFlow(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_StartFlow_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).StartFlow(ctx, req.(*StartFlowRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetFlowRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetFlowRunRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetFlowRun(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetFlowRun_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetFlowRun(ctx, req.(*GetFlowRunRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListFlowRuns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListFlowRunsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListFlowRuns(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListFlowRuns_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListFlowRuns(ctx, req.(*ListFlowRunsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_StopFlowRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(StopFlowRunRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).StopFlowRun(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_StopFlowRun_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).StopFlowRun(ctx, req.(*StopFlowRunRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_AnswerFlowRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AnswerFlowRunRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).AnswerFlowRun(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_AnswerFlowRun_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).AnswerFlowRun(ctx, req.(*AnswerFlowRunRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ScheduleFlow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ScheduleFlowRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ScheduleFlow(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ScheduleFlow_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ScheduleFlow(ctx, req.(*ScheduleFlowRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_UnscheduleFlow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UnscheduleFlowRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).UnscheduleFlow(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_UnscheduleFlow_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).UnscheduleFlow(ctx, req.(*UnscheduleFlowRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2240,96 +1504,6 @@ func _ControlPlaneService_DetachHook_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ImportRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ImportRoleRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ImportRole(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ImportRole_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ImportRole(ctx, req.(*ImportRoleRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListRoles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListRolesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListRoles(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListRoles_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListRoles(ctx, req.(*ListRolesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_AttachRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AttachRoleRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).AttachRole(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_AttachRole_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).AttachRole(ctx, req.(*AttachRoleRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_DetachRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DetachRoleRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).DetachRole(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_DetachRole_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).DetachRole(ctx, req.(*DetachRoleRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRoleRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetRole(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetRole_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetRole(ctx, req.(*GetRoleRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _ControlPlaneService_ListTasks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListTasksRequest)
 	if err := dec(in); err != nil {
@@ -2344,348 +1518,6 @@ func _ControlPlaneService_ListTasks_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).ListTasks(ctx, req.(*ListTasksRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_CreateJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateJobRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).CreateJob(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_CreateJob_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).CreateJob(ctx, req.(*CreateJobRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetJobRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetJob(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetJob_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetJob(ctx, req.(*GetJobRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListJobs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListJobsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListJobs(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListJobs_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListJobs(ctx, req.(*ListJobsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_StopJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(StopJobRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).StopJob(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_StopJob_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).StopJob(ctx, req.(*StopJobRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListExecutions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListExecutionsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListExecutions(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListExecutions_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListExecutions(ctx, req.(*ListExecutionsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_StopExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(StopExecutionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).StopExecution(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_StopExecution_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).StopExecution(ctx, req.(*StopExecutionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_AskJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AskJobRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).AskJob(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_AskJob_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).AskJob(ctx, req.(*AskJobRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_AnswerJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AnswerJobRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).AnswerJob(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_AnswerJob_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).AnswerJob(ctx, req.(*AnswerJobRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RecordJobStep_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RecordJobStepRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RecordJobStep(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RecordJobStep_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RecordJobStep(ctx, req.(*RecordJobStepRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RecordJobHandoff_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RecordJobHandoffRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RecordJobHandoff(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RecordJobHandoff_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RecordJobHandoff(ctx, req.(*RecordJobHandoffRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RecordJobQuestion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RecordJobQuestionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RecordJobQuestion(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RecordJobQuestion_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RecordJobQuestion(ctx, req.(*RecordJobQuestionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_SettleJobQuestion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SettleJobQuestionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).SettleJobQuestion(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_SettleJobQuestion_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).SettleJobQuestion(ctx, req.(*SettleJobQuestionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ResumeJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ResumeJobRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ResumeJob(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ResumeJob_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ResumeJob(ctx, req.(*ResumeJobRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RefuseJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RefuseJobRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RefuseJob(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RefuseJob_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RefuseJob(ctx, req.(*RefuseJobRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_RecordSteer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RecordSteerRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).RecordSteer(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_RecordSteer_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).RecordSteer(ctx, req.(*RecordSteerRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_ListSteers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListSteersRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListSteers(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_ListSteers_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListSteers(ctx, req.(*ListSteersRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetWaiting_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetWaitingRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetWaiting(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetWaiting_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetWaiting(ctx, req.(*GetWaitingRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetWorkspaceLimits_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetWorkspaceLimitsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetWorkspaceLimits(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetWorkspaceLimits_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetWorkspaceLimits(ctx, req.(*GetWorkspaceLimitsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_SetWorkspaceLimits_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetWorkspaceLimitsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).SetWorkspaceLimits(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_SetWorkspaceLimits_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).SetWorkspaceLimits(ctx, req.(*SetWorkspaceLimitsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2740,42 +1572,6 @@ func _ControlPlaneService_GetUsage_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).GetUsage(ctx, req.(*GetUsageRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetHistory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetHistoryRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetHistory(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetHistory_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetHistory(ctx, req.(*GetHistoryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ControlPlaneService_GetHeadroom_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetHeadroomRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).GetHeadroom(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ControlPlaneService_GetHeadroom_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).GetHeadroom(ctx, req.(*GetHeadroomRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2844,38 +1640,6 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetProjectRepository",
 			Handler:    _ControlPlaneService_SetProjectRepository_Handler,
-		},
-		{
-			MethodName: "ImportFlow",
-			Handler:    _ControlPlaneService_ImportFlow_Handler,
-		},
-		{
-			MethodName: "StartFlow",
-			Handler:    _ControlPlaneService_StartFlow_Handler,
-		},
-		{
-			MethodName: "GetFlowRun",
-			Handler:    _ControlPlaneService_GetFlowRun_Handler,
-		},
-		{
-			MethodName: "ListFlowRuns",
-			Handler:    _ControlPlaneService_ListFlowRuns_Handler,
-		},
-		{
-			MethodName: "StopFlowRun",
-			Handler:    _ControlPlaneService_StopFlowRun_Handler,
-		},
-		{
-			MethodName: "AnswerFlowRun",
-			Handler:    _ControlPlaneService_AnswerFlowRun_Handler,
-		},
-		{
-			MethodName: "ScheduleFlow",
-			Handler:    _ControlPlaneService_ScheduleFlow_Handler,
-		},
-		{
-			MethodName: "UnscheduleFlow",
-			Handler:    _ControlPlaneService_UnscheduleFlow_Handler,
 		},
 		{
 			MethodName: "AttachChannel",
@@ -2994,104 +1758,8 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_DetachHook_Handler,
 		},
 		{
-			MethodName: "ImportRole",
-			Handler:    _ControlPlaneService_ImportRole_Handler,
-		},
-		{
-			MethodName: "ListRoles",
-			Handler:    _ControlPlaneService_ListRoles_Handler,
-		},
-		{
-			MethodName: "AttachRole",
-			Handler:    _ControlPlaneService_AttachRole_Handler,
-		},
-		{
-			MethodName: "DetachRole",
-			Handler:    _ControlPlaneService_DetachRole_Handler,
-		},
-		{
-			MethodName: "GetRole",
-			Handler:    _ControlPlaneService_GetRole_Handler,
-		},
-		{
 			MethodName: "ListTasks",
 			Handler:    _ControlPlaneService_ListTasks_Handler,
-		},
-		{
-			MethodName: "CreateJob",
-			Handler:    _ControlPlaneService_CreateJob_Handler,
-		},
-		{
-			MethodName: "GetJob",
-			Handler:    _ControlPlaneService_GetJob_Handler,
-		},
-		{
-			MethodName: "ListJobs",
-			Handler:    _ControlPlaneService_ListJobs_Handler,
-		},
-		{
-			MethodName: "StopJob",
-			Handler:    _ControlPlaneService_StopJob_Handler,
-		},
-		{
-			MethodName: "ListExecutions",
-			Handler:    _ControlPlaneService_ListExecutions_Handler,
-		},
-		{
-			MethodName: "StopExecution",
-			Handler:    _ControlPlaneService_StopExecution_Handler,
-		},
-		{
-			MethodName: "AskJob",
-			Handler:    _ControlPlaneService_AskJob_Handler,
-		},
-		{
-			MethodName: "AnswerJob",
-			Handler:    _ControlPlaneService_AnswerJob_Handler,
-		},
-		{
-			MethodName: "RecordJobStep",
-			Handler:    _ControlPlaneService_RecordJobStep_Handler,
-		},
-		{
-			MethodName: "RecordJobHandoff",
-			Handler:    _ControlPlaneService_RecordJobHandoff_Handler,
-		},
-		{
-			MethodName: "RecordJobQuestion",
-			Handler:    _ControlPlaneService_RecordJobQuestion_Handler,
-		},
-		{
-			MethodName: "SettleJobQuestion",
-			Handler:    _ControlPlaneService_SettleJobQuestion_Handler,
-		},
-		{
-			MethodName: "ResumeJob",
-			Handler:    _ControlPlaneService_ResumeJob_Handler,
-		},
-		{
-			MethodName: "RefuseJob",
-			Handler:    _ControlPlaneService_RefuseJob_Handler,
-		},
-		{
-			MethodName: "RecordSteer",
-			Handler:    _ControlPlaneService_RecordSteer_Handler,
-		},
-		{
-			MethodName: "ListSteers",
-			Handler:    _ControlPlaneService_ListSteers_Handler,
-		},
-		{
-			MethodName: "GetWaiting",
-			Handler:    _ControlPlaneService_GetWaiting_Handler,
-		},
-		{
-			MethodName: "GetWorkspaceLimits",
-			Handler:    _ControlPlaneService_GetWorkspaceLimits_Handler,
-		},
-		{
-			MethodName: "SetWorkspaceLimits",
-			Handler:    _ControlPlaneService_SetWorkspaceLimits_Handler,
 		},
 		{
 			MethodName: "ListSessionEvents",
@@ -3104,14 +1772,6 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUsage",
 			Handler:    _ControlPlaneService_GetUsage_Handler,
-		},
-		{
-			MethodName: "GetHistory",
-			Handler:    _ControlPlaneService_GetHistory_Handler,
-		},
-		{
-			MethodName: "GetHeadroom",
-			Handler:    _ControlPlaneService_GetHeadroom_Handler,
 		},
 		{
 			MethodName: "GetHealth",

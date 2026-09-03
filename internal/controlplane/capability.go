@@ -9,7 +9,6 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/name"
-	"github.com/atlantic-blue/quay-krewe/internal/role"
 	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 	"github.com/atlantic-blue/quay-krewe/internal/skill"
 	"github.com/atlantic-blue/quay-krewe/internal/store"
@@ -72,16 +71,6 @@ type notGiven struct {
 // session, and a session with one skill instead of two is better than a session that will not
 // start.
 func (s *Server) capabilityOf(ctx context.Context, session *quaycrewv1.Session) capability {
-	// A session running as a role holds the skills its role declares it receives, which is usually
-	// none of them. The boundary is what a role is: a session that was never given a capability
-	// cannot reach for it, and a session merely asked not to can.
-	//
-	// It answers unknown rather than known and empty. Known and empty would sweep the workspace's
-	// skills off the host, and that directory is shared by every session in the workspace, so one
-	// role session would take the skills away from all of them.
-	if !s.receives(ctx, session, role.MaterialSkills) {
-		return capability{}
-	}
 	return s.withoutUnusable(ctx, session.GetWorkspace(), s.heldIn(ctx, session.GetWorkspace()))
 }
 
@@ -228,6 +217,5 @@ func boxOf(session *quaycrewv1.Session) sandbox.Config {
 		ID:        session.GetId(),
 		Workspace: session.GetWorkspace(),
 		Project:   session.GetProject(),
-		Role:      session.GetRole(),
 	}
 }

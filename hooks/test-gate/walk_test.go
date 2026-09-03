@@ -19,8 +19,8 @@ func TestWhatADirectoryHolds(t *testing.T) {
 			t.Fatalf("WriteFile: %v", err)
 		}
 	}
-	write("internal/job/build.go")
-	write("internal/job/build_test.go")
+	write("internal/session/build.go")
+	write("internal/session/build_test.go")
 	write("internal/web/page.go")
 	write("features/build.feature")
 	write("build/binary")
@@ -32,14 +32,14 @@ func TestWhatADirectoryHolds(t *testing.T) {
 		want  bool
 		why   string
 	}{
-		{where: "internal/job", want: true, why: "it holds a file ending in _test.go"},
+		{where: "internal/session", want: true, why: "it holds a file ending in _test.go"},
 		{where: "internal", want: true, why: "the test is one directory down"},
 		{where: ".", want: true, why: "the working directory holds all of it"},
 		{where: "features", want: true, why: "the directory is named after the tests"},
 		{where: "internal/web", want: false, why: "it holds one file and that file is not a test"},
 		{where: "build", want: false, why: "a directory of output holds no test"},
 		{where: "web", want: false, why: "the only test under it is inside node_modules"},
-		{where: "internal/job/build_test.go", want: false, why: "a file is read by its name, not walked"},
+		{where: "internal/session/build_test.go", want: false, why: "a file is read by its name, not walked"},
 		{where: "nothing/here", want: false, why: "a command cannot take away what is not there"},
 	}
 	if err := os.Chdir(root); err != nil {

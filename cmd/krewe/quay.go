@@ -112,6 +112,27 @@ var removedFlags = map[string]string{
 // holding an error, so the process exits non zero and a caller reading the status cannot take a
 // refusal for a success.
 var removedCommands = map[string]string{
+	"job": "the job subsystem is gone. A job was four stages, a controller and a gate, and it cost " +
+		"more than the work it delivered. Dispatch a session and talk to it" +
+		"\n\n  krewe task [<address>] \"...\"",
+	"flow": "flows are gone with jobs. They were the second way to run work above a session, and " +
+		"nothing runs above a session now" +
+		"\n\n  krewe task [<address>] \"...\"",
+	"role": "roles are gone with jobs. A session holds its workspace's skills and hooks, and there " +
+		"is no role to narrow it to",
+	"answer": "there is no gate to answer. A job asked the questions and jobs are gone. Reply to a " +
+		"session instead" +
+		"\n\n  krewe task <session> \"...\"",
+	"steer":  "a steer recorded what a job should have known, and jobs are gone",
+	"steers": "a steer recorded what a job should have known, and jobs are gone",
+	"history": "a history was a digest of jobs, and jobs are gone. What a session did is under it" +
+		"\n\n  krewe task list <session>",
+	"limits": "limits capped what a workspace's jobs could declare, and jobs are gone",
+	"room":   "the room read the machine for the job controller to schedule against, and jobs are gone",
+	"web": "the briefing page is gone. The console reads the same rows" +
+		"\n\n  krewe",
+	"render": "rendering a briefing page is gone with the page itself",
+	"record": "recording a briefing page is gone with the page itself",
 	"ask": "a task is one word now, and waiting here for the answer is what it does" +
 		"\n\n  krewe task [<address>] \"...\"",
 	"dispatch": "a task is one word now, and letting go of one is a flag on it" +
@@ -135,9 +156,6 @@ var removedCommands = map[string]string{
 		"left is a command\n\n  krewe room",
 	"panel": "the panel is gone. `krewe` on its own opens the console, full width, and nothing beside\n" +
 		"it. A conversation is asked for: press p in the console from inside tmux, or open one on its own\n\n  krewe attach <session>",
-	"work": "declared intent is called a job now, because that is what Kubernetes calls the same " +
-		"thing: run to completion, watched by a controller, with a disposable container underneath" +
-		"\n\n  krewe job <create|list|show|stop>",
 }
 
 // helpSpellings are every way somebody asks what this tool does. Asking for help is the one thing
@@ -153,12 +171,8 @@ var helpSpellings = map[string]bool{
 // The ones that remain say what shape the output takes, or which of two things a word does, rather
 // than where anything is.
 var takenFlags = map[string]map[string]bool{
-	"answer":  {allAnswers: true},
-	"task":    {flagDispatch: true},
-	"job":     jobFlagsTaken(),
-	"history": historyFlagsTaken(),
-	"limits":  limitsFlagsTaken(),
-	"target":  targetFlagsTaken(),
+	"task":   {flagDispatch: true},
+	"target": targetFlagsTaken(),
 }
 
 // refuseFlags returns an error when an invocation uses a flag the command it names does not take. A
@@ -223,14 +237,6 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runWhere(ctx, client, args[1:], out)
 	case "attach":
 		return runAttach(ctx, client, args[1:], out, os.Stdin)
-	case "web":
-		return runWeb(ctx, client, args[1:], out)
-	case "render":
-		return runRender(args[1:], out)
-	case "record":
-		return runRecord(args[1:], out)
-	case "room":
-		return runRoom(ctx, client, out)
 	// Internal: a status line under a conversation runs the first, `krewe` on its own runs the second,
 	// and the model runtime in a sandbox runs the last of them. Not in the usage, because they are not
 	// commands anybody types.
@@ -240,8 +246,6 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runBareConsole(ctx, client, args[1:], addr)
 	case "sessions", "session":
 		return runSessions(ctx, client, args[1:], out)
-	case "answer":
-		return runAnswer(ctx, client, args[1:], out)
 	case "stop":
 		return runStop(ctx, client, args[1:], out)
 	case "drain":
@@ -258,22 +262,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runSkill(ctx, client, args[1:], out)
 	case "hook":
 		return runHook(ctx, client, args[1:], out)
-	case "role":
-		return runRole(ctx, client, args[1:], out)
-	case "steer":
-		return runSteer(ctx, client, args[1:], out)
-	case "steers":
-		return runSteers(ctx, client, args[1:], out)
-	case "history":
-		return runHistory(ctx, client, args[1:], out)
-	case "job":
-		return runJob(ctx, client, args[1:], out)
 	case "target":
 		return runTarget(ctx, client, args[1:], out)
-	case "limits":
-		return runLimits(ctx, client, args[1:], out)
-	case "flow":
-		return runFlow(ctx, client, args[1:], out)
 	default:
 		return fmt.Errorf("unknown command %q\n\n%s", args[0], usage)
 	}

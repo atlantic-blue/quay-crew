@@ -64,21 +64,6 @@ func initializeContextSpendSteps(sc *godog.ScenarioContext) {
 			return conversationGrew(ctx, sessionOfLastTask)
 		})
 
-	// The job's own session rather than the last task's, because a job is run by the controller and
-	// no task was dispatched by hand in that scenario.
-	sc.Step(`^the session that ran the job read (\d+) characters of a file$`,
-		func(ctx context.Context, characters int) error {
-			return conversationGrew(ctx, sessionOfFirstJob, readAFile(characters))
-		})
-
-	sc.Step(`^the caller reads that job back through the tool$`, func(ctx context.Context) error {
-		one, err := readJob(ctx, 0)
-		if err != nil {
-			return err
-		}
-		return runTool(ctx, "job", "show", one.GetId())
-	})
-
 	sc.Step(`^the session reports no breakdown of its context$`, func(ctx context.Context) error {
 		session, err := onlyListedSession(ctx)
 		if err != nil {
@@ -213,25 +198,13 @@ func onlyListedSession(ctx context.Context) (*quaycrewv1.Session, error) {
 	return nil, fmt.Errorf("the session this scenario wrote a conversation for is not in the listing")
 }
 
-// sessionOfLastTask and sessionOfFirstJob are the two ways a scenario reaches a session: it dispatched
-// a task to it, or the controller gave it to a job.
+// sessionOfLastTask is how a scenario reaches the session it dispatched a task to.
 func sessionOfLastTask(ctx context.Context) (string, error) {
 	current, err := worldFrom(ctx).lastTask()
 	if err != nil {
 		return "", err
 	}
 	return current.sessionID, nil
-}
-
-func sessionOfFirstJob(ctx context.Context) (string, error) {
-	one, err := readJob(ctx, 0)
-	if err != nil {
-		return "", err
-	}
-	if one.GetSession() == "" {
-		return "", fmt.Errorf("the job %q has no session, so nothing ran it yet", one.GetTitle())
-	}
-	return one.GetSession(), nil
 }
 
 // conversationGrew adds records to the session's conversation and writes the whole file again.

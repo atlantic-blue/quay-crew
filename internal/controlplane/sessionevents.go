@@ -6,10 +6,8 @@ import (
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-krewe/internal/messaging"
 	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"github.com/atlantic-blue/quay-krewe/internal/store"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -78,35 +76,6 @@ func (s *Server) emit(ctx context.Context, session *quaycrewv1.Session, kind, de
 	if err := s.store.AppendSessionEvent(ctx, event); err != nil {
 		slog.WarnContext(ctx, "a session event could not be written",
 			"session", session.GetId(), "kind", kind, "error", err)
-	}
-	s.exportSessionEvent(ctx, session, event)
-}
-
-// exportSessionEvent offers one already redacted event to the log, keyed by session so one session's
-// records stay in order on one partition. An export that cannot land is logged and dropped: the log
-// is the copy, and the store already holds the record.
-func (s *Server) exportSessionEvent(ctx context.Context, session *quaycrewv1.Session, event *quaycrewv1.SessionEvent) {
-	workspace, err := s.store.GetWorkspace(ctx, session.GetWorkspace())
-	if err != nil {
-		slog.WarnContext(ctx, "no workspace for this session event, so it is not exported",
-			"session", session.GetId(), "kind", event.GetKind(), "error", err)
-		return
-	}
-	topic, err := messaging.Topic(workspace.GetName(), sessionsStream)
-	if err != nil {
-		slog.WarnContext(ctx, "no topic for this session event, so it is not exported",
-			"session", session.GetId(), "kind", event.GetKind(), "error", err)
-		return
-	}
-	value, err := proto.Marshal(event)
-	if err != nil {
-		slog.WarnContext(ctx, "a session event could not be encoded, so it is not exported",
-			"session", session.GetId(), "kind", event.GetKind(), "error", err)
-		return
-	}
-	if err := s.export(ctx, session.GetId(), topic, value); err != nil {
-		slog.WarnContext(ctx, "a session event could not be exported",
-			"session", session.GetId(), "kind", event.GetKind(), "topic", topic, "error", err)
 	}
 }
 

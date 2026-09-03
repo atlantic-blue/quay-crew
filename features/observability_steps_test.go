@@ -6,11 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/atlantic-blue/quay-krewe/internal/logging"
-	"github.com/atlantic-blue/quay-krewe/internal/messaging"
 	"github.com/cucumber/godog"
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -42,25 +40,6 @@ func observabilityFrom(ctx context.Context) *observabilityWorld {
 	o, _ := ctx.Value(observabilityKey{}).(*observabilityWorld)
 	return o
 }
-
-// refusingEventLog is a broker that will not take what it is given. The export path logs and carries
-// on, which is the real log line these scenarios follow: an export that failed is the one an operator
-// comes looking for, and finding it means knowing which call it belonged to.
-type refusingEventLog struct{}
-
-func (refusingEventLog) Publish(context.Context, string, []byte, []byte) error {
-	return fmt.Errorf("the broker refused the record")
-}
-
-func (refusingEventLog) Consume(context.Context, string, []string, messaging.Handler) error {
-	return nil
-}
-
-func (refusingEventLog) ConsumePattern(context.Context, string, string, messaging.Handler) error {
-	return nil
-}
-
-func (refusingEventLog) Close() {}
 
 // loggedLines decodes what the system wrote during this scenario, oldest first.
 func loggedLines(o *observabilityWorld) ([]map[string]any, error) {
@@ -97,14 +76,6 @@ func initializeObservabilitySteps(sc *godog.ScenarioContext) {
 		return context.WithValue(ctx, observabilityKey{}, o), nil
 	})
 
-	sc.Step(`^an event log that refuses what it is given$`, func(ctx context.Context) error {
-		w := worldFrom(ctx)
-		w.eventsRefuse = true
-		// Standing the control plane up again over the same store is what a system whose broker went bad
-		// looks like: the workspace and project from the background are still there.
-		return w.restart()
-	})
-
 	// The span is ended by a gRPC stats handler on the server, and a stats handler sees the end of a
 	// call after the status has gone back to the caller. So a client that has its answer is not
 	// evidence that the span has landed, and reading once asserts on a set that may still be filling.
@@ -123,27 +94,6 @@ func initializeObservabilitySteps(sc *godog.ScenarioContext) {
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
-	})
-
-	sc.Step(`^the system says the task could not be exported$`, func(ctx context.Context) error {
-		w := worldFrom(ctx)
-		// The export happens inside a task, which runs detached from the call that started it, so
-		// asserting before the task lands would assert on a line not written yet.
-		if err := w.settled(ctx); err != nil {
-			return err
-		}
-		o := observabilityFrom(ctx)
-		lines, err := loggedLines(o)
-		if err != nil {
-			return err
-		}
-		for _, line := range lines {
-			if message, _ := line["msg"].(string); strings.Contains(message, "could not be exported") {
-				o.line = line
-				return nil
-			}
-		}
-		return fmt.Errorf("the system never said the task could not be exported; it wrote %d lines", len(lines))
 	})
 
 	// The span is waited for, for the reason the step above gives: a stats handler sees the end of a

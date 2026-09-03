@@ -3,13 +3,15 @@ package main
 import (
 	"strings"
 	"testing"
+
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 )
 
 // Where a project ships is a record rather than a person's memory, so it is read and written the way
 // a ceiling is: the address, and the three values when you are setting them.
 
 func TestTargetSaysNothingIsDeclaredAndHowToSayIt(t *testing.T) {
-	client := aSystemToJobIn(t)
+	client := aSystemToWorkIn(t)
 
 	said := mustRun(t, client, "target")
 
@@ -26,7 +28,7 @@ func TestTargetSaysNothingIsDeclaredAndHowToSayIt(t *testing.T) {
 }
 
 func TestTargetIsDeclaredAndReadBack(t *testing.T) {
-	client := aSystemToJobIn(t)
+	client := aSystemToWorkIn(t)
 
 	said := mustRun(t, client, "target", "me/house-bills",
 		"--account", "123456789012", "--region", "eu-west-2",
@@ -46,7 +48,7 @@ func TestTargetIsDeclaredAndReadBack(t *testing.T) {
 
 // The row the whole record exists for.
 func TestProjectListSaysWhereEachProjectDeploys(t *testing.T) {
-	client := aSystemToJobIn(t)
+	client := aSystemToWorkIn(t)
 	mustRun(t, client, "target", "me/house-bills",
 		"--account", "123456789012", "--region", "eu-west-2",
 		"--identity", "arn:aws:iam::123456789012:role/krewe-deploy")
@@ -60,7 +62,7 @@ func TestProjectListSaysWhereEachProjectDeploys(t *testing.T) {
 
 // Half a target is refused where it is typed, so the operator fixes it before anything is written.
 func TestTargetRefusesHalfOfOne(t *testing.T) {
-	client := aSystemToJobIn(t)
+	client := aSystemToWorkIn(t)
 
 	_, err := runKrewe(t, client, "target", "me/house-bills", "--account", "123456789012")
 
@@ -73,7 +75,7 @@ func TestTargetRefusesHalfOfOne(t *testing.T) {
 }
 
 func TestTargetRefusesAnIdentityFromAnotherAccount(t *testing.T) {
-	client := aSystemToJobIn(t)
+	client := aSystemToWorkIn(t)
 
 	_, err := runKrewe(t, client, "target", "me/house-bills",
 		"--account", "123456789012", "--region", "eu-west-2",
@@ -89,7 +91,7 @@ func TestTargetRefusesAnIdentityFromAnotherAccount(t *testing.T) {
 
 // A workspace is not a project, and a target belongs to a body of work.
 func TestTargetOnAWorkspaceSaysWhichProject(t *testing.T) {
-	client := aSystemToJobIn(t)
+	client := aSystemToWorkIn(t)
 
 	_, err := runKrewe(t, client, "target", "me", "--account", "123456789012",
 		"--region", "eu-west-2", "--identity", "arn:aws:iam::123456789012:role/krewe-deploy")
@@ -103,7 +105,7 @@ func TestTargetOnAWorkspaceSaysWhichProject(t *testing.T) {
 }
 
 func TestTargetIsCleared(t *testing.T) {
-	client := aSystemToJobIn(t)
+	client := aSystemToWorkIn(t)
 	mustRun(t, client, "target", "me/house-bills",
 		"--account", "123456789012", "--region", "eu-west-2",
 		"--identity", "arn:aws:iam::123456789012:role/krewe-deploy")
@@ -128,4 +130,14 @@ func TestTheUsageNamesTheTargetCommand(t *testing.T) {
 			t.Errorf("the usage does not mention %q", want)
 		}
 	}
+}
+
+// aSystemToWorkIn is a workspace and a project, which is the least a command that acts on somewhere
+// needs before it can be typed.
+func aSystemToWorkIn(t *testing.T) quaycrewv1.ControlPlaneServiceClient {
+	t.Helper()
+	client := testClient(t)
+	mustRun(t, client, "workspace", "create", "me")
+	mustRun(t, client, "project", "create", "house-bills")
+	return client
 }

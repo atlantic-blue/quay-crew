@@ -17,24 +17,16 @@ other's way.
 
 ## The words
 
-Eleven resources, and everything the system holds is one of them.
+Eight resources, and everything the system holds is one of them.
 
-**Workspaces.** The outer grouping. It holds projects, and the secrets, roles and skills they share.
+**Workspaces.** The outer grouping. It holds projects, and the secrets and skills they share.
 
 **Projects.** Inside a workspace. A repository, its context, and the sessions working in it.
-
-**Jobs.** What you want. A row the system keeps, so the intent outlives the terminal that asked for
-it. A controller runs it. Close the laptop and it carries on.
 
 **Sessions.** The workers. A container holding one conversation and its history.
 
 **Tasks.** One thing you said to a session, and the reply. Ephemeral: a task is written when it
 starts and nothing survives the process going down.
-
-**Flows.** An automation graph the system runs: dispatch, choice, ask, wait and trigger nodes, joined
-by edges.
-
-**Roles.** A named way of working: a brief, the model it runs on, and the material it may receive.
 
 **Skills.** What the system can do. Imported, then attached to a workspace so its sessions hold them.
 
@@ -47,12 +39,8 @@ session as a file rather than through its environment.
 **Context.** What the system, the workspace and the project know, as memory files. It is a resource
 with levels, not a setting.
 
-Beside them are the **limits**, which are settings rather than resources: per workspace, how deep the
-job tree may go, how many run at once, what a tree may spend, and how long an unused session is kept.
-
-A job is a Kubernetes Job: declared intent, run to completion, watched by a controller, with a
-disposable container underneath. A session is deliberately not a Pod. A Pod is disposable and
-interchangeable with its replacement, and a session's whole value is the history it holds.
+A session is deliberately not a Pod. A Pod is disposable and interchangeable with its replacement,
+and a session's whole value is the history it holds.
 
 ## Quick start
 
@@ -78,20 +66,9 @@ Then run `krewe` with no arguments to open the console. `make help` lists every 
 
 ## Where to read next
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): the whole picture, the stack, the principles and
-  the plan.
-- [`docs/ORCHESTRATION.md`](docs/ORCHESTRATION.md): a job as a record the system keeps, the controller,
-  the lease and the capability model.
-- [`docs/TASKS.md`](docs/TASKS.md): one task from dispatch to the records it leaves, and the words
-  that get used for each other.
-- [`docs/WORKSPACE.md`](docs/WORKSPACE.md): one workspace from nothing to working.
-- [`docs/SANDBOX.md`](docs/SANDBOX.md): the sandbox, and what runs without a subscription.
-- [`docs/ROLES.md`](docs/ROLES.md) and [`docs/SKILLS.md`](docs/SKILLS.md): what a role is, what a
-  skill is, and how each one reaches a session.
-- [`docs/DATABASE.md`](docs/DATABASE.md), [`docs/EVENTS.md`](docs/EVENTS.md) and
-  [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md): the store, the event log and the signals.
-- [`docs/CONTEXT-SPEND.md`](docs/CONTEXT-SPEND.md): where a session's context actually goes, measured,
-  and the run to repeat it. Read it before proposing a change to how a session reads code.
+The scenarios in [`features/`](features) are what this system does, written out one behaviour at a
+time. [`CHANGELOG.md`](CHANGELOG.md) is what shipped and why. Anything not in one of those two does
+not exist.
 
 ## License
 

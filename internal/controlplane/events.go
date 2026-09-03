@@ -6,16 +6,11 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/auth"
-	"github.com/atlantic-blue/quay-krewe/internal/messaging"
 	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"github.com/atlantic-blue/quay-krewe/internal/store"
 	"github.com/atlantic-blue/quay-krewe/internal/telemetry"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
-
-// tasksStream is the logical stream task events are published on, within a workspace's namespace.
-const tasksStream = "tasks"
 
 // beginTask writes a task the moment it starts, and hands back the record it opened so the landing
 // can close that same record rather than write a second one.
@@ -48,7 +43,6 @@ func (s *Server) landTask(ctx context.Context, session *quaycrewv1.Session, task
 	if err := s.store.FinishTask(ctx, task.GetId(), task.GetStatus(), task.GetReply(), task.GetFailure()); err != nil {
 		slog.WarnContext(ctx, "a task could not be closed in history", "session", session.GetId(), "error", err)
 	}
-	s.exportTask(ctx, session, task)
 }
 
 // recordHistory writes a task into the store, in the same breath as the task itself, and then
@@ -60,8 +54,7 @@ func (s *Server) landTask(ctx context.Context, session *quaycrewv1.Session, task
 // The context is detached first: a client hanging up after a long task used to cancel the write and
 // silently lose the record of the very task they were waiting on.
 func (s *Server) recordHistory(ctx context.Context, session *quaycrewv1.Session, event *quaycrewv1.TaskEvent) {
-	s.writeTask(ctx, session, event)
-	s.exportTask(context.WithoutCancel(ctx), session, event)
+	s.writeTask(context.WithoutCancel(ctx), session, event)
 }
 
 // writeTask redacts a task, stamps it with where it belongs, and stores it.
@@ -107,29 +100,6 @@ func (s *Server) writeTask(ctx context.Context, session *quaycrewv1.Session, eve
 	}
 }
 
-// exportTask offers one already redacted task to the event log. The log is an audit export for
-// whatever second consumer eventually wants it, so a system with no broker configured loses nothing
-// but the export, and an export that could not land is logged and dropped rather than failing
-// anything.
-//
-// The record is keyed by session id, so every event for one session lands on one partition and stays
-// in the order it happened. A consumer rebuilding a conversation depends on that.
-func (s *Server) exportTask(ctx context.Context, session *quaycrewv1.Session, event *quaycrewv1.TaskEvent) {
-	topic, err := s.tasksTopic(ctx, session.GetWorkspace())
-	if err != nil {
-		slog.WarnContext(ctx, "no topic for this task, so it is not exported", "session", session.GetId(), "error", err)
-		return
-	}
-	value, err := proto.Marshal(event)
-	if err != nil {
-		slog.WarnContext(ctx, "a task could not be encoded, so it is not exported", "session", session.GetId(), "error", err)
-		return
-	}
-	if err := s.export(ctx, session.GetId(), topic, value); err != nil {
-		slog.WarnContext(ctx, "a task could not be exported", "session", session.GetId(), "topic", topic, "error", err)
-	}
-}
-
 // sealedValues is everything the system holds that must never be persisted in the clear, keyed by the
 // name it would be redacted under: every secret the workspace has sealed, whether or not any
 // sandbox was handed it, and the driver's token for a driver session. A name whose value cannot be
@@ -163,17 +133,4 @@ func (s *Server) sealedForWorkspace(ctx context.Context, workspace string) map[s
 		values[ref.Name] = value
 	}
 	return values
-}
-
-// tasksTopic names a workspace's task stream.
-//
-// It uses the workspace's name rather than its identifier, because somebody reading `rpk topic list`
-// should be able to tell which workspace they are looking at. A workspace cannot be renamed today;
-// if that ever lands, its old topic stays where it is and this is the reason why.
-func (s *Server) tasksTopic(ctx context.Context, workspaceID string) (string, error) {
-	workspace, err := s.store.GetWorkspace(ctx, workspaceID)
-	if err != nil {
-		return "", err
-	}
-	return messaging.Topic(workspace.GetName(), tasksStream)
 }

@@ -22,19 +22,12 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/auth"
-	"github.com/atlantic-blue/quay-krewe/internal/capacity"
 	"github.com/atlantic-blue/quay-krewe/internal/deploy"
 	"github.com/atlantic-blue/quay-krewe/internal/display"
-	"github.com/atlantic-blue/quay-krewe/internal/flow"
-	"github.com/atlantic-blue/quay-krewe/internal/forge"
-	"github.com/atlantic-blue/quay-krewe/internal/headroom"
-	"github.com/atlantic-blue/quay-krewe/internal/job"
 	"github.com/atlantic-blue/quay-krewe/internal/manual"
-	"github.com/atlantic-blue/quay-krewe/internal/messaging"
 	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"github.com/atlantic-blue/quay-krewe/internal/name"
 	"github.com/atlantic-blue/quay-krewe/internal/repository"
-	"github.com/atlantic-blue/quay-krewe/internal/role"
 	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 	"github.com/atlantic-blue/quay-krewe/internal/secrets"
 	"github.com/atlantic-blue/quay-krewe/internal/skill"
@@ -79,8 +72,6 @@ type Info struct {
 	// State is where a conversation and a project's files are kept, for example "host directory".
 	// Empty means they live in the container and are destroyed with it.
 	State string
-	// Events is the event log a task is recorded on. Empty means nothing is connected to it.
-	Events string
 	// Secrets is where a workspace's credentials are kept, for example "postgres, sealed".
 	Secrets string
 	// SandboxBuild is the build of the system the sandbox image was made from. Empty means the image
@@ -101,14 +92,11 @@ type Config struct {
 	// Storage is where a workspace's conversation store lives on the host. The control plane reads it
 	// to tell a session whose conversation is still there from one whose handle outlived it.
 	Storage sandbox.Storage
-	// Events is the log every task is written to. Nil means nowhere, which is a stack with no broker
-	// configured rather than an error: tasks run, and nothing records that they did.
-	Events messaging.EventLog
-	// Info describes the three above in words, for the console's status block.
+	// Info describes the four above in words, for the console's status block.
 	Info Info
 	// Skills are the capabilities the system has been given, read from files, and every session gets them.
 	// A skill imported into the store and attached to a workspace reaches that workspace's sessions as
-	// well, which is the other half of the same idea. See docs/SKILLS.md.
+	// well, which is the other half of the same idea.
 	Skills []skill.Skill
 	// SkillsHost is the skills directory as the host daemon sees it, which is what a bind mount needs.
 	// Empty means skills are not mounted, the same way an unset data directory means state is not kept.
@@ -138,39 +126,9 @@ type Config struct {
 	// DescribeEvery is how many tasks past its description a conversation goes before the system writes
 	// it again. Zero is off.
 	DescribeEvery int
-	// Headroom reads the machine the system runs on. Nil means the system cannot read it, and every
-	// figure then says unknown, which is what a system with no daemon to ask should say.
-	Headroom headroom.Source
-	// SystemReserve is what the system holds back for its own containers before it admits any sandbox.
-	// The zero value takes the measured floor. What binds is the larger of this and what the system's
-	// own containers are actually holding, read on every sample.
-	SystemReserve capacity.Request
-	// HeadroomEvery is how often the machine is read. Zero takes headroom.Every.
-	HeadroomEvery time.Duration
 	// StartWait is how long a dispatch is given to get from a session row to a sandbox ready for its
 	// first task. Zero takes startWait, which is measured from what a healthy start costs.
 	StartWait time.Duration
-	// ExportWait is how long one record's export to the event log is given before it is dropped.
-	// Zero takes exportWait.
-	ExportWait time.Duration
-	// FlowPollEvery is how often the flow poller looks for runs to carry on: a wait that came due, a
-	// schedule that fired, a step whose job ended. Zero takes flow.DefaultPollEvery.
-	FlowPollEvery time.Duration
-	// JobTickEvery is how often the job controller looks at the job the system holds. Zero takes
-	// job.DefaultTickEvery.
-	JobTickEvery time.Duration
-	// Forge reads back the pull requests the crew opened. Nil means the system has nothing to read one
-	// with, and every reading then says unknown, which is what a system with no forge should say.
-	Forge forge.Reader
-	// PullRequestEvery is how often those pull requests are read. Zero takes job.DefaultReadEvery.
-	PullRequestEvery time.Duration
-	// JobLease is how long a controller holds a job before another may take it. Zero takes
-	// job.DefaultLease, which is derived from what a tick costs rather than chosen.
-	JobLease time.Duration
-	// ControllerName is what this system writes on the leases it takes, on a job and on a
-	// trigger alike. Empty mints one, which is right for a test and wrong for a system an investigator
-	// has to read a record from.
-	ControllerName string
 }
 
 // Identity is who a commit is by.
@@ -197,18 +155,6 @@ type Server struct {
 	runner   model.Runner
 	provider sandbox.Provider
 	storage  sandbox.Storage
-	// flows begins and drives automation runs. It dispatches through this same server, so a flow
-	// can do exactly what the operator who started it could do and nothing more.
-	flows flowRunner
-	// flowPoller resumes waiting runs whose time has come. Started by whoever owns the process,
-	// because a goroutine hidden inside a constructor is a lifetime nobody can see.
-	flowPoller *flow.Poller
-	// jobController makes reality match the job the system holds. Started the same way and for the
-	// same reason.
-	jobController *job.Controller
-	// grants are the credentials this system has minted for jobs, so a call carrying one is
-	// recognised as that job rather than as the operator.
-	grants *grants
 	// reachable is where a session dials to reach this control plane. Empty means it cannot.
 	reachable string
 	// driverToken is the driver's own token, handed only to the driver so its calls are recognised
@@ -231,23 +177,14 @@ type Server struct {
 	skills       []skill.Skill
 	skillsHost   string
 	sandboxImage string
-	events       messaging.EventLog
 	info         Info
 	// taskMetrics publishes what each task spent. Nil records nothing, which is what a system with no
 	// telemetry provider installed does.
 	taskMetrics *telemetry.TaskMetrics
-	// placed is what the system has put on this machine and what it has promised to put there. It is
-	// what admission adds up, and it is a ledger rather than a reading because a container appears
-	// seconds after the job that asked for it was admitted.
-	placed *capacity.Ledger
-	// reserve is the floor under what the system keeps for its own containers.
-	reserve capacity.Request
 	// headroom keeps the last reading of the machine. Everything that reports it reads the sampler
 	// and never the daemon, so a slow daemon slows the sampler and never a command.
-	headroom *headroom.Sampler
 	// pullRequests reads back the pull requests the crew opened, on its own timer, and keeps what the
 	// forge said on the job. Every page reads the row, so a slow forge slows this and never a command.
-	pullRequests *job.Watcher
 
 	// lastHealth is what the last probe of the parts a dispatch has to write to found. It is kept
 	// rather than taken on demand for the reason the headroom sample is: the part that is down is the
@@ -255,11 +192,9 @@ type Server struct {
 	healthMu   sync.RWMutex
 	lastHealth HealthReading
 
-	// startWait is the budget from a session row to a sandbox ready for its first task, and
-	// exportWait what one export to the event log is given. Both are fields rather than constants so
-	// a test can drive a system whose waits run out while somebody is watching.
-	startWait  time.Duration
-	exportWait time.Duration
+	// startWait is the budget from a session row to a sandbox ready for its first task. A field
+	// rather than a constant so a test can shorten it.
+	startWait time.Duration
 
 	// starts is the system's one sandbox start at a time, held as a channel rather than a mutex
 	// because a mutex cannot be given up: a start that never ended held every later dispatch behind
@@ -289,7 +224,6 @@ func NewServer(cfg Config) *Server {
 		runner:        cfg.Runner,
 		provider:      cfg.Provider,
 		storage:       cfg.Storage,
-		events:        eventsOr(cfg.Events),
 		info:          cfg.Info,
 		reachable:     cfg.Reachable,
 		driverToken:   cfg.DriverToken,
@@ -300,13 +234,8 @@ func NewServer(cfg Config) *Server {
 		skillsHost:    cfg.SkillsHost,
 		sandboxImage:  cfg.SandboxImage,
 		sandboxes:     make(map[string]sandbox.Sandbox),
-		headroom:      headroom.NewSampler(cfg.Headroom, cfg.HeadroomEvery),
-		placed:        capacity.NewLedger(),
-		reserve:       reserveOr(cfg.SystemReserve),
 		startWait:     orWait(cfg.StartWait, startWait),
-		exportWait:    orWait(cfg.ExportWait, exportWait),
 		starts:        make(chan struct{}, 1),
-		grants:        newGrants(),
 	}
 	// Creating an instrument fails only on a name this package chose, so a failure here is a defect
 	// in this file rather than an operator's problem. Say it and carry on unmeasured: a system that
@@ -316,45 +245,7 @@ func NewServer(cfg Config) *Server {
 		slog.Warn("tasks are not being measured", "error", err)
 	}
 	server.taskMetrics = metrics
-	// The engine dispatches through this same server rather than dialing it: it is already inside
-	// the process, and a run is started by a caller the interceptor has already authenticated. It
-	// reaches nothing the caller could not, because these are the same two methods.
-	engine := flow.NewEngine(cfg.Store, server, server, server)
-	server.flows = engine
-	// The same name the job controller writes on its leases, because both claims are this system's and
-	// an investigator reading either wants to know which system took it.
-	server.flowPoller = flow.NewPoller(engine, cfg.FlowPollEvery, nil).Owned(cfg.ControllerName)
-	// The controller reads and writes rows and dispatches through this same server, which is the
-	// property that lets it move out of this process later without changing a line of its logic.
-	server.jobController = job.NewController(cfg.Store, server, server, server, nil).
-		Every(cfg.JobTickEvery).Leasing(cfg.JobLease).Owned(cfg.ControllerName).
-		Redacting(server).Exporting(server).Reading(server).
-		// The machine, asked before a job is started rather than after it has been killed.
-		Placing(server).
-		// The credentials a job's sessions hold, taken back the moment the job ends. It is what ends
-		// a credential in a working system; its expiry is the backstop behind it.
-		Revoking(server).
-		// The work a job leaves behind, pushed rather than described. Without it a job that stops
-		// without a pull request can only say that the system cannot reach its files.
-		Publishing(server).
-		// The signal that stops a reclaim closing a container an operator is typing into. Without it
-		// the controller reclaims nothing, whatever the workspace's times say.
-		Watching(server).
-		// How full each session's context window is, which is what the ceiling is checked against.
-		// Without it a session is given new work however full it is, which is what every version of
-		// this loop did before the ceiling existed.
-		Measuring(server)
-	// And the pull requests those jobs opened are read back on a timer of their own. A job ends when
-	// its session answers; what happens to the work afterwards happens on a forge, which is why this
-	// is not part of the controller's tick.
-	server.pullRequests = job.NewWatcher(cfg.Store, cfg.Forge, cfg.PullRequestEvery)
 	return server
-}
-
-// reserveOr is what the system keeps back for itself, and the measured floor where it was given
-// nothing on that axis.
-func reserveOr(configured capacity.Request) capacity.Request {
-	return configured.Or(capacity.DefaultReserve())
 }
 
 // orWait is the budget the system was configured with, and the measured default when it was given none.
@@ -366,13 +257,6 @@ func orWait(configured, standard time.Duration) time.Duration {
 }
 
 // eventsOr is the log to publish on, and Discard when there is none, so nothing downstream has to
-// ask whether there is a broker before writing a record.
-func eventsOr(log messaging.EventLog) messaging.EventLog {
-	if log == nil {
-		return messaging.Discard{}
-	}
-	return log
-}
 
 // ListTasks returns a session's history, oldest first, from the tasks the dispatch path writes in
 // the same breath as each task.
@@ -400,7 +284,6 @@ func (s *Server) GetInfo(_ context.Context, _ *quaycrewv1.GetInfoRequest) (*quay
 		Sandbox:      s.info.Sandbox,
 		Store:        s.info.Store,
 		State:        s.info.State,
-		Events:       s.info.Events,
 		Secrets:      s.info.Secrets,
 		SandboxBuild: s.info.SandboxBuild,
 		Version:      s.info.Version,
@@ -488,15 +371,7 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 	if mount, under := s.renderHooks(ctx, session); under {
 		mounts = append(mounts, mount)
 	}
-	// The machine, one last time, before anything is created. The controller has already decided
-	// this fits and is holding the room under the same key; this is the check that stands between a
-	// dispatch nobody scheduled and a runtime that stops answering.
-	if err := s.placeSandbox(ctx, session); err != nil {
-		return nil, err
-	}
 	cfg := boxOf(session)
-	// What it asked for travels with it, so the container carries the request the system reserved.
-	cfg.Request = s.requestFor(ctx, session.GetWorkspace())
 	// No credential at sandbox birth. A sandbox keeps the configuration it was made with, so a
 	// credential written here would label every later task with the first task's grant, and one
 	// minted after birth would never reach the container at all. It travels on the task instead.
@@ -527,7 +402,6 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 			done()
 			// And its room goes back with it, or a machine loses a sandbox's worth of capacity to
 			// every setup that failed.
-			s.unplaceSandbox(session.GetId())
 		}
 		return nil, err
 	}
@@ -637,17 +511,6 @@ func (s *Server) syncContextExcept(ctx context.Context, session *quaycrewv1.Sess
 		return
 	}
 	// A session running as a role is never read back into the system's memory.
-	//
-	// It was given a brief rather than the system's context, so what sits in its file is not an edit of
-	// what the store holds: whoever wrote it had never seen the body it would be replacing. Reading it
-	// back is also the hole in the boundary, and the one that matters most. A role that receives no
-	// context still writes a note at the end of its file, unmarked text belongs to the last scope,
-	// and the last scope of the outer file is the workspace. One session that was given nothing would
-	// then be writing what every session in the workspace is told.
-	if session.GetRole() != "" {
-		s.renderContext(ctx, session)
-		return
-	}
 	for at, levels := range contextFiles(session) {
 		// Read back first. Something inside the sandbox writing into its own memory has learned
 		// something, and overwriting that on the next task would make the system's memory strictly
@@ -719,11 +582,7 @@ func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session)
 	if len(dirs) != 2 {
 		return
 	}
-	// What the session may be told. A role receives the system's context only where it says so, and the
-	// brief of the role it runs as always: the brief is not context, it is the whole instruction of
-	// this session.
-	receivesContext := s.receives(ctx, session, role.MaterialContext)
-	brief := s.roleBrief(ctx, session)
+	brief := ""
 	for at, levels := range contextFiles(session) {
 		sections := make([]sandbox.Section, 0, len(levels)+2)
 		// Who the session is, first, because everything under it is read in that light. It goes in
@@ -735,7 +594,7 @@ func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session)
 		// A role that does not receive context is given none of it: the levels are not rendered, so
 		// the file holds the brief and whatever the session itself wrote, and nothing else.
 		told := levels
-		if !receivesContext {
+		if false {
 			told = nil
 		}
 		for _, level := range told {
@@ -860,7 +719,6 @@ func contextFiles(session *quaycrewv1.Session) [][]contextLevel {
 func (s *Server) closeSandbox(ctx context.Context, sessionID string) {
 	// The room goes back first. Everything below can fail, and a machine that keeps counting a
 	// container it has removed admits less work every time one is stopped.
-	s.unplaceSandbox(sessionID)
 	s.sandboxesMu.Lock()
 	box, ok := s.sandboxes[sessionID]
 	delete(s.sandboxes, sessionID)
@@ -905,11 +763,9 @@ func (s *Server) ReapStrays(ctx context.Context) {
 		switch {
 		case errors.Is(err, store.ErrNotFound):
 			_ = s.provider.Remove(ctx, id)
-			s.unplaceSandbox(id)
 		case err != nil:
 		case session.GetArchivedAt() != nil, session.GetStatus() == StatusStopped:
 			_ = s.provider.Remove(ctx, id)
-			s.unplaceSandbox(id)
 		}
 	}
 }
@@ -1280,18 +1136,6 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 		return nil, status.Error(codes.InvalidArgument, "text is required")
 	}
 
-	// The role is resolved before the session exists, so a step naming a role the workspace does not
-	// hold leaves no session and no container behind: it is refused, by name, having done nothing.
-	if named := req.GetRole(); named != "" {
-		owner, err := s.store.GetProject(ctx, req.GetProject())
-		if err != nil {
-			return nil, storeError(err, "project")
-		}
-		if _, err := s.roleFor(ctx, owner.GetWorkspace(), named); err != nil {
-			return nil, err
-		}
-	}
-
 	handle := req.GetHandle()
 	if handle == "" {
 		handle = store.NewID()
@@ -1300,7 +1144,7 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	// a newline in it draws a row two rows tall and a long one pushes the columns that say what the
 	// session is doing off the screen.
 	session, created, err := s.store.FindOrCreateSession(ctx, req.GetProject(), handle,
-		store.Birth{Mode: s.birthMode, Role: req.GetRole(), Title: tidyLabel(req.GetTitle())})
+		store.Birth{Mode: s.birthMode, Title: tidyLabel(req.GetTitle())})
 	if err != nil {
 		return nil, storeError(err, "project")
 	}
@@ -1361,13 +1205,11 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 			opened *quaycrewv1.TaskEvent) {
 			defer s.tasking.Done()
 			_, _ = s.task(context.WithoutCancel(ctx), session, text, credential, building, opened)
-		}(session, req.GetText(), s.credentialForTask(ctx, req),
-			s.buildingUnderTheBoundary(ctx, req.GetExecution()), opened)
+		}(session, req.GetText(), "", false, opened)
 		return &quaycrewv1.DispatchResponse{Id: session.GetId(), Handle: handle}, nil
 	}
 
-	reply, err := s.task(ctx, session, req.GetText(), s.credentialForTask(ctx, req),
-		s.buildingUnderTheBoundary(ctx, req.GetExecution()), nil)
+	reply, err := s.task(ctx, session, req.GetText(), "", false, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1409,7 +1251,7 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, cr
 		// The system's own words for a task it never started, from the one place they are written down.
 		// The controller reads this to tell a job it could not start from a job that was wrong, and
 		// puts the first back to pending rather than failing it.
-		failure := job.NoSandbox + ": " + err.Error()
+		failure := "no sandbox" + ": " + err.Error()
 		s.landTask(ctx, session, task, StatusFailed, "", failure)
 		s.emit(ctx, session, KindSessionErrored, failure)
 		return "", sandboxError(err, "create sandbox")
@@ -1971,17 +1813,6 @@ func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, crede
 			env[auth.TokenEnv] = s.driverToken
 		}
 	}
-	// The boundary this one task runs under, where the job it runs builds against tests it did not
-	// write. The test gate reads this name and refuses a write to a test in this session, so the rule
-	// is checked at the moment the session tries rather than stated in its brief and weighed against
-	// everything else it was told.
-	//
-	// Per task rather than at sandbox birth, for the reason the credential below is: a sandbox keeps
-	// what it was made with, and one conversation holds the tasks of one job, so a value written at
-	// birth would put every later task of that session under a boundary that belongs to one of them.
-	if building {
-		env[buildingEnv] = "1"
-	}
 	// The credential this one task runs under, where the task runs a job. It is minted for
 	// that job, carries the verbs its role declared, and expires with it, so a value read out of the
 	// container grants what that job could do and only until it ends.
@@ -2168,9 +1999,6 @@ func (s *Server) withContextWindows(ctx context.Context, sessions []*quaycrewv1.
 			// share on its own, which is what it showed before there was a ceiling at all, rather than
 			// marking a row against a number nobody answered with.
 			ceilings[workspace] = 0
-			if limits, err := s.store.WorkspaceLimits(ctx, workspace); err == nil {
-				ceilings[workspace] = int32(limits.ContextCeiling())
-			}
 		}
 		size, _ := s.storage.ContextWindowSize(workspace)
 		session.ContextWindow = &quaycrewv1.ContextWindow{

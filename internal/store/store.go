@@ -20,11 +20,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/deploy"
-	"github.com/atlantic-blue/quay-krewe/internal/flow"
 	"github.com/atlantic-blue/quay-krewe/internal/hook"
-	"github.com/atlantic-blue/quay-krewe/internal/job"
-	"github.com/atlantic-blue/quay-krewe/internal/origin"
-	"github.com/atlantic-blue/quay-krewe/internal/role"
 	"github.com/atlantic-blue/quay-krewe/internal/session"
 	"github.com/atlantic-blue/quay-krewe/internal/skill"
 	"github.com/google/uuid"
@@ -66,18 +62,6 @@ const StatusReclaimed = "reclaimed"
 // what starved the reclaim: see IdleSandboxes.
 func holdingStatuses() []string { return []string{"idle", "failed"} }
 
-// terminalPhases are the phases of a job that no longer hold a session open. Read from the job
-// package rather than listed here, so a phase added there cannot be forgotten in these two queries.
-func terminalPhases() []string {
-	var terminal []string
-	for _, phase := range job.Phases() {
-		if job.Terminal(phase) {
-			terminal = append(terminal, phase)
-		}
-	}
-	return terminal
-}
-
 // ErrSkillChanged is returned when a version of a skill is imported again carrying a different skill.
 //
 // It is a refusal rather than an overwrite because a workspace pins the version it holds. Overwriting
@@ -89,24 +73,6 @@ var ErrSkillChanged = errors.New("store: that version of the skill is already im
 type Imported struct {
 	skill.Skill
 	ImportedAt time.Time
-}
-
-// ErrRoleChanged is returned when a version of a role is imported again carrying a different role.
-//
-// A refusal rather than an overwrite, for the reason ErrSkillChanged gives: a workspace pins the
-// version it holds, and a role that changed underneath it would change how a session already running
-// as it is told to work. The way forward is to raise the version in the manifest.
-var ErrRoleChanged = errors.New("store: that version of the role is already imported and differs")
-
-// ImportedRole is a role the system holds: the role as its author wrote it, when it came in, and where
-// it came from.
-type ImportedRole struct {
-	role.Role
-	ImportedAt time.Time
-	// Origin is where the files were read from, as the machine that imported them saw it. It is not
-	// part of the fingerprint: the same bytes imported from two checkouts are one role, read in two
-	// places, and a fingerprint that disagreed would refuse the second import as a different role.
-	Origin origin.Origin
 }
 
 // ErrHookChanged is returned when a version of a hook is imported again carrying a different hook.
@@ -133,11 +99,8 @@ type Birth struct {
 	// unknown or empty one is the mode every session had before this was configurable, so a system
 	// that says nothing does not change under an upgrade.
 	Mode string
-	// Role is the role the session works as, empty for a session that works as nobody in particular.
-	Role string
-	// Title is what to call the session, from whoever dispatched it. A job puts its declared title
-	// here, so the name is on the row before the first task runs. Empty for a caller that has no name
-	// for the conversation yet.
+	// Title is what to call the session, from whoever dispatched it, so the name is on the row before
+	// the first task runs. Empty for a caller that has no name for the conversation yet.
 	Title string
 }
 
@@ -316,32 +279,6 @@ type Store interface {
 	// SystemHooks returns what the system holds, at the versions it pinned, files included.
 	SystemHooks(ctx context.Context) ([]ImportedHook, error)
 
-	// The same questions again for roles, and a separate set of calls for the same reason hooks are
-	// separate: a role is its own entity, and a workspace that holds a skill has said nothing about
-	// which roles its job may be split into.
-	//
-	// ImportRole takes a role into the system at the version its manifest declares. The same name and
-	// version again is fine when it is the same role and refused when it is not.
-	ImportRole(ctx context.Context, imported ImportedRole) error
-	// GetRole returns one revision of a role.
-	GetRole(ctx context.Context, name string, version int) (ImportedRole, error)
-	// ListRoles returns the newest revision of every role the system holds.
-	ListRoles(ctx context.Context) ([]ImportedRole, error)
-	// AttachRole gives a workspace a role, pinned to the newest revision the system holds now.
-	AttachRole(ctx context.Context, workspace, name string) (ImportedRole, error)
-	// DetachRole takes a role away from a workspace. The role stays imported.
-	DetachRole(ctx context.Context, workspace, name string) error
-	// WorkspaceRoles returns the roles a workspace holds, at the versions it pinned.
-	WorkspaceRoles(ctx context.Context, workspace string) ([]ImportedRole, error)
-	// AttachSystemRole gives the role to the whole system, so every workspace has it and one made
-	// tomorrow has it too.
-	AttachSystemRole(ctx context.Context, name string) (ImportedRole, error)
-	// DetachSystemRole takes a role away from the system. A workspace that attached it for itself keeps
-	// it: the two are separate statements, and the narrower one is not undone by the wider one.
-	DetachSystemRole(ctx context.Context, name string) error
-	// SystemRoles returns what the system holds, at the versions it pinned.
-	SystemRoles(ctx context.Context) ([]ImportedRole, error)
-
 	// AppendTask records one task of a session's history, and is safe to call twice with the same
 	// task: a caller retrying a write it is not sure landed must leave one task, so a record it has
 	// already written must not double it. The task's Id is what makes that possible.
@@ -361,292 +298,10 @@ type Store interface {
 	// way it happened. An empty session asks for the whole system's, which is what a view of what is
 	// going on right now reads. A limit of zero or less means the default.
 	ListSessionEvents(ctx context.Context, session string, limit int) ([]*quaycrewv1.SessionEvent, error)
-
-	// The flow engine's substrate: a run and its transitions are rows written in one transaction,
-	// which is what makes reconstructable a guarantee rather than a sentence. The contract is
-	// flow.Store; the reads beside it are for listings and tests.
-	ImportFlowGraph(ctx context.Context, name string, version int, definition string) error
-	LatestFlowGraph(ctx context.Context, name string) (int, string, error)
-	FlowGraph(ctx context.Context, name string, version int) (string, error)
-	DueFlowRuns(ctx context.Context, now time.Time) ([]*flow.Run, error)
-	LandedFlowSteps(ctx context.Context, limit int) ([]flow.Landed, error)
-	FlowRunCarrier(ctx context.Context, run string) (string, error)
-	ScheduleFlow(ctx context.Context, graph, project string, every time.Duration, next time.Time) error
-	UnscheduleFlow(ctx context.Context, graph, project string) error
-	DueFlowSchedules(ctx context.Context, now time.Time) ([]flow.Schedule, error)
-	MarkFlowScheduled(ctx context.Context, graph, project string, next time.Time) error
-	CreateFlowRun(ctx context.Context, run *flow.Run, carrier *job.Job, records []*job.Event, trigger string) error
-	// The pending trigger queue: something that happened, written down so a run starts from it. A
-	// row is raised in the transaction of whatever caused it, read off an indexed query, and claimed
-	// with a conditional write, so two pollers reading one trigger start one run. The contract is
-	// flow.Store.
-	RaiseTrigger(ctx context.Context, trigger *flow.Trigger) error
-	PendingTriggers(ctx context.Context, limit int) ([]*flow.Trigger, error)
-	ClaimTrigger(ctx context.Context, id string, lease job.Lease) (*flow.Trigger, error)
-	FailTrigger(ctx context.Context, id, reason string) error
-	GetTrigger(ctx context.Context, id string) (*flow.Trigger, error)
-	AdvanceFlowRun(ctx context.Context, run *flow.Run, transition flow.Transition) error
-	GetFlowRun(ctx context.Context, id string) (*flow.Run, error)
-	ListFlowRuns(ctx context.Context, project string) ([]*flow.Run, error)
-	// StopFlowRun halts a run that is still running, keeping the reason. A run that already ended is
-	// refused rather than overwritten: the record of how it ended is the useful part.
-	StopFlowRun(ctx context.Context, id, reason string) (*flow.Run, error)
-	ListFlowTransitions(ctx context.Context, run string) ([]flow.RecordedTransition, error)
-	// Job is declared intent, kept as a row so it outlives the caller that asked for it. A caller
-	// writes a job and a controller makes reality match it.
-	//
-	// CreateJob writes the job and the record of its declaration in one transaction. A row with no
-	// record of how it came to exist, and a record of a declaration that is not there, are both
-	// states nothing can explain afterwards.
-	//
-	// A job that claims a piece of work another job is still holding is refused with a *job.Held
-	// naming that job, and nothing is written. The check belongs here rather than above the store
-	// because it has to happen inside the transaction that writes the row: a check made before the
-	// write is a check two callers declaring at the same moment both pass.
-	CreateJob(ctx context.Context, declared *job.Job, event *job.Event) error
-	// GetJob reads one job back, whole, its answer included.
-	GetJob(ctx context.Context, id string) (*job.Job, error)
-	// ListJob returns what matches, newest first and without answers, because a listing of a hundred
-	// answers is a listing nobody can read. A caller that wants an answer asks for one job.
-	ListJobs(ctx context.Context, filter job.Filter) ([]*job.Job, error)
-	// JobsCausedBy is how many jobs the session running this one declared. It is the count the
-	// workspace's ceiling on declaring is held against, and it is a count rather than a listing on
-	// purpose: what caused a job says how the row came about and never what it contains.
-	JobsCausedBy(ctx context.Context, cause string) (int, error)
-	// JobHistory returns every job declared inside a window, as digests, newest first.
-	//
-	// Every job and not a page of them: the caller adds them up and then cuts them down, so the
-	// summary a reader trusts covers the window rather than the rows that fitted. Digests because a
-	// history that carried each brief and each answer would cost a reader the context it wanted the
-	// history in order to spend.
-	JobHistory(ctx context.Context, query job.HistoryQuery) ([]*job.Digest, error)
-	// StopJob halts job that has not ended, keeping the reason, and writes the record of the stop
-	// beside it. Job that already ended is refused rather than overwritten: how it ended is the
-	// useful part.
-	StopJob(ctx context.Context, id, reason string, event *job.Event) (*job.Job, error)
-	// AskJob puts a running job's question on the record and stops it there. AnswerJob is the other
-	// half: it writes what a person decided and puts the job back to pending, so the controller
-	// starts it again and hands the answer to the session that asked. Each applies only from the one
-	// phase it moves out of, in the same statement, so a question cannot be answered twice.
-	AskJob(ctx context.Context, id, question string, event *job.Event) (*job.Job, error)
-	AnswerJob(ctx context.Context, id, answer string, event *job.Event) (*job.Job, error)
-	// ProposeJobPlan writes the plan the crew wrote for a job and puts the question about it to a
-	// person, in one movement, so a reader never finds a job asking with no plan on it. ApproveJobPlan
-	// is the other half: it records that a person said yes and puts the job back to pending, so the
-	// work starts against the plan that was approved. An answer that is not the approval takes the
-	// ordinary AnswerJob road, because it is a correction the session writes the next plan from.
-	ProposeJobPlan(ctx context.Context, id, plan, question string, event *job.Event) (*job.Job, error)
-	ApproveJobPlan(ctx context.Context, id string, event *job.Event) (*job.Job, error)
-	// ProposeJobIdeation and AnswerJobIdeation are the same pair one stage earlier: the first writes
-	// what the session said it understood and puts the questions to a person, and the second keeps
-	// what that person wrote, whole, and puts the job back to pending so it plans from the answer.
-	//
-	// The answer is content rather than consent, so there is no word that passes and no word that
-	// refuses. What was written is kept, and a question the answer left alone stays unknown.
-	ProposeJobIdeation(ctx context.Context, id, understood, question string,
-		event *job.Event) (*job.Job, error)
-	AnswerJobIdeation(ctx context.Context, id, answer string, event *job.Event) (*job.Job, error)
-	// ProposeJobDesign and AcceptJobDesign are the same pair one stage later: the first writes the list
-	// of verticals the crew said it would build and puts it to a person, and the second records that a
-	// person accepted the list and puts the job back to pending so it plans against it.
-	//
-	// This one has an acceptance rather than an answer, which is the plan's shape and not the reading's.
-	// An answer that is not the acceptance takes the ordinary AnswerJob road, because it is a correction
-	// the session writes the next list from.
-	ProposeJobDesign(ctx context.Context, id, design, question string,
-		event *job.Event) (*job.Job, error)
-	AcceptJobDesign(ctx context.Context, id string, event *job.Event) (*job.Job, error)
-	// RecordJobTests writes the record of the requirements a job turned into failing tests, one stage
-	// later again. It applies to a pending job that has none yet: the row is pending throughout,
-	// because what runs in that stage is one job for each requirement rather than the job itself.
-	//
-	// There is no acceptance beside it and no answer. What closes this stage is a suite that ran and
-	// failed for every requirement, which the system reads, so the record landing is the fact.
-	RecordJobTests(ctx context.Context, id, tests string, event *job.Event) (*job.Job, error)
-	// AskAboutJobTests is the other way that stage ends: the workers finished and the suite is not red
-	// for the reasons the stage needs, so the question goes to a person. It applies from the pending
-	// phase, unlike every other ask, because the row was never running while its workers wrote.
-	AskAboutJobTests(ctx context.Context, id, question string, event *job.Event) (*job.Job, error)
-	// HoldJobForAcceptance writes the record of what a job's verticals were built into, and stops the
-	// job for a person to accept it, in one movement. The last stage ends here.
-	//
-	// One movement rather than two because the two halves are one fact. A record written without the
-	// hold would leave a built job carrying on as though a person had already looked at it, and a hold
-	// written without the record would fan the same verticals out again on the next tick.
-	//
-	// It applies to a pending job that carries no record yet, so two controllers reading one finished
-	// fan out hold the job once and ask once.
-	HoldJobForAcceptance(ctx context.Context, id, built, question string,
-		events ...*job.Event) (*job.Job, error)
-	// AskAboutJobBuild is the other way that stage ends: the workers finished and the verticals are not
-	// green for the reasons the stage needs, so the question goes to a person. It applies from the
-	// pending phase, for the reason the ask about the tests does.
-	AskAboutJobBuild(ctx context.Context, id, question string, event *job.Event) (*job.Job, error)
-	// AcceptJob writes that a person looked at a picture of what was built and said the value arrived.
-	// Nothing whose verticals are built reaches done without it, which is the whole of the acceptance
-	// stage: every other road into done on such a row is the system calling its own work finished.
-	//
-	// It is permission rather than an ending, so the row stays pending and keeps its question and what
-	// the person said. The job still owes the pull request its work is read in and an account of the
-	// plan somebody approved, and the ordinary road carries it there under this flag.
-	//
-	// It applies to a pending job that carries a build record and no acceptance, so two controllers
-	// reading one answered job record it once.
-	AcceptJob(ctx context.Context, id, answer string, events ...*job.Event) (*job.Job, error)
-	// SendJobBackToBuild is the other way the acceptance stage ends: the person looked and said the
-	// value did not arrive. What was built is cleared and the row goes back to pending, so the build
-	// stage fans out again, and what the person said stays on the row as the thing it builds against.
-	//
-	// It applies to a job that carries a record and no acceptance, so nothing sends an accepted job
-	// back over its own acceptance.
-	SendJobBackToBuild(ctx context.Context, id string, events ...*job.Event) (*job.Job, error)
-	// JobsClaiming is the jobs in one workspace claiming any of these pieces of work, whole. A claim
-	// is a job's hold on a piece of work in the world, and this is how a caller reads who holds what.
-	//
-	// Holding is not asked. A job that finished has let its claim go.
-	JobsClaiming(ctx context.Context, workspace string, claims []string) ([]*job.Job, error)
-
-	// An execution is one run of one stage of one job, and it is not a job. It has its own table, so
-	// no listing of declared work ever carries a row nobody declared. See internal/job/execution.go.
-	//
-	// CreateExecution writes one run and the record of it in one transaction. The claim on the
-	// requirement or the vertical is refused here, so a stage ticked by two controllers at once runs
-	// one session and not two.
-	CreateExecution(ctx context.Context, run *job.Execution, event *job.Event) error
-	// GetExecution reads one run back, whole, its answer included.
-	GetExecution(ctx context.Context, id string) (*job.Execution, error)
-	// ListExecutions is the runs of one job, oldest first, and of one stage of it where the filter
-	// names one. It is how a stage gathers: the newest run of each number is the one it reads.
-	ListExecutions(ctx context.Context, filter job.ExecutionFilter) ([]*job.Execution, error)
-	// What a controller needs of this table, and the same four questions it asks of the jobs.
-	RunnableExecutions(ctx context.Context, limit int) ([]*job.Execution, error)
-	HeldExecutions(ctx context.Context, owner string, limit int) ([]*job.Execution, error)
-	ExpiredExecutions(ctx context.Context, limit int) ([]*job.Execution, error)
-	StartExecution(ctx context.Context, id string, lease job.Lease, event *job.Event) (*job.Execution, error)
-	TakeOverExecution(ctx context.Context, id string, lease job.Lease) (*job.Execution, error)
-	RenewExecutionLease(ctx context.Context, id string, lease job.Lease) error
-	RecordExecutionSession(ctx context.Context, id, session string) error
-	// RecordExecutionBranch writes where this run's commits ended up, once the system has put them
-	// there. It is not a movement: the run is over before anything pushes for it.
-	RecordExecutionBranch(ctx context.Context, id, branch string) error
-	LandExecution(ctx context.Context, id string, landed job.ExecutionLanding, event *job.Event) (*job.Execution, error)
-	// StopExecution halts a run that has not ended, keeping the reason. It stops that run and nothing
-	// else: the job it belongs to carries on, and its stage reads the run as one that ended.
-	StopExecution(ctx context.Context, id, reason string, event *job.Event) (*job.Execution, error)
-	// RunningExecutions is how many runs of each of these jobs' stages are still going. It is one
-	// query for a whole listing, because what reads it is a listing: a surface drawing a hundred jobs
-	// must not make a hundred calls to say which of them are working.
-	RunningExecutions(ctx context.Context, jobs []string) (map[string]int, error)
-	// RecordJobStep writes down one thing the session doing a running job finished. The same words
-	// twice leave one step, because the record is the set of what is finished rather than a log of
-	// what was said, and a session continuing a job says again what it said before.
-	//
-	// pullRequest is the address this step named against the job's repository, and empty where it named
-	// none. It is written only onto a row that carries none, so what a job produced survives the attempt
-	// that produced it: a job that failed after opening its pull request said so nowhere else.
-	RecordJobStep(ctx context.Context, id, summary, pullRequest string, event *job.Event) (*job.Job, error)
-	// RecordJobQuestion writes down one thing a reading of this job's plan could not settle, and
-	// SettleJobQuestion is a later reader answering that row from its own lens. Both apply only while
-	// the job is running, the way a step does, because a reading that ended reads nothing.
-	//
-	// Only an open row settles, in the same statement, so two readers settling at once leave one
-	// answer rather than the later one taking the earlier one's place.
-	RecordJobQuestion(ctx context.Context, id string, asking job.Question, event *job.Event) (*job.Job, error)
-	SettleJobQuestion(ctx context.Context, id string, seq int, answer, settledBy string, event *job.Event) (*job.Job, error)
-	// CarryJobQuestions writes rows onto a job that did not write them: down onto the reading that
-	// comes next, and back up onto the plan the readings are of. It is the engine's call and never a
-	// session's, so it asks nothing about the phase: a plan is held back while its readings are out.
-	//
-	// A row already there by number is settled rather than added, and only while it is open, so the
-	// same reading carried twice leaves one row.
-	CarryJobQuestions(ctx context.Context, id string, rows []job.Question) (*job.Job, error)
-	// ResumeJob puts a job that failed back to pending, keeping its session, so a controller starts it
-	// again in the conversation it has been in all along. RefuseJob is the other answer to a failure:
-	// it ends the job as stopped, and a stopped job is never continued. Both apply only to a job that
-	// failed, in the same statement, so two resumes leave one attempt.
-	ResumeJob(ctx context.Context, id string, event *job.Event) (*job.Job, error)
-	RefuseJob(ctx context.Context, id, reason string, event *job.Event) (*job.Job, error)
-	// RecordJobHandoff writes down the state a fresh session starts this job from, written by the
-	// session that reached its workspace's context ceiling. Only from running, the way a step is,
-	// because a handoff on a job nobody is doing is a note about work that already ended.
-	//
-	// session is the conversation that wrote it, and it is the system's to supply rather than the
-	// caller's to name: it is what tells a handoff waiting to be taken up from one a fresh session
-	// already holds.
-	RecordJobHandoff(ctx context.Context, id, left, tried, session string, event *job.Event) (*job.Job, error)
-	// HandOffJob puts a running job back to pending and lets go of its session, so the controller
-	// starts it in a fresh conversation carrying the handoff. Only from running and only for the
-	// controller holding the lease, in the same statement, so a controller that lost the row cannot
-	// take another one's job away from the session doing it.
-	//
-	// The job does not restart. Its steps, its pull request, its answer and its identity all stay: what
-	// changes is which conversation carries the rest of it.
-	HandOffJob(ctx context.Context, id string, back job.Requeue, event *job.Event) (*job.Job, error)
-	// What a controller needs of the store. RunnableJob is the job it may start, HeldJob is what
-	// it holds and has to come back to, and ExpiredJob is what a controller that went away left
-	// behind. Every write is conditional in the same statement as its condition, which is what keeps
-	// two controllers from both starting one job, both taking over one abandoned row, or
-	// both writing what came of it. The contract is job.Store.
-	RunnableJob(ctx context.Context, limit int) ([]*job.Job, error)
-	HeldJob(ctx context.Context, owner string, limit int) ([]*job.Job, error)
-	ExpiredJob(ctx context.Context, limit int) ([]*job.Job, error)
-	// AnythingMoving says whether any job is running or asking: whether this system is doing
-	// anything at all. It is the first half of the fifth comparison, and it is a probe rather than a
-	// count, so a system with a million finished jobs pays one index lookup per tick.
-	//
-	// Asking counts as moving. A job waiting for a person is not stalled, it is waiting correctly, and
-	// its session is wanted alive whatever else is true.
-	AnythingMoving(ctx context.Context) (bool, error)
-	// TurnedAwayJob is the job the machine had no room for: pending, carrying a reason, oldest
-	// declared first. It is the other half of the comparison. Only the system writes a reason on a
-	// pending job, and it writes one only when it holds the job back.
-	TurnedAwayJob(ctx context.Context, limit int) ([]*job.Job, error)
-	StartJob(ctx context.Context, id string, lease job.Lease, events []*job.Event) (*job.Job, error)
-	HoldJob(ctx context.Context, id, reason string, event *job.Event) (*job.Job, error)
-	TakeOverJob(ctx context.Context, id string, lease job.Lease, events []*job.Event) (*job.Job, error)
-	ReleaseJob(ctx context.Context, id string, events []*job.Event) (*job.Job, error)
-	RequeueJob(ctx context.Context, id string, back job.Requeue, events []*job.Event) (*job.Job, error)
-	RenewLease(ctx context.Context, id string, lease job.Lease) error
-	RecordJobSession(ctx context.Context, id, session string) error
-	LandJob(ctx context.Context, id string, landed job.Landing, event *job.Event) (*job.Job, error)
-	// LoopJob writes that a job went in circles at a step and takes the route the job declared: a
-	// question to the operator, a handoff to another role, or a stop where it had escalated already.
-	// It applies only to a running job the controller writing it still holds, in the same statement,
-	// and it writes the attempt that closed the loop with it.
-	LoopJob(ctx context.Context, id string, looped job.Loop, event *job.Event) (*job.Job, error)
-	// ReplaceJobProduct writes the one sentence a job serves over what it carried, and records the
-	// move. It is what a flow run does when the operator, shown the first thing a person can open,
-	// answers with the sentence they wanted instead: every job declared under this one afterwards
-	// carries the new sentence, because a job takes it from the job above it as it is declared.
-	//
-	// Any phase. A job that carries a run is held back while its steps work, so a rule that only let
-	// a running job be corrected would refuse the one case this exists for.
-	ReplaceJobProduct(ctx context.Context, id, product string, event *job.Event) (*job.Job, error)
-	// RaiseJob writes that a surface named this job as waiting, with the record of the telling, and
-	// says whether this call was the one that wrote it. Only where nothing has raised it yet, so a
-	// console redrawing every three seconds writes one job.raised for each wait rather than one for
-	// each poll. It moves nothing else on the row: the moment the wait started is what a surface
-	// measures the age from.
-	RaiseJob(ctx context.Context, id string, event *job.Event) (bool, error)
-	// ListJobEvents returns one job's own history, oldest first.
-	ListJobEvents(ctx context.Context, id string) ([]*job.Event, error)
 	// What reads back the pull requests the crew opened. UnsettledPullRequests is the job whose pull
 	// request is still worth reading, longest unread first, and RecordPullRequest keeps what the forge
 	// said. Neither is a movement of the job: the job ended when it ended, and what happened to the
 	// work afterwards happened on the forge.
-	job.PullRequestStore
-	// RecordSteer writes one steer and adds it to the count on the job it landed on, in one
-	// transaction. The row and the count are written together because a score that disagrees with the
-	// marks under it is a score nobody can defend.
-	RecordSteer(ctx context.Context, steer *job.Steer) error
-	// ListSteers returns one job's steers, oldest first, which is the order they were made in and the
-	// order the report reads.
-	ListSteers(ctx context.Context, of string) ([]*job.Steer, error)
-	// WorkspaceLimits is what a workspace lets its sessions declare, and SetWorkspaceLimits writes
-	// it. A workspace with no row takes the defaults, which grant nothing: default deny, so a system
-	// nobody configured refuses rather than allows.
-	WorkspaceLimits(ctx context.Context, workspace string) (job.Limits, error)
-	SetWorkspaceLimits(ctx context.Context, limits job.Limits) (job.Limits, error)
 
 	// ListTasks returns a session's history oldest first, capped at limit, so a conversation reads
 	// the way it happened. A limit of zero or less means the default.

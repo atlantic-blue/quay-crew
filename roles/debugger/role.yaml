@@ -1,8 +1,0 @@
-name: debugger
-version: 1
-summary: finds the cause of a defect from evidence and hypotheses, writes the test that captures it, then fixes it
-model: sonnet
-receives:
-  - job
-  - context
-  - skills

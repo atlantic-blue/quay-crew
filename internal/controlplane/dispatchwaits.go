@@ -46,11 +46,6 @@ const startWait = 60 * time.Second
 // container end to end in about two seconds.
 const tidyWait = 10 * time.Second
 
-// exportWait is what one record's export to the event log is given. The log is a copy: the store
-// already holds the record, so an export that cannot land is dropped and logged, which is what this
-// path always said it did. A broker on the same machine answers in milliseconds.
-const exportWait = 5 * time.Second
-
 // waited runs one step of the dispatch path, says in the log that it is waiting, and fails by name
 // when the budget runs out.
 //
@@ -85,22 +80,6 @@ func (s *Server) startSandbox(ctx context.Context, session *quaycrewv1.Session) 
 	ctx, giveUp := context.WithTimeout(ctx, s.startWait)
 	defer giveUp()
 	return s.sandboxFor(ctx, session)
-}
-
-// export offers one record to the event log under a budget, keyed by session so one session's
-// records stay in order on one partition.
-//
-// The budget is the whole of issue 400. A producer whose broker accepts a connection and answers
-// nothing keeps a record without limit by default, and this call carries a context that was
-// deliberately detached from the caller's, so there was nothing left to stop it. The dispatch that
-// wrote the session row never came back, and the export it was held by is a copy of a record the
-// store already holds.
-func (s *Server) export(ctx context.Context, sessionID, topic string, value []byte) error {
-	ctx, giveUp := context.WithTimeout(ctx, s.exportWait)
-	defer giveUp()
-	return waited(ctx, sessionID, waitEventLog, func(ctx context.Context) error {
-		return s.events.Publish(ctx, topic, []byte(sessionID), value)
-	})
 }
 
 // takeStart takes the system's one start slot, or gives up when the budget runs out. The slot is

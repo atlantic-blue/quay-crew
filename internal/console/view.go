@@ -15,11 +15,6 @@ func (m Model) View() string {
 	visible := m.visibleRows()
 
 	var lines []string
-	// Above everything, in every mode. A job waiting on a person is not a property of the view they
-	// happen to have open, and a telling drawn only on one screen is a telling they have to navigate to.
-	if line := m.waitingLine(); line != "" {
-		lines = append(lines, alert.Render(m.fit(line)))
-	}
 	if m.mode == modeReading {
 		lines = append(lines, m.panelTop(len(m.readingLines())))
 		for _, line := range m.readingBody() {
@@ -117,15 +112,6 @@ func secretsPhrase(where string) string {
 		return alert.Render(where)
 	}
 	return where
-}
-
-// eventsPhrase names the event log, and says so plainly when nothing is connected to it rather than
-// letting an empty column read as "fine".
-func eventsPhrase(engine string) string {
-	if engine == "" {
-		return faint.Render("none, nothing reads or writes the log yet")
-	}
-	return engine
 }
 
 // panelTop is the framed panel.s top edge, titled with the resource, its scope and its count, so both
@@ -809,7 +795,6 @@ func (m Model) systemLines() []string {
 	add("Store engine", m.info.Store)
 	add("Secrets", secretsPhrase(m.info.Secrets))
 	if m.info.Store != "" {
-		add("Events engine", eventsPhrase(m.info.Events))
 		add("State", statePhrase(m.info.State))
 	}
 	if len(lines) == 0 {

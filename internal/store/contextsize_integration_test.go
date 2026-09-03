@@ -27,7 +27,7 @@ const systemOnTheDay = 100_179
 
 func TestALongContextKeepsItsSizeThroughPostgres(t *testing.T) {
 	kept := openPostgres(t)
-	s := aSystemNamed(t, kept, "controller-a", 0, &model.FakeRunner{Reply: "ok"})
+	s := aSystemOver(t, kept, &model.FakeRunner{Reply: "ok"})
 	ctx := context.Background()
 	workspace, _ := aProjectOnPostgres(t, s)
 

@@ -31,11 +31,6 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/auth"
 	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
-	"github.com/atlantic-blue/quay-krewe/internal/flow"
-	"github.com/atlantic-blue/quay-krewe/internal/forge"
-	"github.com/atlantic-blue/quay-krewe/internal/headroom"
-	"github.com/atlantic-blue/quay-krewe/internal/job"
-	"github.com/atlantic-blue/quay-krewe/internal/messaging"
 	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 	"github.com/atlantic-blue/quay-krewe/internal/secrets"
@@ -194,62 +189,17 @@ func (r *recordingRunner) answerFor(asked int, text string) string {
 			return pair[1]
 		}
 	}
-	said, exact, queued := "you said: "+text, false, false
+	said, exact := "you said: "+text, false
 	if len(r.says) > 0 {
 		if asked > len(r.says) {
 			asked = len(r.says)
 		}
-		said, exact, queued = r.says[asked-1], r.exact[asked-1], true
+		said, exact = r.says[asked-1], r.exact[asked-1]
 	}
 	if exact {
 		return said
 	}
-	// A task that asks for one of the two records gets that record, unless the scenario queued one
-	// itself. Every job that states the sentence goes through both before it plans, so a double that
-	// answered a plan to either would make every scenario about a planned job into a scenario about
-	// the double ignoring its task. It is the rule the outcome line already follows.
-	//
-	// Whether the scenario queued the answer decides this, rather than whether the answer carries the
-	// marker. With nothing queued the double echoes the task it was handed, and a task that asks for a
-	// list carries the shape of one, so a check for the marker would find it in the echo and hand the
-	// system its own instructions back as a list.
-	if strings.Contains(text, job.TheDesignAsk) &&
-		(!queued || !strings.Contains(said, job.DesignMarker)) {
-		return model.FakeDesign
-	}
-	if strings.Contains(text, job.TheUnderstandingAsk) &&
-		(!queued || !strings.Contains(said, job.UnderstandingMarker)) {
-		return model.FakeUnderstanding
-	}
-	// And a task that asks for the failing tests of one requirement gets a report on that requirement,
-	// for the same reason. The number comes out of the task rather than being stated here: the stage
-	// refuses a report filed against a requirement its worker does not hold.
-	if strings.Contains(text, job.TheTestAsk) && (!queued || !strings.Contains(said, job.TestMarker)) {
-		return statingTheOutcome(model.FakeTestReport(text), text)
-	}
-	// And a task that asks for one vertical to be built gets a report on that vertical, naming the
-	// tests the task said fail now. The stage refuses a report filed against a vertical its worker does
-	// not hold, and one that does not name the tests it was given.
-	if strings.Contains(text, job.TheBuildAsk) && (!queued || !strings.Contains(said, job.BuildMarker)) {
-		return statingTheOutcome(model.FakeBuildReport(text), text)
-	}
-	return statingTheOutcome(said, text)
-}
-
-// statingTheOutcome ends an answer the way a session that read its task ends one.
-//
-// Every job tells its session to state an outcome on a line of its own, and a job whose answer states
-// none does not settle. A double that ignored the instruction would be looser than the thing it
-// stands in for, and every scenario about a job would quietly become a scenario about that. A reply
-// that already states one is left alone, which is how a scenario says the word it means, and a
-// scenario about an answer that states nothing is written with the answer it means.
-func statingTheOutcome(reply, asked string) string {
-	// Read rather than searched, because the double echoes the task it was given and the task carries
-	// the instruction. A substring check would find the word in the instruction and answer nothing.
-	if !strings.Contains(asked, job.OutcomeMarker) || job.OutcomeIn(reply) != "" {
-		return reply
-	}
-	return reply + "\n\n" + job.OutcomeMarker + " " + job.OutcomeProved
+	return said
 }
 
 // hold makes every task wait, and returns the func that lets them go.
@@ -390,10 +340,6 @@ type world struct {
 	listener *bufconn.Listener
 	// token is the system's token, which every caller has to present to be served.
 	token string
-	// clockAhead is how far ahead of the real clock this system reads a credential's life. It is how a
-	// scenario about what a session still holds half an hour into its job runs in a millisecond.
-	// Nothing else in the system reads it, so the only thing it moves is the passage of time.
-	clockAhead atomic.Int64
 	// driverToken is the driver's own token: recognised, and refused the calls that grant capability.
 	driverToken string
 	conn        *grpc.ClientConn
@@ -403,11 +349,6 @@ type world struct {
 	lastHealth grpc_health_v1.HealthCheckResponse_ServingStatus
 	provider   *sandbox.FakeProvider
 	runner     *recordingRunner
-	// readings is what each reading of a plan does while its task is under way, and readingFailed is
-	// the first thing that went wrong doing it. A double cannot fail a step, so what a reading could
-	// not write is kept here and reported by the step that reads the rows back.
-	readings      *readings
-	readingFailed error
 	// realRunner replaces the recording double when a scenario is about what the real one does with
 	// what came out of the sandbox. A double that hands back a canned error cannot say anything about
 	// an explanation built from a stream.
@@ -421,13 +362,7 @@ type world struct {
 	reachable string
 	// gitAuthor is who a commit made inside a sandbox is by.
 	gitAuthor controlplane.Identity
-	// flowRun is the run the last flow step started.
-	flowRun flow.Run
-	// trigger is the last trigger something raised, so a Then step can read what became of it.
-	trigger flow.Trigger
-	// flowRunID is the run the operator surface steps started, and driverErr what the driver was
-	// told when it tried something.
-	flowRunID string
+	// driverErr is what the driver was told when it tried something.
 	driverErr error
 	// scratch is every directory a scenario wrote on disk, removed when the scenario ends.
 	scratch []string
@@ -460,30 +395,9 @@ type world struct {
 	drivers []*quaycrewv1.Session
 	secrets secrets.Store
 	store   store.Store
-	// events is the log the control plane publishes tasks to. A scenario asserts on what landed on
-	// it. Setting it to nil is how a scenario says the stack has no broker configured.
-	events *messaging.Memory
-	// eventsRefuse makes the log refuse every record it is given, for the scenarios about what the
-	// system says when an export fails.
-	eventsRefuse bool
-	// eventsStall makes the log take a record and never answer, which is the broker that held a
-	// whole system's dispatches inside the call. Refusing and never answering are different faults and
-	// only one of them was survivable.
-	eventsStall bool
 	// storeStalls makes every health probe wait without answering, for the scenarios about a system
 	// that reads well and cannot write.
 	storeStalls bool
-	// machine is what the system reads of the machine it runs on. Nil is a system with no daemon to ask,
-	// which reports unknown. A scenario sets it and then asks the system to read it once, because a
-	// scenario that waited for the sampler's own timer would be a scenario with a clock in it.
-	machine headroom.Source
-	// forge is what the system reads a pull request back from. Nil is a system with no forge, which
-	// reports unknown. A scenario writes its answers and then asks the system to read once, because a
-	// scenario that waited for the reader's own timer would be a scenario with a clock in it.
-	forge *forge.Fake
-	// noForgeCredential runs the real reader with nothing to authenticate with, which is what a fresh
-	// crew is. The scenario about it has to reach the real refusal rather than a double repeating it.
-	noForgeCredential bool
 	// startWait and exportWait are the system's budgets. A scenario about a budget running out sets
 	// them short, because a scenario that waits the real minute out is a scenario nobody runs.
 	startWait  time.Duration
@@ -505,8 +419,6 @@ type world struct {
 	lastSecretResponse *quaycrewv1.SetSecretResponse
 	lastSecrets        *quaycrewv1.ListSecretsResponse
 	lastSkills         *quaycrewv1.ListSkillsResponse
-	lastRoles          *quaycrewv1.ListRolesResponse
-	lastRole           *quaycrewv1.GetRoleResponse
 	// mergeGate is what the shipped merge gate answered the last time a scenario fired it.
 	mergeGate gateAnswer
 	// deployGate is what the shipped deploy identity gate answered the last time a scenario fired it.
@@ -544,29 +456,12 @@ func (w *world) start() error {
 	w.runner = &recordingRunner{}
 	w.secrets = secrets.NewMemory()
 	w.store = store.NewMemory()
-	w.events = messaging.NewMemory()
-	w.info = controlplane.Info{Model: "fake", Sandbox: "fake", Store: "memory", Events: "memory"}
+	w.info = controlplane.Info{Model: "fake", Sandbox: "fake", Store: "memory"}
 	// Every scenario runs against a system that guards itself, the way a real one does, so the whole
 	// suite proves the authenticated path and not a special unguarded one.
 	w.token = "the-token-this-scenario-was-minted"
 	w.driverToken = "the-driver-token-this-scenario-was-minted"
 	return w.serve()
-}
-
-// eventLog is the log the control plane is built with. A scenario that unhooks the broker sets
-// w.events to nil, and a typed nil pointer handed to an interface is not nil, so it is spelled out
-// here rather than left to the caller to get right.
-func (w *world) eventLog() messaging.EventLog {
-	if w.eventsRefuse {
-		return refusingEventLog{}
-	}
-	if w.eventsStall {
-		return stallingEventLog{}
-	}
-	if w.events == nil {
-		return nil
-	}
-	return w.events
 }
 
 // settled waits for every detached task to land, so a scenario asserting on what a task left behind
@@ -616,16 +511,12 @@ func (w *world) restart() error {
 func (w *world) serve() error {
 	listener := bufconn.Listen(1024 * 1024)
 	w.listener = listener
-	// The server first, because the interceptors ask it to recognise the credentials it has minted
-	// for jobs.
 	w.server = controlplane.NewServer(controlplane.Config{
 		Store: w.systemStore(), Runner: w.taskRunner(), Provider: w.provider, Secrets: w.secrets,
-		Storage: w.storage, Info: w.info, Events: w.eventLog(), Reachable: w.reachable,
+		Storage: w.storage, Info: w.info, Reachable: w.reachable,
 		GitAuthor: w.gitAuthor, DriverToken: w.driverToken,
 		Skills: w.skills, SkillsHost: w.skillsDir, SandboxImage: "quaycrew-sandbox:test",
-		StartWait: w.startWait, ExportWait: w.exportWait,
-		Headroom: w.machine, HeadroomEvery: time.Hour,
-		Forge: forgeOf{w}, PullRequestEvery: time.Hour,
+		StartWait: w.startWait,
 	})
 	// The same options the real main builds the server with, so a scenario about tracing is about
 	// what the system does and not about what the harness added.
@@ -633,10 +524,6 @@ func (w *world) serve() error {
 		telemetry.ServerOptions(),
 		auth.ServerOptions(auth.Policy{
 			Token: w.token, DriverToken: w.driverToken, Denied: controlplane.DeniedToDriver,
-			// The scenarios run against a system that guards itself the way a real one does, job
-			// credentials included.
-			Grants: w.server.Grants(), DeniedToJob: controlplane.DeniedToJob,
-			Now: func() time.Time { return time.Now().Add(time.Duration(w.clockAhead.Load())) },
 		})...,
 	)...)
 	// The way the real main starts: what strayed while the system is down is reaped on the way up, and
@@ -844,33 +731,14 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeConversationBesideSteps(sc)
 	initializeStatsSteps(sc)
 	initializeWhatTheSystemDoesSteps(sc)
-	initializeConsoleJobsSteps(sc)
-	initializeConsoleViewSteps(sc)
-	initializeConsoleAnswerSteps(sc)
-	initializeConsolePartsSteps(sc)
 	initializeKeysSteps(sc)
-	initializeWebSteps(sc)
-	initializeBriefingSteps(sc)
-	initializeBriefingHeaderSteps(sc)
-	initializeFlowSteps(sc)
-	initializePlanReadingSteps(sc)
-	initializeStageSteps(sc)
-	initializeTestStageSteps(sc)
-	initializeBranchSteps(sc)
-	initializeStageWorkSteps(sc)
-	initializeFlowSurfaceSteps(sc)
-	initializePullRequestReviewSteps(sc)
-	initializePullRequestSteps(sc)
 	initializeFirstRunSteps(sc)
 	initializeInstallSteps(sc)
 	initializeFrontDoorSteps(sc)
 	initializeProjectSteps(sc)
-	initializeProjectRepositorySteps(sc)
-	initializeProjectRepositoryToolSteps(sc)
 	initializeDeployTargetSteps(sc)
 	initializeAddressSteps(sc)
 	initializeInfoSteps(sc)
-	initializeEventsSteps(sc)
 	initializeSessionEventsSteps(sc)
 	initializeObservabilitySteps(sc)
 	initializeMetricsSteps(sc)
@@ -878,41 +746,9 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeToolSteps(sc)
 	initializeAnswerSteps(sc)
 	initializeTaskWordSteps(sc)
-	initializeJobWordSteps(sc)
-	initializeHistorySteps(sc)
 	initializeLevelWordSteps(sc)
 	initializeDirectorySteps(sc)
 	initializeVersionSteps(sc)
-	initializeJobSteps(sc)
-	initializeStopReasonSteps(sc)
-	initializeJobMaterialSteps(sc)
-	initializeClaimSteps(sc)
-	initializeRequestSteps(sc)
-	initializeJobControllerSteps(sc)
-	initializeJobRepositorySteps(sc)
-	initializeOutcomeSteps(sc)
-	initializePublishingSteps(sc)
-	initializeJobWaitingSteps(sc)
-	initializeFlowStepSteps(sc)
-	initializeJobRoleSteps(sc)
-	initializeTriggerSteps(sc)
-	initializeLifecycleSteps(sc)
-	initializeStalledSteps(sc)
-	initializeJobEventsSteps(sc)
-	initializeJobLeaseSteps(sc)
-	initializeAskingSteps(sc)
-	initializeDecidingSteps(sc)
-	initializeTellingSteps(sc)
-	initializeResumingSteps(sc)
-	initializeContextCeilingSteps(sc)
-	initializeSettlingSteps(sc)
-	initializePlanSteps(sc)
-	initializeIdeationSteps(sc)
-	initializeDesignSteps(sc)
-	initializeLoopingSteps(sc)
-	initializeCapabilitySteps(sc)
-	initializeProductSteps(sc)
-	initializeSteersSteps(sc)
 	initializeTasksViewSteps(sc)
 	initializeAttachSteps(sc)
 	initializeContextSteps(sc)
@@ -933,9 +769,6 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeSecretFileSteps(sc)
 	initializeProseGateSteps(sc)
 	initializeProcessGateSteps(sc)
-	initializeBuildStageSteps(sc)
-	initializeAcceptanceStageSteps(sc)
-	initializeEvidenceKindSteps(sc)
 	initializeSystemSecretSteps(sc)
 	initializeGitConfigSteps(sc)
 	initializeWizardModeSteps(sc)
@@ -945,31 +778,17 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeSystemDirectorySteps(sc)
 	initializeWaitsSteps(sc)
 	initializeDegradedSteps(sc)
-	initializeHeadroomSteps(sc)
-	initializeRoomViewSteps(sc)
-	initializeAdmissionSteps(sc)
 	initializeWorkingSteps(sc)
 	initializeDrainSteps(sc)
 	initializeHookSteps(sc)
 	initializeHookSandboxSteps(sc)
 	initializeSeededHookSteps(sc)
 	initializeMergeGateSteps(sc)
-	initializeRoleSteps(sc)
-	initializeShippedRoleSteps(sc)
-	initializeShippedRoleVerbSteps(sc)
-	initializeRoleSkillSteps(sc)
-	initializeRoleSessionSteps(sc)
-	initializePlanCriticSteps(sc)
-	initializeStoppedReasonSteps(sc)
 	initializeHookVersionSteps(sc)
 	initializeImportedSkillSteps(sc)
 	initializeFailureSteps(sc)
 	initializeOpensSteps(sc)
 	initializeScreenSteps(sc)
-	initializeRenderSteps(sc)
-	initializeProvingSteps(sc)
-	initializeVerificationGapSteps(sc)
-	initializeRoomSteps(sc)
 	initializeStatusLineSteps(sc)
 	initializeIdentifierSteps(sc)
 	initializePresenceSteps(sc)
@@ -977,7 +796,6 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializePresenceToolReadingSteps(sc)
 	initializeToolNameSteps(sc)
 	initializeChangelogSteps(sc)
-	initializeRoleOriginSteps(sc)
 	initializePromisesSteps(sc)
 	// Tear the control plane down. The scenario's own failure is already recorded, so this returns
 	// nil rather than the incoming error, which would be reported a second time as a hook failure.
@@ -1597,26 +1415,4 @@ func (w *world) dialAs(token string) quaycrewv1.ControlPlaneServiceClient {
 		return w.client
 	}
 	return quaycrewv1.NewControlPlaneServiceClient(conn)
-}
-
-// pullRequests is the forge this world reads a pull request back from, made on first use so every
-// scenario has one to write answers into. A world with no forge would report unknown, which is a
-// state the scenarios say something about rather than the state they all run in.
-func (w *world) pullRequests() *forge.Fake {
-	if w.forge == nil {
-		w.forge = forge.NewFake()
-	}
-	return w.forge
-}
-
-// forgeOf reads through whichever forge this scenario is running against, chosen at the moment of the
-// call. A system built with one of them would leave a scenario that swaps it afterwards talking to
-// the one the background made.
-type forgeOf struct{ w *world }
-
-func (f forgeOf) Read(ctx context.Context, at forge.Address) (forge.Reading, error) {
-	if f.w.noForgeCredential {
-		return (&forge.GitHub{}).Read(ctx, at)
-	}
-	return f.w.pullRequests().Read(ctx, at)
 }

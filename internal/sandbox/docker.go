@@ -53,7 +53,7 @@ type DockerProvider struct {
 	// processor. What is really there is whatever the rest of the machine has not taken. The
 	// session budgets against the first number, and the kernel kills it against the second. A limit
 	// makes the advertised number the true one, and makes a kill the sandbox's own, which the sandbox
-	// can read. See internal/room.
+	// can read.
 	//
 	// The figure is the operator's to choose, because it shares one machine between the stack, the
 	// sessions already running, and this one.

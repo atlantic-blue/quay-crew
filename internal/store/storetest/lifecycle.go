@@ -7,7 +7,6 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-krewe/internal/job"
 	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
@@ -259,45 +258,6 @@ func runSessionLifecycleConformance(t *testing.T, newDataset func(t *testing.T) 
 		if reclaimed[0].GetHandle() != "first" || reclaimed[1].GetHandle() != "second" {
 			t.Fatalf("the reclaimed sessions read %v, want the two reclaimed longest ago, oldest first",
 				handlesOf(reclaimed))
-		}
-	})
-
-	t.Run("job still open holds its session out of the idle sandboxes", func(t *testing.T) {
-		s := newDataset(t)(t)
-		ctx := context.Background()
-		workspace, project := aProject(t, s)
-		busy, _, _ := s.FindOrCreateSession(ctx, project, "busy", store.Birth{})
-		finished, _, _ := s.FindOrCreateSession(ctx, project, "finished", store.Birth{})
-
-		open := declaredJob(t, s, workspace, project, "still going")
-		if err := s.RecordJobSession(ctx, open, busy.GetId()); err != nil {
-			t.Fatalf("RecordJobSession: %v", err)
-		}
-		if _, err := s.StartJob(ctx, open, aLease("controller-1"), nil); err != nil {
-			t.Fatalf("StartJob: %v", err)
-		}
-		ended := declaredJob(t, s, workspace, project, "over")
-		if err := s.RecordJobSession(ctx, ended, finished.GetId()); err != nil {
-			t.Fatalf("RecordJobSession: %v", err)
-		}
-		if _, err := s.StartJob(ctx, ended, aLease("controller-1"), nil); err != nil {
-			t.Fatalf("StartJob: %v", err)
-		}
-		if _, err := s.LandJob(ctx, ended, job.Landing{Phase: job.PhaseDone, Answer: "done"},
-			answeredEvent(ended, workspace, project)); err != nil {
-			t.Fatalf("LandJob: %v", err)
-		}
-
-		settled, err := s.IdleSandboxes(ctx, 0)
-		if err != nil {
-			t.Fatalf("IdleSandboxes: %v", err)
-		}
-		if holds(idsOf(settled), busy.GetId()) {
-			t.Fatalf("the settled sessions carry one a job is still running in: %v", idsOf(settled))
-		}
-		if !holds(idsOf(settled), finished.GetId()) {
-			t.Fatalf("the settled sessions are %v, and the one whose job is done is nothing's to hold",
-				idsOf(settled))
 		}
 	})
 

@@ -6,10 +6,8 @@ import (
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-krewe/internal/messaging"
 	"github.com/cucumber/godog"
 	"google.golang.org/protobuf/encoding/prototext"
-	"google.golang.org/protobuf/proto"
 )
 
 // The session lifecycle, driven through the same interface every other caller uses. What these prove
@@ -38,26 +36,6 @@ func kindsOf(events []*quaycrewv1.SessionEvent) []string {
 		kinds = append(kinds, event.GetKind())
 	}
 	return kinds
-}
-
-// sessionEventsOn decodes every session event published to a workspace's stream, oldest first.
-func sessionEventsOn(w *world, workspaceName string) ([]*quaycrewv1.SessionEvent, error) {
-	topic, err := messaging.Topic(workspaceName, "sessions")
-	if err != nil {
-		return nil, err
-	}
-	if w.events == nil {
-		return nil, fmt.Errorf("this scenario has no event log, so nothing can be on it")
-	}
-	events := make([]*quaycrewv1.SessionEvent, 0)
-	for _, record := range w.events.RecordsOn(topic) {
-		event := &quaycrewv1.SessionEvent{}
-		if err := proto.Unmarshal(record.Value, event); err != nil {
-			return nil, fmt.Errorf("a record on %s is not a session event: %w", topic, err)
-		}
-		events = append(events, event)
-	}
-	return events, nil
 }
 
 func initializeSessionEventsSteps(sc *godog.ScenarioContext) {
@@ -140,45 +118,6 @@ func initializeSessionEventsSteps(sc *godog.ScenarioContext) {
 		for _, event := range events {
 			if event.GetKind() == first || event.GetKind() == second {
 				return fmt.Errorf("%q is a state rather than something that happened, and it is on the log", event.GetKind())
-			}
-		}
-		return nil
-	})
-
-	sc.Step(`^(\d+) session events are on the log for "([^"]*)"$`, func(ctx context.Context, want int, workspaceName string) error {
-		w := worldFrom(ctx)
-		if err := w.settled(ctx); err != nil {
-			return err
-		}
-		events, err := sessionEventsOn(w, workspaceName)
-		if err != nil {
-			return err
-		}
-		if len(events) != want {
-			return fmt.Errorf("%d session events are on the log for %q, want %d: %v",
-				len(events), workspaceName, want, kindsOf(events))
-		}
-		return nil
-	})
-
-	sc.Step(`^every published session event is keyed by its session$`, func(ctx context.Context) error {
-		w := worldFrom(ctx)
-		topic, err := messaging.Topic(w.workspaceName, "sessions")
-		if err != nil {
-			return err
-		}
-		records := w.events.RecordsOn(topic)
-		if len(records) == 0 {
-			return fmt.Errorf("nothing is on %s", topic)
-		}
-		for _, record := range records {
-			event := &quaycrewv1.SessionEvent{}
-			if err := proto.Unmarshal(record.Value, event); err != nil {
-				return err
-			}
-			if string(record.Key) != event.GetSession() {
-				return fmt.Errorf("a record is keyed %q while its event is for session %q, so one session's records could land on two partitions",
-					record.Key, event.GetSession())
 			}
 		}
 		return nil

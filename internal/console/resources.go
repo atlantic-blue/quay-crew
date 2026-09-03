@@ -53,11 +53,10 @@ func workspaceRow(workspace *quaycrewv1.Workspace) Row {
 	}
 }
 
-// Projects lists the bodies of work inside a workspace, and drills into the jobs declared in them.
+// Projects lists the bodies of work inside a workspace, and drills into the sessions running in them.
 //
-// Jobs rather than sessions, because a job is what a person declares and a session is the layer
-// underneath it. The sessions of one project are still one key away, on s, so the old destination did
-// not become harder to reach.
+// A session is what a person dispatches, so it is what enter reaches. Nothing sits between a project
+// and its conversations any more.
 func Projects(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "projects",
@@ -69,12 +68,13 @@ func Projects(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "deploys to", Width: 26, Colour: dim},
 			{Title: "age", Width: 0, Colour: dim},
 		},
-		DrillTo: "jobs",
+		DrillTo: "sessions",
 		SortBy:  1,
 		Actions: []Action{
 			{
-				// Where enter used to go. A person who wants the conversations of one project reaches
-				// them in one key, which is what enter cost before jobs took it.
+				// The same place enter goes. It is kept because it is in fingers: it was the one key
+				// to the conversations of a project while enter went somewhere else, and a key that
+				// quietly stops working is how an operator learns to distrust the rest of them.
 				Key:     "s",
 				Label:   "Sessions",
 				Descend: "sessions",
@@ -541,9 +541,8 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			},
 			{
 				// The same key the live view uses, because an archived session is the one whose
-				// history somebody actually comes looking for: a flow archives its own session when it
-				// ends, and what it did is in there. The history is read from the store, so it needs no
-				// container and no restore.
+				// history somebody actually comes looking for. The history is read from the store, so
+				// it needs no container and no restore.
 				Key:     "t",
 				Moved:   []string{"l", "h"},
 				Label:   "History",
@@ -896,7 +895,6 @@ func Stats(client quaycrewv1.ControlPlaneServiceClient) Resource {
 				{"Sandbox engine", "", described.GetSandbox()},
 				{"Store engine", display.HealthStore, described.GetStore()},
 				{"Secrets", "", secretsPhrase(described.GetSecrets())},
-				{"Events engine", display.HealthEvents, eventsPhrase(described.GetEvents())},
 				{"State", "", statePhrase(described.GetState())},
 			}
 			rows := make([]Row, 0, len(stats))
@@ -914,55 +912,6 @@ func Stats(client quaycrewv1.ControlPlaneServiceClient) Resource {
 					Label: stat.what,
 					Cells: []string{stat.what, state, running},
 					State: stateFromHealth(state),
-				})
-			}
-			return rows, nil
-		},
-	}
-}
-
-// Room is one line per sandbox: the session it belongs to, what it holds, its share of one
-// processor, and how long since its last task. Largest first.
-//
-// This is the view that answers which session to stop. On 27 August 2026 the host ran out of memory
-// and the kernel killed eighteen sandboxes in one event, and the listing showed neither which
-// session was large nor that the machine was full: one working sandbox held 1,201 megabytes and an
-// idle one held 1.6, which is three orders of magnitude the listing did not carry. See issue 405.
-//
-// The status column is here because the largest sandbox may be the one doing the work. Stopping a
-// session mid task to make room is a decision an operator should make on purpose.
-func Room(client quaycrewv1.ControlPlaneServiceClient) Resource {
-	return Resource{
-		Name:    "room",
-		Aliases: []string{"memory", "headroom", "mem"},
-		Columns: []Column{
-			{Title: "session", Width: 26, Colour: place},
-			{Title: "holds", Width: 12},
-			{Title: "processor", Width: 12},
-			{Title: "idle", Width: 8},
-			{Title: "status", Width: 0, Colour: colourOfStatus},
-		},
-		// The control plane sorts these largest first, and a sort here would fight it: the column
-		// holds "1201 MiB" and "unknown", which do not order as text.
-		SortBy: -1,
-		// What the rows never said: the total, the limit that binds, and what is left. The listing
-		// answered which session to stop and never whether one had to be stopped at all. See issue 457.
-		Summary: roomSummaryFrom(client),
-		List: func(ctx context.Context, _ string) ([]Row, error) {
-			answer, err := client.GetHeadroom(ctx, &quaycrewv1.GetHeadroomRequest{})
-			if err != nil {
-				return nil, err
-			}
-			rows := make([]Row, 0, len(answer.GetSandboxes())+1)
-			for _, box := range answer.GetSandboxes() {
-				rows = append(rows, Row{
-					ID:    box.GetSession(),
-					Label: display.ShortID(box.GetSession()),
-					Cells: []string{
-						display.ShortID(box.GetSession()), box.GetHeld(), box.GetProcessor(),
-						box.GetIdle(), sandboxStatus(box.GetStatus()),
-					},
-					State: stateFromStatus(box.GetStatus()),
 				})
 			}
 			return rows, nil

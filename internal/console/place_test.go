@@ -161,9 +161,9 @@ func TestAPlaceWhoseLevelIsGoneStopsAtTheLastOneStillThere(t *testing.T) {
 		t.Fatalf("the first console ended at %q", deep.Position())
 	}
 
-	// The project goes, and with it the job under it.
+	// The project goes, and with it the sessions under it.
 	client.projects = nil
-	client.jobs = nil
+	client.sessions = nil
 
 	resumed := openedRemembering(t, client, held, held.where)
 	if got := resumed.Position(); got != "acme" {

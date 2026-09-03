@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"errors"
-	"github.com/atlantic-blue/quay-krewe/internal/job"
 	"github.com/atlantic-blue/quay-krewe/internal/secrets"
 	"github.com/atlantic-blue/quay-krewe/internal/store"
 	"github.com/atlantic-blue/quay-krewe/internal/store/storetest"
@@ -149,9 +148,7 @@ func truncate(t *testing.T) {
 	// fresh map and passed, while against real Postgres the first attach in a subtest came back at
 	// version 2 from rows the previous subtest had left behind.
 	//
-	// Roles are the same shape again, and they arrived with the same symptom: a role attached at
-	// version 1 read back as version 2, and attaching a role nobody had imported was accepted. Any
-	// table keyed by its own name rather than by a workspace belongs in this list, because the
+	// Any table keyed by its own name rather than by a workspace belongs in this list, because the
 	// cascade cannot reach it.
 	//
 	// Secrets are the third. They are keyed by a workspace identifier that is a plain string rather
@@ -168,7 +165,7 @@ func truncate(t *testing.T) {
 		// nothing, so the cascade cannot reach them, and a case that counts what the whole system has
 		// seen was counting another test's sessions. It passed for as long as no test file sorting
 		// before this one happened to dispatch anything.
-		`truncate sessions, tasks, session_events, channels, workspaces, skills, hooks, roles, secrets, system_secrets, contexts, flow_graphs restart identity cascade`); err != nil {
+		`truncate sessions, tasks, session_events, channels, workspaces, skills, hooks, secrets, system_secrets, contexts restart identity cascade`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }
@@ -490,218 +487,6 @@ func TestTheRepositoryMachineryIsGoneFromTheSchema(t *testing.T) {
 	}
 	if projects != 3 {
 		t.Errorf("%d projects survived the migrations, want 3", projects)
-	}
-}
-
-// A row written before the rename keeps the material it was declared with, and comes back out of the
-// store under the new name.
-//
-// This is the one thing a rename of a stored column can get wrong quietly. The code compiles either
-// way, every test that writes and then reads passes on a fresh database, and the rows that already
-// exist are the only place the mistake shows. So the row here is written through the old schema, in
-// the old column, before the migration that renames it exists.
-func TestJobDeclaredBeforeTheRenameStillRequiresWhatItWasGiven(t *testing.T) {
-	ctx := context.Background()
-	dropEverything(t)
-
-	pool, err := pgxpool.New(ctx, databaseURL)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer pool.Close()
-
-	// The schema as it stood the day before: the table is called work, the column is called hands,
-	applyThrough(t, ctx, pool, "0035_pending_triggers")
-
-	var columnThere bool
-	if err := pool.QueryRow(ctx, `
-		select exists (select 1 from information_schema.columns
-		               where table_name = 'work' and column_name = 'hands')`).Scan(&columnThere); err != nil {
-		t.Fatalf("check the old column: %v", err)
-	}
-	if !columnThere {
-		t.Fatal("the old schema has no hands column, so this test stands on nothing and proves nothing")
-	}
-
-	if _, err := pool.Exec(ctx, `
-		insert into workspaces (id, name) values ('w1', 'acme');
-		insert into projects (id, workspace, name) values ('p1', 'w1', 'house-bills');
-		insert into work (id, workspace, project, title, brief, role, role_version, hands, phase)
-		values ('k1', 'w1', 'p1', 'write the tests', 'from the specification alone', 'test-writer', 1,
-		        '{context,skills}', 'pending'),
-		       ('k2', 'w1', 'p1', 'read the electricity bill', 'open it', '', 0, '{}', 'pending')`); err != nil {
-		t.Fatalf("seed the old shape: %v", err)
-	}
-
-	if err := store.Migrate(ctx, pool); err != nil {
-		t.Fatalf("migrate over the old shape: %v", err)
-	}
-
-	// Read back through the store, not through a query of my own, because what has to hold is that
-	// the code path a caller uses finds the material.
-	kept, err := store.NewPostgres(ctx, databaseURL)
-	if err != nil {
-		t.Fatalf("open postgres: %v", err)
-	}
-	t.Cleanup(kept.Close)
-
-	carried, err := kept.GetJob(ctx, "k1")
-	if err != nil {
-		t.Fatalf("GetJob: %v", err)
-	}
-	if len(carried.Requires) != 2 || carried.Requires[0] != "context" || carried.Requires[1] != "skills" {
-		t.Fatalf("job declared before the rename requires %v, want context and skills", carried.Requires)
-	}
-	bare, err := kept.GetJob(ctx, "k2")
-	if err != nil {
-		t.Fatalf("GetJob: %v", err)
-	}
-	if len(bare.Requires) != 0 {
-		t.Fatalf("job that required nothing requires %v, want nothing", bare.Requires)
-	}
-
-	// And the old name is gone from the schema, because a column nothing writes is a question every
-	// later migration has to answer.
-	if err := pool.QueryRow(ctx, `
-		select exists (select 1 from information_schema.columns
-		               where table_name = 'jobs' and column_name = 'hands')`).Scan(&columnThere); err != nil {
-		t.Fatalf("check the old column: %v", err)
-	}
-	if columnThere {
-		t.Error("jobs still has a hands column beside requires, so two columns hold one thing")
-	}
-}
-
-// A job declared before the system called it a job reads back whole, under the new name.
-//
-// Renaming a table is the shape that fails quietly. Every test that writes and then reads passes on
-// a fresh database, because the code and the schema agree with each other about the new word and
-// there is nothing else to disagree with. The rows that already exist are the only place the mistake
-// shows, so this one writes them through the schema as it stood the day before the rename.
-func TestJobsDeclaredBeforeTheyWereCalledJobsReadBackWhole(t *testing.T) {
-	ctx := context.Background()
-	dropEverything(t)
-
-	pool, err := pgxpool.New(ctx, databaseURL)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer pool.Close()
-
-	// The schema as it stood the day before: the tables are work and work_events.
-	applyThrough(t, ctx, pool, "0036_work_requires")
-
-	for _, table := range []string{"work", "work_events"} {
-		var there bool
-		if err := pool.QueryRow(ctx, `select exists (select 1 from information_schema.tables
-			where table_schema = 'public' and table_name = $1)`, table).Scan(&there); err != nil {
-			t.Fatalf("check for %s: %v", table, err)
-		}
-		if !there {
-			t.Fatalf("the old schema has no %s table, so this test stands on nothing and proves nothing", table)
-		}
-	}
-
-	// Two rows and the history of the first, in the words the system used then. The second waits for
-	// the first, which is the column the rename touches beside the table itself.
-	if _, err := pool.Exec(ctx, `
-		insert into workspaces (id, name) values ('w1', 'acme');
-		insert into projects (id, workspace, name) values ('p1', 'w1', 'house-bills');
-		insert into work (id, workspace, project, title, brief, phase, answer, requires)
-		values ('k1', 'w1', 'p1', 'read the electricity bill', 'open it and say when it is due',
-		        'done', 'the 14th', '{context}');
-		insert into work (id, workspace, project, title, brief, phase, after_work)
-		values ('k2', 'w1', 'p1', 'pay it', 'pay the bill', 'pending', '{k1}');
-		insert into work_events (id, kind, work, workspace, project, occurred_at)
-		values ('e1', 'work.declared', 'k1', 'w1', 'p1', now()),
-		       ('e2', 'work.claimed', 'k1', 'w1', 'p1', now()),
-		       ('e3', 'work.answered', 'k1', 'w1', 'p1', now())`); err != nil {
-		t.Fatalf("seed the old shape: %v", err)
-	}
-
-	if err := store.Migrate(ctx, pool); err != nil {
-		t.Fatalf("migrate over the old shape: %v", err)
-	}
-
-	// Read back through the store rather than through a query of my own, because what has to hold is
-	// that the code path a caller uses finds the rows.
-	kept, err := store.NewPostgres(ctx, databaseURL)
-	if err != nil {
-		t.Fatalf("open postgres: %v", err)
-	}
-	t.Cleanup(kept.Close)
-
-	answered, err := kept.GetJob(ctx, "k1")
-	if err != nil {
-		t.Fatalf("GetJob: %v", err)
-	}
-	if answered.Title != "read the electricity bill" || answered.Phase != job.PhaseDone {
-		t.Errorf("the job reads %q in phase %q, want the title and phase it was declared with",
-			answered.Title, answered.Phase)
-	}
-	if answered.Answer != "the 14th" {
-		t.Errorf("the answer reads %q, and an answer a caller cannot read back is the one thing the "+
-			"record exists for", answered.Answer)
-	}
-	if len(answered.Requires) != 1 || answered.Requires[0] != "context" {
-		t.Errorf("the job requires %v, want context", answered.Requires)
-	}
-
-	waiting, err := kept.GetJob(ctx, "k2")
-	if err != nil {
-		t.Fatalf("GetJob: %v", err)
-	}
-	if len(waiting.After) != 1 || waiting.After[0] != "k1" {
-		t.Errorf("the job waits for %v, want k1: the ordering is the column the rename touches", waiting.After)
-	}
-
-	// The whole listing, because a rename that lost the table would read as an empty system rather than
-	// as a failure.
-	listed, err := kept.ListJobs(ctx, job.Filter{Project: "p1"})
-	if err != nil {
-		t.Fatalf("ListJobs: %v", err)
-	}
-	if len(listed) != 2 {
-		t.Errorf("%d jobs survived the rename, want 2", len(listed))
-	}
-
-	// The history, in one vocabulary. A kind is the system's own word for what happened, so it travels
-	// with the row; a reader spanning the rename must not have to switch on two spellings forever.
-	records, err := kept.ListJobEvents(ctx, "k1")
-	if err != nil {
-		t.Fatalf("ListJobEvents: %v", err)
-	}
-	var kinds []string
-	for _, record := range records {
-		kinds = append(kinds, record.Kind)
-		if record.Job != "k1" {
-			t.Errorf("a record points at job %q, want k1", record.Job)
-		}
-	}
-	want := []string{job.EventDeclared, job.EventClaimed, job.EventAnswered}
-	if len(kinds) != len(want) {
-		t.Fatalf("the history reads %v, want %v", kinds, want)
-	}
-	for i, kind := range kinds {
-		if kind != want[i] {
-			t.Errorf("record %d reads %q, want %q", i, kind, want[i])
-		}
-		if strings.HasPrefix(kind, "work.") {
-			t.Errorf("record %d still reads %q, so one job's history answers in two vocabularies", i, kind)
-		}
-	}
-
-	// And the old names are gone, because a table nothing writes is a question every later migration
-	// has to answer.
-	for _, table := range []string{"work", "work_events"} {
-		var there bool
-		if err := pool.QueryRow(ctx, `select exists (select 1 from information_schema.tables
-			where table_schema = 'public' and table_name = $1)`, table).Scan(&there); err != nil {
-			t.Fatalf("check for %s: %v", table, err)
-		}
-		if there {
-			t.Errorf("%s is still there beside its new name, so two tables hold one thing", table)
-		}
 	}
 }
 

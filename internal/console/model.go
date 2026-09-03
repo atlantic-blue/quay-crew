@@ -112,7 +112,6 @@ type Info struct {
 	Store     string
 	Secrets   string
 	State     string
-	Events    string
 	// Behind says the control plane is older than this tool: old enough that it cannot answer what it
 	// is running. Everything else in here is then blank, and the console has to say why rather than
 	// quietly showing less.
@@ -291,10 +290,6 @@ type Model struct {
 	// terminal is how the console hands the screen to a command it starts. Nil means the terminal
 	// library's own way, which is what runs in front of an operator.
 	terminal Terminal
-	// waits is what the system last said waits for a person, and bell is how the console rings when
-	// that count goes up. A nil bell is a console that draws the line and makes no sound.
-	waits []*quaycrewv1.Waiting
-	bell  Bell
 }
 
 // Terminal hands the screen to a command and turns whatever came back into a message. It is what
@@ -382,7 +377,7 @@ func (m Model) Init() tea.Cmd {
 // A console with somewhere to resume to loads the top anyway, so the first frame is a listing rather
 // than an empty panel while the levels are walked back down.
 func (m Model) Opening() tea.Cmd {
-	opening := tea.Batch(listCmd(m.active, m.parent), infoCmd(m.source), waitingCmd(m.client))
+	opening := tea.Batch(listCmd(m.active, m.parent), infoCmd(m.source))
 	if m.resuming.Empty() {
 		return opening
 	}
@@ -402,7 +397,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// worse than none: it looks live and is not.
 		// And what waits for a person, on the same clock. It is asked for whichever view is open,
 		// because a job waiting on somebody is not a property of the rows they happen to be reading.
-		return m, tea.Batch(listCmd(m.active, m.parent), infoCmd(m.source), waitingCmd(m.client), tickCmd())
+		return m, tea.Batch(listCmd(m.active, m.parent), infoCmd(m.source), tickCmd())
 	case rowsMsg:
 		next := m.applyRows(msg)
 		// A first listing with nothing in it is the one moment the guided setup can be worth
@@ -458,8 +453,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, listCmd(m.active, m.parent)
 	case resumedMsg:
 		return m.applyResumed(msg)
-	case waitingMsg:
-		return m.applyWaiting(msg)
 	case infoMsg:
 		m.info = msg.info
 		return m, nil

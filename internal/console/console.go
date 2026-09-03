@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
@@ -24,9 +23,9 @@ func NewDefaultRegistry(client quaycrewv1.ControlPlaneServiceClient) (*Registry,
 	if client == nil {
 		return nil, fmt.Errorf("console: nil control plane client")
 	}
-	registry, err := NewRegistry(Sessions(client), Jobs(client), Exec(client), Archived(client), Projects(client),
-		Workspaces(client), Contexts(client), Secrets(client), Flows(client), Roles(client), Skills(client),
-		Hooks(client), Stats(client), Room(client))
+	registry, err := NewRegistry(Sessions(client), Archived(client), Projects(client),
+		Workspaces(client), Contexts(client), Secrets(client), Skills(client),
+		Hooks(client), Stats(client))
 	if err != nil {
 		return nil, err
 	}
@@ -59,19 +58,6 @@ func moved(typed string) (string, bool) {
 	return instead, gone
 }
 
-// RoomFrom asks the system what the machine has left: one figure and one word.
-//
-// The system answers from its own last sample rather than from the daemon, so this may be asked every
-// second. A system too old to answer, or one that could not read its machine, leaves both empty and
-// the header says nothing rather than claiming room nobody measured.
-func RoomFrom(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) (line, state string) {
-	answer, err := client.GetHeadroom(ctx, &quaycrewv1.GetHeadroomRequest{})
-	if err != nil {
-		return "", ""
-	}
-	return answer.GetUsed() + " of " + answer.GetLimit(), answer.GetState()
-}
-
 // InfoFrom asks the control plane what it is running and folds the answer into what the caller
 // already knows: which build this tool is, where it dialled, and where the operator is standing.
 // None of those three are the control plane's to say.
@@ -82,7 +68,7 @@ func InfoFrom(client quaycrewv1.ControlPlaneServiceClient, known Info) InfoSourc
 			return Info{}, err
 		}
 		known.Model, known.Sandbox = resp.GetModel(), resp.GetSandbox()
-		known.Store, known.State, known.Events = resp.GetStore(), resp.GetState(), resp.GetEvents()
+		known.Store, known.State = resp.GetStore(), resp.GetState()
 		known.Secrets = resp.GetSecrets()
 		known.SandboxBuild = resp.GetSandboxBuild()
 		// What the system has cost, which is a running total rather than configuration, so it comes
@@ -96,9 +82,6 @@ func InfoFrom(client quaycrewv1.ControlPlaneServiceClient, known Info) InfoSourc
 				CacheWritten: spent.GetTotal().GetCacheWritten(),
 			}
 		}
-		// What the machine has left, from the system's own last sample. Swallowed the same way and for
-		// the same reason: a system that cannot say still has a header worth drawing.
-		known.Room, known.RoomState = RoomFrom(ctx, client)
 		return known, nil
 	}
 }
@@ -125,7 +108,7 @@ func Run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, known
 	// Show what is already known while the control plane is still being asked, rather than an empty
 	// block that fills in a moment later.
 	model = model.WithInfo(known).WithClient(client).Beside(beside).Freshen(freshen).
-		WithCommandRunner(TheToolItself()).Remembering(remembering).WithBell(TheTerminalBell())
+		WithCommandRunner(TheToolItself()).Remembering(remembering)
 	if remembering.Load != nil {
 		// A place that cannot be read is no place: the console opens at the top, which is where it
 		// opened before it remembered anything.
@@ -163,14 +146,4 @@ func Plain(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, out
 		fmt.Fprintln(out, strings.Join(row.Cells, "  "))
 	}
 	return nil
-}
-
-// TheTerminalBell rings the terminal this console is drawn on.
-//
-// It writes to the error stream rather than to the screen the console owns. The bell character moves
-// no cursor and draws nothing, so it cannot corrupt the frame, and it reaches a terminal tab that is
-// not in front, which is the whole reason it is here: a person looking at something else is exactly
-// the person nothing was telling.
-func TheTerminalBell() Bell {
-	return func() { fmt.Fprint(os.Stderr, "\a") }
 }

@@ -55,7 +55,7 @@ type fakeClient struct {
 func (f *fakeClient) GetInfo(context.Context, *quaycrewv1.GetInfoRequest, ...grpc.CallOption) (*quaycrewv1.GetInfoResponse, error) {
 	return &quaycrewv1.GetInfoResponse{
 		Model: "claude-code", Sandbox: "docker", Store: "postgres",
-		Secrets: "postgres", Events: "kafka", State: "host",
+		Secrets: "postgres", State: "host",
 	}, nil
 }
 
@@ -493,7 +493,7 @@ func TestEnterDrillsIntoTheChildResourceScopedToTheRow(t *testing.T) {
 			{Id: "s2", Workspace: "other", Project: "p2", Status: "idle"},
 		},
 	}
-	model := newTestModel(t, Workspaces(client), Projects(client), Jobs(client), Sessions(client))
+	model := newTestModel(t, Workspaces(client), Projects(client), Sessions(client))
 	model, _ = update(t, model, rowsFor(model, row("acme", "acme", "Acme"), row("other", "other", "Other")))
 
 	model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
@@ -1380,17 +1380,17 @@ func TestTheDroppedWordsResolveToNothing(t *testing.T) {
 	}
 }
 
-// TestDrillingIntoAProjectLandsOnItsJobs: enter on a project opens the work declared in it, and the
-// destination has to be registered or the key dead ends.
-func TestDrillingIntoAProjectLandsOnItsJobs(t *testing.T) {
+// TestDrillingIntoAProjectLandsOnItsSessions: enter on a project opens the conversations running in
+// it, and the destination has to be registered or the key dead ends.
+func TestDrillingIntoAProjectLandsOnItsSessions(t *testing.T) {
 	client := &fakeClient{}
 	registry, err := NewDefaultRegistry(client)
 	if err != nil {
 		t.Fatalf("NewDefaultRegistry: %v", err)
 	}
 	projects, _ := registry.Get("projects")
-	if projects.DrillTo != "jobs" {
-		t.Fatalf("projects drills into %q, want jobs", projects.DrillTo)
+	if projects.DrillTo != "sessions" {
+		t.Fatalf("projects drills into %q, want sessions", projects.DrillTo)
 	}
 	if _, found := registry.Get(projects.DrillTo); !found {
 		t.Fatalf("projects drills into %q, which nothing registers", projects.DrillTo)
@@ -1504,14 +1504,14 @@ func TestTheHelpPanelCarriesWhatTheHeaderDropped(t *testing.T) {
 	model.info = Info{
 		Version: "21fca40", Address: "localhost:50051", Workspace: "juliantellez",
 		Project: "quay-crew", Model: "claude-code", Sandbox: "docker", Store: "postgres",
-		Secrets: "postgres", Events: "kafka", State: "host",
+		Secrets: "postgres", State: "host",
 	}
 	model, _ = update(t, model, runes("?"))
 	shown := model.View()
 
 	for _, want := range []string{
 		"this system", "localhost:50051", "juliantellez", "quay-crew", "claude-code",
-		"Sandbox engine", "Store engine", "Secrets", "Events engine", "State",
+		"Sandbox engine", "Store engine", "Secrets", "State",
 	} {
 		if !strings.Contains(shown, want) {
 			t.Fatalf("the help panel does not carry %q, so moving it out of the header lost it:\n%s", want, shown)
@@ -2495,7 +2495,7 @@ func TestTheStatsViewCarriesWhatTheHeaderStoppedShowing(t *testing.T) {
 	for _, row := range rows {
 		shown[row.Cells[0]] = true
 	}
-	for _, want := range []string{"Model", "Sandbox engine", "Store engine", "Secrets", "Events engine", "State"} {
+	for _, want := range []string{"Model", "Sandbox engine", "Store engine", "Secrets", "State"} {
 		if !shown[want] {
 			t.Fatalf("the stats view does not carry %q, so moving it out of the header lost it", want)
 		}

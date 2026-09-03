@@ -75,16 +75,3 @@ Feature: A session says where its context went
     When the operator lists the sessions
     Then the breakdown accounts for 80 per cent of what the model counted
     And what it does not account for is named
-
-  Scenario: Reading a job back says where its session spent its context
-    Given the system listens on an address the tool can dial
-    And a job titled "read the controller"
-    And the caller goes away and the controller ticks
-    And the task the controller sent lands
-    And the controller ticks again
-    And the session that ran the job read 40000 characters of a file
-    When the caller reads that job back through the tool
-    Then standard output carries "context spent in session"
-    And standard output carries "40,000 characters"
-    And standard output carries "files it read"
-    And the command succeeds

@@ -16,18 +16,16 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/auth"
 	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
-	"github.com/atlantic-blue/quay-krewe/internal/job"
 	"github.com/atlantic-blue/quay-krewe/internal/model"
-	"github.com/atlantic-blue/quay-krewe/internal/role"
 	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 	"github.com/atlantic-blue/quay-krewe/internal/secrets"
 	"github.com/atlantic-blue/quay-krewe/internal/store"
 	"google.golang.org/grpc"
 )
 
-// A job's session calling the system, against a real daemon: a real container, on the network the
-// system's own provider put it on, running the real command line tool, over a real gRPC interface with
-// the interceptor and the deny policy in front of it.
+// A session calling the system, against a real daemon: a real container, on the network the system's
+// own provider put it on, running the real command line tool, over a real gRPC interface with the
+// interceptor and the deny policy in front of it.
 //
 // None of it can be proved with a double. The fault was that nothing arrived, and a double answers
 // whatever it is told to: it would have reported this feature working for as long as it existed.
@@ -38,134 +36,11 @@ import (
 // with the same values.
 //
 // What is not proved here: the control plane in this test listens on the host rather than in a
-// container, so a session dials it by address rather than by name. Name resolution on the session
-// network is proved by the containers job, where the control plane is a real container on it.
+// container, so a session dials it by address rather than by name.
 
-// TestASessionIsRefusedAVerbItsRoleDoesNotCarry is the load bearing one, and it is a refusal rather
-// than a call. Before a session could reach the system, the verb boundary in deny.go had never refused
-// a real call, and a permission system that has never refused anything cannot be told apart from one
-// that is not wired up.
-func TestASessionIsRefusedAVerbItsRoleDoesNotCarry(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
-	defer cancel()
-	system := aSystemWhoseSessionsCanReachIt(ctx, t)
-
-	declared := system.declare(ctx, t, "clear the backlog", assessorRole)
-	said := system.run(ctx, t, declared, "krewe job stop "+declared+" \"I have had enough\" 2>&1")
-
-	// The role carries job.create and job.read and not job.stop, so the system names the verb and
-	// says where a verb comes from. A session that was refused has to know what to ask for.
-	for _, want := range []string{role.VerbJobStop, "may not", "verbs list", "attaching it"} {
-		if !strings.Contains(said, want) {
-			t.Fatalf("the session was told %q, want the system's refusal naming %q", said, want)
-		}
-	}
-	// And the refusal is a refusal. A sentence that reads like one over job that stopped anyway is
-	// worse than no boundary at all.
-	if phase := system.phaseOf(ctx, t, declared); phase == job.PhaseStopped {
-		t.Fatalf("the job is %q: the session was told it may not stop a job, and the job stopped", phase)
-	}
-}
-
-// TestASessionDeclaresASubJobAndTheSystemRunsItInASessionOfItsOwn.
-//
-// The parent and the depth are asserted because both come from the credential and never from the
-// caller. A session that could name its own parent could name none, start again at the top, and
-// escape the depth count that is the only thing bounding recursion.
-func TestASessionDeclaresASubJobAndTheSystemRunsItInASessionOfItsOwn(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
-	defer cancel()
-	system := aSystemWhoseSessionsCanReachIt(ctx, t)
-
-	declared := system.declare(ctx, t, "clear the backlog", assessorRole)
-	parentSession := system.run(ctx, t, declared, `krewe job create `+
-		`--title "write the migration" --brief "add the column" --role `+implementerRole+` 2>&1`)
-
-	children := system.children(ctx, t, declared)
-	if len(children) != 1 {
-		t.Fatalf("the session declared %d jobs, want 1. It said:\n%s", len(children), parentSession)
-	}
-	child := children[0]
-	if child.GetCause() != declared {
-		t.Fatalf("the sub job says %q caused it, want the job the session was running, %q",
-			child.GetCause(), declared)
-	}
-	if child.GetRole() != implementerRole {
-		t.Fatalf("the sub job runs as %q, want the role the session named", child.GetRole())
-	}
-
-	// One tick of the controller, rather than waiting for its ticker: a wait is slow when it passes
-	// and flaky when it does not.
-	system.server.TickJob(ctx)
-
-	ran := system.jobNamed(ctx, t, child.GetId())
-	if ran.GetSession() == "" {
-		t.Fatalf("the sub job is %q and has no session, so nothing ran it", ran.GetPhase())
-	}
-	if ran.GetSession() == system.lastSession {
-		t.Fatal("the sub job ran in the session that declared it, so a role is not a session of its own")
-	}
-	system.removeSandbox(t, ran.GetSession())
-
-	// The container the system made for it is real, and it is the daemon that says so rather than the
-	// system reporting on itself. The controller dispatches detached, so the container is waited for:
-	// what it answers is the assertion, and how soon it exists is the machine's business.
-	container := sandbox.ContainerName(ran.GetSession())
-	if !within(ctx, func() bool {
-		return exec.Command("docker", "inspect", container).Run() == nil
-	}) {
-		t.Fatalf("the daemon holds no container called %s, so the sub job has a session and nowhere to run",
-			container)
-	}
-}
-
-// TestASessionDeclaresAChildLongAfterTheFirstMinuteOfItsJob is issue 449 at the only tier that can
-// prove it: a real container, holding the credential the system minted for its job, calling the system
-// over the real interface with the interceptor in front of it.
-//
-// The session waits past the minute its credential used to last, and then declares a child. It waits
-// for real. A double can be told what time it is, and the fault here was that a session still doing
-// its job could no longer call the system at all, which a double would have reported as working for as
-// long as it existed. The run that found it had been going for twenty nine minutes.
-func TestASessionDeclaresAChildLongAfterTheFirstMinuteOfItsJob(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
-	defer cancel()
-	system := aSystemWhoseSessionsCanReachIt(ctx, t)
-
-	declared := system.declare(ctx, t, "clear the backlog", assessorRole)
-	said := system.run(ctx, t, declared, "sleep 75\n"+
-		`krewe job create --title "write the migration" --brief "add the column" --role `+
-		implementerRole+" 2>&1")
-
-	children := system.children(ctx, t, declared)
-	if len(children) != 1 {
-		t.Fatalf("seventy five seconds into its job the session declared %d jobs, want 1. It said:\n%s",
-			len(children), said)
-	}
-	// From the credential and never from the caller, the same as at the first second of the job.
-	child := children[0]
-	if child.GetCause() != declared {
-		t.Fatalf("the sub job says %q caused it, want the job the session was running, %q",
-			child.GetCause(), declared)
-	}
-}
-
-// within waits for something to become true, for as long as the test's own deadline allows.
-func within(ctx context.Context, done func() bool) bool {
-	for ctx.Err() == nil {
-		if done() {
-			return true
-		}
-		time.Sleep(time.Second)
-	}
-	return false
-}
-
-// TestASessionCannotOpenAConnectionToPostgres.
-//
-// The store is on the system's own network and a session is not, which is the whole reason the session
-// network exists rather than the system's being widened. A session runs model output, so what else is
-// on its network is the whole of the boundary.
+// A session is on a network of its own, and the system's store is not on it. The session can reach the
+// system and nothing else, which is what keeps a session that can drive the system from reading every
+// workspace's rows straight out of the database.
 //
 // Both halves are asserted, because either alone can pass for the wrong reason: the name does not
 // resolve, and the address it would resolve to accepts nothing. And the same command against the
@@ -176,9 +51,8 @@ func TestASessionCannotOpenAConnectionToPostgres(t *testing.T) {
 	system := aSystemWhoseSessionsCanReachIt(ctx, t)
 
 	where := system.postgresOnTheSystemsNetwork(ctx, t)
-	declared := system.declare(ctx, t, "clear the backlog", assessorRole)
 
-	said := system.run(ctx, t, declared, connects+strings.Join([]string{
+	said := system.run(ctx, t, connects+strings.Join([]string{
 		`echo "by name: $(getent hosts postgres || echo unresolved)"`,
 		`echo "by address: $(reach ` + where + `:5432)"`,
 		`echo "the system: $(reach "$QC_GRPC_ADDR")"`,
@@ -204,13 +78,6 @@ const connects = `reach() {
 }
 `
 
-// The roles this file imports. One carries job.create and job.read, which is what the assessor role
-// this system ships carries; the other carries neither, and exists to be named by a sub job.
-const (
-	assessorRole    = "assessor-under-test"
-	implementerRole = "implementer-under-test"
-)
-
 // reachableSystem is a control plane serving on the host, with its sessions on a network of their own.
 type reachableSystem struct {
 	server         *controlplane.Server
@@ -218,13 +85,10 @@ type reachableSystem struct {
 	workspaceID    string
 	sessionNetwork string
 	systemNetwork  string
-	// lastSession is the session the last task ran in, which is what a sub job's own session has to
-	// be different from.
-	lastSession string
 }
 
 // aSystemWhoseSessionsCanReachIt builds the whole thing: two networks, a control plane serving on the
-// host with the real interceptor in front of it, and a workspace holding two roles.
+// host with the real interceptor in front of it, and a workspace with a project in it.
 func aSystemWhoseSessionsCanReachIt(ctx context.Context, t *testing.T) *reachableSystem {
 	t.Helper()
 	image := os.Getenv("QC_TEST_SANDBOX_IMAGE")
@@ -246,17 +110,17 @@ func aSystemWhoseSessionsCanReachIt(ctx context.Context, t *testing.T) *reachabl
 		Runner:   &shellRunner{},
 		Secrets:  secrets.NewMemory(),
 		Provider: sandbox.DockerProvider{Image: image, SessionNetwork: sessionNetwork},
-		// What the system tells a session running a job, beside the credential it mints for
-		// that job. The two together are the whole of what a session is given.
-		Reachable: fmt.Sprintf("%s:%d", gateway, port),
+		// Where a session dials the system, put into the container as QC_GRPC_ADDR.
+		Reachable:   fmt.Sprintf("%s:%d", gateway, port),
+		DriverToken: "the-driver's-token",
 	})
 
 	// The guard the composed system runs behind, and the reason this is worth doing over a container:
 	// the refusal has to come from the interceptor and the policy rather than from a test.
 	grpcServer := grpc.NewServer(auth.ServerOptions(auth.Policy{
 		Token:       "the-operator's-token",
-		Grants:      server.Grants(),
-		DeniedToJob: controlplane.DeniedToJob,
+		DriverToken: "the-driver's-token",
+		Denied:      controlplane.DeniedToDriver,
 	})...)
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, server)
 	go func() { _ = grpcServer.Serve(listener) }()
@@ -279,106 +143,25 @@ func aSystemWhoseSessionsCanReachIt(ctx context.Context, t *testing.T) *reachabl
 	}
 	system.projectID = project.GetProject().GetId()
 
-	// Depth starts at zero, so no session declares anything until an operator raises it.
-	if _, err := server.SetWorkspaceLimits(ctx, &quaycrewv1.SetWorkspaceLimitsRequest{
-		Limits: &quaycrewv1.WorkspaceLimits{Workspace: system.workspaceID, MaxDeclared: 2},
-	}); err != nil {
-		t.Fatalf("raise the ceiling: %v", err)
-	}
-	system.holdRole(ctx, t, assessorRole, role.VerbJobCreate, role.VerbJobRead)
-	system.holdRole(ctx, t, implementerRole, role.VerbJobRead)
 	return system
 }
 
-// holdRole imports a role declaring the verbs named and attaches it to the workspace. A role is what
-// grants: job running as none holds a credential that may call nothing.
-func (c *reachableSystem) holdRole(ctx context.Context, t *testing.T, name string, verbs ...string) {
-	t.Helper()
-	manifest := fmt.Sprintf("name: %s\nversion: 1\nsummary: a role for this test\nmodel: opus\nreceives:\n  - job\nverbs:\n",
-		name)
-	for _, verb := range verbs {
-		manifest += "  - " + verb + "\n"
-	}
-	if _, err := c.server.ImportRole(ctx, &quaycrewv1.ImportRoleRequest{
-		Files: []*quaycrewv1.RoleFile{
-			{Path: role.ManifestFile, Body: []byte(manifest)},
-			{Path: role.BriefFile, Body: []byte("Clear the backlog.")},
-		},
-	}); err != nil {
-		t.Fatalf("import the role %s: %v", name, err)
-	}
-	if _, err := c.server.AttachRole(ctx, &quaycrewv1.AttachRoleRequest{
-		Workspace: c.workspaceID, Name: name,
-	}); err != nil {
-		t.Fatalf("attach the role %s: %v", name, err)
-	}
-}
-
-// declare records a job as the operator does, and hands back its identifier.
-func (c *reachableSystem) declare(ctx context.Context, t *testing.T, title, named string) string {
-	t.Helper()
-	declared, err := c.server.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
-		Project: c.projectID, Title: title, Brief: "read the open pull requests", Role: named,
-	})
-	if err != nil {
-		t.Fatalf("declare the job: %v", err)
-	}
-	return declared.GetJob().GetId()
-}
-
-// run dispatches a task for a job and returns what the session said.
+// run dispatches a task and returns what the session said.
 //
 // The script runs inside the session's container, in the environment the system built for that one
-// task, which is where the address and the credential are: a sandbox keeps what it was born with, so
-// a credential written at birth would label every later task with the first task's grant.
-func (c *reachableSystem) run(ctx context.Context, t *testing.T, declared, script string) string {
+// task, which is where the address and the token are.
+func (c *reachableSystem) run(ctx context.Context, t *testing.T, script string) string {
 	t.Helper()
 	dispatched, err := c.server.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-		Project: c.projectID, Text: script, Job: declared,
+		Project: c.projectID, Text: script,
 	})
 	if err != nil {
 		t.Fatalf("dispatch the task: %v", err)
 	}
 	c.removeSandbox(t, dispatched.GetId())
-	c.lastSession = dispatched.GetId()
 	return dispatched.GetReply()
 }
 
-func (c *reachableSystem) phaseOf(ctx context.Context, t *testing.T, declared string) string {
-	t.Helper()
-	return c.jobNamed(ctx, t, declared).GetPhase()
-}
-
-func (c *reachableSystem) jobNamed(ctx context.Context, t *testing.T, id string) *quaycrewv1.Job {
-	t.Helper()
-	held, err := c.server.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: id})
-	if err != nil {
-		t.Fatalf("read the job back: %v", err)
-	}
-	return held.GetJob()
-}
-
-// children is what one job has hanging under it.
-// children is every job the session running one job declared. A cause is not a filter, so the
-// listing of the project is read and the rows are picked out of it, which is what a person reading
-// that listing sees too.
-func (c *reachableSystem) children(ctx context.Context, t *testing.T, cause string) []*quaycrewv1.Job {
-	t.Helper()
-	listed, err := c.server.ListJobs(ctx, &quaycrewv1.ListJobsRequest{Project: c.projectID})
-	if err != nil {
-		t.Fatalf("list the jobs of the project: %v", err)
-	}
-	caused := make([]*quaycrewv1.Job, 0, len(listed.GetJobs()))
-	for _, one := range listed.GetJobs() {
-		if one.GetCause() == cause {
-			caused = append(caused, one)
-		}
-	}
-	return caused
-}
-
-// postgresOnTheSystemsNetwork starts a real store where the composed stack keeps it, on the system's own
-// network and on no other, and answers with its address there.
 func (c *reachableSystem) postgresOnTheSystemsNetwork(ctx context.Context, t *testing.T) string {
 	t.Helper()
 	name := "quaycrew-itest-postgres-" + store.NewID()

@@ -19,10 +19,7 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/auth"
 	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
-	"github.com/atlantic-blue/quay-krewe/internal/forge"
-	"github.com/atlantic-blue/quay-krewe/internal/headroom"
 	"github.com/atlantic-blue/quay-krewe/internal/logging"
-	"github.com/atlantic-blue/quay-krewe/internal/messaging"
 	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 	"github.com/atlantic-blue/quay-krewe/internal/secrets"
@@ -155,41 +152,14 @@ func main() {
 	token := systemToken(storage, logger, auth.TokenFile)
 	driverToken := systemToken(storage, logger, auth.DriverTokenFile)
 
-	events, eventsKind := openEventLog(os.Getenv("QC_KAFKA_SEEDS"), logger)
-	defer events.Close()
-
-	leaseSetting, leaseNotice := renamedSetting("QC_JOB_LEASE", os.Getenv)
-	if leaseNotice != "" {
-		logger.Warn(leaseNotice)
-	}
-
 	server := controlplane.NewServer(controlplane.Config{
 		// How often a session describes itself, from the system's configuration.
 		DescribeEvery: controlplane.DescribeEvery(os.Getenv("QC_DESCRIBE_EVERY")),
-		// How long the controller holds a job before another may take it, and the name it
-		// writes on the hold so an investigator knows which machine stopped.
-		JobLease:       controlplane.JobLease(leaseSetting, logger),
-		ControllerName: controlplane.ControllerName(os.Hostname),
-		// What reads the machine. Only where a daemon is what makes the sandboxes: a system running
-		// sessions on the host has no daemon to ask, and it reports unknown rather than shelling out
-		// to a command that is not there.
-		Headroom: headroomSource(sandboxKind, logger),
-		// What reads back the pull requests the crew opened. The credential is the system's own secret,
-		// read at the moment it is needed: an operator sets one while the system runs, and a reader that
-		// read it once at startup would report unknown until somebody restarted the stack.
-		Forge: &forge.GitHub{Token: func(ctx context.Context) (string, error) {
-			return credentials.GetSystem(ctx, forge.TokenName)
-		}},
-		// What the system holds back for its own containers before it admits any sandbox. The control
-		// plane, the database and the event log are containers inside the same runtime the work
-		// fills, so a system that reserves nothing goes down with its own workload.
-		SystemReserve: controlplane.EnvReserve(logger),
 		Store:         durable,
 		Runner:        runner,
 		Provider:      provider,
 		Secrets:       credentials,
 		Storage:       storage,
-		Events:        events,
 		// What a session's tasks may do when it is born, from the system's configuration.
 		BirthPermissionMode: bornIn,
 		// Where a session dials to reach this control plane. Unset means it cannot.
@@ -211,7 +181,6 @@ func main() {
 			Sandbox: sandboxKind,
 			Store:   storeKind,
 			State:   stateKind(storage),
-			Events:  eventsKind,
 			Secrets: secretsKind,
 			// What the sandboxes are running, so the tool can say when the system has moved on and
 			// they have not.
@@ -221,25 +190,6 @@ func main() {
 			Version: version,
 		},
 	})
-	// Waits that came due while the system was down are resumed on the way up, and every one after
-	// that on a tick: a wait is a row, so a restart loses none of them.
-	go server.RunFlowPoller(ctx)
-
-	// And the jobs the system holds are made to happen the same way: a controller reads the rows, sends
-	// a task for what has not started, and writes what came back. Declared intent is a row, so a job
-	// declared while the system was down starts on the way up.
-	go server.RunJobController(ctx)
-
-	// And the machine itself, on its own timer. The header reads the last sample rather than the
-	// daemon, because reading the daemon takes as long as the daemon takes and the header redraws
-	// every second.
-	go server.RunHeadroom(ctx)
-
-	// And the pull requests those jobs opened, on a timer of their own. The crew used to keep the
-	// address and never look at it again, so a change that merged and a change whose checks went red
-	// an hour later read the same. Every page reads the row this writes and never the forge.
-	go server.RunPullRequests(ctx)
-
 	// And the parts the system has to write to before a dispatch starts, so a view of them reads a probe
 	// rather than a guess. The health check keeps this fresh wherever one runs; the timer is for a system
 	// nobody checks, which had no reading at all.
@@ -248,11 +198,6 @@ func main() {
 	// What strayed while the system was down is reaped on the way up: a container whose session was
 	// stopped, archived or deleted after this process last saw it is running for nobody.
 	server.ReapStrays(ctx)
-
-	// And what survived is counted, before a single job is admitted. Containers outlive the process
-	// that made them, so a system that started counting from zero would admit a whole machine's worth
-	// of work onto a machine that is already full.
-	server.SeedCapacity(ctx)
 
 	// And what was mid task when the system went down is settled the same way: a task runs in this
 	// process, so a session the store still calls running is one whose task died with the last one.
@@ -271,9 +216,6 @@ func main() {
 		telemetry.ServerOptions(),
 		auth.ServerOptions(auth.Policy{
 			Token: token, DriverToken: driverToken, Denied: controlplane.DeniedToDriver,
-			// A session running a job presents a credential of its own, minted for that
-			// job and holding only the verbs its role declared.
-			Grants: server.Grants(), DeniedToJob: controlplane.DeniedToJob,
 		})...,
 	)...)
 	quaycrewv1.RegisterControlPlaneServiceServer(grpcServer, server)
@@ -310,41 +252,6 @@ func main() {
 	if err := shutdown(shutdownCtx); err != nil {
 		logger.Error("shutdown error", "error", err)
 	}
-}
-
-// headroomSource is what reads the machine the system runs on, and nil where there is nothing to read
-// it with. Nil is a system that reports unknown headroom, which is the honest answer for a system whose
-// sessions do not run on a daemon at all.
-func headroomSource(sandboxKind string, logger *slog.Logger) headroom.Source {
-	if sandboxKind != sandbox.KindDocker {
-		logger.Info("sessions do not run on a docker daemon, so the system reports no headroom",
-			"sandbox", sandboxKind)
-		return nil
-	}
-	return headroom.Daemon{}
-}
-
-// openEventLog returns the log tasks are exported to. With QC_KAFKA_SEEDS set it is Kafka, spoken
-// to Redpanda locally. Without it, nothing is exported and nothing is lost: history is written to
-// the store in the same breath as the task, and the log only ever carried a copy for a second
-// consumer. The status block says the export is off rather than leaving an empty column to read as
-// fine.
-//
-// The producer connects lazily, so a broker that is not up yet does not stop the control plane from
-// serving. A publish that cannot reach it is dropped rather than failing the task.
-func openEventLog(seeds string, logger *slog.Logger) (messaging.EventLog, string) {
-	brokers := splitAndTrim(seeds)
-	if len(brokers) == 0 {
-		logger.Info("no QC_KAFKA_SEEDS set: history is kept in the store, and there is no audit export")
-		return messaging.Discard{}, ""
-	}
-	client, err := messaging.NewClient(brokers...)
-	if err != nil {
-		logger.Warn("event log unavailable, so tasks are not exported; history in the store is unaffected", "error", err)
-		return messaging.Discard{}, ""
-	}
-	logger.Info("event log ready", "backend", "kafka", "seeds", brokers)
-	return client, "kafka"
 }
 
 // systemToken is a token a caller has to present, minted the first time and kept beside the key that
