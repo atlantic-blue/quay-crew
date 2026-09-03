@@ -38,19 +38,17 @@ const (
 	// IdeationPoints is how many lines each of the lists may carry: what was told, what was assumed,
 	// and what is not known.
 	IdeationPoints = 5
-	// IdeationLineLimit is how long one of those lines may be. It is the title's ceiling, because both
-	// are one line a person reads.
+	// IdeationLineLimit is the guide for one of those lines. It is the title's guide, because both are
+	// one line a person reads.
 	IdeationLineLimit = TitleLimit
-	// UnderstandingLimit is how long what the work is, and what it is not, may each be. Wider than a
-	// line and narrower than a brief: it is the paragraph a person reads first, and it is the half
-	// that has to be readable at a glance.
+	// UnderstandingLimit is the guide for what the work is, and for what it is not. Wider than a line
+	// and narrower than a brief: it is the paragraph a person reads first.
 	UnderstandingLimit = 3 * TitleLimit
-	// IdeationLimit is how long the whole record may be once the system renders it.
+	// IdeationLimit is the guide for the whole record once the system renders it.
 	//
-	// It exists because the record is put to a person as a question, and a question has its own
-	// ceiling in asking.go. The two have to agree, and the way they agree is that the record plus the
-	// lines around it fits inside QuestionLimit. A record that does not fit would be a question the
-	// system could not ask.
+	// The three above are guides and not ceilings. A guide tells a person that a part of the record is
+	// long, and by how much. It takes nothing away. Text over a guide reaches the person word for
+	// word, with a warning above it, because the record is the only thing this stage produces.
 	IdeationLimit = 3000
 )
 
@@ -159,10 +157,6 @@ func readIdeationQuestions(reply string) ([]IdeationQuestion, error) {
 		if text == "" {
 			continue
 		}
-		if len(text) > IdeationLineLimit {
-			return nil, fmt.Errorf("question %d is %d bytes and a question may be %d: it is one line a "+
-				"person reads in a terminal", number, len(text), IdeationLineLimit)
-		}
 		if where := askingToProceed.FindString(text); where != "" {
 			return nil, fmt.Errorf("question %d asks %q, which asks whether to go on rather than asking "+
 				"something you cannot answer: the record already stops the job, so ask about the work",
@@ -208,39 +202,6 @@ func (one Ideation) readable() error {
 		return fmt.Errorf("this reply asks nothing: ask at least one thing you cannot answer from the " +
 			"repository, the brief and the sentence, opening the line with \"Question 1:\". A run that " +
 			"asked a person nothing is the failure this stage exists for")
-	case len(one.Questions) > IdeationQuestions:
-		return fmt.Errorf("this reply asks %d questions and it may ask %d: a person reads these in a "+
-			"terminal, so ask the %d that decide the work",
-			len(one.Questions), IdeationQuestions, IdeationQuestions)
-	case len(one.Understood) > UnderstandingLimit:
-		return fmt.Errorf("what you understood is %d bytes and it may be %d: it is the paragraph a "+
-			"person reads first", len(one.Understood), UnderstandingLimit)
-	case len(one.NotThis) > UnderstandingLimit:
-		return fmt.Errorf("what the work is not is %d bytes and it may be %d",
-			len(one.NotThis), UnderstandingLimit)
-	case len(one.Confidence) > IdeationLineLimit:
-		return fmt.Errorf("your confidence is %d bytes and it may be %d: it is one line",
-			len(one.Confidence), IdeationLineLimit)
-	}
-	for _, list := range []struct {
-		heading string
-		lines   []string
-	}{{"Told", one.Told}, {"Assumed", one.Assumed}, {"Unknown", one.Unknown}} {
-		heading, lines := list.heading, list.lines
-		if len(lines) > IdeationPoints {
-			return fmt.Errorf("this reply carries %d %s lines and it may carry %d",
-				len(lines), heading, IdeationPoints)
-		}
-		for _, said := range lines {
-			if len(said) > IdeationLineLimit {
-				return fmt.Errorf("a %s line is %d bytes and it may be %d: it is one line a person reads",
-					heading, len(said), IdeationLineLimit)
-			}
-		}
-	}
-	if kept := IdeationText(one); len(kept) > IdeationLimit {
-		return fmt.Errorf("this record is %d bytes and it may be %d: it is put to a person as one "+
-			"question, so say less in each line rather than more", len(kept), IdeationLimit)
 	}
 	return nil
 }
@@ -266,6 +227,120 @@ func IdeationText(one Ideation) string {
 		lines = append(lines, fmt.Sprintf("Question %d: %s", said.Number, said.Text))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// IdeationWarnings is one line for each part of a record that is longer than its guide, and nothing
+// where every part is inside its guide.
+//
+// A guide used to refuse the text. Job a3d72b11 wrote a correct reading of 859 bytes against a guide
+// of 600, and the system threw the words away, asked once more and stopped the job. So the guide
+// tells the operator instead: which part is long, how many bytes it is, and what the guide is. That
+// is what the operator needs to say "that is fine" or "say it shorter next time".
+//
+// It measures the record the system rendered, because that is the text the person reads. A line of
+// the record is a heading, a colon and what was said, so the measurement is of what was said.
+func IdeationWarnings(understanding string) []string {
+	var said []string
+	for _, line := range strings.Split(understanding, "\n") {
+		heading, text, found := strings.Cut(line, ": ")
+		if !found {
+			continue
+		}
+		switch {
+		case isAParagraphOfTheRecord(heading):
+			if len(text) > UnderstandingLimit {
+				said = append(said, aWarningAbout(theNameOf(heading), len(text), UnderstandingLimit))
+			}
+		case isALineOfTheRecord(heading):
+			if len(text) > IdeationLineLimit {
+				said = append(said, aWarningAbout(theNameOf(heading), len(text), IdeationLineLimit))
+			}
+		}
+	}
+	said = append(said, theCountWarnings(understanding)...)
+	if len(understanding) > IdeationLimit {
+		said = append(said, aWarningAbout("The whole record", len(understanding), IdeationLimit))
+	}
+	return said
+}
+
+// theCountWarnings is one line for each list of the record that carries more lines than its guide.
+//
+// A sixth question used to be refused, which threw away the other five with it. A sixth thing a
+// session was told is worth reading, so the count is a guide as well: the operator is told there are
+// more than the guide, and reads them.
+func theCountWarnings(understanding string) []string {
+	counted := map[string]int{}
+	for _, line := range strings.Split(understanding, "\n") {
+		heading, _, found := strings.Cut(line, ": ")
+		if !found {
+			continue
+		}
+		if strings.HasPrefix(heading, "Question ") {
+			heading = "Question"
+		}
+		counted[heading]++
+	}
+	var said []string
+	for _, heading := range []string{"Told", "Assumed", "Unknown"} {
+		if counted[heading] > IdeationPoints {
+			said = append(said, fmt.Sprintf("The record carries %d %s lines where the guide is %d.",
+				counted[heading], heading, IdeationPoints))
+		}
+	}
+	if counted["Question"] > IdeationQuestions {
+		said = append(said, fmt.Sprintf("The record asks %d questions where the guide is %d.",
+			counted["Question"], IdeationQuestions))
+	}
+	return said
+}
+
+// aWarningAbout is one warning. It carries three things: which part of the record is long, how many
+// bytes that part is, and the guide it went past. Two numbers with no part named leave the operator
+// counting to find which part to shorten.
+func aWarningAbout(part string, size, guide int) string {
+	return fmt.Sprintf("%s is %d bytes where the guide is %d.", part, size, guide)
+}
+
+// isAParagraphOfTheRecord is whether a heading opens one of the two paragraphs a person reads first.
+// Those two are measured against the wider guide.
+func isAParagraphOfTheRecord(heading string) bool {
+	return heading == "Understood" || heading == "Not"
+}
+
+// isALineOfTheRecord is whether a heading opens one line of the record.
+func isALineOfTheRecord(heading string) bool {
+	switch heading {
+	case "Told", "Assumed", "Unknown", "Confidence":
+		return true
+	}
+	return strings.HasPrefix(heading, "Question ")
+}
+
+// theNameOf is how a warning names the part it measured, in the words the record itself uses, so the
+// operator reads the heading here and finds the same heading below.
+func theNameOf(heading string) string {
+	switch heading {
+	case "Understood", "Not":
+		return "The " + heading + " paragraph"
+	case "Confidence":
+		return "The Confidence line"
+	}
+	return "A " + heading + " line"
+}
+
+// TheWarningsAbove is the warnings as a person reads them, above the record they are about, and an
+// empty string where there is nothing to warn about.
+//
+// Above rather than below: a measurement at the far end of a long record is a measurement the reader
+// meets after the thing it was about.
+func TheWarningsAbove(understanding string) string {
+	warnings := IdeationWarnings(understanding)
+	if len(warnings) == 0 {
+		return ""
+	}
+	return "Some of this is longer than its guide. Nothing was cut, and every word is below.\n" +
+		strings.Join(warnings, "\n") + "\n\n"
 }
 
 // IdeationIn is the record a kept row holds. A record the system wrote always reads back, so one that
@@ -380,12 +455,12 @@ func NoUnderstandingToAnswer(why string) string {
 // one of them unknown, which is a worse outcome than silence because it looks like agreement.
 func AskingWhetherThisIsRight(sentence, understanding string) string {
 	return fmt.Sprintf("This job has not started and has not planned yet. Here is what it understands "+
-		"the work to be, and here is the sentence it serves.\n\nThe sentence: %s\n\nWhat it "+
+		"the work to be, and here is the sentence it serves.\n\nThe sentence: %s\n\n%sWhat it "+
 		"understands:\n\n%s\n\nAnswer the questions in your own words, opening each answer with the "+
 		"number it answers, for example \"1: ...\". What you write is kept whole and the plan is written "+
 		"from it. A question you leave alone stays unknown rather than being taken as agreed, and so "+
 		"does anything above marked Assumed. There is nothing to approve here: the plan comes next, and "+
-		"that is the one you approve.", sentence, understanding)
+		"that is the one you approve.", sentence, TheWarningsAbove(understanding), understanding)
 }
 
 // StillUnknown is the questions a person's answer did not touch.
