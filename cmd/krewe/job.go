@@ -317,9 +317,8 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	// read before somebody starts work a job already has, and a column of blanks on every listing is a
 	// column nobody reads by the second week.
 	claiming := anythingClaimed(resp.GetJobs())
-	// The column is only there when a row of this listing has a reason to give. Without it a failed
-	// row says "failed" and nothing else. Reading why then costs one krewe job show for each failure,
-	// and that is the cost this column removes.
+	// The same rule for why a row ended. Most listings hold no stopped row and no failed row, and on
+	// those the reason column is not there at all.
 	saying := anythingSaysWhy(resp.GetJobs())
 	for _, one := range resp.GetJobs() {
 		if holding == "" && heldForRoom(one) {
@@ -346,45 +345,6 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	return nil
 }
 
-// anythingSaysWhy says whether any row of a listing has a reason to give.
-func anythingSaysWhy(jobs []*quaycrewv1.Job) bool {
-	for _, one := range jobs {
-		if whyThisRowEnded(one) != "" {
-			return true
-		}
-	}
-	return false
-}
-
-// whyThisRowEnded is what a row says about how it ended, and nothing where it has nothing to say.
-//
-// A failed job carries what the work died with. That sentence is what a person opens the job to read.
-// A pending job the system holds back carries a reason too. That one is a fact about the machine
-// rather than about the job, so the listing says it once underneath instead.
-func whyThisRowEnded(one *quaycrewv1.Job) string {
-	if one.GetPhase() != job.PhaseFailed {
-		return ""
-	}
-	return strings.Join(strings.Fields(one.GetReason()), " ")
-}
-
-// reasonColumn is why a row ended, in a column beside the outcome, and nothing at all where no row
-// of the listing says why.
-func reasonColumn(one *quaycrewv1.Job, saying bool) string {
-	if !saying {
-		return ""
-	}
-	reason := []rune(whyThisRowEnded(one))
-	if len(reason) > reasonWidth {
-		return fmt.Sprintf("%-*s ", reasonWidth, string(reason[:reasonWidth-1])+"…")
-	}
-	return fmt.Sprintf("%-*s ", reasonWidth, string(reason))
-}
-
-// reasonWidth is how wide the reason column is. It holds a short sentence, which is what most
-// reasons are, and it cuts anything longer rather than pushing the title off the line.
-const reasonWidth = 40
-
 // anythingClaimed says whether any row in a listing has taken a piece of work.
 func anythingClaimed(jobs []*quaycrewv1.Job) bool {
 	for _, one := range jobs {
@@ -394,6 +354,46 @@ func anythingClaimed(jobs []*quaycrewv1.Job) bool {
 	}
 	return false
 }
+
+// anythingSaysWhy says whether any row in a listing ended with words on it.
+func anythingSaysWhy(jobs []*quaycrewv1.Job) bool {
+	for _, one := range jobs {
+		if whyItEnded(one) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// whyItEnded is why a job stopped or failed, and nothing for a job that did neither.
+//
+// A pending job the system holds back carries a reason as well. That reason is one fact about the
+// machine rather than one fact per row, so the listing says it once underneath and the cell of a
+// held row in this column stays empty.
+func whyItEnded(one *quaycrewv1.Job) string {
+	switch one.GetPhase() {
+	case job.PhaseStopped, job.PhaseFailed:
+		return strings.Join(strings.Fields(one.GetReason()), " ")
+	}
+	return ""
+}
+
+// reasonColumn is why a row ended, in a column, and nothing at all where no row in the listing
+// stopped or failed.
+func reasonColumn(one *quaycrewv1.Job, saying bool) string {
+	if !saying {
+		return ""
+	}
+	why := []rune(whyItEnded(one))
+	if len(why) > reasonWidth {
+		why = append(why[:reasonWidth-1], '…')
+	}
+	return fmt.Sprintf("%-*s ", reasonWidth, string(why))
+}
+
+// reasonWidth is how wide the reason column is. It holds a short sentence about what happened, which
+// is what most reasons are, and cuts anything longer rather than pushing the title off the line.
+const reasonWidth = 40
 
 // claimColumn is the piece of work a row claims, in a column, and nothing at all where no row in the
 // listing claims anything.
