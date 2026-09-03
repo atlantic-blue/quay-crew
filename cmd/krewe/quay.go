@@ -111,6 +111,9 @@ var removedFlags = map[string]string{
 // holding an error, so the process exits non zero and a caller reading the status cannot take a
 // refusal for a success.
 var removedCommands = map[string]string{
+	"work": "work became job, and jobs are gone. What a session left in its directory is read " +
+		"directly" +
+		"\n\n  krewe read <session> [<path>]",
 	"job": "the job subsystem is gone. A job was four stages, a controller and a gate, and it cost " +
 		"more than the work it delivered. Dispatch a session and talk to it" +
 		"\n\n  krewe task [<address>] \"...\"",
@@ -159,8 +162,8 @@ var removedCommands = map[string]string{
 		"and ask the session to clone what it works on. To say which repository a project's work " +
 		"lands in: krewe project repository <owner>/<name>",
 	"header": "the header is gone. Which build this is and the way to help are on the console.s own\n" +
-		"footer row now, on the right of the line that says where you are standing. What the machine has\n" +
-		"left is a command\n\n  krewe room",
+		"footer row now, on the right of the line that says where you are standing. What is running is\n" +
+		"the listing\n\n  krewe sessions",
 	"panel": "the panel is gone. `krewe` on its own opens the console, full width, and nothing beside\n" +
 		"it. A conversation is asked for: press p in the console from inside tmux, or open one on its own\n\n  krewe attach <session>",
 }
@@ -179,6 +182,7 @@ var helpSpellings = map[string]bool{
 // than where anything is.
 var takenFlags = map[string]map[string]bool{
 	"task":   {flagDispatch: true},
+	"answer": {allAnswers: true},
 	"target": targetFlagsTaken(),
 }
 

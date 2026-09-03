@@ -180,28 +180,23 @@ func TestNoRemovedWordIsAlsoACommandTheToolStillRuns(t *testing.T) {
 // It is driven with the flags a person actually had in their fingers, because a refusal that blames
 // one of them sends the operator to correct part of a command that is gone whole. And it is driven
 // against a real system, so the row count afterwards means something.
-func TestTheWorkCommandRefusesAndNamesJob(t *testing.T) {
+func TestTheWorkCommandRefusesAndNamesRead(t *testing.T) {
 	client := aSystemToWorkIn(t)
 
-	err := refused(t, client, "work", "create",
-		"--title", "read the electricity bill", "--brief", "open it")
+	err := refused(t, client, "work", "create", "read the electricity bill")
 
-	for _, want := range []string{"there is no work command", "krewe job"} {
+	for _, want := range []string{"there is no work command", "krewe read"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("krewe work create is refused with %q, want it to say %q", err, want)
 		}
 	}
-	// The refusal is about the word, not about a flag on it.
-	if strings.Contains(err.Error(), "--title") {
-		t.Errorf("the refusal blames a flag rather than the word: %q", err)
+	// The refusal is about the word, not about what came after it.
+	if strings.Contains(err.Error(), "create") {
+		t.Errorf("the refusal blames the verb rather than the word: %q", err)
 	}
 	// And it took nothing with it, so the declaration cannot read as one that landed.
 	if strings.Contains(err.Error(), "read the electricity bill") {
 		t.Errorf("the refusal took the title with it: %q", err)
-	}
-	listed := mustRun(t, client, "job", "list")
-	if strings.Contains(listed, "read the electricity bill") {
-		t.Errorf("the refused declaration was written anyway: %q", listed)
 	}
 }
 
@@ -215,7 +210,7 @@ func TestEveryVerbOfTheWordThatWentIsRefused(t *testing.T) {
 		if !strings.Contains(err.Error(), "there is no work command") {
 			t.Errorf("krewe work %s is refused with %q, which does not say the word is gone", verb, err)
 		}
-		if !strings.Contains(err.Error(), "krewe job") {
+		if !strings.Contains(err.Error(), "krewe read") {
 			t.Errorf("krewe work %s is refused with %q, which names nothing to type instead", verb, err)
 		}
 	}

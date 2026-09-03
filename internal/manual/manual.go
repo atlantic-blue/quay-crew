@@ -47,117 +47,13 @@ commands:
   project repository [<address>]          say where this project's work lands, and what kind of
     [<owner>/<name>] [public|private]     repository that is. On its own it reads it back. One
                                           address is a write, and it is refused where that address
-                                          also names a project. A job declared here works in it and
+                                          also names a project. A session started here works in it and
                                           ends in a pull request against it. Public unless you say
                                           otherwise, because a pipeline's minutes are free on a
                                           public repository, and a kind you leave out is the kind
                                           the project already holds
   project repository show [<address>]     read where a project's work lands, recording nothing
   project delete [<workspace>/]<project>  remove it and the sessions inside it, confirmed the same way
-  flow import <file>                      store an automation graph the system can run
-  flow start [<address>] <graph>          begin a run of it in a project
-  flow schedule [<address>] <graph>       let it run on its own, as often as it says
-  flow unschedule [<address>] <graph>     stop it running on its own
-  flow list [<address>|system]            what has run, newest first. It reads where you are
-                                          standing and says so; system reads every project
-  flow show <run>                         where one run got to, what it cost, why it stopped,
-                                          and how to read the job its steps went out as
-  flow stop <run> [<reason>]              halt a run in flight, keeping the reason
-  flow answer <run> <answer>              tell a run waiting on you what you decided
-  job create [<address>]                  declare a job: what it is, and what has to
-    --title "..." --brief "..."           happen. The system keeps it, so the intent outlives the
-    [--role <name>] [--mode <mode>]       terminal that asked for it, and a controller runs it as
-    [--requires <material>]               the role it names. --requires says what the job cannot be
-    [--after <job>] [--label k=v]         done without, one of job, context or skills, and a role
-    [--budget-tokens <n>] [--deadline <t>] that does not receive it is never handed the job.
-    [--expect-file <path>]                --repository says where the work goes, and a job that
-    [--expect-contains "..."]             names one is not done until its answer names a pull
-    [--repository <owner>/<name>]         request against it. --product is one sentence in a
-    [--product "..."]                     person's words: what somebody does with what gets built
-    [--request "..."]                     and what they get back. Every job under this one carries
-    [--claim <piece of work>]             it, and it is what the design is read against. --request
-    [--escalate ask|role:<name>]          is what was asked for, in the words it was asked in: the
-                                          system keeps it whole, gives it to the session above the
-                                          brief, and says at the write which of its words the brief
-                                          never says. It says nothing where the brief carries them.
-                                          --claim is the piece of work this job takes, an issue, a
-                                          branch or a name, and a second job claiming it is refused
-                                          while this one holds it, so two sessions cannot build the
-                                          same slice.
-                                          --escalate says what happens when the job goes in
-                                          circles: ask puts the question to you, role:<name> hands
-                                          the job to another role in a conversation of its own,
-                                          carrying what the attempts already said. A brief
-                                          that asks the job to wait for the checks, or to merge on
-                                          the result, is refused: nothing wakes a job, so that
-                                          shape is a flow
-  history [<address>|system]              what the system did over a window of time: what ran, what it
-    [--since <date>] [--until <date>]     cost, and what failed and why. The read to make instead of
-    [--limit <n>]                         being told. It prints the window added up, then one line
-                                          for each job, newest first, with the reason under a job
-                                          that failed. Dates are written 2026-08-28, and the last
-                                          day named is included whole. The window is the last week
-                                          unless you say otherwise, and the total always covers the
-                                          whole window even when --limit prints fewer rows. It says
-                                          how many it left out
-  job list [<address>|system]             the jobs there are, newest first. With no address it
-    [--phase <phase>] [--outcome <word>]  reads where you are standing and says so, and system reads
-    [--label k=v] [--parent <job>]        every project. Narrow it further with --phase, --outcome,
-    [--roots]                             --label, --parent or --roots. An outcome is one of proved,
-                                          unproved, blocked or decide: the word the session ended on,
-                                          which the phase cannot tell you
-  job show <job>                          one job whole: what it is, where it got to, the word it
-                                          ended on, why it stopped, what came back, and where its
-                                          session spent its context
-  job stop <job> [<reason>]               halt a job that has not ended, keeping the reason
-  job ask "<question>"                    put a question to a person about the job you are running,
-                                          when a decision no measurement settles is in your way.
-                                          The job stops there and nothing moves it until somebody
-                                          answers, so end your task and say you are waiting. The
-                                          answer arrives as your next task
-  job answer <job> "<answer>"             tell a job waiting on you what you decided. It starts
-                                          again with the answer, in the session that asked. Where
-                                          the job is waiting for its plan to be approved, "yes"
-                                          starts the work and anything else is what you wanted
-                                          instead, which the session writes the next plan from.
-                                          Where it is waiting on what it understood, answer the
-                                          questions in your own words, opening each with the number
-                                          it answers. Those words are kept whole and the plan is
-                                          written from them, and a question you leave alone stays
-                                          unknown rather than taken as agreed
-  job step "<what you finished>"          record one step of the job you are running, as you finish
-                                          it. If the job dies part way, what is on that record is
-                                          where it carries on from, and what is not on it is done a
-                                          second time
-  job question "<what you could not      write down one thing this reading of the plan could not
-    settle>"                              settle. The reading after yours is handed the row and may
-                                          answer it, and what no reading settles is what a person is
-                                          asked. Three rows to one reading
-  job settle <number> "<what settles     answer a row an earlier reading left open, by the number
-    it>"                                  you were handed. A settled row does not reach a person
-  job handoff "<what is left>"            hand the rest of the job you are running to a fresh
-    ["<what you tried>"]                  session, which is what the system asks you for when your
-                                          context window reaches this workspace's ceiling. The next
-                                          session is given those words, and what you recorded as
-                                          finished, and nothing else you can see: it starts in an
-                                          empty working directory, so push your branch and name it
-  job resume <job>                        carry on with a job that failed, from the first step it
-                                          did not finish. It keeps its session, so its working
-                                          directory, its branch and its pull request are where it
-                                          left them, and it is asked to fetch its base and say what
-                                          moved while it was stopped
-  job refuse <job> [<reason>]             the other answer to a job that failed: the work was wrong,
-                                          so end it rather than continue it. It stops, and a stopped
-                                          job is never continued
-  steer [<job>] "<what you said>"         mark one moment you had to say something the system should
-                                          have known, asked for, or refused on its own. With no job
-                                          it lands on the one in flight where you stand. The count
-                                          is the score of that job, so mark it while it happens
-  steers [<job>]                          the marks read back. With a job, every steer of that whole
-                                          tree in order, with the time and the job each landed on.
-                                          With none, every job where you stand against the one
-                                          before it, which is how you tell whether this went better
-                                          than last time
   target [<address>]                      where a project ships: the account, the region inside it,
     [--account <id>]                      and the role a pipeline assumes to get there. With no
     [--region <name>]                     values it reads what the project declared, and with them
@@ -167,28 +63,6 @@ commands:
                                           anything: infrastructure ships through the repository's
                                           own pipeline, and this says which account that pipeline is
                                           aimed at. --clear takes it back off
-  limits [<workspace>]                    what a workspace lets its sessions declare, and how long
-    [--max-depth <n>]                     it keeps a session nobody is using: how deep the tree of
-    [--max-running <n>]                   jobs may go, how many run at once, what a tree may spend,
-    [--budget-tokens <n>]                 how long a controller holds a job, and how long
-    [--lease <duration>]                  a settled session keeps its container before the system
-    [--reclaim <duration>]                takes it back and then files it away. Max depth starts at
-    [--archive <duration>]                zero, so no session declares a job until you raise it. The
-    [--context-ceiling <per cent>]        reclaim and archive times start unset, and unset means the
-    [--waiting <duration>]                system does nothing. The lease is the system's hold on a job
-                                          and not the credential a session runs under: a credential
-                                          lasts as long as its job, and this setting does not reach
-                                          it. The context ceiling is how full a session's context
-                                          window may get before the system gives it no new task and
-                                          asks it to hand the rest of its job over. It starts at 70
-                                          per cent, which comes from a standard rather than from any
-                                          measurement of this system, and 100 turns the gate off. A
-                                          session may read none of this and set none of it. The
-                                          waiting time is how long a job may wait for a person here
-                                          before the telling names how long it has waited. It starts
-                                          at fifteen minutes, which is a guess: what replaces it is
-                                          the median gap between a wait starting and a
-                                          surface naming it, over a week of real jobs
   task [<address>] <text>                 start or continue a session, and wait here for the
                                           answer. For a short question, where the reply is the
                                           point
@@ -251,26 +125,6 @@ commands:
   context edit [<address>]                open a project's context in $EDITOR
   context clear [<address>]               empty what a level says
   attach <session>                         open a session's conversation, with its history
-  web [<address>]                         read the system in a browser on this machine. Read only,
-                                           and it serves 127.0.0.1:8080 unless told another port.
-                                           The front door is the briefing: what needs you, what is
-                                           blocked, what the system produced, and what is running
-                                           last. It says how many jobs run, what the system spent,
-                                           what the machine has left and how the system is, and it
-                                           draws itself again. The session listing is at /sessions
-  room                                     how much memory this sandbox actually has, and what to
-                                           do about a gate that does not fit in it. A sandbox with
-                                           no limit advertises the whole machine, and the kernel
-                                           kills against what is free. Run where there is no such
-                                           accounting, on a Mac, it asks the system what its own
-                                           machine holds and which session is holding it
-  render <url> [<file>] [<size>]           draw a page into a picture and say what it drew, so a
-    [light|dark] [<wait>]                  session can look at what it built. The whole page, at
-                                           1280x900 in light unless told otherwise
-  record <file.webm> <capture>             join captures of a screen into one recording, for value a
-    [<capture>...] [<size>]                still frame cannot carry. Capture the screen while the
-    [light|dark] [<frames a second>]       thing runs, once every half second, with tmux
-                                           capture-pane -e -p, and name every frame here
   secret set [<workspace>] <key>          set a workspace secret from standard input, so the value
                                           never reaches your shell history: pipe it in, or redirect
                                           a file. A value given as an argument still works. Say system
@@ -296,18 +150,6 @@ commands:
                                           session already running is not: a hook reaches a sandbox
                                           when the sandbox is built
   hook detach [<workspace>] <name>        take a hook away from a workspace, or from the system
-  role import <directory>                 take a role into the system from its directory. A role is a
-                                          named way of working: a brief, the model it runs on, and
-                                          the material it may receive
-                                          this build ships seventeen in roles/ at the root of the
-                                          repository, and a fresh system is seeded with none of them
-  role list [<workspace>]                 what roles the system holds, or what one workspace holds
-  role show [<workspace>] <name>          read one role back whole: what it is, what it may do, who
-                                          holds it, and the brief in full. The brief is the role, so
-                                          this is how you audit what a session was told
-  role attach [<workspace>] <name>        give a workspace a role. Say system where the workspace
-                                          goes and every workspace holds it
-  role detach [<workspace>] <name>        take a role away from a workspace, or from the system
 
 a level of an address is a name or an id, so me/house-bills and me/3db6b81e both work, and a session
 may be the shortened id a listing prints. An address typed on the command line applies to that
@@ -351,12 +193,10 @@ The ` + "`krewe`" + ` command drives it. If it is on your path, you can use it.
 
   workspace   who you are, for example "me" or an organisation. Secrets attach here.
   project     a body of work inside a workspace, for example "house bills" or a ticket.
-  job         what somebody wants done. A row the system keeps, so the intent outlives the
-              terminal that asked for it, and a controller runs it. It is a Kubernetes Job.
-  session      one conversation. A task runs in a project.
+  session     one conversation, running inside its own sandbox container. It belongs to a project.
   task        one instruction and the work it caused. You ask for something, the system works
-              until it has an answer, and the whole of that is one task. Minutes is normal.
-  session     a session that is running, inside its own sandbox container.
+              until it has an answer, and the whole of that is one task. A task runs in a
+              session, and a session is a series of them. Minutes is normal.
   sandbox     the isolated container a session runs in. A session runs IN a sandbox.
 
 They nest: workspace, then project, then session. An address is written the way a path is,
@@ -387,7 +227,7 @@ refuse it. You get the reason and the command does not run.
   ending a process           ` + "`kill`" + `, ` + "`pkill`" + `, ` + "`killall`" + `, the multiplexer's kill verbs, ` + "`docker stop`" + `,
                              ` + "`docker rm -f`" + `, ` + "`docker compose down`" + `, a prune, ` + "`systemctl stop`" + `.
                              This machine also holds the system and the operator's terminal.
-                             To end this system's own work, run ` + "`krewe job stop`" + ` or ` + "`krewe flow stop`" + `.
+                             To end this system's own work, run ` + "`krewe stop <session>`" + `.
                              To end anything else, ask the operator first.
   a pull request over
   infrastructure             Say what the deploy identity may do, in the body.
