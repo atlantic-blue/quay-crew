@@ -10,5 +10,7 @@ longer than its guide is kept word for word. A line above the record says which 
 many bytes it is, and what the guide is, so the operator can say "that is fine" or "say it shorter
 next time".
 
-The counts are unchanged. A reply may still ask at most five questions and carry at most five lines
-under each heading, and a question that asks whether to go on is still refused.
+`IdeationPoints` and `IdeationQuestions` are guides too. A sixth question used to refuse the reply
+and take the other five with it. The record keeps all six now, and the warning says how many there
+are. A question that asks whether to go on is still refused, because that is a shape and not a
+length.

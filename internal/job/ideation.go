@@ -202,20 +202,6 @@ func (one Ideation) readable() error {
 		return fmt.Errorf("this reply asks nothing: ask at least one thing you cannot answer from the " +
 			"repository, the brief and the sentence, opening the line with \"Question 1:\". A run that " +
 			"asked a person nothing is the failure this stage exists for")
-	case len(one.Questions) > IdeationQuestions:
-		return fmt.Errorf("this reply asks %d questions and it may ask %d: a person reads these in a "+
-			"terminal, so ask the %d that decide the work",
-			len(one.Questions), IdeationQuestions, IdeationQuestions)
-	}
-	for _, list := range []struct {
-		heading string
-		lines   []string
-	}{{"Told", one.Told}, {"Assumed", one.Assumed}, {"Unknown", one.Unknown}} {
-		heading, lines := list.heading, list.lines
-		if len(lines) > IdeationPoints {
-			return fmt.Errorf("this reply carries %d %s lines and it may carry %d",
-				len(lines), heading, IdeationPoints)
-		}
 	}
 	return nil
 }
@@ -257,32 +243,78 @@ func IdeationWarnings(understanding string) []string {
 	var said []string
 	for _, line := range strings.Split(understanding, "\n") {
 		heading, text, found := strings.Cut(line, ": ")
-		guide, known := theGuideFor(heading)
-		if !found || !known || len(text) <= guide {
+		if !found {
 			continue
 		}
-		said = append(said, fmt.Sprintf("%s is %d bytes where the guide is %d.",
-			theNameOf(heading), len(text), guide))
+		switch {
+		case isAParagraphOfTheRecord(heading):
+			if len(text) > UnderstandingLimit {
+				said = append(said, aWarningAbout(theNameOf(heading), len(text), UnderstandingLimit))
+			}
+		case isALineOfTheRecord(heading):
+			if len(text) > IdeationLineLimit {
+				said = append(said, aWarningAbout(theNameOf(heading), len(text), IdeationLineLimit))
+			}
+		}
 	}
+	said = append(said, theCountWarnings(understanding)...)
 	if len(understanding) > IdeationLimit {
-		said = append(said, fmt.Sprintf("The whole record is %d bytes where the guide is %d.",
-			len(understanding), IdeationLimit))
+		said = append(said, aWarningAbout("The whole record", len(understanding), IdeationLimit))
 	}
 	return said
 }
 
-// theGuideFor is the guide one line of the record is measured against, and whether the heading is one
-// the record uses at all.
-func theGuideFor(heading string) (int, bool) {
-	switch {
-	case heading == "Understood", heading == "Not":
-		return UnderstandingLimit, true
-	case heading == "Told", heading == "Assumed", heading == "Unknown", heading == "Confidence":
-		return IdeationLineLimit, true
-	case strings.HasPrefix(heading, "Question "):
-		return IdeationLineLimit, true
+// theCountWarnings is one line for each list of the record that carries more lines than its guide.
+//
+// A sixth question used to be refused, which threw away the other five with it. A sixth thing a
+// session was told is worth reading, so the count is a guide as well: the operator is told there are
+// more than the guide, and reads them.
+func theCountWarnings(understanding string) []string {
+	counted := map[string]int{}
+	for _, line := range strings.Split(understanding, "\n") {
+		heading, _, found := strings.Cut(line, ": ")
+		if !found {
+			continue
+		}
+		if strings.HasPrefix(heading, "Question ") {
+			heading = "Question"
+		}
+		counted[heading]++
 	}
-	return 0, false
+	var said []string
+	for _, heading := range []string{"Told", "Assumed", "Unknown"} {
+		if counted[heading] > IdeationPoints {
+			said = append(said, fmt.Sprintf("The record carries %d %s lines where the guide is %d.",
+				counted[heading], heading, IdeationPoints))
+		}
+	}
+	if counted["Question"] > IdeationQuestions {
+		said = append(said, fmt.Sprintf("The record asks %d questions where the guide is %d.",
+			counted["Question"], IdeationQuestions))
+	}
+	return said
+}
+
+// aWarningAbout is one warning. It carries three things: which part of the record is long, how many
+// bytes that part is, and the guide it went past. Two numbers with no part named leave the operator
+// counting to find which part to shorten.
+func aWarningAbout(part string, size, guide int) string {
+	return fmt.Sprintf("%s is %d bytes where the guide is %d.", part, size, guide)
+}
+
+// isAParagraphOfTheRecord is whether a heading opens one of the two paragraphs a person reads first.
+// Those two are measured against the wider guide.
+func isAParagraphOfTheRecord(heading string) bool {
+	return heading == "Understood" || heading == "Not"
+}
+
+// isALineOfTheRecord is whether a heading opens one line of the record.
+func isALineOfTheRecord(heading string) bool {
+	switch heading {
+	case "Told", "Assumed", "Unknown", "Confidence":
+		return true
+	}
+	return strings.HasPrefix(heading, "Question ")
 }
 
 // theNameOf is how a warning names the part it measured, in the words the record itself uses, so the
