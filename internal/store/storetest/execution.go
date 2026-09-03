@@ -2,6 +2,7 @@ package storetest
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -217,4 +218,156 @@ func ranEvent(id, workspace, project string, run *job.Execution) *job.Event {
 		Execution: run.ID, Detail: "a run of the " + run.Stage + " stage",
 		OccurredAt: time.Now().UTC(),
 	}
+}
+
+// A run is the system doing something, and it holds the session it does it in.
+//
+// Both facts used to come free: a run was a job row, so a job in flight named its session and a
+// controller counting what moved counted it. Neither is true of a run, and a store that answered the
+// old way would take a container back from a session that is writing a requirement's tests, and
+// would report a system with five runs in flight as running nothing.
+func runExecutionHoldsItsSession(t *testing.T, newDataset func(t *testing.T) Opener) {
+	t.Helper()
+
+	t.Run("a run holds its session open and reads as the system moving", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := waitingToWriteItsTests(t, s, workspace, project)
+		kept, err := s.GetJob(ctx, id)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+
+		// The job itself is pending while its stage fans out, so nothing about the job says the system
+		// is doing anything. Only the run does.
+		if moving, err := s.AnythingMoving(ctx); err != nil {
+			t.Fatalf("AnythingMoving: %v", err)
+		} else if moving {
+			t.Fatal("a system whose only job is pending reads as moving")
+		}
+
+		run := job.TestExecutions(kept, job.RequirementsOf(kept))[0]
+		if err := s.CreateExecution(ctx, run, ranEvent(id, workspace, project, run)); err != nil {
+			t.Fatalf("CreateExecution: %v", err)
+		}
+		if _, err := s.StartExecution(ctx, run.ID, aLease("controller-1"), nil); err != nil {
+			t.Fatalf("StartExecution: %v", err)
+		}
+		session := aSessionHoldingAContainer(t, s, project)
+		if err := s.RecordExecutionSession(ctx, run.ID, session); err != nil {
+			t.Fatalf("RecordExecutionSession: %v", err)
+		}
+
+		if moving, err := s.AnythingMoving(ctx); err != nil {
+			t.Fatalf("AnythingMoving: %v", err)
+		} else if !moving {
+			t.Fatal("a system with a run in flight reads as running nothing, so it would take a " +
+				"container back to start work it is already doing")
+		}
+
+		// The session that run is working in is nothing's to take. A run is not a job, so the query
+		// that reads the jobs would find nobody holding it.
+		idle, err := s.IdleSandboxes(ctx, 10)
+		if err != nil {
+			t.Fatalf("IdleSandboxes: %v", err)
+		}
+		for _, one := range idle {
+			if one.GetId() == session {
+				t.Fatal("the session a run is working in reads as idle, so its container goes while it " +
+					"is writing")
+			}
+		}
+
+		// And once the run has landed, nothing holds it any longer.
+		if _, err := s.LandExecution(ctx, run.ID,
+			job.ExecutionLanding{Phase: job.PhaseDone, Answer: "Requirement: 1\nRan: 3"}, nil); err != nil {
+			t.Fatalf("LandExecution: %v", err)
+		}
+		if moving, err := s.AnythingMoving(ctx); err != nil {
+			t.Fatalf("AnythingMoving: %v", err)
+		} else if moving {
+			t.Fatal("a system whose runs have all landed reads as moving")
+		}
+		idle, err = s.IdleSandboxes(ctx, 10)
+		if err != nil {
+			t.Fatalf("IdleSandboxes: %v", err)
+		}
+		found := false
+		for _, one := range idle {
+			found = found || one.GetId() == session
+		}
+		if !found {
+			t.Fatal("the session of a run that landed is still held, so its container never goes back")
+		}
+	})
+
+	t.Run("what a job cost is its own session and every run of its stages", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		id := waitingToWriteItsTests(t, s, workspace, project)
+		kept, err := s.GetJob(ctx, id)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		runs := job.TestExecutions(kept, job.RequirementsOf(kept))
+		for at, run := range runs {
+			if err := s.CreateExecution(ctx, run, ranEvent(id, workspace, project, run)); err != nil {
+				t.Fatalf("CreateExecution: %v", err)
+			}
+			if _, err := s.StartExecution(ctx, run.ID, aLease("controller-1"), nil); err != nil {
+				t.Fatalf("StartExecution: %v", err)
+			}
+			// One address for both runs of one requirement, because that is what a branch carries.
+			if _, err := s.LandExecution(ctx, run.ID, job.ExecutionLanding{
+				Phase: job.PhaseDone, Answer: "Requirement: 1\nRan: 3", SpentTokens: 4_000,
+				PullRequest: fmt.Sprintf("https://github.com/an/owner/pull/%d", at+1),
+			}, nil); err != nil {
+				t.Fatalf("LandExecution: %v", err)
+			}
+		}
+
+		history, err := s.JobHistory(ctx, job.HistoryQuery{
+			Project: project,
+			Window:  job.Window{Since: kept.CreatedAt.Add(-time.Hour), Until: kept.CreatedAt.Add(time.Hour)},
+		})
+		if err != nil {
+			t.Fatalf("JobHistory: %v", err)
+		}
+		var digest *job.Digest
+		for _, one := range history {
+			if one.ID == id {
+				digest = one
+			}
+		}
+		if digest == nil {
+			t.Fatalf("the window holds %d jobs and not the one that fanned out", len(history))
+		}
+		if digest.Runs != len(runs) {
+			t.Fatalf("the job reads as having %d runs, want %d", digest.Runs, len(runs))
+		}
+		if digest.SpentToken < int64(len(runs))*4_000 {
+			t.Fatalf("the job reads as costing %d, which leaves out what its %d runs spent",
+				digest.SpentToken, len(runs))
+		}
+		if len(digest.Opened) != len(runs) {
+			t.Fatalf("the job reads as opening %d addresses, want the %d its runs opened",
+				len(digest.Opened), len(runs))
+		}
+	})
+}
+
+// aSessionHoldingAContainer is a live session in a state that would be reclaimed if nothing held it
+// open, which is what makes the check above mean anything.
+func aSessionHoldingAContainer(t *testing.T, s store.Store, project string) string {
+	t.Helper()
+	ctx := context.Background()
+	session, _, err := s.FindOrCreateSession(ctx, project, store.NewID(), store.Birth{})
+	if err != nil {
+		t.Fatalf("FindOrCreateSession: %v", err)
+	}
+	// A session is born idle, which is one of the two states a container is taken back from. That is
+	// what makes the check above mean something: nothing but the run is holding this one open.
+	return session.GetId()
 }

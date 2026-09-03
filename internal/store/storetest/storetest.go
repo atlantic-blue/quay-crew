@@ -2240,6 +2240,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	runJobTestConformance(t, newDataset)
 	runJobBuildConformance(t, newDataset)
 	runExecutionConformance(t, newDataset)
+	runExecutionHoldsItsSession(t, newDataset)
 	runJobStageConformance(t, newDataset)
 	runJobAcceptanceConformance(t, newDataset)
 	runJobAcceptedSurvivesADeclaration(t, newDataset)

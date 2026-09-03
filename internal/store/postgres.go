@@ -429,6 +429,9 @@ func (p *Postgres) IdleSandboxes(ctx context.Context, limit int) ([]*quaycrewv1.
 		  and not exists (
 		      select 1 from jobs w where w.session = s.id and not (w.phase = any($2))
 		  )
+		  and not exists (
+		      select 1 from executions x where x.session = s.id and not (x.phase = any($2))
+		  )
 		order by s.updated_at, s.id`, limit, holdingStatuses(), terminalPhases())
 }
 
@@ -442,6 +445,9 @@ func (p *Postgres) ReclaimedSessions(ctx context.Context, limit int) ([]*quaycre
 		  and s.status = $1
 		  and not exists (
 		      select 1 from jobs w where w.session = s.id and not (w.phase = any($2))
+		  )
+		  and not exists (
+		      select 1 from executions x where x.session = s.id and not (x.phase = any($2))
 		  )
 		order by s.reclaimed_at nulls first, s.id`, limit, StatusReclaimed, terminalPhases())
 }

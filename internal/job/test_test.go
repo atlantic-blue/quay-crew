@@ -513,3 +513,72 @@ func TestAReportNamesItsRequirementInEitherShape(t *testing.T) {
 		})
 	}
 }
+
+// A run that answered without naming its pull request is asked again, once, before anything is
+// landed.
+//
+// This is the correction that used to cost one task. Its tests are in a sandbox that will go, and
+// the address is the only thing that says where they went, so a run that forgot it holds nothing the
+// build stage can read. Without the ask the stage refuses that requirement and puts it to a person,
+// which turns a job that corrected itself into a job waiting on somebody.
+func TestARunThatNamedNoPullRequestIsAskedAgainBeforeAnythingIsLanded(t *testing.T) {
+	controller, kept, plane := aController(t)
+	one := kept.add(inARepositoryFor(testingJob()))
+	ctx := context.Background()
+
+	controller.Tick(ctx)
+	controller.Tick(ctx)
+	runs := kept.executionsIn(one.ID, job.StageTest)
+	if len(runs) != 2 {
+		t.Fatalf("the fan out wrote %d runs for 2 requirements", len(runs))
+	}
+	// A report the system can read, with no address anywhere in it.
+	plane.landsIn(job.SessionForExecution(runs[0]), landed(aReport(1)))
+	controller.Tick(ctx)
+
+	// Nothing landed. The run is still running, and the session was asked one more thing.
+	if got := kept.getRun(runs[0].ID); job.Terminal(got.Phase) {
+		t.Fatalf("the run landed as %q without ever being asked where the work went", got.Phase)
+	}
+	asked := plane.asked(job.SessionForExecution(runs[0]))
+	if len(asked) != 2 {
+		t.Fatalf("the session was sent %d tasks, want the work and then the ask for the address", len(asked))
+	}
+	for _, phrase := range []string{"named no pull request", "state its outcome"} {
+		if !strings.Contains(asked[1], phrase) {
+			t.Fatalf("the second ask does not say %q:\n%s", phrase, asked[1])
+		}
+	}
+
+	// The session answers with the address, and the run lands with it.
+	plane.landsIn(job.SessionForExecution(runs[0]),
+		landed(aReport(1)+"\n\nhttps://github.com/atlantic-blue/quay-krewe/pull/700"))
+	controller.Tick(ctx)
+	got := kept.getRun(runs[0].ID)
+	if got.Phase != job.PhaseDone {
+		t.Fatalf("the run is %q after answering with its address: %s", got.Phase, got.Reason)
+	}
+	if got.PullRequest != "https://github.com/atlantic-blue/quay-krewe/pull/700" {
+		t.Fatalf("the run reads back naming %q", got.PullRequest)
+	}
+
+	// And it is asked once. A run that answers a second time without an address stops with where its
+	// work actually is, rather than being asked for ever.
+	plane.landsIn(job.SessionForExecution(runs[1]), landed(aReport(2)))
+	controller.Tick(ctx)
+	plane.landsIn(job.SessionForExecution(runs[1]), landed(aReport(2)))
+	controller.Tick(ctx)
+	second := kept.getRun(runs[1].ID)
+	if second.Phase != job.PhaseStopped {
+		t.Fatalf("the run is %q after two answers with no address", second.Phase)
+	}
+	if !strings.Contains(second.Reason, "no answer named a pull request") {
+		t.Fatalf("the run stopped saying %q", second.Reason)
+	}
+}
+
+// inARepositoryFor is a job that works somewhere its runs can push to, so the address is asked for.
+func inARepositoryFor(one *job.Job) *job.Job {
+	one.Repository = "atlantic-blue/quay-krewe"
+	return one
+}

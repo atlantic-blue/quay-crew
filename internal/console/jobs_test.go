@@ -819,3 +819,25 @@ func lineFor(model Model, text string) (string, bool) {
 	}
 	return "", false
 }
+
+// The same cell on a job whose stage fanned out. Its runs are not jobs, so they are in no listing of
+// declared work: the count comes off the row, and without it the row says "not yet" while a session
+// for every requirement is working.
+func TestAJobWhoseRunsAreWorkingSaysHowManyAreAtWork(t *testing.T) {
+	one := aJob("1111111111111111aaaaaaaa", job.PhasePending, func(one *quaycrewv1.Job) {
+		one.RunningExecutions = 3
+	})
+
+	working := sessionsUnder([]*quaycrewv1.Job{one})
+	got := jobRow(one, working[one.GetId()])
+	if got.Cells[sessionColumn] != "3 working" {
+		t.Fatalf(`the session cell of a job with three runs says %q, want "3 working"`,
+			got.Cells[sessionColumn])
+	}
+
+	// A job whose runs have all landed says what it always said: it has no session of its own yet.
+	settled := aJob("5555555555555555eeeeeeee", job.PhasePending, nil)
+	if row := jobRow(settled, sessionsUnder([]*quaycrewv1.Job{settled})[settled.GetId()]); row.Cells[sessionColumn] != "not yet" {
+		t.Fatalf(`a job with no runs says %q, want "not yet"`, row.Cells[sessionColumn])
+	}
+}

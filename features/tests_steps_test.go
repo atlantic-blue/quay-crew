@@ -306,6 +306,20 @@ func initializeTestStageSteps(sc *godog.ScenarioContext) {
 		return noRunsInTheJobsListing(ctx, one)
 	})
 
+	// The number a person watching a fan out is looking straight at. The job has no session of its
+	// own, so without this its row says it has none yet while a session for every requirement works.
+	sc.Step(`^the job says (\d+) of its runs are working$`, func(ctx context.Context, want int) error {
+		one, err := readJob(ctx, 0)
+		if err != nil {
+			return err
+		}
+		if int(one.GetRunningExecutions()) != want {
+			return fmt.Errorf("the job says %d of its runs are working, want %d",
+				one.GetRunningExecutions(), want)
+		}
+		return nil
+	})
+
 	// And what a run is, off the wire: the job it belongs to and the stage of that job it runs. Those
 	// two are what the stage gathers by, and what says a run is never read as a job.
 	sc.Step(`^each run says which job and which stage it is a run of$`, func(ctx context.Context) error {

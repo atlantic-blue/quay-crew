@@ -267,3 +267,32 @@ func (p *Postgres) StopExecution(ctx context.Context, id, reason string,
 		where id = $1 and phase = any($4::text[])`,
 		job.PhaseStopped, reason, job.LivePhases())
 }
+
+// RunningExecutions is how many runs of each of these jobs' stages are still going. One query for a
+// whole listing, so drawing a hundred jobs costs one.
+func (p *Postgres) RunningExecutions(ctx context.Context, jobs []string) (map[string]int, error) {
+	running := map[string]int{}
+	if len(jobs) == 0 {
+		return running, nil
+	}
+	rows, err := p.pool.Query(ctx, `
+		select job, count(*) from executions
+		where job = any($1) and not (phase = any($2))
+		group by job`, jobs, terminalPhases())
+	if err != nil {
+		return nil, fmt.Errorf("count the runs of these jobs: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var count int
+		if err := rows.Scan(&id, &count); err != nil {
+			return nil, fmt.Errorf("count the runs of these jobs: %w", err)
+		}
+		running[id] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("count the runs of these jobs: %w", err)
+	}
+	return running, nil
+}

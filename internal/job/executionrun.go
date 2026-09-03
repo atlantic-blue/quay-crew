@@ -228,8 +228,52 @@ func (c *Controller) adoptExecution(ctx context.Context, run *Execution) {
 	default:
 		landed.Outcome = OutcomeIn(landed.Answer)
 		landed.PullRequest = PullRequestIn(one.Repository, landed.Answer)
+		// Where the job names a repository, the answer has to say where the work went, and a run that
+		// did not say is asked again before anything is landed. A run whose tests reached no pull
+		// request holds nothing the next stage can read, so without this ask the stage refuses the
+		// requirement and puts it to a person, and the correction that used to cost one task costs
+		// the operator an answer instead.
+		if one.Repository != "" && landed.PullRequest == "" {
+			if c.askTheRunForThePullRequest(ctx, one, run, len(tasks)) {
+				return
+			}
+			landed.Phase, landed.Reason = PhaseStopped,
+				WhyNoPullRequest(one.Repository, one.Mode, run.Session, c.published(ctx, run.Session))
+		}
 	}
 	c.landExecution(ctx, one, run, landed)
+}
+
+// askTheRunForThePullRequest sends the session one more task asking for the address, and says whether
+// it did.
+//
+// The same ask a job gets, and the same bound: once. Every ask is a task somebody pays for, and a
+// session that did not answer with an address the second time is a session that cannot.
+//
+// Nothing is landed while the ask is out. The run stays running and this controller keeps its hold,
+// so a controller that dies between the ask and the answer finds a running row with two tasks and
+// reads them the way this one would have.
+func (c *Controller) askTheRunForThePullRequest(ctx context.Context, one *Job, run *Execution,
+	asked int) bool {
+	if asked > 1 {
+		return false
+	}
+	// A mode that cannot reach the network cannot push, so the ask is a task nobody can answer.
+	if ModeCannotPush(one.Mode) {
+		return false
+	}
+	if _, err := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+		Project: one.Project, Handle: SessionForExecution(run),
+		Text:           AskedForThePullRequest(one, run),
+		PermissionMode: one.Mode, Detach: true, Job: one.ID, Execution: run.ID,
+	}); err != nil {
+		c.logger.WarnContext(ctx, "could not ask a run again for the pull request",
+			"execution", run.ID, "session", run.Session, "error", err)
+		return false
+	}
+	// The hold moves on, because the run is still this controller's and a task is in flight again.
+	c.renewExecution(ctx, run)
+	return true
 }
 
 // landExecution writes what came of a run and lets go of the machine.

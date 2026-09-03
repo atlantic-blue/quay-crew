@@ -290,3 +290,25 @@ func (m *Memory) StopExecution(_ context.Context, id, reason string,
 		return nil
 	})
 }
+
+// RunningExecutions is how many runs of each of these jobs' stages are still going.
+//
+// Counted here rather than by a caller reading the rows, because a run is not a job: a surface that
+// used to count the rows under a job in the listing it already had now has nothing to count. One
+// query for a whole listing, so drawing a hundred jobs costs one.
+func (m *Memory) RunningExecutions(_ context.Context, jobs []string) (map[string]int, error) {
+	wanted := make(map[string]bool, len(jobs))
+	for _, id := range jobs {
+		wanted[id] = true
+	}
+	running := map[string]int{}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, one := range m.executions {
+		if !wanted[one.Job] || job.Terminal(one.Phase) {
+			continue
+		}
+		running[one.Job]++
+	}
+	return running, nil
+}

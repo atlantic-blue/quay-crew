@@ -548,14 +548,14 @@ func (c *Controller) Publishing(publisher Publisher) *Controller {
 //
 // Asked once, at the moment of stopping, and never while a job is running: it costs commands inside a
 // container, and a job still working has not finished the work this is about.
-func (c *Controller) published(ctx context.Context, one *Job) publish.Work {
+func (c *Controller) published(ctx context.Context, session string) publish.Work {
 	if c.publisher == nil {
 		return publish.Work{
 			State: publish.Unreadable,
 			Why:   "this system has no way to reach a session's files",
 		}
 	}
-	return c.publisher.PublishSessionWork(ctx, one.Session)
+	return c.publisher.PublishSessionWork(ctx, session)
 }
 
 // Revoking returns a controller that takes a job's credentials back as it writes the end of that
@@ -1124,7 +1124,7 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 			return
 		}
 		landing.Phase, landing.Reason, kind = PhaseStopped,
-			WhyNoPullRequest(one.Repository, one.Mode, one.Session, c.published(ctx, one)), EventStopped
+			WhyNoPullRequest(one.Repository, one.Mode, one.Session, c.published(ctx, one.Session)), EventStopped
 	}
 	// A plan a person approved and the work then walked away from is the same failure as no plan at
 	// all, one step further along, so the record is held against the plan before the job is called

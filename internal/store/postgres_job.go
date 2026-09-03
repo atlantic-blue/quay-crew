@@ -579,8 +579,9 @@ func (p *Postgres) ExpiredJob(ctx context.Context, limit int) ([]*job.Job, error
 func (p *Postgres) AnythingMoving(ctx context.Context) (bool, error) {
 	var moving bool
 	if err := p.pool.QueryRow(ctx,
-		`select exists (select 1 from jobs where phase = any($1))`,
-		[]string{job.PhaseRunning, job.PhaseAsking}).Scan(&moving); err != nil {
+		`select exists (select 1 from jobs where phase = any($1))
+		    or exists (select 1 from executions where phase = $2)`,
+		[]string{job.PhaseRunning, job.PhaseAsking}, job.PhaseRunning).Scan(&moving); err != nil {
 		return false, fmt.Errorf("read whether anything is moving: %w", err)
 	}
 	return moving, nil
@@ -858,25 +859,40 @@ func (p *Postgres) LandJob(ctx context.Context, id string, landed job.Landing, e
 //
 // It is deliberately short. A history never selects the brief, the answer or the steps, which is the
 // difference between a read a session can afford and one that fills its context before it starts.
-const digestColumns = `id, project, title, role, phase, spent_tokens, pull_request, reason, steers,
-	created_at, started_at, finished_at`
+const digestColumns = `j.id, j.project, j.title, j.role, j.phase, j.spent_tokens, j.pull_request,
+	j.reason, j.steers, j.created_at, j.started_at, j.finished_at`
+
+// runColumns is what the runs of a job add to its digest: how many there were, what they spent, and
+// the addresses their work is open at.
+//
+// A run is not a job, so it is no line of its own in a history. What it cost belongs to the job that
+// ran it, and a history that left it out would tell an operator that a week of fan outs was cheap.
+const runColumns = `coalesce(x.runs, 0), coalesce(x.spent, 0), coalesce(x.opened, '{}')`
+
+// theRunsOfEachJob is the aggregate those three columns come from, joined to one job at a time.
+const theRunsOfEachJob = `left join lateral (
+		select count(*) as runs, sum(spent_tokens) as spent,
+		       array_remove(array_agg(distinct nullif(pull_request, '')), null) as opened
+		from executions where job = j.id
+	) x on true`
 
 // JobHistory returns every job declared inside a window, as digests, newest first.
 //
 // Bounded by the window rather than by a limit, because the caller adds these up before it cuts them
 // down: a total taken over a page would be a number that is wrong in the one way a reader cannot see.
 func (p *Postgres) JobHistory(ctx context.Context, query job.HistoryQuery) ([]*job.Digest, error) {
-	statement := `select ` + digestColumns + ` from jobs where created_at >= $1 and created_at < $2`
+	statement := `select ` + digestColumns + `, ` + runColumns + ` from jobs j ` + theRunsOfEachJob +
+		` where j.created_at >= $1 and j.created_at < $2`
 	args := []any{query.Window.Since, query.Window.Until}
 	switch {
 	case query.Project != "":
 		args = append(args, query.Project)
-		statement += fmt.Sprintf(` and project = $%d`, len(args))
+		statement += fmt.Sprintf(` and j.project = $%d`, len(args))
 	case query.Workspace != "":
 		args = append(args, query.Workspace)
-		statement += fmt.Sprintf(` and workspace = $%d`, len(args))
+		statement += fmt.Sprintf(` and j.workspace = $%d`, len(args))
 	}
-	statement += ` order by created_at desc, id desc`
+	statement += ` order by j.created_at desc, j.id desc`
 
 	rows, err := p.pool.Query(ctx, statement, args...)
 	if err != nil {
@@ -903,8 +919,11 @@ func (p *Postgres) JobHistory(ctx context.Context, query job.HistoryQuery) ([]*j
 func scanDigest(row rowScanner) (*job.Digest, error) {
 	var one job.Digest
 	var started, finished *time.Time
+	var runs int
+	var spent int64
 	if err := row.Scan(&one.ID, &one.Project, &one.Title, &one.Role, &one.Phase, &one.SpentToken,
-		&one.PullRequest, &one.Reason, &one.Steers, &one.CreatedAt, &started, &finished); err != nil {
+		&one.PullRequest, &one.Reason, &one.Steers, &one.CreatedAt, &started, &finished,
+		&runs, &spent, &one.Opened); err != nil {
 		return nil, err
 	}
 	if started != nil {
@@ -913,6 +932,9 @@ func scanDigest(row rowScanner) (*job.Digest, error) {
 	if finished != nil {
 		one.FinishedAt = finished.UTC()
 	}
+	// What this job's runs cost is part of what the job cost. They are added here rather than being
+	// left as a second number a reader has to add up for themselves.
+	one.Runs, one.SpentToken = runs, one.SpentToken+spent
 	one.CreatedAt = one.CreatedAt.UTC()
 	return &one, nil
 }

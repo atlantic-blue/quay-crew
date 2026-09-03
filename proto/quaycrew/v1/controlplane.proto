@@ -1533,6 +1533,16 @@ message Job {
   // where each of them came from. What is not in there is the one word a person writes, and a build
   // somebody sent back carries the same record as a build nobody has answered yet.
   bool accepted = 69;
+  // running_executions is how many runs of this job's stages are still going, counted when the job is
+  // read rather than stored on it.
+  //
+  // It is what a person watching a fan out is looking straight at. A job whose stage fans out has no
+  // session of its own: it waits, and the work is in one session for each requirement. Without this
+  // number the row says the job has no session yet, which reads as nothing happening while five
+  // sessions build. The runs were job rows once, so a surface could count them in the listing it
+  // already had; they are not, so the system counts them here.
+  int32 running_executions = 71;
+
   // escalation is what this job does when it goes in circles, as it was declared: "ask", or
   // "role:<name>". Empty is asking.
   string escalation = 41;

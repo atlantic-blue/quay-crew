@@ -17,3 +17,14 @@ Two calls read the new rows: `ListExecutions` gives the runs of one stage of one
 `StopExecution` halts one that has not ended. The migration moves every row that was a run all along
 into the new table, keeping its identifier, and moves the records it wrote onto the job it belongs
 to, naming the run.
+
+Three things a run inherited from being a job are kept rather than lost with the row. A run that
+answers without naming its pull request is asked once more, before anything is landed, so the
+correction that costs one task does not cost a person an answer. A run holds the session it works in
+open, and a system with runs in flight reads as moving, so nothing takes a container back from a
+session that is writing a requirement's tests. And what a job cost is its own session plus every run
+of its stages, so `krewe history` counts what a fan out spent instead of dropping it, counting each
+pull request once however many runs land in it.
+
+A job also says how many of its runs are working. The console reads that number, because the runs are
+in no listing of declared work for it to count.
