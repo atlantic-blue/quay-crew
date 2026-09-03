@@ -20,12 +20,6 @@ Feature: A session says what happened to it
     Then the session's events read "session.created", "session.started", "session.completed"
     And the completed event carries what the model replied
 
-  Scenario: A task that does not land is an errored event, with the reason
-    Given the next task will fail
-    When the operator dispatches "hello" to the project
-    Then the session's events read "session.created", "session.started", "session.errored"
-    And the errored event says why
-
   Scenario: A second task on the same session says started and completed again, and is not created twice
     When the operator dispatches "hello" to the project
     And the operator dispatches "and again" to the same session

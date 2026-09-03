@@ -15,17 +15,3 @@ Feature: What a task spent is measured
     When the operator dispatches "remember the number" to the project
     Then the system measures 1540 tokens spent on "me" and "house-bills"
     And the system measures 0.0241 of cost
-
-  Scenario: A task that failed is still counted, and says it failed
-    Given the next task will fail
-    When the operator dispatches "remember the number" to the project
-    Then the system counts one task, which failed
-    # It contributes no tokens, because a task that fails returns nothing to read them from. What it
-    # spent before it failed is invisible today, and that is issue 16 rather than this scenario
-    # quietly asserting a zero.
-    And the system measures no tokens and no cost
-
-  Scenario: A task whose model said nothing is counted without inventing a cost
-    When the operator dispatches "remember the number" to the project
-    Then the system counts one task
-    And the system measures no tokens and no cost

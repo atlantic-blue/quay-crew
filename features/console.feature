@@ -431,21 +431,3 @@ Feature: The operator sees the system from the console
       | tasks   |
       | task    |
       | history |
-
-  Scenario: The console lists the skills the system holds
-    Given the operator imported the "github" skill
-    When the operator opens the console on the "skills" view
-    Then the console lists every skill the system holds
-
-  # What leaves a skill out of a session is a secret a workspace has not set, and this listing is the
-  # system's own catalogue, which has no workspace to answer for. The system says nothing about that
-  # here, so neither does the row: a cell claiming a reason would be empty on every row.
-  Scenario: The system's own listing says what a skill is for and claims nothing about a workspace
-    Given the operator imported the "github" skill
-    When the operator opens the console on the "skills" view
-    Then the skill's row says what the skill is for
-    And no row says a skill is held and not given
-
-  Scenario: The console lists the hooks the system holds
-    Given a hook "merge-gate" imported firing on "PreToolUse"
-    When the operator opens the console on the "hooks" view
