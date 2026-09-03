@@ -164,6 +164,9 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 // A job is scoped by itself, because what opens under it is every conversation running under that
 // job. A run drawn beneath a job is scoped by the conversation it works in, because what opens under
 // it is what that one conversation did.
+//
+// A job with nothing running under it is refused here rather than opened on an empty level, and what
+// it says is the phase it is waiting in.
 func scopeOfJobRow(row Row) (string, error) {
 	if row.ID == "" {
 		return "", fmt.Errorf("no job selected")
@@ -171,7 +174,29 @@ func scopeOfJobRow(row Row) (string, error) {
 	if row.Under != "" {
 		return sessionOfJob(row)
 	}
+	if !anythingRunsUnder(row) {
+		return sessionOfJob(row)
+	}
 	return row.ID, nil
+}
+
+// anythingRunsUnder says whether this job has a conversation to draw a line for: the one it runs in,
+// or the runs its stage fanned out into. A pending job has neither, and the session cell is where the
+// row carries both.
+func anythingRunsUnder(row Row) bool {
+	if row.Parent != "" {
+		return true
+	}
+	return sessionCell(row) != noSessionYet
+}
+
+// sessionCell is what the row says about the conversations under this job: a shortened identifier,
+// how many are working, or that it has not reached one.
+func sessionCell(row Row) string {
+	if len(row.Cells) <= sessionColumn {
+		return noSessionYet
+	}
+	return row.Cells[sessionColumn]
 }
 
 // sessionOfJob is the conversation to descend into, and the refusal when there is none yet.

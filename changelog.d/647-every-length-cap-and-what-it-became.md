@@ -111,6 +111,8 @@ This pull request carries the list. The code for each marking ships in the verti
   phase in that cell. It measures no text.
 - `permissionColumn` in `internal/console/resources.go`, cell 5: kept because the session row puts
   the mode in that cell. It measures no text.
+- `sessionColumn` in `internal/console/jobs.go`, cell 6: kept because the table this reads puts the
+  conversations under a job in that cell. It measures no text.
 - `projectColumn` in `internal/console/resources.go`, cell 2: kept because the session row puts the
   project in that cell. It measures no text.
 - `ancestryLimit` in `internal/controlplane/steer.go`, 64 parents: gone. A job cannot be under

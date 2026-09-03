@@ -498,14 +498,12 @@ func (m Model) drillFor(row Row) string {
 // descendInto opens a resource scoped to one row, remembering where to come back to. It is what both
 // enter and a key bound to Descend do, so escape behaves the same however you got there.
 func (m Model) descendInto(name string, row Row) (Model, tea.Cmd) {
-	child, found := m.registry.Get(name)
-	if !found {
-		m.err = fmt.Errorf("console: %s descends into unknown resource %q", m.active.Name, name)
-		return m, nil
-	}
 	// What the child is scoped by, which is the row itself everywhere except jobs: a job descends
-	// into its session's tasks, and a job with no session yet says so rather than opening an empty
-	// listing under a heading that promises one.
+	// into the conversations running under it, and a job that has reached none says so rather than
+	// opening an empty listing under a heading that promises one.
+	//
+	// The row is asked before the view is looked up, because a refusal about the row is the one a
+	// person can act on.
 	scope := row.ID
 	if m.active.DrillBy != nil {
 		narrowed, err := m.active.DrillBy(row)
@@ -514,6 +512,11 @@ func (m Model) descendInto(name string, row Row) (Model, tea.Cmd) {
 			return m, nil
 		}
 		scope = narrowed
+	}
+	child, found := m.registry.Get(name)
+	if !found {
+		m.err = fmt.Errorf("console: %s descends into unknown resource %q", m.active.Name, name)
+		return m, nil
 	}
 	m.stack = append(m.stack, crumbEntry{
 		resource: m.active.Name, parent: m.parent, selected: m.selected,

@@ -17,6 +17,9 @@ names.
 A run that has no session yet keeps its line. The line says `not yet`, and both keys refuse it by
 name. A fan out of five never draws three lines.
 
+A job that has reached no conversation at all is refused. Enter says the phase the job waits in, and
+the console stays on the jobs listing. It does not open a level that promises work and lists none.
+
 What a session did is one key further in. Press `t` on any of the six lines to read what that
 conversation ran. That is where enter went before. In the jobs listing, enter on a run still opens
 the work of that run, because a run is one session.
