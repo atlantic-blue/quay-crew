@@ -147,12 +147,11 @@ func TestAFlowRunDeclaresItsStepsAsJobInPostgres(t *testing.T) {
 		t.Fatalf("the run declared %d steps, want fix and push", len(steps))
 	}
 	for node, step := range steps {
-		if step.GetParent() != run.GetJob() {
-			t.Errorf("step %s hangs under %q, want the run's own job %q", node, step.GetParent(), run.GetJob())
+		if step.GetRun() != run.GetId() {
+			t.Errorf("step %s belongs to run %q, want the run that declared it %q", node, step.GetRun(), run.GetId())
 		}
-		if step.GetDepth() != carrier.GetJob().GetDepth()+1 {
-			t.Errorf("step %s is at depth %d and the run at %d, want one deeper",
-				node, step.GetDepth(), carrier.GetJob().GetDepth())
+		if step.GetCause() != "" {
+			t.Errorf("step %s says %q caused it, and a step belongs to its run", node, step.GetCause())
 		}
 		if step.GetPhase() != job.PhaseDone {
 			t.Errorf("step %s is %q, want done", node, step.GetPhase())
@@ -215,16 +214,16 @@ func TestARunsOwnRecordsAreOnItsJobInPostgres(t *testing.T) {
 	}
 }
 
-// A run started by a session hangs under that session's job, so the workspace's depth limit covers
-// the whole run. This is the case the bound exists for: a job that starts a flow that
-// starts more job.
-func TestARunStartedBySomethingElseHangsUnderItInPostgres(t *testing.T) {
+// A run started by a session records that session's job as the cause of the job carrying the run, so
+// a person reading the run can say what set it off. It is a plain reference: the run's job is a job
+// in its project, beside the one that started it.
+func TestARunStartedBySomethingElseRecordsWhatCausedItInPostgres(t *testing.T) {
 	s, _ := aSystemWithAController(t, &model.FakeRunner{Reply: "done"})
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 
 	if _, err := s.SetWorkspaceLimits(ctx, &quaycrewv1.SetWorkspaceLimitsRequest{
-		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDepth: 1},
+		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDeclared: 1},
 	}); err != nil {
 		t.Fatalf("SetWorkspaceLimits: %v", err)
 	}
@@ -234,7 +233,7 @@ func TestARunStartedBySomethingElseHangsUnderItInPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)
 	}
-	// The credential a task of that job runs under, which is what makes the parent the system's to
+	// The credential a task of that job runs under, which is what makes the cause the system's to
 	// assign rather than the caller's to claim.
 	token, minted := s.JobCredentialForTest(ctx, declared.GetJob().GetId())
 	if !minted {
@@ -257,12 +256,12 @@ func TestARunStartedBySomethingElseHangsUnderItInPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetJob: %v", err)
 	}
-	if carrier.GetJob().GetParent() != declared.GetJob().GetId() {
-		t.Fatalf("the run hangs under %q, want the job whose session started it %q",
-			carrier.GetJob().GetParent(), declared.GetJob().GetId())
+	if carrier.GetJob().GetCause() != declared.GetJob().GetId() {
+		t.Fatalf("the job carrying the run says %q caused it, want the job whose session started it %q",
+			carrier.GetJob().GetCause(), declared.GetJob().GetId())
 	}
-	if carrier.GetJob().GetDepth() != 1 {
-		t.Fatalf("the run is at depth %d, want one below the job that started it", carrier.GetJob().GetDepth())
+	if carrier.GetJob().GetRun() != "" {
+		t.Fatalf("the job carrying the run reads back as a step of run %q", carrier.GetJob().GetRun())
 	}
 }
 

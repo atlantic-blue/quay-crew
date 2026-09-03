@@ -191,8 +191,17 @@ type Job struct {
 	Steers int
 
 	// What the system assigned, and the caller may not.
-	Parent string
-	Depth  int
+
+	// Cause is the job whose session declared this one, and empty on a job an operator declared. It
+	// is a plain reference to what brought this job about, and nothing else: a job belongs to its
+	// project, it is listed beside every other job in that project, and no code reads this to decide
+	// what the row is or what it may do. The only thing that belongs to a job is its executions.
+	Cause string
+	// Run is the flow run this job is one step of, and empty on every job a run did not declare. The
+	// run reads its own steps by it, and the graph a person imported is the plan those steps follow,
+	// which is why a step runs none of the four stages. A run is not a job, so a step of a run is not
+	// a job under a job.
+	Run string
 	// Version rises on every write to a declared field, so a status can be told current from stale.
 	Version int
 
@@ -274,9 +283,9 @@ type Job struct {
 	LeaseOwner string
 	LeaseUntil *time.Time
 
-	// TraceID is the trace this whole tree belongs to, minted at the root and inherited unchanged by
-	// every descendant. ParentSpanID is the span the caller was inside when it declared this job,
-	// empty for a root nothing was tracing.
+	// TraceID is the trace this job belongs to, minted when it is declared, or taken from the job
+	// whose session declared it so one trace covers the work and what it caused. ParentSpanID is the
+	// span the caller was inside when it declared this job, and empty where nothing was tracing.
 	//
 	// Both are on the row rather than in a process, which is what makes a trace survive the
 	// controller that started the job: the context is in the declaration, the way a wait is a column
@@ -312,8 +321,6 @@ type Event struct {
 	Job       string
 	Workspace string
 	Project   string
-	Parent    string
-	Depth     int
 	// Execution is the run of a stage this happened in, and empty for everything that happened to
 	// the job itself. A run is not a job, so its records hang off the job it belongs to and name the
 	// run here: a reader of one job then reads what happened in every run of every stage under it.
@@ -424,11 +431,10 @@ type Filter struct {
 	// Project wins over Workspace when both are set, being the narrower.
 	Workspace string
 	Project   string
-	// Parent narrows to the children of one job. Root narrows to jobs with no parent,
-	// which cannot be said with Parent alone because empty means "do not narrow".
-	Parent string
-	Root   bool
-	Phase  string
+	// Run narrows to the steps of one flow run. A job nobody's run declared is in no run, so it is
+	// left out.
+	Run   string
+	Phase string
 	// Outcome narrows to jobs that ended in one word from the fixed set. It is the filter the phase
 	// cannot be: two jobs are done and one of them could not do its work.
 	Outcome string
@@ -445,10 +451,24 @@ type Filter struct {
 	Limit int
 }
 
+// Placement is what the system knows about a job it is declaring for itself, and a caller may say
+// none of it. It is not containment: neither field puts this job under another one.
+type Placement struct {
+	// Cause is the job whose session declared this one. Empty reads the credential the caller
+	// presented instead, which is where it comes from for every session.
+	Cause string
+	// Run is the flow run this job is one step of, and empty for everything that is not a step.
+	Run string
+	// Trace is the trace to keep this job in, for a step of a run: the run's own steps belong to one
+	// trace, and a step that minted its own would leave the run in as many traces as it has nodes.
+	// Empty takes the trace of the cause, or mints one.
+	Trace string
+}
+
 // Declaration is what a caller writes. Everything else on a job is the system's to assign.
 //
-// ID and Parent are here so they can be refused. A field that is quietly ignored is worse than one
-// that does not exist: the caller believes it took effect.
+// ID is here so it can be refused. A field that is quietly ignored is worse than one that does not
+// exist: the caller believes it took effect.
 type Declaration struct {
 	Workspace      string
 	Project        string
@@ -476,7 +496,6 @@ type Declaration struct {
 	// nothing gets the gate.
 	Ungated bool
 	ID      string
-	Parent  string
 }
 
 // Tidied is the declaration as it is stored: the space around the lines it will be read as comes off.
@@ -506,9 +525,6 @@ func (d Declaration) Validate() error {
 	case tidy.ID != "":
 		return fmt.Errorf("job carries an identifier of its own, and the system assigns the identifier: "+
 			"declare it without one and read the identifier back from the answer (you sent %q)", tidy.ID)
-	case tidy.Parent != "":
-		return fmt.Errorf("job carries a parent, and the parent comes from the credential the caller "+
-			"presented rather than from the request: declare it without one (you sent %q)", tidy.Parent)
 	case tidy.Title == "":
 		return fmt.Errorf("job needs a title, which is the one line a listing shows: say what this job is, in a few words")
 	case len(tidy.Title) > TitleLimit:
@@ -716,9 +732,13 @@ func Cycle(id string, after []string, dependsOn func(string) []string) (from, to
 // would give no review, because a limit is not a file anybody reads in a pull request.
 type Limits struct {
 	Workspace string
-	// MaxDepth is how deep the tree of jobs may go. Zero, the default, means no session in this
-	// workspace may declare a job at all.
-	MaxDepth int
+	// MaxDeclared is how many jobs one session may declare. Zero, the default, means no session in
+	// this workspace may declare a job at all.
+	//
+	// It bounds what one session can start, not how far a chain of them can go: a job belongs to its
+	// project and nothing sits under it, so there is no chain to count. What bounds the crew as a
+	// whole is MaxRunning and the budget, and what bounds a session is this.
+	MaxDeclared int
 	// MaxRunning is how many jobs may run at once here. Zero is unset.
 	MaxRunning int
 	// BudgetTokens is what a tree may spend when its root declares none. Zero is unset.

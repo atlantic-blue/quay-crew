@@ -492,7 +492,7 @@ Feature: The operator sees the system from the console
 
   Scenario: A job that fanned out is one row, and it says how many parts are under it
     Given a job titled "read the electricity bill"
-    And its test stage fans out into 5 parts
+    And its test stage fans out into 5 runs
     When the operator is at the console on the "jobs" view
     Then the screen carries the job and not its parts
     And the job's row says it has 5 parts
@@ -500,14 +500,14 @@ Feature: The operator sees the system from the console
   # The way onto a part, because a part that fails is a thing somebody has to open.
   Scenario: Tab draws the parts under the job that declared them
     Given a job titled "read the electricity bill"
-    And its test stage fans out into 5 parts
+    And its test stage fans out into 5 runs
     When the operator opens the console on jobs and presses tab on the job
     Then the console draws the job and its 5 parts under it
 
   # And the way off it. A key that only opens leaves the listing buried again.
   Scenario: Tab again takes the parts away
     Given a job titled "read the electricity bill"
-    And its test stage fans out into 5 parts
+    And its test stage fans out into 5 runs
     When the operator opens the console on jobs and presses tab on the job
     And the operator presses tab again
     Then the screen carries the job and not its parts

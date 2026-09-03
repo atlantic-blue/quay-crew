@@ -41,7 +41,7 @@ func (c *Controller) executionEvent(ctx context.Context, one *Job, run *Executio
 	}
 	return &Event{
 		ID: newRowID(), Kind: kind, Job: one.ID, Workspace: one.Workspace, Project: one.Project,
-		Parent: one.Parent, Depth: one.Depth, Execution: run.ID, Detail: detail,
+		Execution: run.ID, Detail: detail,
 		TraceID: one.TraceID, OccurredAt: time.Now().UTC(),
 	}
 }

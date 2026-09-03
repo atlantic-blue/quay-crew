@@ -97,6 +97,14 @@ func (m *Memory) ListExecutions(_ context.Context, filter job.ExecutionFilter) (
 		if filter.Job != "" && one.Job != filter.Job {
 			continue
 		}
+		if filter.Job == "" && filter.Project != "" {
+			// The project is on the job rather than on the run, so a run whose job is gone is in no
+			// project and is left out.
+			of, held := m.jobs[one.Job]
+			if !held || of.Project != filter.Project {
+				continue
+			}
+		}
 		if filter.Stage != "" && one.Stage != filter.Stage {
 			continue
 		}

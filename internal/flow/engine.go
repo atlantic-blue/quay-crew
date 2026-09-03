@@ -227,17 +227,17 @@ type ControlPlane interface {
 	ArchiveSession(ctx context.Context, req *quaycrewv1.ArchiveSessionRequest) (*quaycrewv1.ArchiveSessionResponse, error)
 }
 
-// Works is what the engine needs from the system to keep a run inside the job tree.
+// Works is what the engine needs from the system to declare the jobs a run is made of.
 //
 // It prepares rather than writes, because the declaration and the movement that asked for it land in
 // one transaction. Preparing is where every rule a caller's declaration is held to is applied: the
-// depth, the workspace's ceiling, the role's pinned version and the trace. The engine does not get a
-// cheaper road than a caller, it gets the same one.
+// workspace's ceiling, the role's pinned version and the trace. The engine does not get a cheaper
+// road than a caller, it gets the same one.
 type Works interface {
 	// PrepareJob holds a declaration to every rule and answers with the row to write and the record
-	// of writing it. `under` names the job this one hangs under; empty means the parent
-	// comes from the credential the caller presented, which is what a run started by a person wants.
-	PrepareJob(ctx context.Context, under string, declaration job.Declaration) (*job.Job, *job.Event, error)
+	// of writing it. The placement says what caused the job and which run it is a step of; the zero
+	// value reads the credential the caller presented, which is what a run started by a person wants.
+	PrepareJob(ctx context.Context, at job.Placement, declaration job.Declaration) (*job.Job, *job.Event, error)
 	// ExportJob offers records to the event log, after the transaction that wrote them.
 	ExportJob(ctx context.Context, events ...*job.Event)
 }
@@ -360,16 +360,14 @@ func (e *Engine) create(ctx context.Context, from starting) (Run, string, Graph,
 	if from.trigger != "" {
 		labels[labelTrigger] = from.trigger
 	}
-	carrier, declared, err := e.works.PrepareJob(ctx, from.under, job.Declaration{
+	carrier, declared, err := e.works.PrepareJob(ctx, job.Placement{Cause: from.under}, job.Declaration{
 		Workspace: from.workspace, Project: from.project,
 		Title: fmt.Sprintf("flow %s version %d", graphName, version),
-		Brief: fmt.Sprintf("carries the run of flow %s, version %d. Its steps hang under it, and it "+
-			"ends when the run does.", graphName, version),
+		Brief: fmt.Sprintf("carries the run of flow %s, version %d. The run holds its steps, and this "+
+			"job ends when the run does.", graphName, version),
 		Labels: labels,
-		// The graph's sentence goes on the job carrying the run, so every step under it carries the
-		// same one and every session doing a step is given it above its brief. A run started by a
-		// session whose job already serves a different sentence is refused there, which is the rule a
-		// tree with two products already keeps.
+		// The graph's sentence goes on the job carrying the run, and every step of the run is given
+		// the same one above its brief: a step reads it off this job at the moment it is declared.
 		Product: graph.Product,
 	})
 	if err != nil {
@@ -380,13 +378,13 @@ func (e *Engine) create(ctx context.Context, from starting) (Run, string, Graph,
 	if carrier.Product != "" {
 		run.State[stateProduct] = carrier.Product
 	}
-	// And the plan its readings read, off the job the run hangs under. A graph whose steps read a plan
-	// has no other way to reach one: a step is a new session with an empty working directory, and a
-	// plan is a column rather than a file.
-	e.thePlanBeingRead(ctx, &run, carrier.Parent)
+	// And the plan its readings read, off the job whose session started the run. A graph whose steps
+	// read a plan has no other way to reach one: a step is a new session with an empty working
+	// directory, and a plan is a column rather than a file.
+	e.thePlanBeingRead(ctx, &run, carrier.Cause)
 	// Held back rather than pending, because a controller must never send this one as a task. It is a
-	// parent whose children are outstanding, which is what waiting already means, and the controller's
-	// queries pass over it on that.
+	// job waiting on a run that is still going, which is what waiting already means, and the
+	// controller's queries pass over it on that.
 	carrier.Phase = job.PhaseWaiting
 
 	records := []*job.Event{declared, e.record(carrier, EventRunStarted,
@@ -514,8 +512,8 @@ func (e *Engine) replaceTheSentence(ctx context.Context, id, sentence string) er
 	return nil
 }
 
-// declare writes down one step as a job: same rules, same tree, same ceilings as anything
-// a session declares.
+// declare writes down one step as a job of the run: same rules and same checks as anything a session
+// declares, and belonging to the run rather than to the job carrying it.
 //
 // What the node said would prove it worked travels with the declaration rather than being checked
 // here. The controller reads it after the task, which is the one place that can see the session the
@@ -537,7 +535,18 @@ func (e *Engine) declare(ctx context.Context, graph Graph, run Run, carrier stri
 	if expect := graph.Nodes[dispatch.Node].Expect; expect != nil {
 		declaration.ExpectFile, declaration.ExpectContains = expect.File, expect.Contains
 	}
-	return e.works.PrepareJob(ctx, carrier, declaration)
+	// The sentence and the trace come off the job carrying the run, read now rather than held in the
+	// run: an operator can replace the sentence part way through, and a step declared from a copy
+	// would serve the sentence somebody changed. A carrier that cannot be read costs the step both,
+	// which is a step outside the run's trace rather than no step at all.
+	at := job.Placement{Run: run.ID}
+	if carrying, err := e.store.GetJob(ctx, carrier); err == nil {
+		declaration.Product, at.Trace = carrying.Product, carrying.TraceID
+	} else {
+		slog.WarnContext(ctx, "the job carrying this run could not be read, so its step states no sentence",
+			"run", run.ID, "job", carrier, "node", dispatch.Node, "error", err)
+	}
+	return e.works.PrepareJob(ctx, at, declaration)
 }
 
 // carrier is what this movement writes onto the job that carries the run, and the record
@@ -614,10 +623,16 @@ func (e *Engine) Worked(ctx context.Context, run Run, step *job.Job) (Run, error
 	// What this reading could not settle goes onto the plan it read, and the rows still open go into
 	// the run's state. Both happen before the movement, because the next node is rendered from that
 	// state: a reader handed the list a step late is a reader answering the reading before last.
-	e.carryUp(ctx, &run, step)
+	// The job carrying the run, read off the run rather than off the step: a step belongs to the run,
+	// and the run is what knows which job carries it.
+	carrier, err := e.store.FlowRunCarrier(ctx, run.ID)
+	if err != nil {
+		return run, err
+	}
+	e.carryUp(ctx, &run, step, carrier)
 
 	run.Status = StatusRunning
-	return e.advance(ctx, graph, run, where{carrier: step.Parent, answers: step.ID}, Event{
+	return e.advance(ctx, graph, run, where{carrier: carrier, answers: step.ID}, Event{
 		Kind:    EventTaskFinished,
 		Node:    run.Node,
 		Reply:   replyOf(step),
@@ -778,7 +793,7 @@ func (e *Engine) record(carrier *job.Job, kind, detail string) *job.Event {
 	return &job.Event{
 		ID: newEventID(), Kind: kind, Job: carrier.ID,
 		Workspace: carrier.Workspace, Project: carrier.Project,
-		Parent: carrier.Parent, Depth: carrier.Depth, Detail: detail,
+		Detail:  detail,
 		TraceID: carrier.TraceID, OccurredAt: time.Now().UTC(),
 	}
 }

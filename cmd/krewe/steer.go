@@ -58,10 +58,10 @@ func runSteer(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, 
 		return err
 	}
 
-	root := recorded.GetRoot()
-	fmt.Fprintf(out, "%s on %s (%s)\n", job.Steers(int(root.GetSteers())),
-		display.ShortID(root.GetId()), truncateLine(root.GetTitle()))
-	fmt.Fprintf(out, "read them back with krewe steers %s\n", display.ShortID(root.GetId()))
+	marked := recorded.GetJob()
+	fmt.Fprintf(out, "%s on %s (%s)\n", job.Steers(int(marked.GetSteers())),
+		display.ShortID(marked.GetId()), truncateLine(marked.GetTitle()))
+	fmt.Fprintf(out, "read them back with krewe steers %s\n", display.ShortID(marked.GetId()))
 	return nil
 }
 
@@ -79,7 +79,7 @@ func theJobBeingSteered(ctx context.Context, client quaycrewv1.ControlPlaneServi
 		return nil, err
 	}
 	listed, err := client.ListJobs(ctx, &quaycrewv1.ListJobsRequest{
-		Workspace: located.WorkspaceID, Project: located.ProjectID, RootsOnly: true,
+		Workspace: located.WorkspaceID, Project: located.ProjectID,
 	})
 	if err != nil {
 		return nil, err
@@ -120,10 +120,10 @@ func runSteers(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 		return err
 	}
 
-	root := listed.GetRoot()
-	fmt.Fprintf(out, "%s  %s\n", display.ShortID(root.GetId()), root.GetTitle())
-	// The moment and the job each one landed on, because the count on its own says a job was hard and
-	// not which part of it kept needing a person.
+	of := listed.GetJob()
+	fmt.Fprintf(out, "%s  %s\n", display.ShortID(of.GetId()), of.GetTitle())
+	// The moment each one landed, because the count on its own says a job was hard and not when it
+	// kept needing a person.
 	for _, one := range listed.GetSteers() {
 		fmt.Fprintf(out, "%s  %-10s %s\n", one.GetOccurredAt().AsTime().Local().Format(time.RFC3339),
 			display.ShortID(one.GetJob()), one.GetText())
@@ -146,7 +146,7 @@ func runSteersHere(ctx context.Context, client quaycrewv1.ControlPlaneServiceCli
 		return err
 	}
 	listed, err := client.ListJobs(ctx, &quaycrewv1.ListJobsRequest{
-		Workspace: located.WorkspaceID, Project: located.ProjectID, RootsOnly: true,
+		Workspace: located.WorkspaceID, Project: located.ProjectID,
 	})
 	if err != nil {
 		return err

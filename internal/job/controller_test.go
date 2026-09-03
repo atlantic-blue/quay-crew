@@ -1320,12 +1320,12 @@ func TestJobThatWaitsForSomethingIsLeftAlone(t *testing.T) {
 	}
 }
 
-// Job under a parent runs. It has to: a flow run declares every step under the run's own job, so a
-// controller that started roots only would leave every step of every automation pending forever.
-func TestJobUnderAParentIsRun(t *testing.T) {
+// A job a session declared runs. It has to: it is a job in its project like any other, and a
+// controller that started only what an operator typed would leave the rest pending forever.
+func TestAJobASessionDeclaredIsRun(t *testing.T) {
 	controller, kept, plane := aController(t)
 	declared := declaredJob("write the tests")
-	declared.Parent, declared.Depth = "job-0", 1
+	declared.Cause = "job-0"
 	one := kept.add(declared)
 
 	controller.Tick(context.Background())
@@ -1542,15 +1542,15 @@ func (r *rows) JobsClaiming(_ context.Context, workspace string, claims []string
 	return found, nil
 }
 
-// children is every job declared under one job, in the order they were declared. It is how a test
-// about a fan out reads the workers the system made, which no caller declared.
-func (r *rows) children(parent string) []*job.Job {
+// caused is every job the session running one job declared, in the order they were declared. It is
+// how a test about a fan out proves the system wrote no job at all, because a run is not a job.
+func (r *rows) caused(cause string) []*job.Job {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var found []*job.Job
 	for _, id := range r.order {
 		one, held := r.held[id]
-		if !held || one.Parent != parent {
+		if !held || one.Cause != cause {
 			continue
 		}
 		kept := *one

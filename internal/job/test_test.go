@@ -466,17 +466,16 @@ func TestARunOfTheFanOutIsNoJobAtAll(t *testing.T) {
 	if declared := kept.all(); len(declared) != 1 || declared[0].ID != one.ID {
 		t.Fatalf("the jobs table holds %d rows, and one job was declared", len(declared))
 	}
-	if under := kept.children(one.ID); len(under) != 0 {
-		t.Fatalf("the fan out left %d jobs under the job it ran for", len(under))
+	if caused := kept.caused(one.ID); len(caused) != 0 {
+		t.Fatalf("the fan out wrote %d jobs for the job it ran for, and a run is not a job", len(caused))
 	}
 
-	// And the reason a part of a job never fans out, held on its own: a job under another is one part
-	// of a plan somebody already approved, so it is outside these stages however far through them its
-	// row looks.
-	under := testingJob()
-	under.Parent, under.Depth = one.ID, 1
-	if job.WaitingForItsTests(under) {
-		t.Fatal("a job declared under another owes failing tests of its own")
+	// And the reason a step of a flow run never fans out, held on its own: the graph a person imported
+	// is its plan, so it is outside these stages however far through them its row looks.
+	step := testingJob()
+	step.Run = "a-run"
+	if job.WaitingForItsTests(step) {
+		t.Fatal("a step of a flow run owes failing tests of its own")
 	}
 
 	controller.Tick(ctx)

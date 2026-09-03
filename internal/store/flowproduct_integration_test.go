@@ -197,19 +197,15 @@ func TestAnAnswerThatIsNotASentenceLeavesTheRunAskingInPostgres(t *testing.T) {
 	}
 }
 
-// A tree with two products has none, and a graph carries a sentence of its own, so a run started by
-// a session whose job serves a different one is refused where somebody is looking rather than three
-// steps in.
-func TestARunWhoseSentenceDisagreesWithTheJobAboveItIsRefusedInPostgres(t *testing.T) {
+// A graph carries a sentence of its own, and the job carrying its run serves that one. The job whose
+// session started the run keeps its own: neither is under the other, so nothing has to agree.
+func TestARunServesTheGraphsOwnSentenceInPostgres(t *testing.T) {
 	s, _ := aSystemWithAController(t, &addressingRunner{})
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 
-	// A workspace allows no depth at all until an operator says otherwise, and a run started by a
-	// session hangs under that session's job. Without this the run is refused for being too deep,
-	// which is a different refusal and would leave the one this test is about unproved.
 	if _, err := s.SetWorkspaceLimits(ctx, &quaycrewv1.SetWorkspaceLimitsRequest{
-		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDepth: 2},
+		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDeclared: 2},
 	}); err != nil {
 		t.Fatalf("SetWorkspaceLimits: %v", err)
 	}
@@ -230,14 +226,27 @@ func TestARunWhoseSentenceDisagreesWithTheJobAboveItIsRefusedInPostgres(t *testi
 	}
 
 	startedFlow(t, s, project, theTranscriptFlow)
-	_, err = s.StartFlow(auth.WithGrant(ctx, grant), &quaycrewv1.StartFlowRequest{
+	started, err := s.StartFlow(auth.WithGrant(ctx, grant), &quaycrewv1.StartFlowRequest{
 		Graph: "transcript", Project: project,
 	})
-	if err == nil {
-		t.Fatal("a run serving one sentence started under a job serving another, so the tree has two products and no way to say which")
+	if err != nil {
+		t.Fatalf("StartFlow as the job's session: %v", err)
 	}
-	if !strings.Contains(err.Error(), "paste a link and get the text back") {
-		t.Errorf("the refusal says %q, want it to name the sentence the job above it serves", err)
+
+	carrier, err := s.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: started.GetRun().GetJob()})
+	if err != nil {
+		t.Fatalf("GetJob: %v", err)
+	}
+	if got := carrier.GetJob().GetProduct(); got != "search the archive by video id" {
+		t.Fatalf("the job carrying the run serves %q, want the graph's own sentence", got)
+	}
+	// And the job whose session started it is untouched.
+	kept, err := s.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: declared.GetJob().GetId()})
+	if err != nil {
+		t.Fatalf("GetJob: %v", err)
+	}
+	if got := kept.GetJob().GetProduct(); got != "paste a link and get the text back" {
+		t.Fatalf("the job that started the run now serves %q", got)
 	}
 }
 

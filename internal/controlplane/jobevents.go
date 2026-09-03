@@ -20,17 +20,22 @@ const jobStream = "job"
 
 // traceJob gives a job the trace it belongs to, before it is written.
 //
-// A root is minted, and a child inherits its parent's unchanged, so one identifier covers a whole
-// tree however many controllers and processes it passes through. The span identifier is the caller's
-// own at the moment of the write, which is what ties a child's declaration to the attempt that asked
-// for it.
+// A job an operator declared mints one. A job a session declared takes the trace of the job whose
+// session declared it, and a step of a flow run takes the run's, so one identifier covers a piece of
+// work and everything it caused however many controllers and processes it passes through. The span
+// identifier is the caller's own at the moment of the write, which is what ties a declaration to the
+// attempt that asked for it.
 //
 // Both go on the row rather than into a process. That is what makes the trace survive a controller
 // that died: the context is in the declaration, the way a wait is a column rather than a timer.
-func (s *Server) traceJob(ctx context.Context, declared *job.Job, parent *job.Job) {
+func (s *Server) traceJob(ctx context.Context, declared *job.Job, cause *job.Job, given string) {
 	declared.ParentSpanID = telemetry.SpanIDFrom(ctx)
-	if parent != nil && parent.TraceID != "" {
-		declared.TraceID = parent.TraceID
+	if given != "" {
+		declared.TraceID = given
+		return
+	}
+	if cause != nil && cause.TraceID != "" {
+		declared.TraceID = cause.TraceID
 		return
 	}
 	if inherited := telemetry.TraceIDFrom(ctx); inherited != "" {
@@ -38,8 +43,8 @@ func (s *Server) traceJob(ctx context.Context, declared *job.Job, parent *job.Jo
 		return
 	}
 	// Nothing was tracing this call, which is a system with no exporter configured or a caller whose
-	// own tool starts no trace. The identifier is minted anyway, because it is what joins the tree
-	// together afterwards and a root with none leaves every descendant unjoined.
+	// own tool starts no trace. The identifier is minted anyway, because it is what joins the work
+	// together afterwards and a job with none leaves everything it causes unjoined.
 	declared.TraceID = telemetry.NewTraceID()
 }
 
@@ -93,7 +98,6 @@ func asJobEvent(event *job.Event) *quaycrewv1.JobEvent {
 	return &quaycrewv1.JobEvent{
 		Id: event.ID, Kind: event.Kind, Job: event.Job,
 		Workspace: event.Workspace, Project: event.Project,
-		Parent: event.Parent, Depth: int32(event.Depth),
 		Detail: event.Detail, TraceId: event.TraceID,
 		OccurredAt: timestamppb.New(event.OccurredAt),
 	}

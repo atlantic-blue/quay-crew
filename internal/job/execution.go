@@ -69,12 +69,17 @@ type Execution struct {
 	FinishedAt *time.Time
 }
 
-// ExecutionFilter narrows a listing of executions. Job is required: an execution is only ever read
-// as one of the runs of one stage of one job, which is the whole reason it is not a job.
+// ExecutionFilter narrows a listing of executions. One of Job and Project is required: an execution
+// is only ever read as one of the runs of one stage of one job, which is the whole reason it is not
+// a job, and a listing of one project's jobs reads every run in that project to draw each job's runs
+// beneath it.
 type ExecutionFilter struct {
 	Job string
 	// Stage narrows to one stage of that job, and empty is every stage.
 	Stage string
+	// Project is every run of every job in one project. Job wins where both are set, being the
+	// narrower.
+	Project string
 }
 
 // Live says whether this run is still going.
@@ -159,4 +164,21 @@ type ExecutionLanding struct {
 	Reason      string
 	SpentTokens int64
 	PullRequest string
+}
+
+// RunCalled is what to call one run of a stage where there is no title to print, which is every
+// surface that lists runs: nobody declared a run, so nobody wrote it a title.
+//
+// The words are the stage's own, so a run reads the way the stage that made it reads. A stage this
+// does not know says its own name and the number, which is a run named honestly rather than a row
+// with an empty cell.
+func RunCalled(stage string, number int) string {
+	switch stage {
+	case StageTest:
+		return fmt.Sprintf("tests for requirement %d", number)
+	case StageBuild:
+		return fmt.Sprintf("build vertical %d", number)
+	default:
+		return fmt.Sprintf("%s %d", stage, number)
+	}
 }

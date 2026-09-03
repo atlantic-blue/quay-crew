@@ -275,12 +275,12 @@ func TestAJobWhoseVerticalsAreBuiltCannotSettleOnItsOwnAnswer(t *testing.T) {
 		t.Fatal("a job with nothing built is held at the acceptance gate")
 	}
 
-	// And a worker is not. The verticals are its parent's, and one part of a plan a person already
-	// approved does not get its own acceptance: they would be accepting the same work twice.
-	worker := *built
-	worker.Parent = "the-job-above"
-	if job.NotYetAccepted(&worker) {
-		t.Fatal("a build worker is held at its parent's acceptance gate")
+	// And a job a session declared is held at its own gate, like any other job. What caused it says
+	// how it came about and nothing about what it is, so it does not borrow somebody else's answer.
+	caused := *built
+	caused.Cause = "the-job-whose-session-declared-it"
+	if !job.NotYetAccepted(&caused) {
+		t.Fatal("a job a session declared settles its own built work with nobody having looked at it")
 	}
 }
 

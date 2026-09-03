@@ -77,7 +77,7 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 	// Asking and still in ideation. That pair is the useful thing to read, and it is the reason the
 	// stage sits beside the phase rather than replacing it.
 	if stage := job.StageOf(&job.Job{
-		Product: asking.GetProduct(), Parent: asking.GetParent(),
+		Product: asking.GetProduct(), Run: asking.GetRun(),
 		IdeationAnswer: asking.GetIdeationAnswer(),
 		Plan:           asking.GetPlan(), PlanApproved: asking.GetPlanApproved(),
 	}); stage.Name != job.StageIdeation {
@@ -372,7 +372,7 @@ func stageOnTheWire(t *testing.T, ctx context.Context,
 	t.Helper()
 	one := readJob(t, ctx, client, id)
 	return job.StageOf(&job.Job{
-		Product: one.GetProduct(), Parent: one.GetParent(),
+		Product: one.GetProduct(), Run: one.GetRun(),
 		IdeationAnswer: one.GetIdeationAnswer(),
 		Design:         one.GetDesign(), DesignAccepted: one.GetDesignAccepted(),
 		Tests: one.GetTests(), Build: one.GetBuild(), Accepted: one.GetAccepted(),

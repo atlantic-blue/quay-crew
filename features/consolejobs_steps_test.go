@@ -179,25 +179,25 @@ func (c *consoleWorld) openModelOnJobs(w *world) error {
 const titleCell = 5
 
 func initializeConsolePartsSteps(sc *godog.ScenarioContext) {
-	// The fan out this view was rebuilt for: a job in its test stage declares one part for each
-	// requirement. The parts are written the way a controller writes them, because standing the whole
+	// The fan out this view was rebuilt for: a job in its test stage runs one session for each
+	// requirement. The runs are written the way a controller writes them, because standing the whole
 	// test stage up would make this a scenario about the test stage.
-	sc.Step(`^its test stage fans out into (\d+) parts$`, func(ctx context.Context, count int) error {
+	sc.Step(`^its test stage fans out into (\d+) runs$`, func(ctx context.Context, count int) error {
 		w := worldFrom(ctx)
 		one, err := readJob(ctx, 0)
 		if err != nil {
 			return err
 		}
 		for at := 1; at <= count; at++ {
-			part := &job.Job{
-				ID: store.NewID(), Workspace: w.workspaceID, Project: w.projectID,
-				Title: fmt.Sprintf("tests for requirement %d", at),
-				Brief: "write the failing test for it", Version: 1, Phase: job.PhaseRunning,
-				Parent: one.GetId(), Depth: 1, Session: store.NewID(),
+			run := &job.Execution{
+				ID: store.NewID(), Job: one.GetId(), Stage: job.StageTest, Number: at,
+				Claim: job.ClaimOnRequirement(one.GetId(), job.Requirement{Number: at}),
+				Phase: job.PhaseRunning, Session: store.NewID(),
 			}
-			if err := w.store.CreateJob(ctx, part, &job.Event{
-				ID: store.NewID(), Kind: job.EventDeclared, Job: part.ID,
-				Workspace: w.workspaceID, Project: w.projectID, Detail: part.Title,
+			if err := w.store.CreateExecution(ctx, run, &job.Event{
+				ID: store.NewID(), Kind: job.EventDeclared, Job: one.GetId(), Execution: run.ID,
+				Workspace: w.workspaceID, Project: w.projectID,
+				Detail:     job.RunCalled(run.Stage, run.Number),
 				OccurredAt: time.Now().UTC(),
 			}); err != nil {
 				return err

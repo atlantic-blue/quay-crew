@@ -110,8 +110,8 @@ This pull request carries the list. The code for each marking ships in the verti
   the mode in that cell. It measures no text.
 - `projectColumn` in `internal/console/resources.go`, cell 2: kept because the session row puts the
   project in that cell. It measures no text.
-- `ancestryLimit` in `internal/controlplane/steer.go`, 64 parents: kept because a store that somehow
-  held a cycle has to answer rather than spin.
+- `ancestryLimit` in `internal/controlplane/steer.go`, 64 parents: gone. A job cannot be under
+  another job, so there is no chain of parents to walk and no cycle to bound.
 - `BuildAttempts` in `internal/job/build.go`, 2 attempts: kept because every ask is a task somebody
   pays for. It counts workers, not bytes.
 - `StepsAtLeast` in `internal/job/evidence.go`, 2 steps: kept because it is a floor. It refuses one

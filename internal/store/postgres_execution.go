@@ -102,6 +102,12 @@ func (p *Postgres) GetExecution(ctx context.Context, id string) (*job.Execution,
 // ListExecutions is the runs of one job, oldest first, and of one of its stages where the filter
 // names one.
 func (p *Postgres) ListExecutions(ctx context.Context, filter job.ExecutionFilter) ([]*job.Execution, error) {
+	if filter.Job == "" && filter.Project != "" {
+		// The project is on the job rather than on the run: a run holds nothing a person wrote and
+		// nothing it could only copy from its job, and where it runs is one of those things.
+		return p.executionsWhere(ctx, `where job in (select id from jobs where project = $1)
+			and ($2 = '' or stage = $2) order by created_at asc, id asc`, 0, filter.Project, filter.Stage)
+	}
 	return p.executionsWhere(ctx, `where ($1 = '' or job = $1) and ($2 = '' or stage = $2)
 		order by created_at asc, id asc`, 0, filter.Job, filter.Stage)
 }

@@ -28,10 +28,10 @@ func TestARunHoldsNothingAPersonWrote(t *testing.T) {
 	// the ordering and the limits a caller declared.
 	for _, name := range []string{
 		"Title", "Brief", "Product", "Request", "Plan", "PlanApproved", "Ideation", "IdeationAnswer",
-		"Design", "DesignAccepted", "Tests", "Build", "Accepted", "Steers", "Depth", "Requires",
+		"Design", "DesignAccepted", "Tests", "Build", "Accepted", "Steers", "Requires",
 		"After", "Deadline", "BudgetTokens", "Labels", "ExpectFile", "ExpectContains", "Role",
 		"RoleVersion", "Escalation", "Handoffs", "Questions", "Steps", "Told", "Question",
-		"Ungated", "Reviewed", "Tested", "Parent", "Attempted", "Resuming",
+		"Ungated", "Reviewed", "Tested", "Cause", "Run", "Attempted", "Resuming",
 	} {
 		if held[name] {
 			t.Fatalf("a run carries %s, which belongs to the job it runs a stage of", name)
@@ -63,12 +63,14 @@ func TestARunCannotBeDeclaredByAPerson(t *testing.T) {
 		}
 	}
 
-	// And a declaration that tries to name the row it hangs under is refused by name, which is the
-	// refusal that already stands: the system assigns what a caller may not.
-	if err := (job.Declaration{
-		Workspace: "a", Project: "b", Title: "a run", Brief: "write the tests", Parent: "job-1",
-	}).Validate(); err == nil {
-		t.Fatal("a declaration naming the job it hangs under was accepted")
+	// And a declaration cannot name a job it sits under, because there is no such field: a job
+	// belongs to its project, and what a run belongs to is written by the stage that made it.
+	for at := 0; at < written.NumField(); at++ {
+		switch written.Field(at).Name {
+		case "Parent", "Depth", "Cause", "Run":
+			t.Fatalf("a declaration carries %s, so a caller could put a job under something",
+				written.Field(at).Name)
+		}
 	}
 }
 
