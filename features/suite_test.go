@@ -127,59 +127,6 @@ type recordingRunner struct {
 	answers [][2]string
 }
 
-// failTheNextTask makes the next task the model is asked to run fail. Under the lock, because a
-// scenario sets it while a task is already waiting inside the double.
-func (r *recordingRunner) failTheNextTask() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.failNext = true
-}
-
-// failTheNextTaskWith is the same, in words the scenario chooses, so a scenario about attempts that
-// failed differently can say what each one failed with. A model that says the same thing every time
-// would make every failure a loop.
-func (r *recordingRunner) failTheNextTaskWith(said string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.failNext, r.failWith = true, said
-}
-
-// willSay adds one answer to the queue, so a scenario builds up what a model says over several tasks.
-func (r *recordingRunner) willSay(answer string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.says = append(r.says, answer)
-	r.exact = append(r.exact, false)
-}
-
-// willSayExactly adds one answer the double must not add anything to, which is what a scenario about
-// an answer that states no outcome needs: the double follows its task otherwise, so an answer meant
-// to be missing the line would arrive carrying one.
-func (r *recordingRunner) willSayExactly(answer string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.says = append(r.says, answer)
-	r.exact = append(r.exact, true)
-}
-
-// lastSaid is the last answer the double was told to give, so a step can hold what the record kept
-// against what the session wrote without the scenario repeating the words in two places.
-func (r *recordingRunner) lastSaid() string {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if len(r.says) == 0 {
-		return ""
-	}
-	return r.says[len(r.says)-1]
-}
-
-// willAnswer says what the double answers a task carrying a phrase, whenever that task arrives.
-func (r *recordingRunner) willAnswer(whenAsked, answer string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.answers = append(r.answers, [2]string{whenAsked, answer})
-}
-
 // answerFor is what the double says to the nth task, one indexed. The caller holds the lock.
 func (r *recordingRunner) answerFor(asked int, text string) string {
 	// What was asked wins over how many have been asked, because a scenario naming a phrase is being
@@ -362,17 +309,11 @@ type world struct {
 	reachable string
 	// gitAuthor is who a commit made inside a sandbox is by.
 	gitAuthor controlplane.Identity
-	// driverErr is what the driver was told when it tried something.
-	driverErr error
 	// scratch is every directory a scenario wrote on disk, removed when the scenario ends.
 	scratch []string
 	// server is the control plane itself, kept so a scenario can drive what main does at startup
 	// rather than only what a client can call.
 	server *controlplane.Server
-	// lastStop is what the last stop of one session came back with, and lastStopReason what the
-	// operator said, so a Then step can hold the record to their own words.
-	lastStop       *quaycrewv1.StopTaskResponse
-	lastStopReason string
 	// lastDrain is what the last drain put down, kept so a scenario can ask what went rather than
 	// counting sandboxes.
 	lastDrain *quaycrewv1.DrainSessionsResponse
@@ -400,8 +341,7 @@ type world struct {
 	storeStalls bool
 	// startWait and exportWait are the system's budgets. A scenario about a budget running out sets
 	// them short, because a scenario that waits the real minute out is a scenario nobody runs.
-	startWait  time.Duration
-	exportWait time.Duration
+	startWait time.Duration
 	// storage is a real conversation store on disk, so a scenario can say what the model kept and
 	// what it did not. The scenarios that do not care about it seed every conversation they start.
 	storage sandbox.Storage
@@ -430,10 +370,6 @@ type world struct {
 	processGate gateAnswer
 	// proseGate is what the shipped prose gate answered the last time a scenario fired it.
 	proseGate gateAnswer
-	// testGate is what the shipped test gate answered the last time a scenario fired it, and building
-	// says whether the session it was fired for is one the system is building with.
-	testGate gateAnswer
-	building bool
 }
 
 type worldKey struct{}
@@ -488,15 +424,6 @@ func (w *world) everyServer() []*controlplane.Server {
 	w.serversMu.Lock()
 	defer w.serversMu.Unlock()
 	return append([]*controlplane.Server{w.server}, w.alsoServing...)
-}
-
-// alsoServing records a control plane a scenario stood up beside the world's own, so a wait for tasks
-// covers the ones it dispatched.
-func (w *world) serving(also *controlplane.Server) *controlplane.Server {
-	w.serversMu.Lock()
-	defer w.serversMu.Unlock()
-	w.alsoServing = append(w.alsoServing, also)
-	return also
 }
 
 // restart tears the control plane down and stands a new one up over the same store, model and
@@ -1395,24 +1322,4 @@ func refused(w *world, want codes.Code) error {
 		return fmt.Errorf("the control plane refused it as %s, want %s", got, want)
 	}
 	return nil
-}
-
-// dialAs is a second client presenting somebody else's token, which is how a scenario makes a call
-// as a session rather than as the operator. The guard is the real one: the call goes through the
-// same interceptors the operator's does and is judged by the policy written for whoever it is from.
-func (w *world) dialAs(token string) quaycrewv1.ControlPlaneServiceClient {
-	conn, err := grpc.NewClient(
-		"passthrough:///bufnet",
-		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
-			return w.listener.DialContext(ctx)
-		}),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithPerRPCCredentials(auth.Credentials(token)),
-	)
-	if err != nil {
-		// A dial that cannot be built is a defect in the harness rather than a behaviour, and the
-		// step that follows says so plainly when every call fails.
-		return w.client
-	}
-	return quaycrewv1.NewControlPlaneServiceClient(conn)
 }

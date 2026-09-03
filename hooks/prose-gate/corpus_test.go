@@ -14,17 +14,18 @@ import (
 // rate, on the premise that the prose here is the standard being aimed at.
 //
 // The premise turned out to be false, and the number is reported here rather than argued about. This
-// repository's documentation and changelog are written in the house voice, which uses long
+// repository's readme and changelog are written in the house voice, which uses long
 // explanatory sentences on purpose, and the standard arrived after most of them. The median sentence
 // in CHANGELOG.md is 18 words and the ninetieth percentile is 37, so a rule that allows 25 refuses a
-// third of it, correctly. The role briefs, which are written as short instructions, refuse far less.
+// third of it, correctly.
 //
 // So the number this test gates on is not the refusal count. It is the count of refusals that are
 // wrong, which is measurable exactly for the rule that produces almost all of them.
 
-// corpus is the prose the issue named, and the role briefs beside it, which are the nearest thing
-// here to prose written as short instructions.
-var corpus = []string{"../../docs", "../../README.md", "../../CHANGELOG.md", "../../changelog.d", "../../roles"}
+// corpus is the prose the issue named. A path that no longer exists fails the walk rather than being
+// skipped, and an empty corpus fails below, because prose nobody reads is measured the same as prose
+// that passes.
+var corpus = []string{"../../README.md", "../../CHANGELOG.md", "../../changelog.d"}
 
 // The only way the length rule can refuse wrongly is a sentence boundary the reader missed, which
 // joins two sentences into one that is over the limit. A joined sentence still carries the full stop
@@ -58,6 +59,11 @@ func TestNoRefusalIsMadeOfTwoSentencesReadAsOne(t *testing.T) {
 // The headline number, reported rather than gated, with a band around it wide enough that editing a
 // document does not turn this red and tight enough that a rule which starts refusing everything or
 // nothing does.
+//
+// The band was 60 against a corpus that held the documentation and the role briefs. Both are gone, and
+// the briefs were the short instructions that pulled the figure down, so the same rules over what is
+// left measure 65 rather than 34. The number is the measurement over the corpus that exists, not an
+// estimate of what the prose should score.
 func TestHowMuchOfThisRepositorysProseTheGateRefuses(t *testing.T) {
 	paragraphs, refused := 0, 0
 	byRule := map[string]int{}
@@ -79,9 +85,9 @@ func TestHowMuchOfThisRepositorysProseTheGateRefuses(t *testing.T) {
 	switch {
 	case share == 0:
 		t.Error("the gate refuses nothing in prose it demonstrably should, so it is reading nothing")
-	case share > 60:
-		t.Errorf("the gate refuses %d per cent of the prose here, and it refused 34 when it was written. "+
-			"A rule got wider, or the reader broke: read the refusals before moving this number", share)
+	case share > 80:
+		t.Errorf("the gate refuses %d per cent of the prose here, and it refused 65 when this band was "+
+			"set. A rule got wider, or the reader broke: read the refusals before moving this number", share)
 	}
 }
 

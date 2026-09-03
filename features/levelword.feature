@@ -34,7 +34,6 @@ Feature: One word for the level above every workspace, and the word it replaced 
     Examples:
       | typed               |
       | secret list system  |
-      | job list system     |
       | sessions system     |
 
   Scenario Outline: The word that went refuses, names what to type, and fails
@@ -49,9 +48,7 @@ Feature: One word for the level above every workspace, and the word it replaced 
       | skill attach crew git                 |
       | skill detach crew git                 |
       | hook attach crew merge-gate           |
-      | role attach crew implementer          |
       | context show crew                     |
-      | job list crew                         |
       | sessions crew                         |
       | use crew                              |
 
@@ -98,7 +95,6 @@ Feature: One word for the level above every workspace, and the word it replaced 
       | gone             |
       | secret list Crew |
       | secret list CREW |
-      | job list Crew    |
       | use Crew         |
 
   # The refusal a capitalised reserved word used to get was the general one about names, whose advice

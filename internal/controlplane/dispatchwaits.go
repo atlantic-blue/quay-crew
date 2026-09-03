@@ -16,9 +16,6 @@ import (
 // named, because "the dispatch failed" sends the reader to the whole path and one of these sends
 // them to a component.
 const (
-	// waitEventLog is the export of one record to the broker. It is on this list because it is where
-	// a dispatch stopped: the record sat in the producer and the call never came back.
-	waitEventLog = "the event log to take a record"
 	// waitStartAhead is the sandbox start already running, because the system starts one at a time.
 	waitStartAhead = "the sandbox start ahead of this one"
 	// waitContainer is the provider making the container.

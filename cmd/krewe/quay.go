@@ -93,10 +93,9 @@ var removedFlags = map[string]string{
 	"--wait": "krewe task waits for the answer already: krewe task [<address>] \"...\"",
 	"--no-wait": "letting go is krewe task --dispatch [<address>] \"...\"" +
 		"\n\nand krewe task on its own waits for the answer instead",
-	// The word reads correctly in both directions now: this job requires context, and the architect
-	// role receives context.
-	"--hands": "what a job cannot be done without is what it requires: " +
-		"krewe job create --requires <material>",
+	// It was a flag on job create, and jobs are gone, so there is no flag to send anybody to.
+	"--hands": "--hands is gone with jobs. What a session works from is the context and the skills " +
+		"its workspace holds: krewe context set <workspace> \"...\"",
 }
 
 // removedCommands are the words this tool used to take, each against what to type now.
@@ -112,6 +111,9 @@ var removedFlags = map[string]string{
 // holding an error, so the process exits non zero and a caller reading the status cannot take a
 // refusal for a success.
 var removedCommands = map[string]string{
+	"work": "work became job, and jobs are gone. What a session left in its directory is read " +
+		"directly" +
+		"\n\n  krewe read <session> [<path>]",
 	"job": "the job subsystem is gone. A job was four stages, a controller and a gate, and it cost " +
 		"more than the work it delivered. Dispatch a session and talk to it" +
 		"\n\n  krewe task [<address>] \"...\"",
@@ -119,20 +121,28 @@ var removedCommands = map[string]string{
 		"nothing runs above a session now" +
 		"\n\n  krewe task [<address>] \"...\"",
 	"role": "roles are gone with jobs. A session holds its workspace's skills and hooks, and there " +
-		"is no role to narrow it to",
-	"answer": "there is no gate to answer. A job asked the questions and jobs are gone. Reply to a " +
+		"is no role to narrow it to" +
+		"\n\n  krewe skill list <workspace>",
+	"steer": "a steer recorded what a job should have known, and jobs are gone. Say it to the " +
 		"session instead" +
 		"\n\n  krewe task <session> \"...\"",
-	"steer":  "a steer recorded what a job should have known, and jobs are gone",
-	"steers": "a steer recorded what a job should have known, and jobs are gone",
+	"steers": "a steer recorded what a job should have known, and jobs are gone. What a session was " +
+		"told is its own history" +
+		"\n\n  krewe task list <session>",
 	"history": "a history was a digest of jobs, and jobs are gone. What a session did is under it" +
 		"\n\n  krewe task list <session>",
-	"limits": "limits capped what a workspace's jobs could declare, and jobs are gone",
-	"room":   "the room read the machine for the job controller to schedule against, and jobs are gone",
+	"limits": "limits capped what a workspace's jobs could declare, and jobs are gone. What is " +
+		"running is the listing" +
+		"\n\n  krewe sessions",
+	"room": "the room read the machine for the job controller to schedule against, and jobs are " +
+		"gone. What is running is the listing" +
+		"\n\n  krewe sessions",
 	"web": "the briefing page is gone. The console reads the same rows" +
 		"\n\n  krewe",
-	"render": "rendering a briefing page is gone with the page itself",
-	"record": "recording a briefing page is gone with the page itself",
+	"render": "rendering a briefing page is gone with the page itself. The console reads the same rows" +
+		"\n\n  krewe",
+	"record": "recording a briefing page is gone with the page itself. The console reads the same rows" +
+		"\n\n  krewe",
 	"ask": "a task is one word now, and waiting here for the answer is what it does" +
 		"\n\n  krewe task [<address>] \"...\"",
 	"dispatch": "a task is one word now, and letting go of one is a flag on it" +
@@ -151,9 +161,9 @@ var removedCommands = map[string]string{
 		"once with krewe skill import skills/git, attach it with krewe skill attach <workspace> git, " +
 		"and ask the session to clone what it works on. To say which repository a project's work " +
 		"lands in: krewe project repository <owner>/<name>",
-	"header": "the header is gone. Which build this is and the way to help are on the console.s own\n" +
-		"footer row now, on the right of the line that says where you are standing. What the machine has\n" +
-		"left is a command\n\n  krewe room",
+	"header": "the header is gone. Which build this is and the way to help are on the console's own\n" +
+		"footer row now, on the right of the line that says where you are standing. What is running is\n" +
+		"the listing\n\n  krewe sessions",
 	"panel": "the panel is gone. `krewe` on its own opens the console, full width, and nothing beside\n" +
 		"it. A conversation is asked for: press p in the console from inside tmux, or open one on its own\n\n  krewe attach <session>",
 }
@@ -172,6 +182,7 @@ var helpSpellings = map[string]bool{
 // than where anything is.
 var takenFlags = map[string]map[string]bool{
 	"task":   {flagDispatch: true},
+	"answer": {allAnswers: true},
 	"target": targetFlagsTaken(),
 }
 
@@ -233,6 +244,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runTask(ctx, client, args[1:], out)
 	case "read":
 		return runRead(ctx, client, args[1:], out)
+	case "answer":
+		return runAnswer(ctx, client, args[1:], out)
 	case "where":
 		return runWhere(ctx, client, args[1:], out)
 	case "attach":

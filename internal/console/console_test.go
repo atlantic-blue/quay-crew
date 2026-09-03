@@ -1697,7 +1697,7 @@ func TestTheSelectedRowIsHighlightedAcrossTheWholeRow(t *testing.T) {
 	}
 }
 
-// TestTheBreadcrumbNamesWhatWasDrilledThrough: "me > house-bills <jobs>" says what escape goes
+// TestTheBreadcrumbNamesWhatWasDrilledThrough: "me > house-bills <sessions>" says what escape goes
 // back to, which a trail of resource names does not.
 func TestTheBreadcrumbNamesWhatWasDrilledThrough(t *testing.T) {
 	client := &fakeClient{
@@ -1713,7 +1713,7 @@ func TestTheBreadcrumbNamesWhatWasDrilledThrough(t *testing.T) {
 	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
 	view := model.View()
-	for _, want := range []string{"me", "house-bills", "jobs", "esc to go back"} {
+	for _, want := range []string{"me", "house-bills", "sessions", "esc to go back"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the breadcrumb does not name %q:\n%s", want, view)
 		}

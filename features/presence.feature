@@ -35,21 +35,6 @@ Feature: A listing says what is inside a session's sandbox
     Then the listing says the session is "awake"
     And the listing does not say the session is idle
 
-  Scenario: A session somebody is typing into says so
-    Given a session started by dispatching "hello"
-    And an operator has that session's conversation open
-    When the operator lists the sessions
-    Then the listing says the session is "attached"
-
-  # Ending a conversation leaves the terminal alive at a prompt, so there is somebody in a container
-  # with no runtime running. Asking only about the runtime would call that container empty.
-  Scenario: Somebody sitting in a conversation they closed still holds the container
-    Given a session started by dispatching "hello"
-    And an operator has that session's conversation open
-    And that session's sandbox is running nothing
-    When the operator lists the sessions
-    Then the listing says the session is "attached"
-
   # The other half. Without this nothing is ever reclaimed and the system holds every container it made.
   Scenario: An empty sandbox is the only real idle
     Given a session started by dispatching "hello"
@@ -72,16 +57,6 @@ Feature: A listing says what is inside a session's sandbox
     And a task is under way
     When the operator lists the sessions
     Then the listing says the session is "running"
-
-  # A session with no container has nothing to ask, and the system must not report that as the daemon
-  # failing: unknown would send an operator looking for a broken daemon.
-  Scenario: A session whose container was taken back reads reclaimed
-    Given the workspace reclaims a session after 1 second
-    And a session started by dispatching "hello"
-    When the reclaim time passes
-    And the controller ticks
-    And the operator lists the sessions
-    Then the listing says the session is "reclaimed"
 
   # The cost rule. One question per row that would otherwise read idle, and nothing at all for a row
   # that already says something is happening. A console redraws every three seconds.

@@ -97,14 +97,14 @@ func TestTheConsoleOpensWhereItWasLeft(t *testing.T) {
 	first = step(t, first, enter())
 	first = step(t, first, enter())
 	if got := first.Position(); got != "acme/house-bills" {
-		t.Fatalf("the first console ended at %q, want the jobs of house-bills", got)
+		t.Fatalf("the first console ended at %q, want the sessions of house-bills", got)
 	}
 
 	next := openedRemembering(t, client, held, held.where)
 	if got := next.Position(); got != "acme/house-bills" {
 		t.Fatalf("the next console opened at %q, want where the last one was left", got)
 	}
-	screenSays(t, next, "<jobs>", "read the electricity bill", "esc to go back")
+	screenSays(t, next, "<sessions>", "bills", "esc to go back")
 }
 
 // Opening at the top is the default, so a console that has never been opened is not a console that
@@ -122,17 +122,16 @@ func TestAConsoleWithNothingRememberedOpensAtTheTop(t *testing.T) {
 	}
 }
 
-// The way back has to work from a resumed place too. A console that walked four levels down on the
+// The way back has to work from a resumed place too. A console that walked to the tasks of a session on the
 // way up, and then cannot come back, has stranded whoever opened it.
 func TestTheWayBackWorksFromAPlaceTheConsoleResumedInto(t *testing.T) {
 	client := aSystemWithOneOfEverything()
 	held := &heldPlace{}
 
 	deep := openedRemembering(t, client, held, Place{})
-	for range 3 {
-		deep = step(t, deep, enter())
-	}
-	if got := deep.Position(); got != "acme/house-bills/33333333" {
+	deep = step(t, step(t, deep, enter()), enter())
+	deep = step(t, deep, runes("t"))
+	if got := deep.Position(); got != "acme/house-bills/bills" {
 		t.Fatalf("the first console ended at %q", got)
 	}
 

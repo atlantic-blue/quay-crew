@@ -34,10 +34,6 @@ type consoleWorld struct {
 	terminalErr error
 	// contextFile is a file a scenario wrote for the guided setup.s context stage to read.
 	contextFile string
-	// rung is how many times the console rang the bell, which is the part of the telling that reaches
-	// somebody looking at another tab. A count rather than a flag: the whole rule is one ring for each
-	// rise rather than one for each redraw.
-	rung int
 	// panes is the panel the console is in, and besideEach is the conversation that was open beside it
 	// after each key, which is what the operator was looking at each time.
 	panes      *panelPanes
@@ -369,6 +365,12 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		}
 		c.registry, c.active = registry, resource
 		return c.list(ctx, "")
+	})
+
+	// The command bar is how any word reaches a view, so a spelling the view used to answer to is
+	// typed the way an operator types it: colon, the word, enter, against the real console.
+	sc.Step(`^the operator types "([^"]*)" into the command bar$`, func(ctx context.Context, typed string) error {
+		return consoleFrom(ctx).openModelOn(worldFrom(ctx), typed)
 	})
 
 	sc.Step(`^typing "([^"]*)" in the console opens nothing$`, func(ctx context.Context, typed string) error {

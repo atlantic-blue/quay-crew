@@ -37,11 +37,6 @@ const (
 	KindSessionDeleted   = "session.deleted"
 )
 
-// sessionsStream is the logical stream a session's lifecycle is published on, within a workspace's
-// namespace. It is beside the tasks stream rather than mixed into it: a consumer that wants to know
-// what the system is doing should not have to read every prompt and reply to find out.
-const sessionsStream = "sessions"
-
 // detailLine is how much of a detail is kept. A reply runs to paragraphs and this is one line about
 // one event, so the whole of it belongs in the task record that already holds it.
 const detailLine = 240

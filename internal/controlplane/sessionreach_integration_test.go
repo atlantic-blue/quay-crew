@@ -146,14 +146,23 @@ func aSystemWhoseSessionsCanReachIt(ctx context.Context, t *testing.T) *reachabl
 	return system
 }
 
-// run dispatches a task and returns what the session said.
+// run dispatches a task to the driver and returns what it said.
 //
-// The script runs inside the session's container, in the environment the system built for that one
-// task, which is where the address and the token are.
+// The driver rather than an ordinary session, because the driver is the one session the system tells
+// where it is: an ordinary session is told no address and no token at all, which is what
+// features/sessions.feature specifies. So the driver is the session that can reach the system, and
+// therefore the only one where "it reaches the system and nothing else" is a claim worth making.
+//
+// The script runs inside that session's container, in the environment the system built for the task,
+// which is where the address and the token are.
 func (c *reachableSystem) run(ctx context.Context, t *testing.T, script string) string {
 	t.Helper()
+	opened, err := c.server.OpenDriver(ctx, &quaycrewv1.OpenDriverRequest{Project: c.projectID})
+	if err != nil {
+		t.Fatalf("open the driver: %v", err)
+	}
 	dispatched, err := c.server.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-		Project: c.projectID, Text: script,
+		Project: c.projectID, Handle: opened.GetSession().GetHandle(), Text: script,
 	})
 	if err != nil {
 		t.Fatalf("dispatch the task: %v", err)

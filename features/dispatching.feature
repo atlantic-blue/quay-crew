@@ -43,10 +43,3 @@ Feature: A task outlives the caller that started it
     When the operator dispatches "read the repository" to the project
     Then the system says it waited for "the sandbox to be created"
     And the session left behind is not sitting idle
-
-  # The audit export is a copy of a record the store already holds, so a broker that never answers
-  # costs the export and never the job. It used to cost the whole dispatch.
-  Scenario: A task runs while the event log is not answering
-    Given an event log that never answers
-    When the operator dispatches "hello" to the project
-    Then the reply is "you said: hello"

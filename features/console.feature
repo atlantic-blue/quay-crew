@@ -34,26 +34,24 @@ Feature: The operator sees the system from the console
     Then the console lists 1 project
 
   # The whole tree, driven one key at a time against the real control plane. The console opens on the
-  # workspaces, and each enter goes one level down: projects, then jobs, then the work running under
-  # the job.
+  # workspaces, and each enter goes one level down: projects, then the sessions in the project.
   Scenario: The console opens at the top and each key goes one level down
-    Given a job titled "read the electricity bill"
+    Given a session started by dispatching "read the electricity bill"
     When the operator is at the console
     Then the console is on the "workspaces" view
     When the operator presses "enter" in the console
     Then the console is on the "projects" view
     When the operator presses "enter" in the console
-    Then the console is on the "jobs" view
-    And the console screen says "read the electricity"
+    Then the console is on the "sessions" view
 
   # And back up. Escape from every level, including the one the console opens on, which has nowhere
   # to go and must not take the console with it.
   Scenario: Escape comes back up one level at a time
-    Given a job titled "read the electricity bill"
+    Given a session started by dispatching "read the electricity bill"
     When the operator is at the console
     And the operator presses "enter" in the console
     And the operator presses "enter" in the console
-    Then the console is on the "jobs" view
+    Then the console is on the "sessions" view
     When the operator presses "esc" in the console
     Then the console is on the "projects" view
     When the operator presses "esc" in the console
@@ -61,8 +59,8 @@ Feature: The operator sees the system from the console
     When the operator presses "esc" in the console
     Then the console is on the "workspaces" view
 
-  # Enter on a project used to open its sessions. It opens the jobs now, so the sessions of one
-  # project keep a key of their own rather than becoming a trip through the command bar.
+  # The key that was the way to a project's sessions while enter went elsewhere. Enter reaches them
+  # again, and the key is kept because it is in fingers.
   Scenario: A project still reaches its own sessions in one key
     Given a session started by dispatching "hello"
     When the operator is at the console
@@ -420,125 +418,6 @@ Feature: The operator sees the system from the console
     Then a session's row carries more than one colour
     And the row says how the session is doing in its status cell
 
-  # The console was built when a session was the unit of work. A job is what an operator declares now,
-  # and five of them were running on this repository the day the console could show none: the full
-  # screen interface an operator leaves open was drawing the layer underneath the work rather than the
-  # work. See issue 455.
-  #
-  # These drive the console against the real control plane, so the rows are the system's actual jobs.
-
-  Scenario: The console lists the jobs the system holds
-    Given a job titled "read the electricity bill"
-    And a job titled "read the water bill" after the first
-    When the operator opens the console on jobs
-    Then the console lists 2 jobs
-
-  Scenario: A short word for the jobs view opens it
-    When the operator opens the console by typing "j"
-    Then the console is showing jobs
-
-  # A pending job has no session, which is the normal state rather than a fault, so the cell says
-  # which it is. An empty cell reads as something missing.
-  Scenario: A job that has not reached a session says so rather than leaving the cell empty
-    Given a job titled "read the electricity bill"
-    When the operator opens the console on jobs
-    Then the job's row says it has no session yet
-
-  Scenario: A job a controller started names the session doing it
-    Given a job titled "read the electricity bill"
-    When the controller ticks
-    And the task the controller sent lands
-    And the operator opens the console on jobs
-    Then the job's row names the session doing it
-
-  # Enter goes to what the job did rather than to the row it runs in: a job's session is one row, and
-  # a listing of one row says nothing the line above it did not. The tasks are the whole account of
-  # what was asked and what came back.
-  Scenario: Enter on a job opens what it did
-    Given a job titled "read the electricity bill"
-    When the controller ticks
-    And the task the controller sent lands
-    And the operator opens the console on jobs
-    And the operator presses enter on the selected job
-    Then the console shows what the job's session was asked
-
-  # A row of this listing is nine cells, a brief is a paragraph, and the answer is not in a listing
-  # at all. Enter opens the job, and the page reads that job: the brief and the answer are on it
-  # whole, which a page built out of the row could not do.
-  Scenario: Enter on a job reads the brief and the answer whole
-    Given a job titled "put a conversation on a page" that answered "the bill is due on the 14th, and the standing charge moved in March"
-    When the operator opens that job in the console
-    Then the console shows that job's brief and answer whole
-
-  # A job with nothing behind it yet is the case enter has to refuse, and the refusal names the phase,
-  # so it says why rather than only that it will not.
-  Scenario: Enter on a job with no session yet says why
-    Given a job titled "read the electricity bill"
-    When the operator opens the console on jobs
-    And the operator presses enter on the selected job
-    Then the console says "pending"
-    And the console is still showing the job
-
-  # Stopping is destructive and there is no way back from the wrong row, so it asks first, the way
-  # every destructive key in this console already does.
-  Scenario: Backspace asks before it stops a job, and stops nothing until yes
-    Given a job titled "read the electricity bill"
-    When the operator opens the console on jobs and presses backspace on the job
-    Then the console asks whether to stop that job
-    And the job is pending
-
-  Scenario: Answering yes stops the job
-    Given a job titled "read the electricity bill"
-    When the operator opens the console on jobs and presses backspace on the job
-    And the operator answers "y"
-    Then the job is stopped, and the reason says a person did it
-
-  # A job in its test stage fans out into one part for each requirement, and every part used to be a
-  # row beside the job that declared them: six rows with nothing saying which was which, and the work
-  # a person asked for at the bottom of the six. The parts are drawn under their job now, closed until
-  # somebody asks for them. See issue 653.
-
-  Scenario: A job that fanned out is one row, and it says how many parts are under it
-    Given a job titled "read the electricity bill"
-    And its test stage fans out into 5 runs
-    When the operator is at the console on the "jobs" view
-    Then the screen carries the job and not its parts
-    And the job's row says it has 5 parts
-
-  # The way onto a part, because a part that fails is a thing somebody has to open.
-  Scenario: Tab draws the parts under the job that declared them
-    Given a job titled "read the electricity bill"
-    And its test stage fans out into 5 runs
-    When the operator opens the console on jobs and presses tab on the job
-    Then the console draws the job and its 5 parts under it
-
-  # And the way off it. A key that only opens leaves the listing buried again.
-  Scenario: Tab again takes the parts away
-    Given a job titled "read the electricity bill"
-    And its test stage fans out into 5 runs
-    When the operator opens the console on jobs and presses tab on the job
-    And the operator presses tab again
-    Then the screen carries the job and not its parts
-
-  # The phase says what the system is doing with the row: it is pending, it is running, it is asking.
-  # It never said how far through the work the job is. A job waiting for an answer about what it
-  # understood and a job waiting for an answer about a failed build both read "asking", and those two
-  # are days apart.
-  Scenario: A job's row says which stage the work is in
-    Given a job waiting for a person to answer what it understood
-    When the operator opens the console on jobs
-    Then the job's row says it is in the "ideation" stage
-
-  # A job that stops for a person rings the bell and draws a line across the listing, and no key
-  # answered it. The answer had to be typed into the command line or into the web briefing, which is
-  # the one surface the operator watching the console is not looking at.
-  Scenario: A job that is asking is answered from the console
-    Given a job titled "choose where the transcripts are stored" whose session is still working
-    And the session running that job asked its question
-    When the operator answers the job under the cursor with "the key value store, it bills nothing at rest"
-    Then the system keeps "the key value store, it bills nothing at rest" as what the person wrote
-    And the console shows that job is no longer asking
-
   # The word for the view that lists what a session ran changed, and fingers did not. Each spelling
   # that opened it opens it now, because a word that quietly stopped working is how an operator
   # learns to distrust the rest of the command bar.
@@ -552,36 +431,3 @@ Feature: The operator sees the system from the console
       | tasks   |
       | task    |
       | history |
-
-  # What the system holds had one answer and it was on the command line. An operator living in the
-  # console had to leave it to find out what a job can be run as, what a session is given, and what
-  # it runs under.
-  Scenario: The console lists the roles the system holds
-    Given the operator imported the "test-writer" role
-    When the operator opens the console on the "roles" view
-    Then the console lists every role the system holds
-
-  Scenario: The console lists the skills the system holds
-    Given the operator imported the "github" skill
-    When the operator opens the console on the "skills" view
-    Then the console lists every skill the system holds
-
-  # What leaves a skill out of a session is a secret a workspace has not set, and this listing is the
-  # system's own catalogue, which has no workspace to answer for. The system says nothing about that
-  # here, so neither does the row: a cell claiming a reason would be empty on every row.
-  Scenario: The system's own listing says what a skill is for and claims nothing about a workspace
-    Given the operator imported the "github" skill
-    When the operator opens the console on the "skills" view
-    Then the skill's row says what the skill is for
-    And no row says a skill is held and not given
-
-  Scenario: The console lists the hooks the system holds
-    Given a hook "merge-gate" imported firing on "PreToolUse"
-    When the operator opens the console on the "hooks" view
-    Then the console lists every hook the system holds
-
-  # Nothing running is the ordinary state of a system nobody has automated yet. A blank panel reads as
-  # a console that failed to draw, so it says which it is.
-  Scenario: A console listing nothing says so
-    When the operator opens the console on the "flows" view
-    Then the console lists nothing, and says so

@@ -106,9 +106,10 @@ func TestNoFlagIsBothTakenAndRemoved(t *testing.T) {
 // removed flag that is ignored is worse than one that never existed: its value becomes the next
 // argument and the command reads as one that worked.
 //
-// Every flag is driven through `job create`, because a flag no command takes is refused the same
-// way whichever word carries it, and `job create` is the one word with a value after the flag for
-// the refusal to swallow.
+// Every flag is driven through `task`, because a flag no command takes is refused the same way
+// whichever word carries it, and task is the word with a value after the flag for the refusal to
+// swallow. It used to be `job create`, and job is itself refused now, so the refusal under test
+// never ran.
 func TestEveryRemovedFlagIsRefusedByNameAndNeverSwallowsItsValue(t *testing.T) {
 	client := aSystemToWorkIn(t)
 	if len(removedFlags) == 0 {
@@ -119,8 +120,7 @@ func TestEveryRemovedFlagIsRefusedByNameAndNeverSwallowsItsValue(t *testing.T) {
 	// rather than proving the sentence mentions a material.
 	const value = "swallowed-by-the-refusal"
 	for flag := range removedFlags {
-		err := refused(t, client, "job", "create",
-			flag, value, "--title", "read the electricity bill", "--brief", "open it")
+		err := refused(t, client, "task", flag, value, "read the electricity bill")
 		if !strings.Contains(err.Error(), flag) {
 			t.Errorf("%s is refused with %q, which does not name the flag", flag, err)
 		}
@@ -130,27 +130,6 @@ func TestEveryRemovedFlagIsRefusedByNameAndNeverSwallowsItsValue(t *testing.T) {
 		if strings.Contains(err.Error(), value) {
 			t.Errorf("%s took its value with it: %q", flag, err)
 		}
-	}
-}
-
-// The flag this rename removed, by name, because the class guard proves every entry refuses and this
-// proves the entry says the word to type instead. A caller with --hands in their fingers, their
-// scripts and their notes gets sent to --requires and nowhere else.
-func TestTheHandsFlagRefusesAndNamesRequires(t *testing.T) {
-	client := aSystemToWorkIn(t)
-
-	err := refused(t, client, "job", "create",
-		"--title", "read the electricity bill", "--brief", "open it", "--hands", "context")
-
-	for _, want := range []string{"--hands is gone", "--requires"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("--hands is refused with %q, want it to say %q", err, want)
-		}
-	}
-	// And no row was written, so a caller who reads the listing after a refusal finds nothing.
-	listed := mustRun(t, client, "job", "list")
-	if strings.Contains(listed, "read the electricity bill") {
-		t.Errorf("the refused declaration was written anyway: %q", listed)
 	}
 }
 
@@ -201,28 +180,23 @@ func TestNoRemovedWordIsAlsoACommandTheToolStillRuns(t *testing.T) {
 // It is driven with the flags a person actually had in their fingers, because a refusal that blames
 // one of them sends the operator to correct part of a command that is gone whole. And it is driven
 // against a real system, so the row count afterwards means something.
-func TestTheWorkCommandRefusesAndNamesJob(t *testing.T) {
+func TestTheWorkCommandRefusesAndNamesRead(t *testing.T) {
 	client := aSystemToWorkIn(t)
 
-	err := refused(t, client, "work", "create",
-		"--title", "read the electricity bill", "--brief", "open it")
+	err := refused(t, client, "work", "create", "read the electricity bill")
 
-	for _, want := range []string{"there is no work command", "krewe job"} {
+	for _, want := range []string{"there is no work command", "krewe read"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("krewe work create is refused with %q, want it to say %q", err, want)
 		}
 	}
-	// The refusal is about the word, not about a flag on it.
-	if strings.Contains(err.Error(), "--title") {
-		t.Errorf("the refusal blames a flag rather than the word: %q", err)
+	// The refusal is about the word, not about what came after it.
+	if strings.Contains(err.Error(), "create") {
+		t.Errorf("the refusal blames the verb rather than the word: %q", err)
 	}
 	// And it took nothing with it, so the declaration cannot read as one that landed.
 	if strings.Contains(err.Error(), "read the electricity bill") {
 		t.Errorf("the refusal took the title with it: %q", err)
-	}
-	listed := mustRun(t, client, "job", "list")
-	if strings.Contains(listed, "read the electricity bill") {
-		t.Errorf("the refused declaration was written anyway: %q", listed)
 	}
 }
 
@@ -236,7 +210,7 @@ func TestEveryVerbOfTheWordThatWentIsRefused(t *testing.T) {
 		if !strings.Contains(err.Error(), "there is no work command") {
 			t.Errorf("krewe work %s is refused with %q, which does not say the word is gone", verb, err)
 		}
-		if !strings.Contains(err.Error(), "krewe job") {
+		if !strings.Contains(err.Error(), "krewe read") {
 			t.Errorf("krewe work %s is refused with %q, which names nothing to type instead", verb, err)
 		}
 	}

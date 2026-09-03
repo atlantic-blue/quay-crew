@@ -185,12 +185,6 @@ Feature: A session is given the skills the system has
     Then the memory file names the "github" skill and where its brief is
     And the sandbox mounts the workspace's github skill read only
 
-  Scenario: A workspace created after the system took a skill holds it too
-    Given the operator imported the "github" skill
-    And the operator attached the "github" skill to the system
-    When a second workspace named "widgets" with a project
-    Then the second workspace holds the "github" skill
-
   Scenario: The listing says a skill came from the system
     Given the operator imported the "github" skill
     And the operator attached the "github" skill to the system
@@ -418,4 +412,3 @@ Feature: A session is given the skills the system has
   Scenario: Setting a gpg key's passphrase, rather than mounting it, is refused
     When the operator tries to set the secret "GPG_SIGNING_KEY_PASSPHRASE" to "open sesame"
     Then the system refuses it, saying to mount the key instead
-

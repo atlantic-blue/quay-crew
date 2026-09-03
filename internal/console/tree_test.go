@@ -267,6 +267,8 @@ func TestALongAskIsReadWholeRatherThanCutAtTheBorder(t *testing.T) {
 
 	model := openedOnTheTree(t, client)
 	model = walk(t, walk(t, walk(t, model, enter()), enter()), runes("t"))
+	// And enter on the row, which is what opens the reading a row could never hold.
+	model = walk(t, model, enter())
 
 	// Every word of it, in the order it was written, across however many rows the panel needed.
 	if drawn := drawnText(model); !strings.Contains(drawn, ask) {

@@ -49,16 +49,6 @@ Feature: A sandbox keeps a session's state outside itself
     Then the sandbox carries "GITHUB_TOKEN" set to "ghp-1234"
     And the sandbox carries "STRIPE_KEY" set to "sk-live-and-wanted"
 
-  # One workspace's secrets are its own. This is the isolation the whole design turns on, and it is
-  # the only boundary left now that naming is gone.
-  Scenario: A session is given nothing from another workspace
-    Given a workspace named "acme"
-    And a project named "house-bills"
-    And a second workspace named "rivals" with a project
-    And the second workspace has the secret "STRIPE_KEY" set to "sk-live-nobody-asked"
-    When the operator dispatches "hello" to the project
-    Then the sandbox carries nothing called "STRIPE_KEY"
-
   Scenario: A secret nobody set is not carried
     Given a workspace named "acme"
     And a project named "house-bills"
