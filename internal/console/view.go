@@ -20,7 +20,7 @@ func (m Model) View() string {
 	if line := m.waitingLine(); line != "" {
 		lines = append(lines, alert.Render(m.fit(line)))
 	}
-	if m.mode == modeReading {
+	if m.mode == modeReading || m.mode == modeJob {
 		lines = append(lines, m.panelTop(len(m.readingLines())))
 		for _, line := range m.readingBody() {
 			lines = append(lines, m.framed(line))
@@ -581,6 +581,8 @@ func (m Model) footer() string {
 		return truncate(m.wizardPrompt(), m.width)
 	case modeReading:
 		return faint.Render("   any key closes, j and k scroll")
+	case modeJob:
+		return faint.Render("   esc closes, j and k scroll")
 	case modeBrowse:
 		return m.positionRow()
 	default:
@@ -833,7 +835,7 @@ func (m Model) systemBlock() []string {
 // Nothing is drawn over the help or over a command's output: both take the panel from the rows, and
 // a total about a listing that is not on screen is a line about nothing.
 func (m Model) summaryLine() string {
-	if m.mode == modeHelp || m.mode == modeReading {
+	if m.mode == modeHelp || m.mode == modeReading || m.mode == modeJob {
 		return ""
 	}
 	return m.summary.line

@@ -50,6 +50,11 @@ const (
 	// where the confirmation draws, because it is the same kind of thing: a question with the answer
 	// on screen. Leaving it does nothing, so it is also how somebody reads what the choices are.
 	modeChoose
+	// modeJob is the whole of one job over the rows: the brief, every question with the answer it
+	// got, the plan, what was built and the answer. It is drawn where a reading is drawn, and it is
+	// its own mode because the keys are not: a reading closes on the next key, and this is a page a
+	// person reads to the end.
+	modeJob
 )
 
 // summary is a view's line above the columns: the text, and the state it is drawn in. The state is
@@ -468,6 +473,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case commandOutputMsg:
 		return m.showCommandOutput(msg), nil
+	case jobRecordMsg:
+		if msg.err != nil {
+			m.err, m.held = msg.err, true
+			return m, nil
+		}
+		return m.showJobRecord(msg.job), nil
 	case wizardChoicesMsg:
 		applied := m.applyWizardChoices(msg)
 		// A skill stage in the guided setup with nothing to offer passes itself over: a question
