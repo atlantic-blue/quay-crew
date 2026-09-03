@@ -10,11 +10,12 @@ cell is empty on a row that did not stop. Every title then starts in the same pl
 reads down the screen. `krewe job list system` and `krewe job list --phase stopped` say the same
 thing, because they are the same listing.
 
-This is a real listing. A control plane drew it on 3 September 2026, with the in memory store, the
-echo model and the local sandbox provider:
+This is a real listing, word for word. A control plane drew it on 3 September 2026, with the in
+memory store, the echo model and the local sandbox provider:
 
     c9db0133   pending  -         -                                                  check the council tax band
     3c08cbf7   stopped  -         -         this job's answer states no outcome, so… check the council tax
+    66783346   stopped  -         -         this job's answer states no outcome, so… read the gas bill
     aa03780d   stopped  -         -         the meter reading is wrong               pay the water bill
     1c462838   stopped  -         -         the bank refused the direct debit        read the electricity bill
 
