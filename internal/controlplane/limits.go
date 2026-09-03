@@ -38,7 +38,7 @@ func (s *Server) SetWorkspaceLimits(ctx context.Context, req *quaycrewv1.SetWork
 	asked := req.GetLimits()
 	if asked.GetWorkspace() == "" {
 		return nil, status.Error(codes.InvalidArgument,
-			"which workspace: krewe limits <workspace> --max-depth <n>")
+			"which workspace: krewe limits <workspace> --max-declared <n>")
 	}
 	if _, err := s.store.GetWorkspace(ctx, asked.GetWorkspace()); err != nil {
 		return nil, storeError(err, "workspace")
@@ -47,7 +47,7 @@ func (s *Server) SetWorkspaceLimits(ctx context.Context, req *quaycrewv1.SetWork
 		name  string
 		value int64
 	}{
-		{"max depth", int64(asked.GetMaxDepth())},
+		{"max declared", int64(asked.GetMaxDeclared())},
 		{"max running", int64(asked.GetMaxRunning())},
 		{"budget", asked.GetBudgetTokens()},
 		{"lease", int64(asked.GetLeaseSeconds())},
@@ -72,7 +72,7 @@ func (s *Server) SetWorkspaceLimits(ctx context.Context, req *quaycrewv1.SetWork
 	}
 
 	written, err := s.store.SetWorkspaceLimits(ctx, job.Limits{
-		Workspace: asked.GetWorkspace(), MaxDepth: int(asked.GetMaxDepth()),
+		Workspace: asked.GetWorkspace(), MaxDeclared: int(asked.GetMaxDeclared()),
 		MaxRunning: int(asked.GetMaxRunning()), BudgetTokens: asked.GetBudgetTokens(),
 		LeaseSeconds:          int(asked.GetLeaseSeconds()),
 		ReclaimSeconds:        int(asked.GetReclaimSeconds()),
@@ -89,7 +89,7 @@ func (s *Server) SetWorkspaceLimits(ctx context.Context, req *quaycrewv1.SetWork
 // asLimits puts a workspace's ceiling on the wire.
 func asLimits(from job.Limits) *quaycrewv1.WorkspaceLimits {
 	return &quaycrewv1.WorkspaceLimits{
-		Workspace: from.Workspace, MaxDepth: int32(from.MaxDepth),
+		Workspace: from.Workspace, MaxDeclared: int32(from.MaxDeclared),
 		MaxRunning: int32(from.MaxRunning), BudgetTokens: from.BudgetTokens,
 		LeaseSeconds:   int32(from.LeaseSeconds),
 		ReclaimSeconds: int32(from.ReclaimSeconds),

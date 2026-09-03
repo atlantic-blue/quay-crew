@@ -151,23 +151,46 @@ func runJobStageConformance(t *testing.T, newDataset func(t *testing.T) Opener) 
 		}
 	})
 
-	t.Run("a child job carries no stage of its own, out of the store", func(t *testing.T) {
+	t.Run("a job a session declared runs its own stages, out of the store", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		workspace, project := aProject(t, s)
-		root := jobWithASentence(t, s, workspace, project, "")
-		child := jobWithASentence(t, s, workspace, project, root)
+		caused := jobWithASentence(t, s, workspace, project, declaredJob(t, s, workspace, project, "the ask"))
 
-		kept, err := s.GetJob(ctx, child)
+		kept, err := s.GetJob(ctx, caused)
 		if err != nil {
 			t.Fatalf("GetJob: %v", err)
 		}
-		if kept.Parent != root {
-			t.Fatalf("the child reads back under %q, want %q", kept.Parent, root)
+		if kept.Cause == "" {
+			t.Fatal("the job a session declared reads back with nothing that caused it")
+		}
+		// What caused a job says how it came about and nothing about what it is. It states the
+		// sentence, so it runs the four stages like any other job, starting at the first.
+		stage := job.StageOf(kept)
+		if stage.Outside != "" || stage.Name != job.StageIdeation {
+			t.Fatalf("a job a session declared reads as stage %q, outside because %q, want ideation",
+				stage.Name, stage.Outside)
+		}
+	})
+
+	t.Run("a step of a flow run runs no stages of its own, out of the store", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		workspace, project := aProject(t, s)
+		step := jobShaped(t, s, workspace, project, "one step of a run", func(w *job.Job) {
+			w.Product, w.Run = "you paste a link and get the text back", "a-run"
+		})
+
+		kept, err := s.GetJob(ctx, step)
+		if err != nil {
+			t.Fatalf("GetJob: %v", err)
+		}
+		if kept.Run != "a-run" {
+			t.Fatalf("the step reads back in run %q, want the run that declared it", kept.Run)
 		}
 		stage := job.StageOf(kept)
 		if stage.Name != "" || stage.Outside == "" {
-			t.Fatalf("a child job reads as being in stage %q of its own", stage.Name)
+			t.Fatalf("a step of a run reads as being in stage %q of its own", stage.Name)
 		}
 	})
 
@@ -188,8 +211,8 @@ func runJobStageConformance(t *testing.T, newDataset func(t *testing.T) Opener) 
 }
 
 // jobWithASentence is a job that states what a person gets out of it, which is what puts a job into
-// the stages at all. A parent makes it one part of a plan approved on the job above it.
-func jobWithASentence(t *testing.T, s store.Store, workspace, project, parent string) string {
+// the stages at all. A cause records the job whose session declared it, and changes nothing else.
+func jobWithASentence(t *testing.T, s store.Store, workspace, project, cause string) string {
 	t.Helper()
 	declared := &job.Job{
 		ID: store.NewID(), Workspace: workspace, Project: project,
@@ -197,9 +220,7 @@ func jobWithASentence(t *testing.T, s store.Store, workspace, project, parent st
 		Product: "you paste a link and get the text back",
 		Version: 1, Phase: job.PhasePending,
 	}
-	if parent != "" {
-		declared.Parent, declared.Depth = parent, 1
-	}
+	declared.Cause = cause
 	if err := s.CreateJob(context.Background(), declared, declaredEvent(declared)); err != nil {
 		t.Fatalf("CreateJob: %v", err)
 	}

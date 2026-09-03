@@ -338,19 +338,16 @@ type JobEvent struct {
 	Kind string `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
 	// job is the job this happened to, and the key the record is published under.
 	Job string `protobuf:"bytes,3,opt,name=job,proto3" json:"job,omitempty"`
-	// workspace, project, parent and depth are where the job sits in the tree, denormalised
-	// deliberately: a consumer must not have to query the store to know what it is reading. parent is
-	// empty for a root.
+	// workspace and project are where the job sits, denormalised deliberately: a consumer must not
+	// have to query the store to know what it is reading.
 	Workspace string `protobuf:"bytes,4,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	Project   string `protobuf:"bytes,5,opt,name=project,proto3" json:"project,omitempty"`
-	Parent    string `protobuf:"bytes,6,opt,name=parent,proto3" json:"parent,omitempty"`
-	Depth     int32  `protobuf:"varint,7,opt,name=depth,proto3" json:"depth,omitempty"`
 	// detail is one short line about this event: the title declared, the session and attempt, what it
 	// spent, the reason it stopped. It can carry what a caller typed, so it goes through the system's
 	// redactor before it is written or exported.
 	Detail string `protobuf:"bytes,8,opt,name=detail,proto3" json:"detail,omitempty"`
-	// trace_id is the trace the whole tree belongs to, minted at the root and inherited by every
-	// descendant, so one identifier joins a job, its children, its tasks and its spans.
+	// trace_id is the trace this work belongs to, so one identifier joins a job, its executions, its
+	// tasks and its spans.
 	TraceId string `protobuf:"bytes,9,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
 	// occurred_at is when it happened.
 	OccurredAt    *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
@@ -423,20 +420,6 @@ func (x *JobEvent) GetProject() string {
 	return ""
 }
 
-func (x *JobEvent) GetParent() string {
-	if x != nil {
-		return x.Parent
-	}
-	return ""
-}
-
-func (x *JobEvent) GetDepth() int32 {
-	if x != nil {
-		return x.Depth
-	}
-	return 0
-}
-
 func (x *JobEvent) GetDetail() string {
 	if x != nil {
 		return x.Detail
@@ -486,20 +469,18 @@ const file_quaycrew_v1_events_proto_rawDesc = "" +
 	"\x06handle\x18\x06 \x01(\tR\x06handle\x12\x16\n" +
 	"\x06detail\x18\a \x01(\tR\x06detail\x12;\n" +
 	"\voccurred_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"occurredAt\"\x96\x02\n" +
+	"occurredAt\"\x83\x02\n" +
 	"\bJobEvent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x10\n" +
 	"\x03job\x18\x03 \x01(\tR\x03job\x12\x1c\n" +
 	"\tworkspace\x18\x04 \x01(\tR\tworkspace\x12\x18\n" +
 	"\aproject\x18\x05 \x01(\tR\aproject\x12\x16\n" +
-	"\x06parent\x18\x06 \x01(\tR\x06parent\x12\x14\n" +
-	"\x05depth\x18\a \x01(\x05R\x05depth\x12\x16\n" +
 	"\x06detail\x18\b \x01(\tR\x06detail\x12\x19\n" +
 	"\btrace_id\x18\t \x01(\tR\atraceId\x12;\n" +
 	"\voccurred_at\x18\n" +
 	" \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"occurredAtB\xab\x01\n" +
+	"occurredAtJ\x04\b\x06\x10\aJ\x04\b\a\x10\bR\x06parentR\x05depthB\xab\x01\n" +
 	"\x0fcom.quaycrew.v1B\vEventsProtoP\x01Z>github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1;quaycrewv1\xa2\x02\x03QXX\xaa\x02\vQuaycrew.V1\xca\x02\vQuaycrew\\V1\xe2\x02\x17Quaycrew\\V1\\GPBMetadata\xea\x02\fQuaycrew::V1b\x06proto3"
 
 var (

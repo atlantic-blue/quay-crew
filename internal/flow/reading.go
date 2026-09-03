@@ -24,8 +24,8 @@ import (
 // A failure here is logged and not returned. The reading happened, its rows are on its own job, and
 // a run halted over a merge would cost the whole reading to save one row: the person is asked what
 // the plan still holds open, which is the worse of the two answers rather than no answer at all.
-func (e *Engine) carryUp(ctx context.Context, run *Run, step *job.Job) {
-	if step == nil || step.Parent == "" {
+func (e *Engine) carryUp(ctx context.Context, run *Run, step *job.Job, carrier string) {
+	if step == nil || carrier == "" {
 		return
 	}
 	// Read back rather than trusted, because the row a listing carries is the job and not the rows
@@ -37,12 +37,12 @@ func (e *Engine) carryUp(ctx context.Context, run *Run, step *job.Job) {
 		return
 	}
 	if len(read.Questions) > 0 {
-		if _, err := e.store.CarryJobQuestions(ctx, step.Parent, questionsFor(read.Questions, step.Parent)); err != nil {
+		if _, err := e.store.CarryJobQuestions(ctx, carrier, questionsFor(read.Questions, carrier)); err != nil {
 			slog.WarnContext(ctx, "what this reading could not settle did not reach the plan it read",
-				"run", run.ID, "job", step.ID, "plan", step.Parent, "error", err)
+				"run", run.ID, "job", step.ID, "plan", carrier, "error", err)
 		}
 	}
-	e.holdOpenRows(ctx, run, step.Parent)
+	e.holdOpenRows(ctx, run, carrier)
 }
 
 // holdOpenRows puts the rows nobody has settled into the run's state, so the next reader's prompt and

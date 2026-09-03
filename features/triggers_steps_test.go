@@ -108,33 +108,27 @@ func initializeTriggerSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the run's steps hang under the run's own job$`, func(ctx context.Context) error {
+	sc.Step(`^the run's steps belong to the run$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		carrying, err := runCarrier(ctx, w)
 		if err != nil {
 			return err
 		}
-		steps, err := w.store.ListJobs(ctx, job.Filter{LabelKey: "flow.run", LabelValue: w.flowRun.ID})
+		steps, err := w.store.ListJobs(ctx, job.Filter{Run: w.flowRun.ID})
 		if err != nil {
 			return err
 		}
-		found := 0
 		for _, step := range steps {
 			if step.ID == carrying.ID {
-				continue
+				return fmt.Errorf("the job carrying the run reads back as one of its own steps")
 			}
-			found++
-			if step.Parent != carrying.ID {
-				return fmt.Errorf("step %q hangs under %q, want the run's own job %q",
-					step.Title, step.Parent, carrying.ID)
-			}
-			if step.Depth != carrying.Depth+1 {
-				return fmt.Errorf("step %q is at depth %d and the run at %d, want one deeper",
-					step.Title, step.Depth, carrying.Depth)
+			if step.Cause != "" {
+				return fmt.Errorf("step %q says %q caused it, and a step belongs to its run",
+					step.Title, step.Cause)
 			}
 		}
-		if found == 0 {
-			return fmt.Errorf("the run has no steps, so nothing hangs under it")
+		if len(steps) == 0 {
+			return fmt.Errorf("the run reads back no steps of its own")
 		}
 		return nil
 	})

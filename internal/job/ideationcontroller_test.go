@@ -209,11 +209,11 @@ func TestAnErrandIsNeverAskedWhatItUnderstood(t *testing.T) {
 	}
 }
 
-// A job declared under another carries a sentence a person already agreed to, one plan up.
-func TestAJobUnderAnotherIsNeverAskedWhatItUnderstood(t *testing.T) {
+// A step of a flow run follows the graph a person imported, so nobody is asked what it understood.
+func TestAStepOfAFlowRunIsNeverAskedWhatItUnderstood(t *testing.T) {
 	controller, kept, plane := aController(t)
 	one := readingJob()
-	one.Parent, one.Depth = "job-above", 1
+	one.Run = "a-run"
 	kept.add(one)
 	ctx := context.Background()
 
@@ -223,7 +223,7 @@ func TestAJobUnderAnotherIsNeverAskedWhatItUnderstood(t *testing.T) {
 
 	got := kept.get(one.ID)
 	if got.Ideation != "" {
-		t.Fatalf("a job under another was asked what it understood: %q", got.Ideation)
+		t.Fatalf("a step of a flow run was asked what it understood: %q", got.Ideation)
 	}
 	if !strings.Contains(plane.lastText(), "build what the design describes") {
 		t.Fatalf("a job under another was not given its brief: %q", plane.lastText())

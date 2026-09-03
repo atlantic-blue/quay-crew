@@ -71,51 +71,56 @@ func TestAJobOwesABuildOnlyOnceItsPlanIsApprovedAndItsSuiteIsRed(t *testing.T) {
 	}
 }
 
-// One worker for each vertical, each holding its own claim, each told the tests it owns and the
-// boundary it works under.
-func TestOneWorkerPerVerticalAndEachHoldsItsOwn(t *testing.T) {
+// One run for each vertical, each holding its own claim, each in the stage that puts it under the
+// boundary, and each told the tests it owns.
+func TestOneRunPerVerticalAndEachHoldsItsOwn(t *testing.T) {
 	one := buildingJob()
 	wanted := job.RequirementsOf(one)
-	workers := job.BuildWorkers(one, wanted, job.FailuresOn(one.Tests))
-	if len(workers) != 2 {
-		t.Fatalf("a list of 2 verticals made %d workers", len(workers))
+	runs := job.BuildExecutions(one, wanted, nil)
+	if len(runs) != 2 {
+		t.Fatalf("a list of 2 verticals made %d runs", len(runs))
 	}
 
 	claims := map[string]bool{}
-	for at, worker := range workers {
+	for at, run := range runs {
 		vertical := wanted[at]
-		if worker.Claim != job.ClaimOnBuild(one.ID, vertical) {
-			t.Fatalf("worker %d holds %q", vertical.Number, worker.Claim)
+		if run.Claim != job.ClaimOnBuild(one.ID, vertical) {
+			t.Fatalf("run %d holds %q", vertical.Number, run.Claim)
 		}
-		if claims[worker.Claim] {
-			t.Fatalf("two workers hold %q, so both would build one vertical", worker.Claim)
+		if claims[run.Claim] {
+			t.Fatalf("two runs hold %q, so both would build one vertical", run.Claim)
 		}
-		claims[worker.Claim] = true
-		if worker.Parent != one.ID || worker.Depth != one.Depth+1 {
-			t.Fatalf("worker %d is under %q at depth %d", vertical.Number, worker.Parent, worker.Depth)
+		claims[run.Claim] = true
+		if run.Job != one.ID || run.Number != vertical.Number {
+			t.Fatalf("run %d belongs to job %q as number %d", vertical.Number, run.Job, run.Number)
 		}
-		// Under the boundary, and that is what puts the session under the gate: the system reads this
-		// field when it sends the task. A worker without it would be under advice.
-		if !worker.Building {
-			t.Fatalf("worker %d builds outside the boundary", vertical.Number)
+		// In the build stage, and that is what puts the session under the gate: the system reads the
+		// stage of the run when it sends the task. A run in any other stage would be under advice.
+		if run.Stage != job.StageBuild {
+			t.Fatalf("run %d is in stage %q, so it builds outside the boundary",
+				vertical.Number, run.Stage)
 		}
-		if !strings.Contains(worker.Title, fmt.Sprintf("vertical %d", vertical.Number)) {
-			t.Fatalf("the worker is called %q, and a refused claim names it", worker.Title)
+		// Nothing a person wrote is on the row. What the session is asked and what the listing calls
+		// it are built from the job when the task is sent.
+		title := job.BuildingVertical(vertical)
+		if !strings.Contains(title, fmt.Sprintf("vertical %d", vertical.Number)) {
+			t.Fatalf("the run is called %q, and a refused claim names it", title)
 		}
-		// Its own vertical and nothing else, the tests it owns by name, and the boundary said in the
-		// brief as well as held by the gate.
+		// Its own vertical and nothing else, the tests it owns by name, and the boundary said in what
+		// it is asked as well as held by the gate.
+		asked := job.BuildTheVertical(one, vertical, job.FailuresOn(one.Tests)[vertical.Number], job.Opened{})
 		for _, phrase := range []string{
 			job.TheBuildAsk, vertical.Text, theFailures[vertical.Number],
 			"You may not change one", "Build this vertical only",
 		} {
-			if !strings.Contains(worker.Brief, phrase) {
-				t.Fatalf("the brief of worker %d does not say %q: %s", vertical.Number, phrase, worker.Brief)
+			if !strings.Contains(asked, phrase) {
+				t.Fatalf("what run %d is asked does not say %q: %s", vertical.Number, phrase, asked)
 			}
 		}
 		// And not the other vertical's tests, or the fan out buys nothing.
 		other := 3 - vertical.Number
-		if strings.Contains(worker.Brief, theFailures[other]) {
-			t.Fatalf("worker %d was given the tests of vertical %d", vertical.Number, other)
+		if strings.Contains(asked, theFailures[other]) {
+			t.Fatalf("run %d was given the tests of vertical %d", vertical.Number, other)
 		}
 	}
 }
@@ -254,17 +259,17 @@ func TestTheStageIsNotDoneUntilEveryVerticalIsGreen(t *testing.T) {
 	}
 }
 
-// A worker is read as holding the vertical its claim says it holds. The two disagreeing would leave
+// A run is read as holding the vertical its claim says it holds. The two disagreeing would leave
 // one vertical covered twice and another not at all.
-func TestAWorkerThatReportedOnSomebodyElsesVerticalIsRefused(t *testing.T) {
+func TestARunThatReportedOnSomebodyElsesVerticalIsRefused(t *testing.T) {
 	one := buildingJob()
 	wanted := job.RequirementsOf(one)
-	worker := job.BuildWorkers(one, wanted[1:], job.FailuresOn(one.Tests))[0]
-	worker.Phase, worker.Answer = job.PhaseDone, aBuildReport(1, theFailures[1])
+	run := job.BuildExecutions(one, wanted[1:], nil)[0]
+	run.Phase, run.Answer = job.PhaseDone, aBuildReport(1, theFailures[1])
 
-	_, why := job.BuiltBy([]*job.Job{worker}, wanted[1], job.FailuresOn(one.Tests)[2])
+	_, why := job.BuiltBy([]*job.Execution{run}, wanted[1], job.FailuresOn(one.Tests)[2])
 	if why == "" {
-		t.Fatal("a worker that reported on vertical 1 was read as building vertical 2")
+		t.Fatal("a run that reported on vertical 1 was read as building vertical 2")
 	}
 	if !strings.Contains(why, "reported on vertical 1 instead") {
 		t.Fatalf("the refusal is %q", why)
@@ -308,18 +313,18 @@ func TestTheDoubleAnswersABuildReportTheSystemCanRead(t *testing.T) {
 	}
 	one := buildingJob()
 	wanted := job.RequirementsOf(one)
-	worker := job.BuildWorkers(one, wanted[1:], job.FailuresOn(one.Tests))[0]
+	asked := job.BuildTheVertical(one, wanted[1], job.FailuresOn(one.Tests)[2], job.Opened{})
 
-	report, err := job.ReadBuildReport(model.FakeBuildReport(worker.Brief))
+	report, err := job.ReadBuildReport(model.FakeBuildReport(asked))
 	if err != nil {
 		t.Fatalf("the double's answer is not a report: %v", err)
 	}
 	if report.Vertical != 2 {
-		t.Fatalf("the double reported on vertical %d, and the worker holds 2", report.Vertical)
+		t.Fatalf("the double reported on vertical %d, and the run holds 2", report.Vertical)
 	}
 	// It names the test it was told fails, because the stage refuses a report that does not.
-	if _, why := job.BuiltBy([]*job.Job{{Phase: job.PhaseDone,
-		Answer: model.FakeBuildReport(worker.Brief)}}, wanted[1],
+	if _, why := job.BuiltBy([]*job.Execution{{Phase: job.PhaseDone,
+		Answer: model.FakeBuildReport(asked)}}, wanted[1],
 		job.FailuresOn(one.Tests)[2]); why != "" {
 		t.Fatalf("the double's report is refused: %s", why)
 	}
@@ -342,35 +347,35 @@ func TestAnApprovedPlanFansOutIntoAWorkerForEachVertical(t *testing.T) {
 		t.Fatalf("the job says %q, want it to say how many verticals are built", got.Reason)
 	}
 	if !strings.Contains(got.Reason, "able to change a test") {
-		t.Fatalf("the job says %q, want it to say the workers cannot change a test", got.Reason)
+		t.Fatalf("the job says %q, want it to say the runs cannot change a test", got.Reason)
 	}
-	if len(kept.children(one.ID)) != 2 {
-		t.Fatalf("the fan out declared %d workers for 2 verticals", len(kept.children(one.ID)))
+	if len(kept.executionsIn(one.ID, job.StageBuild)) != 2 {
+		t.Fatalf("the fan out wrote %d runs for 2 verticals", len(kept.executionsIn(one.ID, job.StageBuild)))
 	}
 
-	// A second tick declares nothing more. The claim each worker holds is what stops it, and this is
+	// A second tick writes nothing more. The claim each run holds is what stops it, and this is
 	// the case that would otherwise pay for a second session for every vertical.
 	controller.Tick(ctx)
-	if again := kept.children(one.ID); len(again) != 2 {
-		t.Fatalf("a second tick left %d workers for 2 verticals", len(again))
+	if again := kept.executionsIn(one.ID, job.StageBuild); len(again) != 2 {
+		t.Fatalf("a second tick left %d runs for 2 verticals", len(again))
 	}
 
-	// The workers run, each in its own session, and each answers with its own report.
+	// The runs happen, each in its own session, and each answers with its own report.
 	controller.Tick(ctx)
-	for _, worker := range kept.children(one.ID) {
-		if kept.get(worker.ID).Phase != job.PhaseRunning {
-			t.Fatalf("worker %q is %q, want running", worker.Title, kept.get(worker.ID).Phase)
+	for _, run := range kept.executionsIn(one.ID, job.StageBuild) {
+		if kept.getRun(run.ID).Phase != job.PhaseRunning {
+			t.Fatalf("the run of number %d is %q, want running", run.Number, kept.getRun(run.ID).Phase)
 		}
 	}
-	for i, worker := range kept.children(one.ID) {
-		plane.landsIn(job.SessionFor(worker.ID), landed(aBuildReport(i+1, theFailures[i+1])))
+	for i, run := range kept.executionsIn(one.ID, job.StageBuild) {
+		plane.landsIn(job.SessionForExecution(run), landed(aBuildReport(i+1, theFailures[i+1])))
 	}
 	controller.Tick(ctx)
 
 	// And the stage closes by holding the job for a person rather than by calling it done.
 	got = kept.get(one.ID)
 	if got.Build == "" {
-		t.Fatalf("every worker answered and the job holds no record: %s", got.Reason)
+		t.Fatalf("every run answered and the job holds no record: %s", got.Reason)
 	}
 	if got.Phase != job.PhaseAsking {
 		t.Fatalf("the job is %q once every vertical is green, want asking so a person accepts it",
@@ -401,8 +406,8 @@ func TestOnlyThePersonsWordLandsAJobWhoseVerticalsAreBuilt(t *testing.T) {
 
 	controller.Tick(ctx)
 	controller.Tick(ctx)
-	for i, worker := range kept.children(one.ID) {
-		plane.landsIn(job.SessionFor(worker.ID), landed(aBuildReport(i+1, theFailures[i+1])))
+	for i, run := range kept.executionsIn(one.ID, job.StageBuild) {
+		plane.landsIn(job.SessionForExecution(run), landed(aBuildReport(i+1, theFailures[i+1])))
 	}
 	controller.Tick(ctx)
 	if kept.get(one.ID).Phase != job.PhaseAsking {
@@ -435,8 +440,8 @@ func TestOnlyThePersonsWordLandsAJobWhoseVerticalsAreBuilt(t *testing.T) {
 	if !got.Accepted {
 		t.Fatalf("the job a person accepted does not say so: %s", got.Reason)
 	}
-	if len(kept.children(one.ID)) != 2 {
-		t.Fatalf("accepting the build declared %d workers, want the same 2", len(kept.children(one.ID)))
+	if len(kept.executionsIn(one.ID, job.StageBuild)) != 2 {
+		t.Fatalf("accepting the build declared %d workers, want the same 2", len(kept.executionsIn(one.ID, job.StageBuild)))
 	}
 	// And the record of what was built stays on the row, because that is what the person accepted.
 	if got.Build == "" {
@@ -473,8 +478,8 @@ func TestAnAnswerThatIsNotTheAcceptanceSendsTheVerticalsBackToBuild(t *testing.T
 
 	controller.Tick(ctx)
 	controller.Tick(ctx)
-	for i, worker := range kept.children(one.ID) {
-		plane.landsIn(job.SessionFor(worker.ID), landed(aBuildReport(i+1, theFailures[i+1])))
+	for i, run := range kept.executionsIn(one.ID, job.StageBuild) {
+		plane.landsIn(job.SessionForExecution(run), landed(aBuildReport(i+1, theFailures[i+1])))
 	}
 	controller.Tick(ctx)
 
@@ -502,11 +507,11 @@ func TestAnAnswerThatIsNotTheAcceptanceSendsTheVerticalsBackToBuild(t *testing.T
 		t.Fatal("nothing on the record says the job was sent back")
 	}
 
-	// And the build stage picks it up again, with a second worker for each vertical.
+	// And the build stage picks it up again, with a second run for each vertical.
 	controller.Tick(ctx)
-	if len(kept.children(one.ID)) != 4 {
-		t.Fatalf("the build stage declared %d workers in total, want a second for each of the 2",
-			len(kept.children(one.ID)))
+	if len(kept.executionsIn(one.ID, job.StageBuild)) != 4 {
+		t.Fatalf("the build stage wrote %d runs in total, want a second for each of the 2",
+			len(kept.executionsIn(one.ID, job.StageBuild)))
 	}
 }
 
@@ -562,11 +567,11 @@ func TestAVerticalThatCannotBeBuiltStopsTheJobForAPerson(t *testing.T) {
 
 	controller.Tick(ctx)
 	controller.Tick(ctx)
-	workers := kept.children(one.ID)
-	plane.landsIn(job.SessionFor(workers[0].ID), landed(aBuildReport(1, theFailures[1])))
-	// The second worker ran the suite and it is still red. This is the shape a session reaches for
+	runs := kept.executionsIn(one.ID, job.StageBuild)
+	plane.landsIn(job.SessionForExecution(runs[0]), landed(aBuildReport(1, theFailures[1])))
+	// The second run ran the suite and it is still red. This is the shape a session reaches for
 	// when the test is the thing that is wrong.
-	plane.landsIn(job.SessionFor(workers[1].ID),
+	plane.landsIn(job.SessionForExecution(runs[1]),
 		landed("Vertical: 2\nRan: 14\nRed: 2\nPassing 1: TestOne\nChanged 1: internal/page.go"))
 	controller.Tick(ctx)
 
@@ -584,7 +589,7 @@ func TestAVerticalThatCannotBeBuiltStopsTheJobForAPerson(t *testing.T) {
 	}
 }
 
-// A test that was already green before anything was built holds nothing, so a worker reporting one is
+// A test that was already green before anything was built holds nothing, so a run reporting one is
 // put to a person rather than counted.
 func TestATestThatWasAlreadyGreenIsNotABuild(t *testing.T) {
 	controller, kept, plane := aController(t)
@@ -593,9 +598,9 @@ func TestATestThatWasAlreadyGreenIsNotABuild(t *testing.T) {
 
 	controller.Tick(ctx)
 	controller.Tick(ctx)
-	workers := kept.children(one.ID)
-	plane.landsIn(job.SessionFor(workers[0].ID), landed(aBuildReport(1, theFailures[1])))
-	plane.landsIn(job.SessionFor(workers[1].ID), landed(fmt.Sprintf(
+	runs := kept.executionsIn(one.ID, job.StageBuild)
+	plane.landsIn(job.SessionForExecution(runs[0]), landed(aBuildReport(1, theFailures[1])))
+	plane.landsIn(job.SessionForExecution(runs[1]), landed(fmt.Sprintf(
 		"Nothing needed doing.\n\nVertical: 2\nRan: 14\nRed: 0\nPassing 1: %s", theFailures[2])))
 	controller.Tick(ctx)
 
@@ -608,18 +613,18 @@ func TestATestThatWasAlreadyGreenIsNotABuild(t *testing.T) {
 	}
 }
 
-// A worker that died leaves its vertical with nothing holding it, and the job stops for a person
+// A run that died leaves its vertical with nothing holding it, and the job stops for a person
 // rather than reading the others as the whole.
-func TestAVerticalWhoseWorkerDiedStopsTheJobForAPerson(t *testing.T) {
+func TestAVerticalWhoseRunDiedStopsTheJobForAPerson(t *testing.T) {
 	controller, kept, plane := aController(t)
 	one := kept.add(buildingJob())
 	ctx := context.Background()
 
 	controller.Tick(ctx)
 	controller.Tick(ctx)
-	workers := kept.children(one.ID)
-	plane.landsIn(job.SessionFor(workers[0].ID), landed(aBuildReport(1, theFailures[1])))
-	plane.failsIn(job.SessionFor(workers[1].ID), "the sandbox went away")
+	runs := kept.executionsIn(one.ID, job.StageBuild)
+	plane.landsIn(job.SessionForExecution(runs[0]), landed(aBuildReport(1, theFailures[1])))
+	plane.failsIn(job.SessionForExecution(runs[1]), "the sandbox went away")
 	controller.Tick(ctx)
 
 	got := kept.get(one.ID)
@@ -628,22 +633,5 @@ func TestAVerticalWhoseWorkerDiedStopsTheJobForAPerson(t *testing.T) {
 	}
 	if !strings.Contains(got.Question, "vertical 2") {
 		t.Fatalf("the question is %q, want it to name the vertical nothing holds", got.Question)
-	}
-}
-
-// A worker of the fan out never fans out itself. It carries the sentence its parent states, and a
-// worker that read that as owing its own reading, list, tests and build would go round for ever.
-func TestAWorkerOfTheBuildNeverFansOutItself(t *testing.T) {
-	one := buildingJob()
-	worker := job.BuildWorkers(one, job.RequirementsOf(one)[:1], job.FailuresOn(one.Tests))[0]
-	if job.WaitingForItsBuild(worker) {
-		t.Fatal("a build worker owes a build of its own")
-	}
-	if job.WaitingForItsIdeation(worker) || job.WaitingForItsDesign(worker) ||
-		job.WaitingForItsTests(worker) || job.WaitingForItsPlan(worker) {
-		t.Fatal("a build worker owes a stage of its own")
-	}
-	if stage := job.StageOf(worker); stage.Name != "" || stage.Outside == "" {
-		t.Fatalf("a build worker is in stage %q of its own", stage.Name)
 	}
 }

@@ -142,22 +142,6 @@ code { font-family: var(--mono); font-size: 13px; color: var(--accent); }
 
 .job { padding: calc(var(--step) * 1.5) 0; border-bottom: 1px solid var(--outline); }
 
-/* Depth is the tree. A child sits under its parent with a rule down the left, which is the same
-   relation the console draws by drilling, held on one page because a page cannot drill. */
-.job.depth-1, .job.depth-2, .job.depth-3, .job.depth-4 {
-  border-left: 1px solid var(--outline);
-  padding-left: calc(var(--step) * 1.5);
-}
-
-.job.depth-1 { margin-left: var(--step); }
-.job.depth-2 { margin-left: calc(var(--step) * 2); }
-.job.depth-3 { margin-left: calc(var(--step) * 3); }
-.job.depth-4 { margin-left: calc(var(--step) * 4); }
-
-/* A job drawn only so the row below it has its work above it. It answers nothing itself, so it
-   recedes. */
-.job.context .title { color: var(--text-dim); }
-
 .line {
   display: flex;
   flex-wrap: wrap;

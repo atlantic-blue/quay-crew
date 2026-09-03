@@ -289,19 +289,19 @@ func TestTheListStandsBetweenTheReadingAndThePlan(t *testing.T) {
 }
 
 // An errand and a job under another never reach this gate, for the reasons the two gates around it
-// already keep: an errand has nothing to build a list against, and a child is one part of a plan
-// somebody already approved.
-func TestAnErrandAndAChildAreNeverAskedForAList(t *testing.T) {
+// already keep: an errand has nothing to build a list against, and a step of a flow run follows the
+// graph a person imported.
+func TestAnErrandAndAStepOfARunAreNeverAskedForAList(t *testing.T) {
 	errand := &job.Job{Title: "read the electricity bill", IdeationAnswer: "1: yes"}
 	if job.WaitingForItsDesign(errand) {
 		t.Fatal("an errand is asked what it would build")
 	}
-	child := &job.Job{
-		Product: "you paste a link and get the text back", Parent: "job-above", Depth: 1,
+	step := &job.Job{
+		Product: "you paste a link and get the text back", Run: "a-run",
 		IdeationAnswer: "1: on the command line",
 	}
-	if job.WaitingForItsDesign(child) {
-		t.Fatal("a job declared under another is asked what it would build")
+	if job.WaitingForItsDesign(step) {
+		t.Fatal("a step of a flow run is asked what it would build")
 	}
 }
 

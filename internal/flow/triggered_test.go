@@ -100,19 +100,19 @@ func TestATriggeredRunIsCarriedByAJob(t *testing.T) {
 	if carrying.Labels["flow.trigger"] != raised.ID {
 		t.Errorf("the run's own job is labelled %v, want it to name the trigger that caused it", carrying.Labels)
 	}
-	if step := stepOf(t, it, *run); step.Parent != carrier {
-		t.Errorf("the step hangs under %q, want the run's own job", step.Parent)
+	if step := stepOf(t, it, *run); step.Run != run.ID {
+		t.Errorf("the step belongs to run %q, want the run that declared it", step.Run)
 	}
 }
 
-// A trigger that names the job that caused it puts the whole run under that job, so a
-// flow started by job that finished is bounded by the same depth limit as everything else in the
-// tree. This is what stops a flow that triggers itself running forever.
-func TestARunHangsUnderTheJobThatCausedItsTrigger(t *testing.T) {
+// A trigger that names the job that caused it records that job as the cause of the run's own job, so
+// a person reading the run can say what set it off. It is a plain reference: the run's job is a job
+// in its project, beside the one that caused it.
+func TestTheJobCarryingARunRecordsWhatCausedItsTrigger(t *testing.T) {
 	engine, it, workspace, project := aSystem(t, reactingGraph)
 	ctx := context.Background()
 
-	cause, _, err := it.PrepareJob(ctx, "", job.Declaration{
+	cause, _, err := it.PrepareJob(ctx, job.Placement{}, job.Declaration{
 		Workspace: workspace, Project: project, Title: "review the release", Brief: "read it",
 	})
 	if err != nil {
@@ -139,12 +139,21 @@ func TestARunHangsUnderTheJobThatCausedItsTrigger(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetJob: %v", err)
 	}
-	if carrying.Parent != cause.ID {
-		t.Fatalf("the run's own job hangs under %q, want the job that caused the trigger", carrying.Parent)
+	if carrying.Cause != cause.ID {
+		t.Fatalf("the run's own job says %q caused it, want the job that caused the trigger", carrying.Cause)
 	}
-	if carrying.Depth != cause.Depth+1 {
-		t.Errorf("the run's own job is at depth %d and the job that caused it at %d, want one deeper",
-			carrying.Depth, cause.Depth)
+	// Beside it in the project, not under it. Both are jobs and the listing holds both.
+	listed, err := it.store.ListJobs(ctx, job.Filter{Project: project})
+	if err != nil {
+		t.Fatalf("ListJobs: %v", err)
+	}
+	held := map[string]bool{}
+	for _, one := range listed {
+		held[one.ID] = true
+	}
+	if !held[cause.ID] || !held[carrying.ID] {
+		t.Fatalf("the project lists %d jobs, want the job that caused the trigger and the one carrying the run",
+			len(listed))
 	}
 }
 

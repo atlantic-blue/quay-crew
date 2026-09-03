@@ -8,8 +8,12 @@ Feature: A session may declare jobs, within limits
   job, carries only the verbs that job's role declared, and expires with the job. A credential
   read out of a container grants what that one job could do and only until it ends.
 
-  Depth is what stops recursion, and it starts at zero: no session may declare a job until an
-  operator raises the ceiling, per workspace, deliberately.
+  How many jobs one session may declare is the ceiling, and it starts at zero: no session may declare
+  a job until an operator raises it, per workspace, deliberately.
+
+  What a session declares is a job in the project, beside every other job. It is not under the job
+  whose session declared it: nothing is under a job except its executions. What the row records is
+  the cause, which says how it came about and nothing about where it sits.
 
   Background:
     Given a running control plane
@@ -18,56 +22,57 @@ Feature: A session may declare jobs, within limits
 
   Scenario: A workspace starts with no room for a session to declare anything
     When the operator reads the limits of the workspace
-    Then the limits allow no depth at all
+    Then the limits let a session declare nothing at all
     And the limits say the rest is unset
 
   Scenario: A session whose role does not grant job.create declares nothing
-    Given the workspace allows jobs down to depth 2
+    Given the workspace lets one session declare 2 jobs
     And a job titled "clear the backlog" running as a role that may only read jobs
     When that session declares a job
     Then the system refuses it and names the verb it lacks
     And the project holds only the job the operator declared
 
-  Scenario: A session whose role grants job.create declares job under its own
-    Given the workspace allows jobs down to depth 2
+  Scenario: A session whose role grants job.create declares a job beside its own
+    Given the workspace lets one session declare 2 jobs
     And a job titled "clear the backlog" running as a role that may create jobs
     When that session declares a job
-    Then the new job hangs under the job that declared it, one level deeper
+    Then the new job records the job that declared it as its cause
+    And the new job is listed in the project beside the job that declared it
 
   # A session cannot resolve an address: resolving one means listing workspaces and projects, and a
   # role grants the four job verbs and nothing else. So it names no project, and the system reads that
   # from the credential, the same place the parent comes from.
   Scenario: A session names no project and its job lands in the one its credential names
-    Given the workspace allows jobs down to depth 2
+    Given the workspace lets one session declare 2 jobs
     And a job titled "clear the backlog" running as a role that may create jobs
     When that session declares a job naming no project
     Then the new job is in the same project as the job that declared it
-    And the new job hangs under the job that declared it, one level deeper
+    And the new job records the job that declared it as its cause
 
-  Scenario: A job deeper than the workspace allows is refused, naming the limit
-    Given the workspace allows jobs down to depth 1
+  Scenario: A session past its ceiling is refused, naming the limit
+    Given the workspace lets one session declare 1 jobs
     And a job titled "clear the backlog" running as a role that may create jobs
     And that session declared a job
-    When the job at depth 1 declares another
+    When that session declares a job
     Then the system refuses it and names the limit and the command that raises it
 
   Scenario: An operator raises the ceiling and the same declaration is allowed
-    Given the workspace allows jobs down to depth 1
+    Given the workspace lets one session declare 1 jobs
     And a job titled "clear the backlog" running as a role that may create jobs
     And that session declared a job
-    And the job at depth 1 declares another
-    When the operator allows jobs down to depth 2
-    And the job at depth 1 declares another
-    Then the new job hangs under the job that declared it, one level deeper
+    And that session declares a job
+    When the operator lets one session declare 2 jobs
+    And that session declares a job
+    Then the new job records the job that declared it as its cause
 
   Scenario: A session may not raise its own ceiling
-    Given the workspace allows jobs down to depth 2
+    Given the workspace lets one session declare 2 jobs
     And a job titled "clear the backlog" running as a role that may create jobs
     When that session tries to raise the ceiling
     Then the system refuses the session that call
 
   Scenario: A session may not reach the calls that grant capability
-    Given the workspace allows jobs down to depth 2
+    Given the workspace lets one session declare 2 jobs
     And a job titled "clear the backlog" running as a role that may create jobs
     When that session tries to attach a hook
     Then the system refuses the session that call
@@ -79,7 +84,7 @@ Feature: A session may declare jobs, within limits
   # and what it is not, which is the half of the fault the system decides.
   Scenario: A session running a job is told where the system is, and what it may spend there
     Given a system that sessions can reach at "controlplane:50051"
-    And the workspace allows jobs down to depth 2
+    And the workspace lets one session declare 2 jobs
     And a job titled "clear the backlog" running as a role that may create jobs
     When the system runs that job
     Then the task carries the address of the system
@@ -93,7 +98,7 @@ Feature: A session may declare jobs, within limits
   # The load bearing test is the refusal, not the call. A role's verbs list is the whole boundary, so a
   # verb it does not carry has to come back as a refusal a session can act on.
   Scenario: A session whose role may not stop a job is refused, and told where the verb comes from
-    Given the workspace allows jobs down to depth 2
+    Given the workspace lets one session declare 2 jobs
     And a job titled "clear the backlog" running as a role that may create jobs
     When that session tries to stop the job it is running
     Then the system refuses it and names the verb it lacks and how an operator grants it
@@ -101,7 +106,7 @@ Feature: A session may declare jobs, within limits
 
   # The credential is the boundary, so what it carries is the whole of what a session holds.
   Scenario: The credential a session runs under is bound to its job and expires
-    Given the workspace allows jobs down to depth 2
+    Given the workspace lets one session declare 2 jobs
     And a job titled "clear the backlog" running as a role that may create jobs
     Then the credential names that job, carries only the verbs the role declared, and runs out
 
@@ -109,23 +114,23 @@ Feature: A session may declare jobs, within limits
   # cover the job rather than the system's hold on the job. It covered the hold, which is sixty seconds,
   # and a root job that ran for twenty nine minutes declared none of its three children.
   Scenario: A session declares a child long after the first minute of its job
-    Given the workspace allows jobs down to depth 2
+    Given the workspace lets one session declare 2 jobs
     And a job titled "clear the backlog" running as a role that may create jobs
     And that job has been running for 29 minutes
     When that session declares a job
-    Then the new job hangs under the job that declared it, one level deeper
+    Then the new job records the job that declared it as its cause
 
   # What a session is told matters as much as when. Told the token is not this system's, a session
   # concludes it holds a bad credential and stops, and this one had simply run out.
   Scenario: A session whose credential has run out is told that, and when it ran out
-    Given the workspace allows jobs down to depth 2
+    Given the workspace lets one session declare 2 jobs
     And a job titled "clear the backlog" running as a role that may create jobs
     And that job has been running for 30 days
     When that session declares a job
     Then the system refuses it, says the credential ran out, and says when
 
   Scenario: A session whose job has ended is told the job ended
-    Given the workspace allows jobs down to depth 2
+    Given the workspace lets one session declare 2 jobs
     And a job titled "clear the backlog" running as a role that may create jobs
     And the operator stops that job
     When that session declares a job
@@ -135,5 +140,5 @@ Feature: A session may declare jobs, within limits
     Then the driver is refused importing, listing, attaching and detaching a hook
 
   Scenario: An operator sets the ceiling and reads it back
-    When the operator allows jobs down to depth 2
-    Then the limits allow jobs down to depth 2
+    When the operator lets one session declare 2 jobs
+    Then the limits let one session declare 2 jobs

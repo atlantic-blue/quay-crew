@@ -82,10 +82,15 @@ func initializeJobSteps(sc *godog.ScenarioContext) {
 		})
 	})
 
-	sc.Step(`^the caller declares a job carrying a parent$`, func(ctx context.Context) error {
-		return declareJob(ctx, &quaycrewv1.CreateJobRequest{
-			Title: "read the electricity bill", Brief: "open it", Parent: "0123456789abcdef01234567",
-		})
+	sc.Step(`^a declaration carries no way to say what a job sits under$`, func(_ context.Context) error {
+		fields := (&quaycrewv1.CreateJobRequest{}).ProtoReflect().Descriptor().Fields()
+		for at := 0; at < fields.Len(); at++ {
+			switch name := string(fields.Get(at).Name()); name {
+			case "parent", "depth", "cause", "run":
+				return fmt.Errorf("a declaration carries %q, so a caller can put a job under something", name)
+			}
+		}
+		return nil
 	})
 
 	sc.Step(`^the caller declares a job with no title$`, func(ctx context.Context) error {
@@ -233,13 +238,14 @@ func initializeJobSteps(sc *godog.ScenarioContext) {
 		return jobIs(ctx, 0, job.PhasePending)
 	})
 
-	sc.Step(`^the job is at depth (\d+) with no parent$`, func(ctx context.Context, depth int) error {
+	sc.Step(`^the job sits under nothing$`, func(ctx context.Context) error {
 		one, err := firstJob(ctx)
 		if err != nil {
 			return err
 		}
-		if one.GetDepth() != int32(depth) || one.GetParent() != "" {
-			return fmt.Errorf("the job is at depth %d under %q", one.GetDepth(), one.GetParent())
+		if one.GetCause() != "" || one.GetRun() != "" {
+			return fmt.Errorf("the job says %q caused it and it is a step of run %q, want neither",
+				one.GetCause(), one.GetRun())
 		}
 		return nil
 	})
@@ -280,7 +286,26 @@ func initializeJobSteps(sc *godog.ScenarioContext) {
 	})
 
 	sc.Step(`^the system refuses it and says it assigns the identifier$`, theRefusalSays("assigns the identifier"))
-	sc.Step(`^the system refuses it and says the parent comes from the credential$`, theRefusalSays("credential"))
+	// The tool's refusal, driven through the tool rather than described: the flag is still in scripts
+	// and in people's fingers, and what it has to do is name what to type instead.
+	// The tool's refusal, driven through the tool rather than described: the flag is still in scripts
+	// and in people's fingers, and what it has to do is name what to type instead.
+	sc.Step(`^the tool refuses --parent and says a job cannot be under another job$`, func(ctx context.Context) error {
+		if err := runTool(ctx, "job", "create", "--title", "read the bill", "--brief", "open it",
+			"--parent", "0123456789abcdef01234567"); err != nil {
+			return err
+		}
+		t := toolFrom(ctx)
+		if t.exitCode == 0 {
+			return fmt.Errorf("the tool accepted --parent and said %q", t.stdout)
+		}
+		for _, want := range []string{"--parent", "cannot be under another job"} {
+			if err := says("the tool", t.stdout+t.stderr, want); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 	sc.Step(`^the system refuses it and says a title is needed$`, theRefusalSays("title"))
 	sc.Step(`^the system refuses it and says the ceiling is (\d+)$`, func(ctx context.Context, ceiling int) error {
 		return theRefusalSays(fmt.Sprintf("%d", ceiling))(ctx)

@@ -409,6 +409,10 @@ type Store interface {
 	// ListJob returns what matches, newest first and without answers, because a listing of a hundred
 	// answers is a listing nobody can read. A caller that wants an answer asks for one job.
 	ListJobs(ctx context.Context, filter job.Filter) ([]*job.Job, error)
+	// JobsCausedBy is how many jobs the session running this one declared. It is the count the
+	// workspace's ceiling on declaring is held against, and it is a count rather than a listing on
+	// purpose: what caused a job says how the row came about and never what it contains.
+	JobsCausedBy(ctx context.Context, cause string) (int, error)
 	// JobHistory returns every job declared inside a window, as digests, newest first.
 	//
 	// Every job and not a page of them: the caller adds them up and then cuts them down, so the
@@ -496,14 +500,43 @@ type Store interface {
 	// It applies to a job that carries a record and no acceptance, so nothing sends an accepted job
 	// back over its own acceptance.
 	SendJobBackToBuild(ctx context.Context, id string, events ...*job.Event) (*job.Job, error)
-	// JobsClaiming is the jobs in one workspace claiming any of these pieces of work, whole. It is how
-	// the test stage finds the workers it declared, each of which holds the claim on one requirement,
-	// and how the build stage finds the workers it declared, each of which holds the claim on one
-	// vertical. What it needs back from them is the answer each one gave.
+	// JobsClaiming is the jobs in one workspace claiming any of these pieces of work, whole. A claim
+	// is a job's hold on a piece of work in the world, and this is how a caller reads who holds what.
 	//
-	// Holding is not asked. A worker that finished has let its claim go, and that worker's answer is
-	// exactly what the job that fanned out is reading.
+	// Holding is not asked. A job that finished has let its claim go.
 	JobsClaiming(ctx context.Context, workspace string, claims []string) ([]*job.Job, error)
+
+	// An execution is one run of one stage of one job, and it is not a job. It has its own table, so
+	// no listing of declared work ever carries a row nobody declared. See internal/job/execution.go.
+	//
+	// CreateExecution writes one run and the record of it in one transaction. The claim on the
+	// requirement or the vertical is refused here, so a stage ticked by two controllers at once runs
+	// one session and not two.
+	CreateExecution(ctx context.Context, run *job.Execution, event *job.Event) error
+	// GetExecution reads one run back, whole, its answer included.
+	GetExecution(ctx context.Context, id string) (*job.Execution, error)
+	// ListExecutions is the runs of one job, oldest first, and of one stage of it where the filter
+	// names one. It is how a stage gathers: the newest run of each number is the one it reads.
+	ListExecutions(ctx context.Context, filter job.ExecutionFilter) ([]*job.Execution, error)
+	// What a controller needs of this table, and the same four questions it asks of the jobs.
+	RunnableExecutions(ctx context.Context, limit int) ([]*job.Execution, error)
+	HeldExecutions(ctx context.Context, owner string, limit int) ([]*job.Execution, error)
+	ExpiredExecutions(ctx context.Context, limit int) ([]*job.Execution, error)
+	StartExecution(ctx context.Context, id string, lease job.Lease, event *job.Event) (*job.Execution, error)
+	TakeOverExecution(ctx context.Context, id string, lease job.Lease) (*job.Execution, error)
+	RenewExecutionLease(ctx context.Context, id string, lease job.Lease) error
+	RecordExecutionSession(ctx context.Context, id, session string) error
+	// RecordExecutionBranch writes where this run's commits ended up, once the system has put them
+	// there. It is not a movement: the run is over before anything pushes for it.
+	RecordExecutionBranch(ctx context.Context, id, branch string) error
+	LandExecution(ctx context.Context, id string, landed job.ExecutionLanding, event *job.Event) (*job.Execution, error)
+	// StopExecution halts a run that has not ended, keeping the reason. It stops that run and nothing
+	// else: the job it belongs to carries on, and its stage reads the run as one that ended.
+	StopExecution(ctx context.Context, id, reason string, event *job.Event) (*job.Execution, error)
+	// RunningExecutions is how many runs of each of these jobs' stages are still going. It is one
+	// query for a whole listing, because what reads it is a listing: a surface drawing a hundred jobs
+	// must not make a hundred calls to say which of them are working.
+	RunningExecutions(ctx context.Context, jobs []string) (map[string]int, error)
 	// RecordJobStep writes down one thing the session doing a running job finished. The same words
 	// twice leave one step, because the record is the set of what is finished rather than a log of
 	// what was said, and a session continuing a job says again what it said before.
@@ -602,14 +635,13 @@ type Store interface {
 	// said. Neither is a movement of the job: the job ended when it ended, and what happened to the
 	// work afterwards happened on the forge.
 	job.PullRequestStore
-	// RecordSteer writes one steer and adds it to the count on each job in counted, in one
-	// transaction. Counted is the job it landed on and every job above it, so the count on the job at
-	// the top is the score of the whole tree. The row and the counts are written together because a
-	// score that disagrees with the marks under it is a score nobody can defend.
-	RecordSteer(ctx context.Context, steer *job.Steer, counted []string) error
-	// ListSteers returns every steer under one job at the top of a tree, oldest first, which is the
-	// order they were made in and the order the report reads.
-	ListSteers(ctx context.Context, root string) ([]*job.Steer, error)
+	// RecordSteer writes one steer and adds it to the count on the job it landed on, in one
+	// transaction. The row and the count are written together because a score that disagrees with the
+	// marks under it is a score nobody can defend.
+	RecordSteer(ctx context.Context, steer *job.Steer) error
+	// ListSteers returns one job's steers, oldest first, which is the order they were made in and the
+	// order the report reads.
+	ListSteers(ctx context.Context, of string) ([]*job.Steer, error)
 	// WorkspaceLimits is what a workspace lets its sessions declare, and SetWorkspaceLimits writes
 	// it. A workspace with no row takes the defaults, which grant nothing: default deny, so a system
 	// nobody configured refuses rather than allows.

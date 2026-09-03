@@ -26,36 +26,20 @@ Feature: A job says what a person does with it and what they get back
     Then the command succeeds
     And reading that job back through the tool says a person "pastes a link and gets the text back"
 
-  # The sentence has to reach the sessions that do the work, and they are not the session that wrote
-  # it down. Every job in the tree carries the same one.
-  Scenario: A job declared under another carries the same sentence
-    Given the workspace allows jobs down to depth 2
-    And a job titled "build the transcript page" saying a person "pastes a link and gets the text back"
-    When the session running it declares a job
-    Then the new job says a person "pastes a link and gets the text back"
-
-  Scenario: A job two levels down still carries it
-    Given the workspace allows jobs down to depth 2
-    And a job titled "build the transcript page" saying a person "pastes a link and gets the text back"
-    And the session running it declares a job
-    When the session running that job declares another
-    Then the new job says a person "pastes a link and gets the text back"
-
-  # A tree with two products has none. Ignoring the second in silence would be worse: the caller would
-  # believe the product had moved.
-  Scenario: A job stating a different sentence from the one above it is refused
-    Given the workspace allows jobs down to depth 2
+  # A job a session declares is a job in its project, and it states its own sentence. Nothing is
+  # carried down, because no job sits under another: a session that wants the sentence on the work it
+  # declares says the sentence.
+  Scenario: A job a session declares states its own sentence
+    Given the workspace lets one session declare 2 jobs
     And a job titled "build the transcript page" saying a person "pastes a link and gets the text back"
     When the session running it declares a job saying a person "searches the archive by video id"
-    Then the system refuses it, naming the sentence the job above it serves
-    And the project holds only the job the operator declared
+    Then the new job says a person "searches the archive by video id"
 
-  # A tree that started without a sentence can still gain one.
-  Scenario: Under a job that says nothing, the new job's own sentence stands
-    Given the workspace allows jobs down to depth 2
-    And a job titled "build the transcript page" saying nothing about what a person gets
-    When the session running it declares a job saying a person "pastes a link and gets the text back"
-    Then the new job says a person "pastes a link and gets the text back"
+  Scenario: A job a session declares saying nothing is an errand
+    Given the workspace lets one session declare 2 jobs
+    And a job titled "build the transcript page" saying a person "pastes a link and gets the text back"
+    When the session running it declares a job
+    Then the new job says a person ""
 
   # The point of the whole thing. A session given the brief alone builds what the brief says, and
   # building the brief faithfully is what already went wrong.

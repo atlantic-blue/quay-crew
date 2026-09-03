@@ -117,8 +117,10 @@ func TestOnlyAJobThatStatesTheSentenceIsPlanned(t *testing.T) {
 	}{
 		{"states the sentence, at the top", &job.Job{Product: "paste a link and get the text"}, true},
 		{"an errand, which states none", &job.Job{Brief: "read the electricity bill"}, false},
-		{"under another job, which is part of a plan already approved",
-			&job.Job{Product: "paste a link and get the text", Parent: "abc"}, false},
+		{"a step of a flow run, which follows the graph a person imported",
+			&job.Job{Product: "paste a link and get the text", Run: "a-run"}, false},
+		{"a job a session declared, which is a job like any other",
+			&job.Job{Product: "paste a link and get the text", Cause: "abc"}, true},
 	} {
 		if got := job.Planned(one.job); got != one.planned {
 			t.Fatalf("%s: planned is %t, want %t", one.name, got, one.planned)

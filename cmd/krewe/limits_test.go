@@ -15,7 +15,7 @@ func TestLimitsReadsTheDefaultsAndSaysWhatZeroMeans(t *testing.T) {
 
 	said := mustRun(t, client, "limits")
 
-	for _, want := range []string{"max depth      0", "no session here may declare a job", "max running    unset"} {
+	for _, want := range []string{"max declared   0", "no session here may declare a job", "max running    unset"} {
 		if !strings.Contains(said, want) {
 			t.Errorf("krewe limits does not say %q: %q", want, said)
 		}
@@ -28,16 +28,16 @@ func TestLimitsReadsTheDefaultsAndSaysWhatZeroMeans(t *testing.T) {
 func TestLimitsSetsTheCeilingAndReadsItBack(t *testing.T) {
 	client := aSystemToJobIn(t)
 
-	said := mustRun(t, client, "limits", "me", "--max-depth", "2", "--max-running", "4",
+	said := mustRun(t, client, "limits", "me", "--max-declared", "2", "--max-running", "4",
 		"--budget-tokens", "5000", "--lease", "90s")
 
-	for _, want := range []string{"max depth      2", "max running    4", "budget tokens  5000", "lease          1m30s"} {
+	for _, want := range []string{"max declared   2", "max running    4", "budget tokens  5000", "lease          1m30s"} {
 		if !strings.Contains(said, want) {
 			t.Errorf("krewe limits does not say %q: %q", want, said)
 		}
 	}
 	read := mustRun(t, client, "limits", "me")
-	if !strings.Contains(read, "max depth      2") {
+	if !strings.Contains(read, "max declared   2") {
 		t.Fatalf("the ceiling did not survive being set: %q", read)
 	}
 }
@@ -61,11 +61,11 @@ func TestLimitsSaysTheLeaseIsNotTheLifeOfACredential(t *testing.T) {
 // Setting one number leaves the rest, because the tool reads the row first and sends it back whole.
 func TestSettingOneLimitLeavesTheOthers(t *testing.T) {
 	client := aSystemToJobIn(t)
-	mustRun(t, client, "limits", "me", "--max-depth", "2", "--max-running", "4")
+	mustRun(t, client, "limits", "me", "--max-declared", "2", "--max-running", "4")
 
-	said := mustRun(t, client, "limits", "me", "--max-depth", "3")
+	said := mustRun(t, client, "limits", "me", "--max-declared", "3")
 
-	if !strings.Contains(said, "max depth      3") {
+	if !strings.Contains(said, "max declared   3") {
 		t.Fatalf("the depth is not what was just set: %q", said)
 	}
 	if !strings.Contains(said, "max running    4") {
@@ -76,11 +76,11 @@ func TestSettingOneLimitLeavesTheOthers(t *testing.T) {
 func TestALimitThatIsNotANumberIsRefused(t *testing.T) {
 	client := aSystemToJobIn(t)
 
-	_, err := runKrewe(t, client, "limits", "me", "--max-depth", "deep")
+	_, err := runKrewe(t, client, "limits", "me", "--max-declared", "deep")
 	if err == nil {
 		t.Fatal("a depth that is not a number was accepted")
 	}
-	if !strings.Contains(err.Error(), "--max-depth") {
+	if !strings.Contains(err.Error(), "--max-declared") {
 		t.Fatalf("the refusal says %q, want it to name the flag", err)
 	}
 }
@@ -101,7 +101,7 @@ func TestALeaseThatIsNotALengthOfTimeIsRefused(t *testing.T) {
 func TestALimitBelowZeroIsRefusedByTheSystem(t *testing.T) {
 	client := aSystemToJobIn(t)
 
-	_, err := runKrewe(t, client, "limits", "me", "--max-depth", "-1")
+	_, err := runKrewe(t, client, "limits", "me", "--max-declared", "-1")
 	if err == nil {
 		t.Fatal("a depth below zero was accepted")
 	}

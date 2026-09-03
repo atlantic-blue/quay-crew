@@ -38,6 +38,20 @@ Feature: The requirements a person accepted become failing tests before anything
     Then the reading says the job is in the "build" stage
     And the reading carries a failing test for every requirement
 
+  # A run of a stage is not a job. Nobody declared it, so it states no sentence, it passes through no
+  # stages, and it stands nowhere in the listing of the work a person asked for. Before this, a job
+  # with five runs under it was six rows on the screen.
+  Scenario: The runs of a stage are not jobs, and no listing of declared work carries one
+    Given a job whose list of 2 verticals a person accepted
+    When the controller ticks
+    Then the jobs listing carries only the job somebody declared
+    And 2 workers are writing tests, one for each requirement
+    And each run says which job and which stage it is a run of
+    And the job says 2 of its runs are working
+    When every worker answers with its run
+    And the controller ticks again
+    Then the jobs listing carries only the job somebody declared
+
   # The claim doing the work it already does for anything else. The second declaration is refused by
   # the store, so a second controller ticking the same row buys no second session.
   Scenario: A second worker for one requirement is refused
@@ -97,4 +111,4 @@ Feature: The requirements a person accepted become failing tests before anything
     Given a job in a repository whose list of 2 verticals a person accepted
     When the controller ticks
     Then a worker is writing the tests for each requirement, and the job itself has no session
-    And each worker is told to commit its tests to the branch this job's tests live on
+    And each worker is told to commit its tests to the branch its requirement's tests live on
