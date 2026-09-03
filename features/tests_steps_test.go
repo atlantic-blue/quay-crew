@@ -296,6 +296,45 @@ func initializeTestStageSteps(sc *godog.ScenarioContext) {
 		return theQuestionSays(ctx, fmt.Sprintf("requirement %d", requirement))
 	})
 
+	// The whole of the split, said at the surface a person reads. A run is not declared work, so the
+	// listing of declared work carries the one row somebody wrote and no other.
+	sc.Step(`^the jobs listing carries only the job somebody declared$`, func(ctx context.Context) error {
+		one, err := readJob(ctx, 0)
+		if err != nil {
+			return err
+		}
+		return noRunsInTheJobsListing(ctx, one)
+	})
+
+	// And what a run is, off the wire: the job it belongs to and the stage of that job it runs. Those
+	// two are what the stage gathers by, and what says a run is never read as a job.
+	sc.Step(`^each run says which job and which stage it is a run of$`, func(ctx context.Context) error {
+		one, err := readJob(ctx, 0)
+		if err != nil {
+			return err
+		}
+		runs, err := theWorkers(ctx)
+		if err != nil {
+			return err
+		}
+		if len(runs) == 0 {
+			return fmt.Errorf("this job has no runs, so this checked nothing")
+		}
+		for _, run := range runs {
+			if run.GetJob() != one.GetId() {
+				return fmt.Errorf("a run belongs to job %q, and this job is %q", run.GetJob(), one.GetId())
+			}
+			if run.GetStage() != job.StageTest {
+				return fmt.Errorf("a run of the test stage says it is a run of the %q stage", run.GetStage())
+			}
+			if run.GetNumber() < 1 {
+				return fmt.Errorf("a run says it is for number %d, and a requirement counts from one",
+					run.GetNumber())
+			}
+		}
+		return nil
+	})
+
 	sc.Step(`^the reading carries a failing test for every requirement$`, func(ctx context.Context) error {
 		one, err := readJob(ctx, 0)
 		if err != nil {
