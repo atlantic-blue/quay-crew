@@ -18,7 +18,7 @@ import (
 // through the work it is, the word it ended on, whose role is doing it, what it is about, the
 // conversation it runs in, how many times it has been tried and how old it is. The answer and the
 // brief are not here, because a listing of a hundred answers is a listing nobody can read; enter
-// goes to what the job actually did instead.
+// opens the job and the whole record is on that page.
 func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "jobs",
@@ -59,10 +59,14 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		// way, because these cells are rendered text and sorting them compares "10d" against "1d" as
 		// words.
 		SortBy: -1,
-		// What the job did, rather than the row it runs in. A job's session is one row and a listing
-		// of one row says nothing the line above it did not; the tasks are the whole account of what
-		// was asked and what came back. The sessions view cannot be scoped to a session either: its
-		// lister reads its parent as a project, so descending there would list nothing at all.
+		// The job itself, rather than the session under it. Enter used to open what the job's session
+		// ran, which is one level past the thing a person pointed at, so the job had no screen at all
+		// and its brief, its questions and its answer were only at the command line. What the job did
+		// is one key away, on w.
+		Opens: openJobRecord,
+		// A part of a job is a run rather than a job, so enter still goes down into what that run did.
+		// The sessions view cannot be scoped to a session either: its lister reads its parent as a
+		// project, so descending there would list nothing at all.
 		DrillTo: "exec",
 		DrillBy: sessionOfJob,
 		Actions: []Action{
@@ -79,13 +83,22 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 				Folds: true,
 			},
 			{
+				// Where enter used to go. It is one key rather than none because the tasks are the
+				// whole account of what was asked and what came back, and a person watching a job
+				// reaches for them.
+				Key:     "w",
+				Label:   "Work",
+				Descend: "exec",
+				Refuses: hasReachedASession,
+			},
+			{
 				// A job that stops for a person rings the bell and draws a line across the listing,
 				// and until now no key answered it: the answer had to be typed into the command line
 				// or into the web briefing, which is the one place the operator was not looking.
 				//
 				// `a` for answer. It is free on this view, and it costs nothing that was here before:
-				// enter descends into what the job did, and the sessions view's own `a` opens a
-				// conversation, which a job row has nothing to do with.
+				// enter opens the job, and the sessions view's own `a` opens a conversation, which a
+				// job row has nothing to do with.
 				Key:     "a",
 				Label:   "Answer",
 				Asks:    "answer",
@@ -163,6 +176,13 @@ func sessionOfJob(row Row) (string, error) {
 			display.ShortID(row.ID), phaseOfRow(row))
 	}
 	return row.Parent, nil
+}
+
+// hasReachedASession is why the key for what a job did says nothing on most pending rows: a job
+// waiting its turn has run nothing, so there is no conversation to read.
+func hasReachedASession(row Row) error {
+	_, err := sessionOfJob(row)
+	return err
 }
 
 // Where each cell a reader of a row goes looking for sits in it. They are named so a column added in
