@@ -317,10 +317,9 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	// read before somebody starts work a job already has, and a column of blanks on every listing is a
 	// column nobody reads by the second week.
 	claiming := anythingClaimed(resp.GetJobs())
-	// The same for why a job stopped. It is there when a row of this listing stopped. It answers the
-	// question a person brings to a listing of stopped work: which of these needs me. Without it,
-	// that answer costs one krewe job show for every stopped row.
-	stopped := anythingStopped(resp.GetJobs())
+	// The same rule for why a row ended. Most listings hold no stopped row and no failed row, and on
+	// those the reason column is not there at all.
+	saying := anythingSaysWhy(resp.GetJobs())
 	for _, one := range resp.GetJobs() {
 		if holding == "" && heldForRoom(one) {
 			holding = one.GetReason()
@@ -328,13 +327,13 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 		if where.where == "" {
 			fmt.Fprintf(out, "%-10s %-24s %-8s %-9s %-9s %s%s%s\n", display.ShortID(one.GetId()),
 				addresses[one.GetProject()], phaseOf(one), job.StageOfWire(one).Says(),
-				outcomeOf(one), reasonColumn(one, stopped), claimColumn(one, claiming),
+				outcomeOf(one), reasonColumn(one, saying), claimColumn(one, claiming),
 				truncateLine(one.GetTitle()))
 			continue
 		}
 		fmt.Fprintf(out, "%-10s %-8s %-9s %-9s %s%s%s\n",
 			display.ShortID(one.GetId()), phaseOf(one), job.StageOfWire(one).Says(),
-			outcomeOf(one), reasonColumn(one, stopped), claimColumn(one, claiming),
+			outcomeOf(one), reasonColumn(one, saying), claimColumn(one, claiming),
 			truncateLine(one.GetTitle()))
 	}
 	// Said once, under the listing, because an operator reading a column of "held" needs to know it
@@ -356,6 +355,46 @@ func anythingClaimed(jobs []*quaycrewv1.Job) bool {
 	return false
 }
 
+// anythingSaysWhy says whether any row in a listing ended with words on it.
+func anythingSaysWhy(jobs []*quaycrewv1.Job) bool {
+	for _, one := range jobs {
+		if whyItEnded(one) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// whyItEnded is why a job stopped or failed, and nothing for a job that did neither.
+//
+// A pending job the system holds back carries a reason as well. That reason is one fact about the
+// machine rather than one fact per row, so the listing says it once underneath and the cell of a
+// held row in this column stays empty.
+func whyItEnded(one *quaycrewv1.Job) string {
+	switch one.GetPhase() {
+	case job.PhaseStopped, job.PhaseFailed:
+		return strings.Join(strings.Fields(one.GetReason()), " ")
+	}
+	return ""
+}
+
+// reasonColumn is why a row ended, in a column, and nothing at all where no row in the listing
+// stopped or failed.
+func reasonColumn(one *quaycrewv1.Job, saying bool) string {
+	if !saying {
+		return ""
+	}
+	why := []rune(whyItEnded(one))
+	if len(why) > reasonWidth {
+		why = append(why[:reasonWidth-1], '…')
+	}
+	return fmt.Sprintf("%-*s ", reasonWidth, string(why))
+}
+
+// reasonWidth is how wide the reason column is. It holds a short sentence about what happened, which
+// is what most reasons are, and cuts anything longer rather than pushing the title off the line.
+const reasonWidth = 40
+
 // claimColumn is the piece of work a row claims, in a column, and nothing at all where no row in the
 // listing claims anything.
 func claimColumn(one *quaycrewv1.Job, claiming bool) string {
@@ -367,44 +406,6 @@ func claimColumn(one *quaycrewv1.Job, claiming bool) string {
 		claim = claim[:claimWidth-1] + "…"
 	}
 	return fmt.Sprintf("%-*s ", claimWidth, claim)
-}
-
-// anythingStopped says whether any row in a listing stopped.
-func anythingStopped(jobs []*quaycrewv1.Job) bool {
-	for _, one := range jobs {
-		if reasonOf(one) != "" {
-			return true
-		}
-	}
-	return false
-}
-
-// reasonColumn is why a job stopped, in a column beside the outcome, and nothing at all where no row
-// in the listing stopped. The cell is empty on a row that did not stop. Every title then starts in
-// the same place, and a person reads the listing down the screen rather than one row at a time.
-func reasonColumn(one *quaycrewv1.Job, stopped bool) string {
-	if !stopped {
-		return ""
-	}
-	return fmt.Sprintf("%-*s ", reasonWidth, reasonOf(one))
-}
-
-// reasonWidth is how wide the reason column is. A reason is a person, or the system, saying what
-// happened in a few plain words. 40 characters carries a line such as "the bank refused the direct
-// debit" whole.
-const reasonWidth = 40
-
-// reasonOf is why a job stopped, and nothing at all on any other job.
-//
-// A pending job carries a reason too, and that one is the system saying the machine has no room for
-// the job. The listing says that once, under the rows, because it is one fact about the machine. In
-// this column it would be the same sentence on every held row, and it would hide the row that
-// stopped.
-func reasonOf(one *quaycrewv1.Job) string {
-	if one.GetPhase() != job.PhaseStopped {
-		return ""
-	}
-	return oneLine(one.GetReason())
 }
 
 // claimWidth is how wide the claim column is. It holds an owner, a name and an issue number, which is
