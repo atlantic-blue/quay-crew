@@ -94,10 +94,10 @@ func TestEveryStatsRowSaysHowItIs(t *testing.T) {
 }
 
 // TestTheStatsViewStillDrawsWhenTheSystemWillNotSayHowItIs. An older control plane does not answer the
-// health call at all, and the six lines an operator opened this view for are still worth drawing.
+// health call at all, and the five lines an operator opened this view for are still worth drawing.
 func TestTheStatsViewStillDrawsWhenTheSystemWillNotSayHowItIs(t *testing.T) {
 	rows := statsRows(t, &fakeClient{healthErr: errors.New("unknown method GetHealth")})
-	if len(rows) != 6 {
+	if len(rows) != 5 {
 		t.Fatalf("the stats view listed %d rows when the system would not say how it is", len(rows))
 	}
 	for what, row := range rows {

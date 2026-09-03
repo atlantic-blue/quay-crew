@@ -93,10 +93,9 @@ var removedFlags = map[string]string{
 	"--wait": "krewe task waits for the answer already: krewe task [<address>] \"...\"",
 	"--no-wait": "letting go is krewe task --dispatch [<address>] \"...\"" +
 		"\n\nand krewe task on its own waits for the answer instead",
-	// The word reads correctly in both directions now: this job requires context, and the architect
-	// role receives context.
-	"--hands": "what a job cannot be done without is what it requires: " +
-		"krewe job create --requires <material>",
+	// It was a flag on job create, and jobs are gone, so there is no flag to send anybody to.
+	"--hands": "--hands is gone with jobs. What a session works from is the context and the skills " +
+		"its workspace holds: krewe context set <workspace> \"...\"",
 }
 
 // removedCommands are the words this tool used to take, each against what to type now.
@@ -119,20 +118,28 @@ var removedCommands = map[string]string{
 		"nothing runs above a session now" +
 		"\n\n  krewe task [<address>] \"...\"",
 	"role": "roles are gone with jobs. A session holds its workspace's skills and hooks, and there " +
-		"is no role to narrow it to",
-	"answer": "there is no gate to answer. A job asked the questions and jobs are gone. Reply to a " +
+		"is no role to narrow it to" +
+		"\n\n  krewe skill list <workspace>",
+	"steer": "a steer recorded what a job should have known, and jobs are gone. Say it to the " +
 		"session instead" +
 		"\n\n  krewe task <session> \"...\"",
-	"steer":  "a steer recorded what a job should have known, and jobs are gone",
-	"steers": "a steer recorded what a job should have known, and jobs are gone",
+	"steers": "a steer recorded what a job should have known, and jobs are gone. What a session was " +
+		"told is its own history" +
+		"\n\n  krewe task list <session>",
 	"history": "a history was a digest of jobs, and jobs are gone. What a session did is under it" +
 		"\n\n  krewe task list <session>",
-	"limits": "limits capped what a workspace's jobs could declare, and jobs are gone",
-	"room":   "the room read the machine for the job controller to schedule against, and jobs are gone",
+	"limits": "limits capped what a workspace's jobs could declare, and jobs are gone. What is " +
+		"running is the listing" +
+		"\n\n  krewe sessions",
+	"room": "the room read the machine for the job controller to schedule against, and jobs are " +
+		"gone. What is running is the listing" +
+		"\n\n  krewe sessions",
 	"web": "the briefing page is gone. The console reads the same rows" +
 		"\n\n  krewe",
-	"render": "rendering a briefing page is gone with the page itself",
-	"record": "recording a briefing page is gone with the page itself",
+	"render": "rendering a briefing page is gone with the page itself. The console reads the same rows" +
+		"\n\n  krewe",
+	"record": "recording a briefing page is gone with the page itself. The console reads the same rows" +
+		"\n\n  krewe",
 	"ask": "a task is one word now, and waiting here for the answer is what it does" +
 		"\n\n  krewe task [<address>] \"...\"",
 	"dispatch": "a task is one word now, and letting go of one is a flag on it" +
@@ -233,6 +240,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runTask(ctx, client, args[1:], out)
 	case "read":
 		return runRead(ctx, client, args[1:], out)
+	case "answer":
+		return runAnswer(ctx, client, args[1:], out)
 	case "where":
 		return runWhere(ctx, client, args[1:], out)
 	case "attach":
