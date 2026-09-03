@@ -317,19 +317,24 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	// read before somebody starts work a job already has, and a column of blanks on every listing is a
 	// column nobody reads by the second week.
 	claiming := anythingClaimed(resp.GetJobs())
+	// The column is only there when a row of this listing has a reason to give. Without it a failed
+	// row says "failed" and nothing else. Reading why then costs one krewe job show for each failure,
+	// and that is the cost this column removes.
+	saying := anythingSaysWhy(resp.GetJobs())
 	for _, one := range resp.GetJobs() {
 		if holding == "" && heldForRoom(one) {
 			holding = one.GetReason()
 		}
 		if where.where == "" {
-			fmt.Fprintf(out, "%-10s %-24s %-8s %-9s %-9s %s%s\n", display.ShortID(one.GetId()),
+			fmt.Fprintf(out, "%-10s %-24s %-8s %-9s %-9s %s%s%s\n", display.ShortID(one.GetId()),
 				addresses[one.GetProject()], phaseOf(one), job.StageOfWire(one).Says(),
-				outcomeOf(one), claimColumn(one, claiming), truncateLine(one.GetTitle()))
+				outcomeOf(one), reasonColumn(one, saying), claimColumn(one, claiming),
+				truncateLine(one.GetTitle()))
 			continue
 		}
-		fmt.Fprintf(out, "%-10s %-8s %-9s %-9s %s%s\n",
+		fmt.Fprintf(out, "%-10s %-8s %-9s %-9s %s%s%s\n",
 			display.ShortID(one.GetId()), phaseOf(one), job.StageOfWire(one).Says(),
-			outcomeOf(one), claimColumn(one, claiming),
+			outcomeOf(one), reasonColumn(one, saying), claimColumn(one, claiming),
 			truncateLine(one.GetTitle()))
 	}
 	// Said once, under the listing, because an operator reading a column of "held" needs to know it
@@ -340,6 +345,45 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	where.counted(out, len(resp.GetJobs()))
 	return nil
 }
+
+// anythingSaysWhy says whether any row of a listing has a reason to give.
+func anythingSaysWhy(jobs []*quaycrewv1.Job) bool {
+	for _, one := range jobs {
+		if whyThisRowEnded(one) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// whyThisRowEnded is what a row says about how it ended, and nothing where it has nothing to say.
+//
+// A failed job carries what the work died with. That sentence is what a person opens the job to read.
+// A pending job the system holds back carries a reason too. That one is a fact about the machine
+// rather than about the job, so the listing says it once underneath instead.
+func whyThisRowEnded(one *quaycrewv1.Job) string {
+	if one.GetPhase() != job.PhaseFailed {
+		return ""
+	}
+	return strings.Join(strings.Fields(one.GetReason()), " ")
+}
+
+// reasonColumn is why a row ended, in a column beside the outcome, and nothing at all where no row
+// of the listing says why.
+func reasonColumn(one *quaycrewv1.Job, saying bool) string {
+	if !saying {
+		return ""
+	}
+	reason := []rune(whyThisRowEnded(one))
+	if len(reason) > reasonWidth {
+		return fmt.Sprintf("%-*s ", reasonWidth, string(reason[:reasonWidth-1])+"…")
+	}
+	return fmt.Sprintf("%-*s ", reasonWidth, string(reason))
+}
+
+// reasonWidth is how wide the reason column is. It holds a short sentence, which is what most
+// reasons are, and it cuts anything longer rather than pushing the title off the line.
+const reasonWidth = 40
 
 // anythingClaimed says whether any row in a listing has taken a piece of work.
 func anythingClaimed(jobs []*quaycrewv1.Job) bool {
