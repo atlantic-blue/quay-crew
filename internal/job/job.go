@@ -185,31 +185,6 @@ type Job struct {
 	// nobody has answered yet, and only the flag tells those two apart.
 	Accepted bool
 
-	// Building says this job builds against tests it did not write and may not change. The system sets
-	// it on a worker the build stage declares, and on nothing else.
-	//
-	// It is on the row rather than worked out from the stage, because what reads it is the dispatch,
-	// which knows the job and nothing about where the job came from. What it buys is the boundary: the
-	// system tells the session's runtime, and the test gate then refuses a write to a test in that
-	// session alone. A session under no gate is a session under advice, and the shortest way to a green
-	// suite is to change the assertion.
-	Building bool
-
-	// Branch is the branch this job's work lives on, named by the system rather than chosen by the
-	// session. The system sets it on a worker the test stage declares and on the worker that builds
-	// the same requirement, and on nothing else. See branch.go.
-	//
-	// It is on the row because two workers have to agree on one name without either of them being
-	// told by the other. The worker that writes a requirement's tests cuts this branch and opens the
-	// pull request from it; the worker that builds the same requirement fetches it, checks it out and
-	// turns those tests green in the same pull request. A session that chose its own name would leave
-	// the next session nothing to look for, which is what happened: the tests went with the sandbox
-	// that wrote them.
-	//
-	// Empty is every job that works wherever its session put it, which is every job this system ran
-	// before a requirement had a branch, and every job that names no repository.
-	Branch string
-
 	// Steers is how many times the operator had to say something this job should have known, counted
 	// on the job the steer landed on and on every job above it. On the job at the top it is the score
 	// of the whole tree, which is the number the acceptance job exists to move. See steer.go.
@@ -339,6 +314,10 @@ type Event struct {
 	Project   string
 	Parent    string
 	Depth     int
+	// Execution is the run of a stage this happened in, and empty for everything that happened to
+	// the job itself. A run is not a job, so its records hang off the job it belongs to and name the
+	// run here: a reader of one job then reads what happened in every run of every stage under it.
+	Execution string
 	// Detail is a short line about what happened. It goes through the system's redactor before it is
 	// written.
 	Detail string

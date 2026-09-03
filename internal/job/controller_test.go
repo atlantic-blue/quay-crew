@@ -13,6 +13,7 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/capacity"
 	"github.com/atlantic-blue/quay-krewe/internal/job"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -259,12 +260,17 @@ type rows struct {
 	sessions map[string]*quaycrewv1.Session
 	// sessionOrder keeps them in the order they were added, so a listing is stable.
 	sessionOrder []string
+	// runs are the executions this double holds, kept by the store's own in memory implementation
+	// rather than by a second one written here. A double that accepted a run the real store refuses
+	// would pass a suite the system fails, and the claim on a requirement is exactly that refusal.
+	runs *store.Memory
 }
 
 func newRows() *rows {
 	return &rows{
 		held: map[string]*job.Job{}, events: map[string][]*job.Event{},
 		sessions: map[string]*quaycrewv1.Session{},
+		runs:     store.NewMemory(),
 	}
 }
 
@@ -1553,15 +1559,6 @@ func (r *rows) children(parent string) []*job.Job {
 	return found
 }
 
-// declaredEvent is the record that lands with a job somebody declares, for a test that declares one
-// through the store itself.
-func declaredEvent(one *job.Job) *job.Event {
-	return &job.Event{
-		Kind: job.EventDeclared, Job: one.ID, Workspace: one.Workspace, Project: one.Project,
-		Parent: one.Parent, Depth: one.Depth, Detail: one.Title, OccurredAt: time.Now().UTC(),
-	}
-}
-
 // AskAboutJobTests puts the question to a person from the pending phase, and refuses what both real
 // stores refuse: a row that already carries the record has nothing to ask about.
 func (r *rows) AskAboutJobTests(_ context.Context, id, question string,
@@ -1709,4 +1706,130 @@ func (r *rows) AcceptJob(_ context.Context, id, answer string,
 	r.record(id, events)
 	kept := *one
 	return &kept, nil
+}
+
+// The runs of the stages. They are the store's own rows rather than a second set kept here: what a
+// stage reads back has to be what the system would read back.
+//
+// The record of a run hangs off the job it belongs to, so these write it where every other record of
+// that job is, and a reader of one job's history reads what happened in its runs too.
+
+func (r *rows) CreateExecution(ctx context.Context, run *job.Execution, event *job.Event) error {
+	if err := r.runs.CreateExecution(ctx, run, nil); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.record(run.Job, []*job.Event{event})
+	return nil
+}
+
+func (r *rows) ListExecutions(ctx context.Context, filter job.ExecutionFilter) ([]*job.Execution, error) {
+	return r.runs.ListExecutions(ctx, filter)
+}
+
+func (r *rows) RunnableExecutions(ctx context.Context, limit int) ([]*job.Execution, error) {
+	return r.runs.RunnableExecutions(ctx, limit)
+}
+
+func (r *rows) HeldExecutions(ctx context.Context, owner string, limit int) ([]*job.Execution, error) {
+	return r.runs.HeldExecutions(ctx, owner, limit)
+}
+
+func (r *rows) ExpiredExecutions(ctx context.Context, limit int) ([]*job.Execution, error) {
+	return r.runs.ExpiredExecutions(ctx, limit)
+}
+
+func (r *rows) StartExecution(ctx context.Context, id string, lease job.Lease,
+	event *job.Event) (*job.Execution, error) {
+	started, err := r.runs.StartExecution(ctx, id, lease, nil)
+	if err != nil {
+		return nil, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.record(started.Job, []*job.Event{event})
+	return started, nil
+}
+
+func (r *rows) TakeOverExecution(ctx context.Context, id string, lease job.Lease) (*job.Execution, error) {
+	return r.runs.TakeOverExecution(ctx, id, lease)
+}
+
+func (r *rows) RenewExecutionLease(ctx context.Context, id string, lease job.Lease) error {
+	return r.runs.RenewExecutionLease(ctx, id, lease)
+}
+
+func (r *rows) RecordExecutionSession(ctx context.Context, id, session string) error {
+	return r.runs.RecordExecutionSession(ctx, id, session)
+}
+
+func (r *rows) RecordExecutionBranch(ctx context.Context, id, branch string) error {
+	return r.runs.RecordExecutionBranch(ctx, id, branch)
+}
+
+func (r *rows) LandExecution(ctx context.Context, id string, landed job.ExecutionLanding,
+	event *job.Event) (*job.Execution, error) {
+	ended, err := r.runs.LandExecution(ctx, id, landed, nil)
+	if err != nil {
+		return nil, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.record(ended.Job, []*job.Event{event})
+	return ended, nil
+}
+
+// executionsOf is every run of one job this double holds, oldest first, which a test reads to say
+// what a stage sent out.
+func (r *rows) executionsOf(id string) []*job.Execution {
+	runs, err := r.runs.ListExecutions(context.Background(), job.ExecutionFilter{Job: id})
+	if err != nil {
+		return nil
+	}
+	return runs
+}
+
+// executionsIn is every run of one stage of one job, oldest first.
+func (r *rows) executionsIn(id, stage string) []*job.Execution {
+	runs, err := r.runs.ListExecutions(context.Background(),
+		job.ExecutionFilter{Job: id, Stage: stage})
+	if err != nil {
+		return nil
+	}
+	return runs
+}
+
+// getRun is one run read back, which a test uses to say what came of a stage's session.
+func (r *rows) getRun(id string) *job.Execution {
+	found, err := r.runs.GetExecution(context.Background(), id)
+	if err != nil {
+		return &job.Execution{}
+	}
+	return found
+}
+
+// all is every job this double holds, in the order they were declared, which a test reads to say
+// that a fan out left no row in the jobs table.
+func (r *rows) all() []*job.Job {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var found []*job.Job
+	for _, id := range r.order {
+		if one, held := r.held[id]; held {
+			kept := *one
+			found = append(found, &kept)
+		}
+	}
+	return found
+}
+
+// ranEvent is the record that lands with a run of a stage, written the way the controller writes it:
+// against the job the run belongs to, naming the run.
+func ranEvent(one *job.Job, run *job.Execution) *job.Event {
+	return &job.Event{
+		ID: run.ID + "-ran", Kind: job.EventRan, Job: one.ID, Workspace: one.Workspace,
+		Project: one.Project, Execution: run.ID, Detail: "a run of the " + run.Stage + " stage",
+		OccurredAt: time.Now().UTC(),
+	}
 }

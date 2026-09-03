@@ -52,12 +52,11 @@ func BranchFor(one *Job, wanted Requirement) string {
 	return BranchForRequirement(one.ID, wanted)
 }
 
-// Opened is what the worker that wrote one requirement's tests left behind: the branch its failing
+// Opened is what the run that wrote one requirement's tests left behind: the branch its failing
 // tests are on, and the pull request they are open in.
 //
-// It is read off that worker's row rather than copied into the record the job keeps, for the reason
-// the requirement list is read off the row: a second copy of a fact could only disagree with the
-// first.
+// It is read off that run's row rather than copied into the record the job keeps, for the reason the
+// requirement list is read off the row: a second copy of a fact could only disagree with the first.
 type Opened struct {
 	Branch      string
 	PullRequest string
@@ -66,16 +65,16 @@ type Opened struct {
 // Landed says whether these tests reached a branch anybody else can read.
 func (o Opened) Landed() bool { return o.Branch != "" && o.PullRequest != "" }
 
-// OpenedFor is what the workers holding one requirement left behind, and nothing where none of them
+// OpenedFor is what the runs holding one requirement left behind, and nothing where none of them
 // left anything.
 //
-// The newest worker is the one read, which is the rule the report is read by: a requirement whose
-// first worker died has a second, and what the stage stands on is the run that happened last.
-func OpenedFor(workers []*Job) Opened {
-	if len(workers) == 0 {
+// The newest run is the one read, which is the rule the report is read by: a requirement whose first
+// run died has a second, and what the stage stands on is the run that happened last.
+func OpenedFor(runs []*Execution) Opened {
+	if len(runs) == 0 {
 		return Opened{}
 	}
-	worker := workers[len(workers)-1]
+	worker := runs[len(runs)-1]
 	return Opened{Branch: worker.Branch, PullRequest: worker.PullRequest}
 }
 
@@ -160,21 +159,22 @@ func ContinuesThePullRequestOn(repository, branch string) string {
 }
 
 // EndsOnItsBranch is the line about the pull request the system sends a session, whichever of the
-// three shapes this job is.
+// three shapes the task is.
 //
-// A job with no branch is every job this system ran before a requirement had one, and it is asked for
-// what it was always asked for. A branch on a job that builds is a branch somebody else cut, and a
-// branch on any other job is this job's own to cut.
-func EndsOnItsBranch(one *Job) string {
+// A task that runs the job itself is asked for what every job is asked for: a pull request, wherever
+// the session put the work. A run of the test stage cuts its requirement's branch and opens the pull
+// request on it, and a run of the build stage continues the one already open there. The run says
+// which of the two it is, so nothing has to carry a flag about it.
+func EndsOnItsBranch(one *Job, run *Execution) string {
 	switch {
 	case one.Repository == "":
 		return ""
-	case one.Branch == "":
+	case run == nil || run.Branch == "":
 		return EndsInAPullRequest(one.Repository)
-	case one.Building:
-		return ContinuesThePullRequestOn(one.Repository, one.Branch)
+	case run.Stage == StageBuild:
+		return ContinuesThePullRequestOn(one.Repository, run.Branch)
 	default:
-		return OpensThePullRequestOn(one.Repository, one.Branch)
+		return OpensThePullRequestOn(one.Repository, run.Branch)
 	}
 }
 

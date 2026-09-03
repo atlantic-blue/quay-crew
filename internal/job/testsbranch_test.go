@@ -62,33 +62,33 @@ func (f *aFanOut) intoTheBuildStage(t *testing.T, ctx context.Context) {
 }
 
 // theTestWorkers is the workers the fan out declared, started, and given a session each.
-func (f *aFanOut) theTestWorkers(t *testing.T, ctx context.Context) []*job.Job {
+func (f *aFanOut) theTestRuns(t *testing.T, ctx context.Context) []*job.Execution {
 	t.Helper()
 	f.controller.Tick(ctx)
 	f.controller.Tick(ctx)
-	workers := f.kept.children(f.job.ID)
-	if len(workers) != 2 {
-		t.Fatalf("the fan out declared %d workers for 2 requirements", len(workers))
+	runs := f.kept.executionsIn(f.job.ID, job.StageTest)
+	if len(runs) != 2 {
+		t.Fatalf("the fan out wrote %d runs for 2 requirements", len(runs))
 	}
-	return workers
+	return runs
 }
 
 // writesAndAnswers is one worker doing what its brief asks: it writes a test file in the clone its
 // own session holds, commits it, and answers with its report.
-func (f *aFanOut) writesAndAnswers(t *testing.T, worker *job.Job, at int, name, body string) {
+func (f *aFanOut) writesAndAnswers(t *testing.T, run *job.Execution, at int, name, body string) {
 	t.Helper()
-	f.publisher.aClone(t, f.sessionOf(t, worker)).writes(t, name, body)
-	f.plane.landsIn(job.SessionFor(worker.ID), landed(theTestReport(at)))
+	f.publisher.aClone(t, f.sessionOf(t, run)).writes(t, name, body)
+	f.plane.landsIn(job.SessionForExecution(run), landed(theTestReport(at)))
 }
 
 // sessionOf is the session the controller gave one worker, read off the row rather than built from
 // the identifier: it is the string the publisher is asked about, and a test that guessed it would
 // pass while nothing was ever delivered.
-func (f *aFanOut) sessionOf(t *testing.T, worker *job.Job) string {
+func (f *aFanOut) sessionOf(t *testing.T, run *job.Execution) string {
 	t.Helper()
-	session := f.kept.get(worker.ID).Session
+	session := f.kept.getRun(run.ID).Session
 	if session == "" {
-		t.Fatalf("worker %q holds no session, so nothing wrote its tests", worker.Title)
+		t.Fatalf("the run of number %d holds no session, so nothing wrote its tests", run.Number)
 	}
 	return session
 }
@@ -118,15 +118,15 @@ func theBranchOf(t *testing.T, fan *aFanOut, requirement int) string {
 
 // The whole road, and the fault this answers. Two workers write their tests in sandboxes of their
 // own, and the worker that builds each requirement has that requirement's file in front of it.
-func TestTheTestsTwoWorkersWroteAreInTheBuildWorkersCheckout(t *testing.T) {
+func TestTheTestsTwoRunsWroteAreInTheBuildRunsCheckout(t *testing.T) {
 	fan := inTheTestStage(t)
 	ctx := context.Background()
 
 	const theBasketTest = "func TestABasketHoldsWhatWasPutInIt(t *testing.T) { t.Fatal(\"nothing builds this yet\") }"
 	const theCheckoutTest = "func TestCheckoutRefusesAnEmptyBasket(t *testing.T) { t.Fatal(\"nothing builds this yet\") }"
-	workers := fan.theTestWorkers(t, ctx)
-	fan.writesAndAnswers(t, workers[0], 1, "basket_test.go", theBasketTest)
-	fan.writesAndAnswers(t, workers[1], 2, "checkout_test.go", theCheckoutTest)
+	runs := fan.theTestRuns(t, ctx)
+	fan.writesAndAnswers(t, runs[0], 1, "basket_test.go", theBasketTest)
+	fan.writesAndAnswers(t, runs[1], 2, "checkout_test.go", theCheckoutTest)
 	fan.controller.Tick(ctx)
 
 	// The stage closed, so the record is on the row and it says where each requirement's tests are.
@@ -158,12 +158,13 @@ func TestTheTestsTwoWorkersWroteAreInTheBuildWorkersCheckout(t *testing.T) {
 		requirement := theVerticalOf(t, fan, builder)
 		branch := theBranchOf(t, fan, requirement)
 		if builder.Branch != branch {
-			t.Fatalf("the worker building vertical %d is on %q, and its tests are on %q",
+			t.Fatalf("the run building vertical %d is on %q, and its tests are on %q",
 				requirement, builder.Branch, branch)
 		}
-		if !strings.Contains(builder.Brief, "git switch "+branch) {
-			t.Fatalf("the worker building vertical %d is not told to check its tests out:\n%s",
-				requirement, builder.Brief)
+		told := whatTheRunIsAsked(t, fan, builder)
+		if !strings.Contains(told, "git switch "+branch) {
+			t.Fatalf("the run building vertical %d is not told to check its tests out:\n%s",
+				requirement, told)
 		}
 		checkout := theCheckoutOf(t, fan.remote, branch)
 		if checkout[wanted[requirement]] != bodies[requirement] {
@@ -174,31 +175,42 @@ func TestTheTestsTwoWorkersWroteAreInTheBuildWorkersCheckout(t *testing.T) {
 	}
 }
 
-// theVerticalOf is the vertical one build worker holds, by the claim it was declared with.
-func theVerticalOf(t *testing.T, fan *aFanOut, builder *job.Job) int {
+// theVerticalOf is the vertical one build run holds, which is the number it was written for.
+func theVerticalOf(t *testing.T, fan *aFanOut, builder *job.Execution) int {
 	t.Helper()
 	one := fan.kept.get(fan.job.ID)
 	for _, vertical := range job.RequirementsOf(one) {
-		if builder.Claim == job.ClaimOnBuild(one.ID, vertical) {
+		if builder.Number == vertical.Number {
 			return vertical.Number
 		}
 	}
-	t.Fatalf("the worker %q holds no vertical of this job", builder.Title)
+	t.Fatalf("the run of number %d holds no vertical of this job", builder.Number)
 	return 0
+}
+
+// whatTheRunIsAsked is the text of the task one run was sent, which is where its words live: a run
+// carries none of them, and the system builds them from the job when it sends the task.
+func whatTheRunIsAsked(t *testing.T, fan *aFanOut, run *job.Execution) string {
+	t.Helper()
+	asked := fan.plane.asked(job.SessionForExecution(run))
+	if len(asked) == 0 {
+		t.Fatalf("the run of number %d was sent no task", run.Number)
+	}
+	return asked[len(asked)-1]
 }
 
 // A worker that wrote no file. Its report reads exactly like the others, and nothing it was asked to
 // write can be read by anybody, so the stage does not close on it.
-func TestAWorkerWhoseTestsReachedNoBranchStopsTheStageForAPerson(t *testing.T) {
+func TestARunWhoseTestsReachedNoBranchStopsTheStageForAPerson(t *testing.T) {
 	fan := inTheTestStage(t)
 	ctx := context.Background()
 
-	workers := fan.theTestWorkers(t, ctx)
-	fan.writesAndAnswers(t, workers[0], 1, "basket_test.go",
+	runs := fan.theTestRuns(t, ctx)
+	fan.writesAndAnswers(t, runs[0], 1, "basket_test.go",
 		"func TestABasketHoldsWhatWasPutInIt(t *testing.T) { t.Fatal(\"nothing builds this yet\") }")
 	// The second answers a report the system can read, out of a clone it committed nothing to.
-	fan.publisher.aClone(t, fan.sessionOf(t, workers[1]))
-	fan.plane.landsIn(job.SessionFor(workers[1].ID), landed(theTestReport(2)))
+	fan.publisher.aClone(t, fan.sessionOf(t, runs[1]))
+	fan.plane.landsIn(job.SessionForExecution(runs[1]), landed(theTestReport(2)))
 	fan.controller.Tick(ctx)
 
 	got := fan.kept.get(fan.job.ID)
@@ -232,8 +244,8 @@ func TestAStageThatCannotReachTheFilesDoesNotClose(t *testing.T) {
 
 	controller.Tick(ctx)
 	controller.Tick(ctx)
-	for at, worker := range kept.children(one.ID) {
-		plane.landsIn(job.SessionFor(worker.ID), landed(theTestReport(at+1)))
+	for at, run := range kept.executionsIn(one.ID, job.StageTest) {
+		plane.landsIn(job.SessionForExecution(run), landed(theTestReport(at+1)))
 	}
 	controller.Tick(ctx)
 
@@ -255,8 +267,8 @@ func TestAJobWithNoRepositoryIsNotHeldToABranch(t *testing.T) {
 
 	controller.Tick(ctx)
 	controller.Tick(ctx)
-	for at, worker := range kept.children(one.ID) {
-		plane.landsIn(job.SessionFor(worker.ID), landed(theTestReport(at+1)))
+	for at, run := range kept.executionsIn(one.ID, job.StageTest) {
+		plane.landsIn(job.SessionForExecution(run), landed(theTestReport(at+1)))
 	}
 	controller.Tick(ctx)
 
@@ -272,13 +284,13 @@ func TestAJobWithNoRepositoryIsNotHeldToABranch(t *testing.T) {
 // The boundary the build stage works under still holds over the tests it now has in front of it. The
 // files arrived, and reading them is the point of them arriving, so what must not change is that the
 // worker cannot write to one.
-func TestTheBuildWorkerHoldsTheTestsItMayNotChange(t *testing.T) {
+func TestTheBuildRunHoldsTheTestsItMayNotChange(t *testing.T) {
 	fan := inTheTestStage(t)
 	ctx := context.Background()
 
-	workers := fan.theTestWorkers(t, ctx)
-	fan.writesAndAnswers(t, workers[0], 1, "basket_test.go", "func TestABasketHolds(t *testing.T) {}")
-	fan.writesAndAnswers(t, workers[1], 2, "checkout_test.go", "func TestCheckoutRefuses(t *testing.T) {}")
+	runs := fan.theTestRuns(t, ctx)
+	fan.writesAndAnswers(t, runs[0], 1, "basket_test.go", "func TestABasketHolds(t *testing.T) {}")
+	fan.writesAndAnswers(t, runs[1], 2, "checkout_test.go", "func TestCheckoutRefuses(t *testing.T) {}")
 	fan.intoTheBuildStage(t, ctx)
 
 	branch := theBranchOf(t, fan, 1)
@@ -294,32 +306,22 @@ func TestTheBuildWorkerHoldsTheTestsItMayNotChange(t *testing.T) {
 		}
 	}
 	for _, builder := range theBuildersOf(t, fan) {
-		if !builder.Building {
-			t.Fatalf("the worker building %q is outside the boundary, so it may change a test",
-				builder.Title)
+		if builder.Stage != job.StageBuild {
+			t.Fatalf("the run building number %d is in stage %q, so it is outside the boundary and may "+
+				"change a test", builder.Number, builder.Stage)
 		}
-		if !strings.Contains(builder.Brief, "You may not change one") {
-			t.Fatalf("the build brief does not say the tests may not be changed:\n%s", builder.Brief)
+		if told := whatTheRunIsAsked(t, fan, builder); !strings.Contains(told, "You may not change one") {
+			t.Fatalf("what the build run is asked does not say the tests may not be changed:\n%s", told)
 		}
 	}
 }
 
-// theBuildersOf is the workers the build stage declared, by the claim each holds. The test stage's
-// workers are under the same parent and answered a different question.
-func theBuildersOf(t *testing.T, fan *aFanOut) []*job.Job {
+// theBuildersOf is the runs the build stage made, read as the runs of that stage. The test stage's
+// runs belong to the same job and answered a different question, and the table says which stage each
+// one is a run of, so neither stage reads the other's.
+func theBuildersOf(t *testing.T, fan *aFanOut) []*job.Execution {
 	t.Helper()
-	one := fan.kept.get(fan.job.ID)
-	building := map[string]bool{}
-	for _, vertical := range job.RequirementsOf(one) {
-		building[job.ClaimOnBuild(one.ID, vertical)] = true
-	}
-	var builders []*job.Job
-	for _, worker := range fan.kept.children(one.ID) {
-		if building[worker.Claim] {
-			builders = append(builders, worker)
-		}
-	}
-	return builders
+	return fan.kept.executionsIn(fan.job.ID, job.StageBuild)
 }
 
 // gitPublisher is the control plane's publisher over real git: a bare repository standing in for the

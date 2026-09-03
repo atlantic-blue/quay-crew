@@ -202,9 +202,29 @@ unknown rather than as a pass. A reader in the control plane writes them every t
 pull request that has not merged or closed, so nothing calls a forge while a page draws. See section
 3 of `docs/ORCHESTRATION.md`.
 
+**`executions`** is one run of one stage of one job, and it is not a job. A stage that fans out
+writes one row here for each requirement or vertical: the job it belongs to, the stage it runs, the
+number it is for, the claim it holds, and then what the controller writes, which is its phase, its
+session, its attempts, its answer, its outcome and reason, its branch and pull request, what it
+spent, its lease and its trace.
+
+It carries nothing a person wrote. There is no title, no brief, no sentence, no plan and no gate on
+it, because nobody declares a run: what the session is asked, the mode it runs in and the repository
+it works in are read off the job at the moment of the dispatch, so a copy here could only disagree
+with the job. Before this the fan out wrote a full job row for each requirement, so a job with five
+runs was six rows in every listing of declared work, and twelve places in the code asked whether a
+row had a parent to decide whether it was really a job.
+
+`parent` on `jobs` stays, and it means what it always meant: a session running a job declares work
+under that job, and a flow run declares each of its steps under the job carrying the run. Those are
+jobs, declared through the same call a person declares one through. What left the table is the rows
+nobody declared.
+
 **`job_events`** is what happened to each job, one row per event, written in the same
 transaction as the row it describes. The store is the source of truth, and an export to the log is a
-copy going outward rather than a source it could be rebuilt from.
+copy going outward rather than a source it could be rebuilt from. A record written inside a run of a
+stage hangs off the job and names the run in `execution`, so one job's history carries what happened
+in every run under it.
 
 **`job_steps`** is what each job's session said it finished, one row per step, in the order it
 finished them. A job that failed is continued from them rather than declared a second time:

@@ -36,7 +36,7 @@ func TestPastingALinkPrintsTheTranscript(t *testing.T) {
 // Nothing here types a git command of its own. Both sets are read back out of the briefs the system
 // writes, because the words a worker is given are the mechanism: a test that typed the commands
 // itself would prove that this test can check out a branch, which nobody doubted.
-func TestTheBuildWorkerFindsTheTestsTheTestWorkerLeftOnTheBranch(t *testing.T) {
+func TestTheBuildRunFindsTheTestsTheTestRunLeftOnTheBranch(t *testing.T) {
 	remote := aBareRemote(t)
 	one := aJobInARepository()
 	requirement := job.RequirementsOf(one)[0]
@@ -46,12 +46,12 @@ func TestTheBuildWorkerFindsTheTestsTheTestWorkerLeftOnTheBranch(t *testing.T) {
 	// The worker that writes the tests, following its brief. It cuts the branch the brief names,
 	// writes its test there and pushes it.
 	writing := gitCloneOf(t, remote, "the-test-worker")
-	testWorker := job.TestWorkers(one, []job.Requirement{requirement})[0]
-	if testWorker.Branch != branch {
-		t.Fatalf("the worker writing requirement %d is on %q, and its branch is %q",
-			requirement.Number, testWorker.Branch, branch)
+	testRun := job.TestExecutions(one, []job.Requirement{requirement})[0]
+	if testRun.Branch != branch {
+		t.Fatalf("the run writing requirement %d is on %q, and its branch is %q",
+			requirement.Number, testRun.Branch, branch)
 	}
-	runTheGitIn(t, writing, testWorker.Brief)
+	runTheGitIn(t, writing, job.WriteFailingTests(one, requirement))
 	if on := gitSaid(t, writing, "rev-parse", "--abbrev-ref", "HEAD"); on != branch {
 		t.Fatalf("the brief left the worker writing tests on %q, want %q", on, branch)
 	}
@@ -67,9 +67,8 @@ func TestTheBuildWorkerFindsTheTestsTheTestWorkerLeftOnTheBranch(t *testing.T) {
 		t.Fatalf("a fresh clone already holds %s, so this proves nothing about fetching it", where)
 	}
 	opened := job.Opened{Branch: branch, PullRequest: aPullRequestOn(requirement)}
-	builder := job.BuildWorkers(one, []job.Requirement{requirement},
-		job.FailuresOn(one.Tests), map[int]job.Opened{requirement.Number: opened})[0]
-	runTheGitIn(t, building, builder.Brief)
+	runTheGitIn(t, building,
+		job.BuildTheVertical(one, requirement, job.FailuresOn(one.Tests)[requirement.Number], opened))
 
 	// The whole of it: the file the first worker wrote is in the second worker's checkout, and it
 	// holds what was written rather than only carrying the name.
@@ -219,7 +218,7 @@ func isRefusal(err error) bool {
 }
 
 // One branch belongs to one requirement, and the two workers that touch that requirement are on it.
-func TestOneBranchBelongsToOneRequirementAndBothItsWorkersAreOnIt(t *testing.T) {
+func TestOneBranchBelongsToOneRequirementAndBothItsRunsAreOnIt(t *testing.T) {
 	one := aJobInARepository()
 	wanted := job.RequirementsOf(one)
 	opened := map[int]job.Opened{}
@@ -230,8 +229,8 @@ func TestOneBranchBelongsToOneRequirementAndBothItsWorkersAreOnIt(t *testing.T) 
 		}
 	}
 
-	writers := job.TestWorkers(one, wanted)
-	builders := job.BuildWorkers(one, wanted, job.FailuresOn(one.Tests), opened)
+	writers := job.TestExecutions(one, wanted)
+	builders := job.BuildExecutions(one, wanted, opened)
 	branches := map[string]int{}
 	for at, requirement := range wanted {
 		want := job.BranchForRequirement(one.ID, requirement)
@@ -255,30 +254,31 @@ func TestOneBranchBelongsToOneRequirementAndBothItsWorkersAreOnIt(t *testing.T) 
 }
 
 // The worker that writes the tests is told where they go and that the pull request stays open.
-func TestTheWorkerWritingTestsIsToldToOpenTheirPullRequestAndLeaveItRed(t *testing.T) {
+func TestTheRunWritingTestsIsToldToOpenItsPullRequestAndLeaveItRed(t *testing.T) {
 	one := aJobInARepository()
 	requirement := job.RequirementsOf(one)[0]
-	worker := job.TestWorkers(one, []job.Requirement{requirement})[0]
+	run := job.TestExecutions(one, []job.Requirement{requirement})[0]
 	branch := job.BranchForRequirement(one.ID, requirement)
 
+	asked := job.WriteFailingTests(one, requirement)
 	for _, phrase := range []string{
 		branch, "git switch --create " + branch, "leave it open", "Do not merge it",
 	} {
-		if !strings.Contains(worker.Brief, phrase) {
-			t.Fatalf("the brief does not say %q: %s", phrase, worker.Brief)
+		if !strings.Contains(asked, phrase) {
+			t.Fatalf("what the run is asked does not say %q: %s", phrase, asked)
 		}
 	}
-	// And the line the system adds beside the brief names the branch too, because the line on every
-	// other job says only to push a branch, which leaves the session to choose the name.
-	asked := job.Asked(worker)
-	if !strings.Contains(asked, "from the branch "+branch) {
-		t.Fatalf("the task does not tell the worker which branch to open from: %s", asked)
+	// And the line the system adds beside it names the branch too, because the line on every other
+	// job says only to push a branch, which leaves the session to choose the name.
+	ending := job.EndsOnItsBranch(one, run)
+	if !strings.Contains(ending, "from the branch "+branch) {
+		t.Fatalf("the task does not tell the run which branch to open from: %s", ending)
 	}
 
 	// A job that names no repository has nowhere to push, so it is told about no branch rather than
 	// sent looking for a remote that is not there.
 	nowhere := buildingJob()
-	if on := job.TestWorkers(nowhere, []job.Requirement{requirement})[0]; on.Branch != "" {
+	if on := job.TestExecutions(nowhere, []job.Requirement{requirement})[0]; on.Branch != "" {
 		t.Fatalf("a job that works in no repository put its tests on %q", on.Branch)
 	}
 }
@@ -291,50 +291,53 @@ func TestTheBuildStageOpensNoSecondPullRequest(t *testing.T) {
 	opened := job.Opened{
 		Branch: job.BranchForRequirement(one.ID, requirement), PullRequest: aPullRequestOn(requirement),
 	}
-	worker := job.BuildWorkers(one, []job.Requirement{requirement}, job.FailuresOn(one.Tests),
+	run := job.BuildExecutions(one, []job.Requirement{requirement},
 		map[int]job.Opened{requirement.Number: opened})[0]
 
+	told := job.BuildTheVertical(one, requirement, job.FailuresOn(one.Tests)[requirement.Number],
+		opened)
 	for _, phrase := range []string{
 		opened.Branch, opened.PullRequest, "Do not open a second pull request",
 	} {
-		if !strings.Contains(worker.Brief, phrase) {
-			t.Fatalf("the brief does not say %q: %s", phrase, worker.Brief)
+		if !strings.Contains(told, phrase) {
+			t.Fatalf("what the run is asked does not say %q: %s", phrase, told)
 		}
 	}
-	asked := job.Asked(worker)
-	if !strings.Contains(asked, "already open on that branch") ||
-		!strings.Contains(asked, "Do not open a second pull request") {
-		t.Fatalf("the task tells a build worker to open a pull request of its own: %s", asked)
+	ending := job.EndsOnItsBranch(one, run)
+	if !strings.Contains(ending, "already open on that branch") ||
+		!strings.Contains(ending, "Do not open a second pull request") {
+		t.Fatalf("the task tells a build run to open a pull request of its own: %s", ending)
 	}
 	// The second ask is the moment this matters most: a session that answered without an address is
 	// being told what to do about it, and it does as it is told.
-	again := job.AskedForThePullRequest(worker)
+	again := job.AskedForThePullRequest(one, run)
 	if !strings.Contains(again, "already open") || !strings.Contains(again, "Do not open a second one") {
-		t.Fatalf("the second ask sends a build worker to open another pull request: %s", again)
+		t.Fatalf("the second ask sends a build run to open another pull request: %s", again)
 	}
 
-	// And the way off it. A worker with no branch is a worker whose tests were written before a
-	// requirement had one, and it is asked for what every job was asked for before this.
-	old := job.BuildWorkers(one, []job.Requirement{requirement}, job.FailuresOn(one.Tests), nil)[0]
-	if !strings.Contains(job.Asked(old), "ends in a pull request against it. Push your branch") {
-		t.Fatalf("a worker with no branch is not asked for a pull request: %s", job.Asked(old))
+	// And the way off it. A run with no branch is one whose tests were written before a requirement
+	// had one, and it is asked for what every job was asked for before this.
+	old := job.BuildExecutions(one, []job.Requirement{requirement}, nil)[0]
+	if !strings.Contains(job.EndsOnItsBranch(one, old), "ends in a pull request against it. Push your branch") {
+		t.Fatalf("a run with no branch is not asked for a pull request: %s", job.EndsOnItsBranch(one, old))
 	}
-	if !strings.Contains(job.AskedForThePullRequest(old), "open the pull request") {
-		t.Fatalf("a worker with no branch is not asked to open one: %s", job.AskedForThePullRequest(old))
+	if !strings.Contains(job.AskedForThePullRequest(one, old), "open the pull request") {
+		t.Fatalf("a run with no branch is not asked to open one: %s",
+			job.AskedForThePullRequest(one, old))
 	}
 }
 
 // A worker that pushed nothing is a failed worker, not a quiet pass. Its report can be perfect and
 // the tests it describes are gone with the sandbox.
-func TestAWorkerWhoseTestsReachedNoBranchIsRefused(t *testing.T) {
+func TestARunWhoseTestsReachedNoBranchIsRefused(t *testing.T) {
 	one := aJobInARepository()
 	requirement := job.RequirementsOf(one)[0]
-	worker := job.TestWorkers(one, []job.Requirement{requirement})[0]
-	worker.Phase, worker.Answer = job.PhaseDone, aTestReport(requirement.Number)
+	run := job.TestExecutions(one, []job.Requirement{requirement})[0]
+	run.Phase, run.Answer = job.PhaseDone, aTestReport(requirement.Number)
 
-	_, why := job.ReportFrom([]*job.Job{worker}, requirement)
+	_, why := job.ReportFrom(one, []*job.Execution{run}, requirement)
 	if why == "" {
-		t.Fatal("a worker that opened no pull request closed the stage on a report about files nobody has")
+		t.Fatal("a run that opened no pull request closed the stage on a report about files nobody has")
 	}
 	for _, phrase := range []string{"opened no pull request", "reached no branch"} {
 		if !strings.Contains(why, phrase) {
@@ -342,10 +345,10 @@ func TestAWorkerWhoseTestsReachedNoBranchIsRefused(t *testing.T) {
 		}
 	}
 
-	// The same worker, having pushed. Nothing else about it changed.
-	worker.PullRequest = aPullRequestOn(requirement)
-	if report, why := job.ReportFrom([]*job.Job{worker}, requirement); why != "" {
-		t.Fatalf("a worker that opened its pull request is refused: %s", why)
+	// The same run, having pushed. Nothing else about it changed.
+	run.PullRequest = aPullRequestOn(requirement)
+	if report, why := job.ReportFrom(one, []*job.Execution{run}, requirement); why != "" {
+		t.Fatalf("a run that opened its pull request is refused: %s", why)
 	} else if report.Requirement != requirement.Number {
 		t.Fatalf("the report is filed under requirement %d", report.Requirement)
 	}

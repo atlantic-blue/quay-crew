@@ -29,16 +29,20 @@ func initializeBranchSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^each worker was told which branch its requirement's tests go on$`,
 		func(ctx context.Context) error {
-			return eachTestWorker(ctx, func(one *quaycrewv1.Job, worker *quaycrewv1.Job,
+			return eachTestWorker(ctx, func(one *quaycrewv1.Job, run *quaycrewv1.Execution,
 				requirement job.Requirement) error {
 				branch := job.BranchForRequirement(one.GetId(), requirement)
-				if worker.GetBranch() != branch {
+				if run.GetBranch() != branch {
 					return fmt.Errorf("the worker writing requirement %d is on %q, and its branch is %q",
-						requirement.Number, worker.GetBranch(), branch)
+						requirement.Number, run.GetBranch(), branch)
 				}
-				if !strings.Contains(worker.GetBrief(), "git switch --create "+branch) {
+				asked, err := whatTheSessionWasAsked(ctx, run.GetSession())
+				if err != nil {
+					return err
+				}
+				if !strings.Contains(asked, "git switch --create "+branch) {
 					return fmt.Errorf("the worker writing requirement %d is not told to cut %q: %s",
-						requirement.Number, branch, worker.GetBrief())
+						requirement.Number, branch, asked)
 				}
 				return nil
 			})
@@ -46,12 +50,16 @@ func initializeBranchSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^each worker was told to open its pull request from that branch and leave it red$`,
 		func(ctx context.Context) error {
-			return eachTestWorker(ctx, func(_ *quaycrewv1.Job, worker *quaycrewv1.Job,
+			return eachTestWorker(ctx, func(_ *quaycrewv1.Job, run *quaycrewv1.Execution,
 				requirement job.Requirement) error {
+				asked, err := whatTheSessionWasAsked(ctx, run.GetSession())
+				if err != nil {
+					return err
+				}
 				for _, phrase := range []string{"leave it open", "Do not merge it"} {
-					if !strings.Contains(worker.GetBrief(), phrase) {
+					if !strings.Contains(asked, phrase) {
 						return fmt.Errorf("the worker writing requirement %d is not told %q: %s",
-							requirement.Number, phrase, worker.GetBrief())
+							requirement.Number, phrase, asked)
 					}
 				}
 				return nil
@@ -63,31 +71,26 @@ func initializeBranchSteps(sc *godog.ScenarioContext) {
 	})
 }
 
-// eachTestWorker runs one check over every worker that writes a requirement's tests, and refuses a
-// run that found no worker to check: a fan out that declared nothing reads as every worker passing.
+// eachTestWorker runs one check over every run that writes a requirement's tests, and refuses a fan
+// out that found no run to check: a stage that wrote nothing reads as every worker passing.
 func eachTestWorker(ctx context.Context,
-	check func(one *quaycrewv1.Job, worker *quaycrewv1.Job, requirement job.Requirement) error) error {
-	return eachWorkerHolding(ctx, job.ClaimOnRequirement, check)
-}
-
-func eachWorkerHolding(ctx context.Context, claim func(string, job.Requirement) string,
-	check func(one *quaycrewv1.Job, worker *quaycrewv1.Job, requirement job.Requirement) error) error {
+	check func(one *quaycrewv1.Job, run *quaycrewv1.Execution, requirement job.Requirement) error) error {
 	one, err := readJob(ctx, 0)
 	if err != nil {
 		return err
 	}
-	workers, err := theWorkers(ctx)
+	runs, err := theWorkers(ctx)
 	if err != nil {
 		return err
 	}
 	wanted := job.RequirementsOf(jobAsKept(one))
 	checked := 0
 	for _, requirement := range wanted {
-		for _, worker := range workers {
-			if worker.GetClaim() != claim(one.GetId(), requirement) {
+		for _, run := range runs {
+			if run.GetNumber() != int32(requirement.Number) {
 				continue
 			}
-			if err := check(one, worker, requirement); err != nil {
+			if err := check(one, run, requirement); err != nil {
 				return err
 			}
 			checked++

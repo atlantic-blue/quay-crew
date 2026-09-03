@@ -161,7 +161,7 @@ func Asked(one *Job) string {
 			said = append(said, ServesAPerson(one.Product))
 		}
 		said = append(said, one.Brief)
-		if ending := EndsOnItsBranch(one); ending != "" {
+		if ending := EndsOnItsBranch(one, nil); ending != "" {
 			said = append(said, ending)
 		}
 		if one.PlanApproved {
@@ -191,7 +191,7 @@ func Asked(one *Job) string {
 			said = append(said, asked)
 		}
 		said = append(said, one.Brief)
-		if ending := EndsOnItsBranch(one); ending != "" {
+		if ending := EndsOnItsBranch(one, nil); ending != "" {
 			said = append(said, ending)
 		}
 		// Last, because it is the system's line about how the job is done rather than part of what it is.
@@ -217,16 +217,16 @@ func Asked(one *Job) string {
 // second half of the refusal: the job is not landed, and the session that did the work is asked for
 // the one thing missing.
 //
-// A job that continues somebody else's pull request is asked for that one rather than for a new one.
+// A run that continues somebody else's pull request is asked for that one rather than for a new one.
 // Asking it to open a pull request is how one requirement's work ends up in two of them, and this
 // ask is the moment a session is most likely to do as it is told.
-func AskedForThePullRequest(one *Job) string {
-	if one.Branch != "" && one.Building {
-		return fmt.Sprintf("This job works in %s, on the branch %s, and its answer named no pull request "+
+func AskedForThePullRequest(one *Job, run *Execution) string {
+	if run != nil && run.Branch != "" && run.Stage == StageBuild {
+		return fmt.Sprintf("This run works in %s, on the branch %s, and its answer named no pull request "+
 			"against it, so nobody can tell where the work went. The pull request that branch lands in is "+
 			"already open: push your commits to %s and answer with its address. Do not open a second one. "+
-			"If you cannot push, say what stopped you. This answer ends the job, so state its outcome in "+
-			"it as well. %s", one.Repository, one.Branch, one.Branch, EndsWithAnOutcome())
+			"If you cannot push, say what stopped you. This answer ends the run, so state its outcome in "+
+			"it as well. %s", one.Repository, run.Branch, run.Branch, EndsWithAnOutcome())
 	}
 	return fmt.Sprintf("This job works in %s and its answer named no pull request against it, so the work is "+
 		"nowhere anybody can read it. Push your branch, open the pull request, and answer with its "+

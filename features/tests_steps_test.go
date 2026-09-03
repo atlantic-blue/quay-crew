@@ -53,24 +53,30 @@ func initializeTestStageSteps(sc *godog.ScenarioContext) {
 			if err != nil {
 				return err
 			}
-			workers, err := theWorkers(ctx)
+			runs, err := theWorkers(ctx)
 			if err != nil {
 				return err
 			}
-			held := map[string]string{}
+			held := map[int]string{}
 			for _, requirement := range job.RequirementsOf(jobAsKept(one)) {
-				held[job.ClaimOnRequirement(one.GetId(), requirement)] = job.BranchFor(jobAsKept(one), requirement)
+				held[requirement.Number] = job.BranchFor(jobAsKept(one), requirement)
 			}
-			for _, worker := range workers {
-				branch := held[worker.GetClaim()]
+			for _, run := range runs {
+				branch := held[int(run.GetNumber())]
 				if branch == "" {
 					return fmt.Errorf("the worker holding %q names no branch for its tests, so they go "+
-						"nowhere", worker.GetClaim())
+						"nowhere", run.GetClaim())
+				}
+				// What the session was actually asked, read off its task rather than off the row: a run
+				// carries no words a person wrote, and what it was sent is what it worked from.
+				asked, err := whatTheSessionWasAsked(ctx, run.GetSession())
+				if err != nil {
+					return err
 				}
 				for _, needed := range []string{branch, "commit every file you write"} {
-					if !strings.Contains(worker.GetBrief(), needed) {
+					if !strings.Contains(asked, needed) {
 						return fmt.Errorf("the worker holding %q is not told %q, so its tests stay in its "+
-							"own sandbox:\n%s", worker.GetClaim(), needed, worker.GetBrief())
+							"own sandbox:\n%s", run.GetClaim(), needed, asked)
 					}
 				}
 			}
@@ -97,27 +103,28 @@ func initializeTestStageSteps(sc *godog.ScenarioContext) {
 			if err != nil {
 				return err
 			}
-			workers, err := theWorkers(ctx)
+			runs, err := theWorkers(ctx)
 			if err != nil {
 				return err
 			}
-			if len(workers) != len(job.RequirementsOf(jobAsKept(one))) {
+			if len(runs) != len(job.RequirementsOf(jobAsKept(one))) {
 				return fmt.Errorf("%d workers are writing tests for %d requirements",
-					len(workers), len(job.RequirementsOf(jobAsKept(one))))
+					len(runs), len(job.RequirementsOf(jobAsKept(one))))
 			}
 			// The row itself buys no session for this stage. It is pending throughout, and every session
-			// the stage pays for belongs to a worker holding one requirement.
+			// the stage pays for belongs to one run holding one requirement.
 			if one.GetPhase() != job.PhasePending {
 				return fmt.Errorf("the job is %q while its workers write: %s",
 					one.GetPhase(), one.GetReason())
 			}
-			for _, worker := range workers {
-				if worker.GetSession() != "" && worker.GetSession() == one.GetSession() {
+			for _, run := range runs {
+				if run.GetSession() != "" && run.GetSession() == one.GetSession() {
 					return fmt.Errorf("a worker writes tests in the job's own conversation %q",
 						one.GetSession())
 				}
 			}
-			return nil
+			// And nothing the fan out wrote stands in the listing of declared work.
+			return noRunsInTheJobsListing(ctx, one)
 		})
 
 	sc.Step(`^each worker was given its own requirement and told not to implement it$`,
@@ -127,39 +134,43 @@ func initializeTestStageSteps(sc *godog.ScenarioContext) {
 				return err
 			}
 			wanted := job.RequirementsOf(jobAsKept(one))
-			workers, err := theWorkers(ctx)
+			runs, err := theWorkers(ctx)
 			if err != nil {
 				return err
 			}
-			for _, worker := range workers {
+			for _, run := range runs {
+				asked, err := whatTheSessionWasAsked(ctx, run.GetSession())
+				if err != nil {
+					return err
+				}
 				mine, others := "", 0
 				for _, requirement := range wanted {
-					if worker.GetClaim() == job.ClaimOnRequirement(one.GetId(), requirement) {
+					if run.GetClaim() == job.ClaimOnRequirement(one.GetId(), requirement) {
 						mine = requirement.Text
 						continue
 					}
-					if strings.Contains(worker.GetBrief(), requirement.Text) {
+					if strings.Contains(asked, requirement.Text) {
 						others++
 					}
 				}
 				if mine == "" {
-					return fmt.Errorf("worker %q claims %q, which is no requirement of this job",
-						worker.GetTitle(), worker.GetClaim())
+					return fmt.Errorf("the run of number %d claims %q, which is no requirement of this job",
+						run.GetNumber(), run.GetClaim())
 				}
-				if !strings.Contains(worker.GetBrief(), mine) || others > 0 {
+				if !strings.Contains(asked, mine) || others > 0 {
 					return fmt.Errorf("the worker holding %q was given %d other requirements as well",
 						mine, others)
 				}
-				if !strings.Contains(worker.GetBrief(), "Do not implement") {
+				if !strings.Contains(asked, "Do not implement") {
 					return fmt.Errorf("the worker holding %q was not told to leave the implementation "+
-						"alone: %q", mine, worker.GetBrief())
+						"alone: %q", mine, asked)
 				}
 			}
 			return nil
 		})
 
-	// Every worker runs and answers. It takes as many ticks as it takes: the workers are ordinary
-	// jobs, so they are started, dispatched and landed the way every other job is.
+	// Every worker runs and answers. It takes as many ticks as it takes: a run is claimed, dispatched
+	// and landed on its own passes, the way a job is.
 	sc.Step(`^every worker answers with its run$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		for range 5 {
@@ -167,17 +178,17 @@ func initializeTestStageSteps(sc *godog.ScenarioContext) {
 			if err := w.settled(ctx); err != nil {
 				return err
 			}
-			workers, err := theWorkers(ctx)
+			runs, err := theWorkers(ctx)
 			if err != nil {
 				return err
 			}
 			done := 0
-			for _, worker := range workers {
-				if job.Terminal(worker.GetPhase()) {
+			for _, run := range runs {
+				if job.Terminal(run.GetPhase()) {
 					done++
 				}
 			}
-			if len(workers) > 0 && done == len(workers) {
+			if len(runs) > 0 && done == len(runs) {
 				return nil
 			}
 		}
@@ -195,16 +206,16 @@ func initializeTestStageSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("this job has %d requirements, so it has no %dth", len(wanted), requirement)
 		}
 		claim := job.ClaimOnRequirement(one.GetId(), wanted[requirement-1])
-		workers, err := theWorkers(ctx)
+		runs, err := theWorkers(ctx)
 		if err != nil {
 			return err
 		}
-		for _, worker := range workers {
-			if worker.GetClaim() != claim {
+		for _, run := range runs {
+			if run.GetClaim() != claim {
 				continue
 			}
-			_, err := w.client.StopJob(ctx, &quaycrewv1.StopJobRequest{
-				Id: worker.GetId(), Reason: "the sandbox went away",
+			_, err := w.client.StopExecution(ctx, &quaycrewv1.StopExecutionRequest{
+				Id: run.GetId(), Reason: "the sandbox went away",
 			})
 			return err
 		}
@@ -213,20 +224,20 @@ func initializeTestStageSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^(\d+) workers? (?:are|is) writing tests, one for each requirement$`,
 		func(ctx context.Context, want int) error {
-			workers, err := theWorkers(ctx)
+			runs, err := theWorkers(ctx)
 			if err != nil {
 				return err
 			}
-			if len(workers) != want {
-				return fmt.Errorf("%d workers hold requirements of this job, want %d", len(workers), want)
+			if len(runs) != want {
+				return fmt.Errorf("%d workers hold requirements of this job, want %d", len(runs), want)
 			}
 			claims := map[string]bool{}
-			for _, worker := range workers {
-				if claims[worker.GetClaim()] {
+			for _, run := range runs {
+				if claims[run.GetClaim()] {
 					return fmt.Errorf("two workers claim %q, so both write the same requirement",
-						worker.GetClaim())
+						run.GetClaim())
 				}
-				claims[worker.GetClaim()] = true
+				claims[run.GetClaim()] = true
 			}
 			return nil
 		})
@@ -285,6 +296,45 @@ func initializeTestStageSteps(sc *godog.ScenarioContext) {
 		return theQuestionSays(ctx, fmt.Sprintf("requirement %d", requirement))
 	})
 
+	// The whole of the split, said at the surface a person reads. A run is not declared work, so the
+	// listing of declared work carries the one row somebody wrote and no other.
+	sc.Step(`^the jobs listing carries only the job somebody declared$`, func(ctx context.Context) error {
+		one, err := readJob(ctx, 0)
+		if err != nil {
+			return err
+		}
+		return noRunsInTheJobsListing(ctx, one)
+	})
+
+	// And what a run is, off the wire: the job it belongs to and the stage of that job it runs. Those
+	// two are what the stage gathers by, and what says a run is never read as a job.
+	sc.Step(`^each run says which job and which stage it is a run of$`, func(ctx context.Context) error {
+		one, err := readJob(ctx, 0)
+		if err != nil {
+			return err
+		}
+		runs, err := theWorkers(ctx)
+		if err != nil {
+			return err
+		}
+		if len(runs) == 0 {
+			return fmt.Errorf("this job has no runs, so this checked nothing")
+		}
+		for _, run := range runs {
+			if run.GetJob() != one.GetId() {
+				return fmt.Errorf("a run belongs to job %q, and this job is %q", run.GetJob(), one.GetId())
+			}
+			if run.GetStage() != job.StageTest {
+				return fmt.Errorf("a run of the test stage says it is a run of the %q stage", run.GetStage())
+			}
+			if run.GetNumber() < 1 {
+				return fmt.Errorf("a run says it is for number %d, and a requirement counts from one",
+					run.GetNumber())
+			}
+		}
+		return nil
+	})
+
 	sc.Step(`^the reading carries a failing test for every requirement$`, func(ctx context.Context) error {
 		one, err := readJob(ctx, 0)
 		if err != nil {
@@ -301,19 +351,56 @@ func initializeTestStageSteps(sc *godog.ScenarioContext) {
 	})
 }
 
-// theWorkers is every job this job's test stage declared, which is every job under it.
-func theWorkers(ctx context.Context) ([]*quaycrewv1.Job, error) {
+// theWorkers is every run this job's test stage made, read as the runs of that stage.
+func theWorkers(ctx context.Context) ([]*quaycrewv1.Execution, error) {
 	one, err := readJob(ctx, 0)
 	if err != nil {
 		return nil, err
 	}
-	listed, err := worldFrom(ctx).client.ListJobs(ctx, &quaycrewv1.ListJobsRequest{
-		Parent: one.GetId(),
+	listed, err := worldFrom(ctx).client.ListExecutions(ctx, &quaycrewv1.ListExecutionsRequest{
+		Job: one.GetId(), Stage: job.StageTest,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return listed.GetJobs(), nil
+	return listed.GetExecutions(), nil
+}
+
+// whatTheSessionWasAsked is the text of the last task one session was sent. A run carries no words a
+// person wrote, so this is where what it worked from is read.
+func whatTheSessionWasAsked(ctx context.Context, session string) (string, error) {
+	if session == "" {
+		return "", fmt.Errorf("this run holds no session, so nothing was asked of it")
+	}
+	tasks, err := worldFrom(ctx).client.ListTasks(ctx,
+		&quaycrewv1.ListTasksRequest{Session: session})
+	if err != nil {
+		return "", err
+	}
+	if len(tasks.GetTasks()) == 0 {
+		return "", fmt.Errorf("session %s was sent no task", session)
+	}
+	return tasks.GetTasks()[len(tasks.GetTasks())-1].GetPrompt(), nil
+}
+
+// noRunsInTheJobsListing refuses a listing of declared work that carries a row nobody declared.
+//
+// It is the whole point of the split, and it is checked here rather than only in the store because
+// this is the surface a person reads: a job with five runs under it used to be six rows.
+func noRunsInTheJobsListing(ctx context.Context, one *quaycrewv1.Job) error {
+	listed, err := worldFrom(ctx).client.ListJobs(ctx, &quaycrewv1.ListJobsRequest{
+		Project: one.GetProject(),
+	})
+	if err != nil {
+		return err
+	}
+	for _, row := range listed.GetJobs() {
+		if row.GetId() != one.GetId() {
+			return fmt.Errorf("the jobs listing carries %q, %q, which nobody declared",
+				row.GetId(), row.GetTitle())
+		}
+	}
+	return nil
 }
 
 // theQuestionSays holds what a person was asked to a phrase, because the question is the whole of
