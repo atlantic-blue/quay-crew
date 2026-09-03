@@ -10,6 +10,43 @@ import (
 	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
+// jobColumns is the shape of a job on one line: the same columns in the listing of every job and in
+// the view of one of them, so a person who has learnt to read a row here reads it there.
+//
+// The same rules the sessions listing already follows: a name carries its own colour so the eye
+// finds its rows without reading them, identifiers and counts are dim so they stop competing, and
+// the one cell that says how the row is doing is coloured by meaning.
+func jobColumns() []Column {
+	return []Column{
+		// Headed job because it is the value every job command takes, the way the sessions
+		// listing heads its first column session. Eight wide, which is the shortened identifier
+		// itself: every column here is as wide as the widest thing it can hold and no wider,
+		// because what they leave over is the title.
+		{Title: "job", Width: 8, Colour: dim},
+		{Title: "phase", Width: 7, Colour: colourOfPhase},
+		// How far through the work the job is, beside what the system is doing with the row. A
+		// job waiting for an answer about what it understood and a job waiting for an answer
+		// about a failed build both read "asking", and those two are days apart.
+		{Title: "stage", Width: 8, Colour: dim},
+		// What the job ended on, beside where it got to. The two say different things: the phase
+		// is the system's account of the attempt, and this is the work's own. Five jobs reading
+		// "done" with one of them unable to do its work is the row this column exists for.
+		{Title: "outcome", Width: 8, Colour: colourOfOutcome},
+		// Gives way third: a system where every job names a role has a column of one word, and by
+		// then the title is worth more than it is.
+		{Title: "role", Width: 16, Give: 3, Colour: colourOfName},
+		// The flexible column, because it is the line an operator reads to know what this is.
+		{Title: "title", Width: 0},
+		// Gives way second, since a job with no session yet has nothing here anyway.
+		{Title: "session", Width: 10, Give: 2, Colour: dim},
+		// Gives way first. It is the count that only matters once something has gone wrong twice,
+		// and it is headed by the shorter word because the heading was five characters wider than
+		// anything it ever holds, all of them taken off the title.
+		{Title: "tries", Width: 5, Give: 1, Colour: dim},
+		{Title: "age", Width: 6, Colour: colourOfAge},
+	}
+}
+
 // Jobs lists what the system has been asked to do, which is the work itself rather than the layer
 // underneath it. The console was built when a session was the unit of work, and a job is what an
 // operator declares now: five were running on this repository the day this view did not exist.
@@ -23,48 +60,17 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	return Resource{
 		Name:    "jobs",
 		Aliases: []string{"j", "job"},
-		// The same rules the sessions listing already follows: a name carries its own colour so the
-		// eye finds its rows without reading them, identifiers and counts are dim so they stop
-		// competing, and the one cell that says how the row is doing is coloured by meaning.
-		Columns: []Column{
-			// Headed job because it is the value every job command takes, the way the sessions
-			// listing heads its first column session. Eight wide, which is the shortened identifier
-			// itself: every column here is as wide as the widest thing it can hold and no wider,
-			// because what they leave over is the title.
-			{Title: "job", Width: 8, Colour: dim},
-			{Title: "phase", Width: 7, Colour: colourOfPhase},
-			// How far through the work the job is, beside what the system is doing with the row. A
-			// job waiting for an answer about what it understood and a job waiting for an answer
-			// about a failed build both read "asking", and those two are days apart.
-			{Title: "stage", Width: 8, Colour: dim},
-			// What the job ended on, beside where it got to. The two say different things: the phase
-			// is the system's account of the attempt, and this is the work's own. Five jobs reading
-			// "done" with one of them unable to do its work is the row this column exists for.
-			{Title: "outcome", Width: 8, Colour: colourOfOutcome},
-			// Gives way third: a system where every job names a role has a column of one word, and by
-			// then the title is worth more than it is.
-			{Title: "role", Width: 16, Give: 3, Colour: colourOfName},
-			// The flexible column, because it is the line an operator reads to know what this is.
-			{Title: "title", Width: 0},
-			// Gives way second, since a job with no session yet has nothing here anyway.
-			{Title: "session", Width: 10, Give: 2, Colour: dim},
-			// Gives way first. It is the count that only matters once something has gone wrong twice,
-			// and it is headed by the shorter word because the heading was five characters wider than
-			// anything it ever holds, all of them taken off the title.
-			{Title: "tries", Width: 5, Give: 1, Colour: dim},
-			{Title: "age", Width: 6, Colour: colourOfAge},
-		},
+		Columns: jobColumns(),
 		// No order of its own: both stores answer newest first, and sorting here would be a second
 		// order to keep in step with the command line. The age column cannot hold this order either
 		// way, because these cells are rendered text and sorting them compares "10d" against "1d" as
 		// words.
 		SortBy: -1,
-		// What the job did, rather than the row it runs in. A job's session is one row and a listing
-		// of one row says nothing the line above it did not; the tasks are the whole account of what
-		// was asked and what came back. The sessions view cannot be scoped to a session either: its
-		// lister reads its parent as a project, so descending there would list nothing at all.
-		DrillTo: "exec",
-		DrillBy: sessionOfJob,
+		// The job itself, scoped by the job under the cursor. Enter used to open the tasks of the
+		// session under the job, which is one level past the thing a person pointed at, and it
+		// refused a job that had reached no session at all: the row somebody watches most is the row
+		// it would not open. What that session ran is a level below the job now.
+		DrillTo: "onejob",
 		Actions: []Action{
 			{
 				// A job that fans out has one part for each requirement, and all of them used to be
@@ -78,33 +84,7 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 				Label: "Parts",
 				Folds: true,
 			},
-			{
-				// A job that stops for a person rings the bell and draws a line across the listing,
-				// and until now no key answered it: the answer had to be typed into the command line
-				// or into the web briefing, which is the one place the operator was not looking.
-				//
-				// `a` for answer. It is free on this view, and it costs nothing that was here before:
-				// enter descends into what the job did, and the sessions view's own `a` opens a
-				// conversation, which a job row has nothing to do with.
-				Key:     "a",
-				Label:   "Answer",
-				Asks:    "answer",
-				Refuses: onlyAnAskingJob,
-				RunTyped: func(ctx context.Context, row Row, typed string) error {
-					if row.ID == "" {
-						return fmt.Errorf("no job selected")
-					}
-					// An empty line is a cancel here rather than an answer, which is the opposite of
-					// naming a session: an empty name clears a name, and an empty answer is a job
-					// restarted with nothing to go on and a person who thinks they answered it.
-					if strings.TrimSpace(typed) == "" {
-						return fmt.Errorf("nothing was typed, so %s is still asking: answer it in words, "+
-							"or press escape to leave it", display.ShortID(row.ID))
-					}
-					_, err := client.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{Id: row.ID, Answer: typed})
-					return err
-				},
-			},
+			answerAJob(client, false),
 			{
 				// The same key, in the same meaning, as the sessions view: backspace stops the thing
 				// under the cursor and asks first. A job that stopped by itself and one somebody
@@ -150,19 +130,41 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	}
 }
 
-// sessionOfJob is the conversation to descend into, and the refusal when there is none yet.
+// answerAJob is the key that tells a job that stopped for a person what to do. A job that stops rings
+// the bell and draws a line across the listing, and until this key nothing answered it: the answer
+// had to be typed at the command line or into the web briefing, which is the one place the person
+// watching was not looking.
 //
-// A pending job has no session, which is the normal state rather than a fault, so what it says names
-// the phase it is in and stops there.
-func sessionOfJob(row Row) (string, error) {
-	if row.ID == "" {
-		return "", fmt.Errorf("no job selected")
+// `a` for answer, on the listing of every job and on the view of one job, because a second letter for
+// the same thing is a letter somebody has to learn. It costs nothing that was there before: enter
+// opens a job, and the sessions view's own `a` opens a conversation, which a job row has nothing to
+// do with.
+//
+// onScope is what makes it the job's key rather than the cursor's. On the listing the row under the
+// cursor is the job. On a job's own view the rows are the work running under that job, and a run has
+// no question, so the key reads what the view is open on.
+func answerAJob(client quaycrewv1.ControlPlaneServiceClient, onScope bool) Action {
+	return Action{
+		Key:     "a",
+		Label:   "Answer",
+		Asks:    "answer",
+		OnScope: onScope,
+		Refuses: onlyAnAskingJob,
+		RunTyped: func(ctx context.Context, row Row, typed string) error {
+			if row.ID == "" {
+				return fmt.Errorf("no job selected")
+			}
+			// An empty line is a cancel here rather than an answer, which is the opposite of naming a
+			// session: an empty name clears a name, and an empty answer is a job restarted with
+			// nothing to go on and a person who thinks they answered it.
+			if strings.TrimSpace(typed) == "" {
+				return fmt.Errorf("nothing was typed, so %s is still asking: answer it in words, "+
+					"or press escape to leave it", display.ShortID(row.ID))
+			}
+			_, err := client.AnswerJob(ctx, &quaycrewv1.AnswerJobRequest{Id: row.ID, Answer: typed})
+			return err
+		},
 	}
-	if row.Parent == "" {
-		return "", fmt.Errorf("%s is %s, so there is nothing it has done yet: a job reaches a session when a controller starts it",
-			display.ShortID(row.ID), phaseOfRow(row))
-	}
-	return row.Parent, nil
 }
 
 // Where each cell a reader of a row goes looking for sits in it. They are named so a column added in

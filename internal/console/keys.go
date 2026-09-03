@@ -701,5 +701,37 @@ func (m Model) performOnScope(action Action) (Model, tea.Cmd) {
 			"from the row above it", strings.ToLower(action.Label)), true
 		return m, nil
 	}
-	return m.perform(action, Row{ID: m.parent})
+	row := m.scopeRow()
+	// The same two answers a key gets on the row under the cursor, in the same order: a scope this
+	// key cannot act on is refused before anything opens, and a key that wants a line of text opens
+	// it about the scope. Answering a job is what needs both: the rows are the runs under the job,
+	// and asking somebody to type an answer the system will throw away is worse than a key that says
+	// why it will not.
+	if action.Refuses != nil {
+		if err := action.Refuses(row); err != nil {
+			m.err, m.held = err, true
+			return m, nil
+		}
+	}
+	if action.RunTyped != nil {
+		m.mode, m.typing, m.input = modeType, pending{action: action, row: row}, ""
+		if action.Typed != nil {
+			m.input = action.Typed(row)
+		}
+		return m, nil
+	}
+	return m.perform(action, row)
+}
+
+// scopeRow is what the view is open on, as a row. The listing's own row for it is used where there is
+// one, so a key acting on the scope reads the cells and the name a person is looking at rather than
+// an identifier with nothing else on it. A view whose listing does not carry its scope falls back to
+// the identifier, which is what every key that acts on a scope had before.
+func (m Model) scopeRow() Row {
+	for _, row := range m.rows {
+		if row.ID == m.parent {
+			return row
+		}
+	}
+	return Row{ID: m.parent}
 }

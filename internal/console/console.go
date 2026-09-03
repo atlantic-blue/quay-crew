@@ -24,7 +24,7 @@ func NewDefaultRegistry(client quaycrewv1.ControlPlaneServiceClient) (*Registry,
 	if client == nil {
 		return nil, fmt.Errorf("console: nil control plane client")
 	}
-	registry, err := NewRegistry(Sessions(client), Jobs(client), Exec(client), Archived(client), Projects(client),
+	registry, err := NewRegistry(Sessions(client), Jobs(client), OneJob(client), Exec(client), Archived(client), Projects(client),
 		Workspaces(client), Contexts(client), Secrets(client), Flows(client), Roles(client), Skills(client),
 		Hooks(client), Stats(client), Room(client))
 	if err != nil {
