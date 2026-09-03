@@ -480,7 +480,19 @@ func (m Model) drill() (Model, tea.Cmd) {
 	if !hasRow {
 		return m, nil
 	}
-	return m.descendInto(m.active.DrillTo, row)
+	return m.descendInto(m.drillFor(row), row)
+}
+
+// drillFor is the resource this row opens, which is the view's own child unless the view says
+// otherwise for this kind of row.
+func (m Model) drillFor(row Row) string {
+	if m.active.DrillWhere == nil {
+		return m.active.DrillTo
+	}
+	if into := m.active.DrillWhere(row); into != "" {
+		return into
+	}
+	return m.active.DrillTo
 }
 
 // descendInto opens a resource scoped to one row, remembering where to come back to. It is what both

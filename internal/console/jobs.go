@@ -59,12 +59,21 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		// way, because these cells are rendered text and sorting them compares "10d" against "1d" as
 		// words.
 		SortBy: -1,
-		// What the job did, rather than the row it runs in. A job's session is one row and a listing
-		// of one row says nothing the line above it did not; the tasks are the whole account of what
-		// was asked and what came back. The sessions view cannot be scoped to a session either: its
-		// lister reads its parent as a project, so descending there would list nothing at all.
-		DrillTo: "exec",
-		DrillBy: sessionOfJob,
+		// A job opens the conversations running under it. Its own session is one of six on a job in
+		// its test stage, and the five beside it were readable only at the command line while enter
+		// here descended straight into what the job's own session had done. That reading is one key
+		// further in now: `t` on any of the six lines.
+		//
+		// A run drawn beneath a job is one session rather than a fan out of them, so it keeps
+		// opening what it did.
+		DrillTo: "jobsessions",
+		DrillWhere: func(row Row) string {
+			if row.Under != "" {
+				return "exec"
+			}
+			return "jobsessions"
+		},
+		DrillBy: scopeOfJobRow,
 		Actions: []Action{
 			{
 				// A job that fans out has one part for each requirement, and all of them used to be
@@ -148,6 +157,21 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			return rows, nil
 		},
 	}
+}
+
+// scopeOfJobRow is what enter opens each kind of row on, scoped by.
+//
+// A job is scoped by itself, because what opens under it is every conversation running under that
+// job. A run drawn beneath a job is scoped by the conversation it works in, because what opens under
+// it is what that one conversation did.
+func scopeOfJobRow(row Row) (string, error) {
+	if row.ID == "" {
+		return "", fmt.Errorf("no job selected")
+	}
+	if row.Under != "" {
+		return sessionOfJob(row)
+	}
+	return row.ID, nil
 }
 
 // sessionOfJob is the conversation to descend into, and the refusal when there is none yet.

@@ -500,3 +500,51 @@ func initializeConsoleAnswerSteps(sc *godog.ScenarioContext) {
 			said, eventKinds(events))
 	})
 }
+
+// initializeConsoleJobSessionsSteps registers the steps for the conversations running under one job.
+// A job in its test stage holds its own and one for each requirement its stage fanned out into, and
+// this is the view that draws them.
+func initializeConsoleJobSessionsSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^the console draws one line for each session running under the job$`, func(ctx context.Context) error {
+		one, err := readJob(ctx, 0)
+		if err != nil {
+			return err
+		}
+		runs, err := worldFrom(ctx).client.ListExecutions(ctx, &quaycrewv1.ListExecutionsRequest{
+			Job: one.GetId(),
+		})
+		if err != nil {
+			return err
+		}
+		running := []string{one.GetSession()}
+		for _, run := range runs.GetExecutions() {
+			running = append(running, run.GetSession())
+		}
+
+		rows := consoleFrom(ctx).model.Listed()
+		view := consoleFrom(ctx).model.View()
+		if len(rows) != len(running) {
+			return fmt.Errorf("the console draws %d lines, want one for each of the %d sessions running "+
+				"under the job:\n%s", len(rows), len(running), view)
+		}
+		// Read as a set, and by the identifier rather than by the row it landed on: which session is
+		// drawn on which line is not something this view promises, so a step that indexed into the
+		// order would pass by accident.
+		for _, session := range running {
+			on := 0
+			for _, row := range rows {
+				if row.ID == session {
+					on++
+				}
+			}
+			if on != 1 {
+				return fmt.Errorf("session %s is on %d lines of the job, want one:\n%s",
+					display.ShortID(session), on, view)
+			}
+			if !strings.Contains(view, display.ShortID(session)) {
+				return fmt.Errorf("the screen does not name session %s:\n%s", display.ShortID(session), view)
+			}
+		}
+		return nil
+	})
+}

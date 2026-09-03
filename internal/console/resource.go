@@ -226,6 +226,11 @@ type Resource struct {
 	// DrillTo is the resource enter descends into, scoped to the selected row. Empty means enter
 	// does nothing here.
 	DrillTo string
+	// DrillWhere is the resource enter opens for one row, where a view draws two kinds of row and
+	// they descend into different things. The jobs listing is the case: a job opens the sessions
+	// running under it, and a run drawn beneath that job opens what that one run did. An empty
+	// answer, and a nil function, fall back to DrillTo.
+	DrillWhere func(row Row) string
 	// DrillBy is the identifier the child is scoped by, when it is not the row's own. Jobs is the
 	// case: what a job did is its session's tasks, so the child is scoped by the session the row
 	// names rather than by the job. Nil scopes by the row's own identifier, which is every other

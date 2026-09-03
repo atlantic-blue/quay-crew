@@ -512,6 +512,19 @@ Feature: The operator sees the system from the console
     And the operator presses tab again
     Then the screen carries the job and not its parts
 
+  # A job in its test stage holds six conversations: the one it runs in, and one for each requirement
+  # its stage fanned out into. Five of the six were readable only at the command line, because enter
+  # on a job went straight into what the job's own session had done and said nothing about the runs
+  # beside it. See issue 676.
+  Scenario: Opening a job shows every session running under it, one line each
+    Given a job titled "read the electricity bill"
+    When the controller ticks
+    And the task the controller sent lands
+    And its test stage fans out into 5 runs
+    And the operator opens the console on jobs
+    And the operator presses enter on the selected job
+    Then the console draws one line for each session running under the job
+
   # The phase says what the system is doing with the row: it is pending, it is running, it is asking.
   # It never said how far through the work the job is. A job waiting for an answer about what it
   # understood and a job waiting for an answer about a failed build both read "asking", and those two
