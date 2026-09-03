@@ -919,16 +919,6 @@ func Stats(client quaycrewv1.ControlPlaneServiceClient) Resource {
 	}
 }
 
-// sandboxStatus is what the session beside a container says it is doing. A container the system holds
-// no session for is a stray, and saying so is more useful than an empty cell: the system does not know
-// what it is, and nothing will ever stop it.
-func sandboxStatus(status string) string {
-	if status == "" {
-		return "stray, no session"
-	}
-	return status
-}
-
 // Keys is every key the console answers to, as a view rather than only as the overlay behind the
 // question mark. The header carries this view's own keys; the rest have to be somewhere you can leave
 // open beside what you are doing.

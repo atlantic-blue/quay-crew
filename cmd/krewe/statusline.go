@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/statusline"
@@ -14,25 +13,6 @@ import (
 // JSON describing the session; a megabyte is far more than that and stops a pipe that never ends
 // from holding the draw open.
 const statusLineLimit = 1 << 20
-
-// surfaceStatusLine is what the line under a conversation calls itself on the record when it carries
-// the telling.
-const surfaceStatusLine = "status line"
-
-// waitingFile is where the last count of what waits for a person is kept, inside the conversation
-// directory the system already mounts into every sandbox.
-const waitingFile = "waiting"
-
-// waitingFreshFor is how long that count stands before this asks the system again.
-//
-// Three seconds, which is the console's own refresh, so the two surfaces cannot be more than one
-// beat apart. The runtime redraws this line several times a second, and a call on every draw would
-// be several calls a second from inside a container for a number that changes when a job stops.
-const waitingFreshFor = 3 * time.Second
-
-// waitingTimeout caps the call. This line has to be drawn now, so a system that is slow to answer
-// leaves the telling off rather than holding up the prompt.
-const waitingTimeout = 500 * time.Millisecond
 
 // runStatusLine draws the line the model runtime keeps under the conversation, so an operator
 // attached to a session can see how much of the context window it has used, and whether anything is

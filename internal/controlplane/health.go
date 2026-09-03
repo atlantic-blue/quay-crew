@@ -15,16 +15,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// healthStream is where a health probe writes its record. It is a stream of the system rather than of
-// a workspace, because the question is about the system and no workspace owns it.
-const healthStream = "health"
-
 // healthWait is what one health probe is given before it reports the component down.
 const healthWait = 5 * time.Second
-
-// healthWorkspace namespaces that stream. A workspace of this name would share the topic, which
-// costs nothing: the record carries no workspace and nothing consumes it.
-const healthWorkspace = "system"
 
 // probeEvery is the floor under how stale the reading a view reads may be.
 //

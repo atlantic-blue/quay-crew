@@ -400,26 +400,6 @@ func theShapeOf(text string) []string {
 	return wrong
 }
 
-// diagramsIn returns every mermaid block in a document.
-func diagramsIn(text string) []string {
-	const opener = "```mermaid"
-	var diagrams []string
-	rest := text
-	for {
-		opened := strings.Index(rest, opener)
-		if opened < 0 {
-			return diagrams
-		}
-		rest = rest[opened+len(opener):]
-		closed := strings.Index(rest, "```")
-		if closed < 0 {
-			return diagrams
-		}
-		diagrams = append(diagrams, rest[:closed])
-		rest = rest[closed:]
-	}
-}
-
 // unreusableMarkdownIn returns every line carrying a construct a reader cannot copy back out. A
 // blockquote renders as a bar down the left of every line and wraps the text in markers. A table
 // reads as a grid and reuses as nothing. A dash used as punctuation is neither, and is house style.

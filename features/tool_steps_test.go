@@ -197,14 +197,3 @@ func says(stream, got, want string) error {
 	}
 	return nil
 }
-
-// runToolIn runs the tool in a home directory the caller keeps, for a scenario whose command reads
-// where the operator is standing: the move and the command have to be two runs of the same tool in
-// one home.
-func runToolIn(ctx context.Context, home string, args ...string) error {
-	binary, err := kreweBinary()
-	if err != nil {
-		return err
-	}
-	return runBinaryInHome(ctx, binary, home, "", args...)
-}

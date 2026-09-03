@@ -74,15 +74,6 @@ func (s *Server) capabilityOf(ctx context.Context, session *quaycrewv1.Session) 
 	return s.withoutUnusable(ctx, session.GetWorkspace(), s.heldIn(ctx, session.GetWorkspace()))
 }
 
-// leftOutIn is every skill the workspace holds that its sessions are not given, and why.
-//
-// It is the same reading capabilityOf makes, asked of a workspace rather than of a session, so a
-// caller declaring a job is told what a session in that workspace will be born without. Answering it
-// any other way is how a listing comes to say one thing while the sandbox does another.
-func (s *Server) leftOutIn(ctx context.Context, workspace string) []notGiven {
-	return s.withoutUnusable(ctx, workspace, s.heldIn(ctx, workspace)).leftOut
-}
-
 // heldIn is every skill a workspace's sessions could hold, before the workspace's own secrets are
 // held against it: the system's and the workspace's, with where each mounts.
 func (s *Server) heldIn(ctx context.Context, workspace string) capability {
