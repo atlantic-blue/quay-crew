@@ -186,29 +186,35 @@ func TestAnAnswerWithNothingUnderTheLineStillAsksSomething(t *testing.T) {
 	}
 }
 
-// A question is read by a person in a terminal, so it is held to the ceiling the record holds every
-// question to. An answer too long to carry whole is cut, and never refused: refusing it would leave
-// the job running, which is the whole fault.
-func TestALongAnswerIsCutRatherThanRefused(t *testing.T) {
+// A question is read by a person in a terminal, and a long answer used to be cut before the record
+// kept it. The record keeps the whole of it now: a surface that draws a question in one line cuts it
+// there, and a person reaches the rest with krewe job show. Cutting on the way in left nothing for
+// that command to print.
+func TestALongAnswerIsKeptWholeRatherThanCut(t *testing.T) {
 	said := ""
 	for range 400 {
 		said += "the store bills nothing at rest. "
 	}
 	asked := TheDecisionPutToAPerson(said+"\n\n"+OutcomeMarker+" "+OutcomeDecide, "session-1")
-	if len(asked) > QuestionLimit {
-		t.Fatalf("the question is %d bytes and a question may be %d", len(asked), QuestionLimit)
+	if len(asked) <= QuestionLimit {
+		t.Fatalf("the answer is %d bytes and a question was held to %d, so this proves nothing about a "+
+			"long one", len(asked), QuestionLimit)
+	}
+	if !strings.Contains(asked, strings.TrimSpace(said)) {
+		t.Fatalf("the question lost the answer it was made from: %q", asked)
 	}
 	if _, err := TidyQuestion(asked); err != nil {
 		t.Fatalf("the record refuses this question: %v", err)
 	}
-	if !strings.Contains(asked, "conversation") {
-		t.Fatalf("a cut question does not say where the rest is: %q", asked)
+	if strings.Contains(asked, "cut here") {
+		t.Fatalf("the record says it cut a question it kept whole: %q", asked)
 	}
 }
 
-// The cut lands on a character rather than inside one, so a question is never handed over ending in
-// a broken rune.
-func TestACutQuestionIsStillText(t *testing.T) {
+// Every character survives, because a cut inside one leaves a question mark on the screen of anybody
+// whose words were not written in English. Nothing cuts here now, so what this holds is that the
+// record hands the characters on untouched.
+func TestAQuestionKeepsEveryCharacter(t *testing.T) {
 	said := ""
 	for range 2000 {
 		said += "café "
@@ -216,5 +222,8 @@ func TestACutQuestionIsStillText(t *testing.T) {
 	asked := TheDecisionPutToAPerson(said+"\n\n"+OutcomeMarker+" "+OutcomeDecide, "session-1")
 	if !utf8.ValidString(asked) {
 		t.Fatal("the question was cut inside a character")
+	}
+	if strings.Count(asked, "café") != 2000 {
+		t.Fatalf("the question carries %d of the 2000 words it was given", strings.Count(asked, "café"))
 	}
 }

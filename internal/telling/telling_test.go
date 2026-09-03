@@ -3,6 +3,7 @@ package telling_test
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/job"
@@ -140,6 +141,30 @@ func aQuestionThatFitsIsNotMarkedAsCut(t *testing.T) {
 	for _, marker := range []string{"krewe job show", "…"} {
 		if strings.Contains(said, marker) {
 			t.Errorf("a question that fits is marked as cut: %q", said)
+		}
+	}
+}
+
+// The cut lands between characters and never inside one. A question written in words that are not
+// English is cut here like any other, and half a character is a question mark on the screen of the
+// person reading it.
+func TestACutQuestionIsStillText(t *testing.T) {
+	// One unbroken run of characters that are two bytes each, so there is no space for the cut to
+	// fall back to and it lands where the arithmetic puts it. The run is offset by a few plain
+	// characters in turn, because a cut counted in bytes lands between two of these characters on one
+	// offset and inside one on the next.
+	for offset := range 4 {
+		question := strings.Repeat("a", offset) + strings.Repeat("é", 400)
+		said := telling.Line(waiting("f71415ba9c2e4d1a8b3c5d7e", job.WaitingAsking, question, 10, false))
+
+		if !utf8.ValidString(said) {
+			t.Fatalf("a question offset by %d characters was cut inside a character: %q", offset, said)
+		}
+		if !strings.Contains(said, "éé") {
+			t.Fatalf("the line lost the words it was cutting: %q", said)
+		}
+		if !strings.Contains(said, "krewe job show") {
+			t.Fatalf("the cut does not say where the whole question is: %q", said)
 		}
 	}
 }

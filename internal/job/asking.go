@@ -18,11 +18,16 @@ import (
 // between. Nothing but an answer moves the job while it stands, which is the difference between a
 // gate and a note.
 const (
-	// QuestionLimit is how long a question may be.
+	// QuestionLimit is how long a question is expected to be, and how much of one a narrow surface
+	// draws.
 	//
 	// Shorter than a brief on purpose. A question is read by a person in a terminal, usually one who
 	// is doing something else, and one that does not fit on a screen is one nobody reads to the end.
 	// What it has to carry is the decision and what each answer costs, which fits.
+	//
+	// It takes nothing away now. A question over it is kept word for word, because a question the
+	// record refused is a job stopped over the length of the thing it needed answered. The surfaces
+	// that draw a question in one line cut it there and say so.
 	QuestionLimit = 4096
 	// TellingLimit is how long an answer may be. It reaches the session as a task, so it is held to
 	// the same ceiling a brief is: it is read by a model, and the reason a brief has a ceiling is
@@ -31,16 +36,14 @@ const (
 )
 
 // TidyQuestion is a question as the system keeps it, and the refusal where it could not be kept.
+//
+// Length is not one of the refusals. A question over the guide is kept word for word, and the
+// surfaces that draw it in one line cut it there.
 func TidyQuestion(question string) (string, error) {
 	tidy := strings.TrimSpace(question)
-	switch {
-	case tidy == "":
+	if tidy == "" {
 		return "", fmt.Errorf("a question needs to say what is being decided: ask it in a sentence, " +
 			"and say what each answer costs, because the person answering has only what you write here")
-	case len(tidy) > QuestionLimit:
-		return "", fmt.Errorf("this question is %d bytes and a question may be %d: it is read by a person "+
-			"in a terminal, so say the decision and what each answer costs and leave the working out of it",
-			len(tidy), QuestionLimit)
 	}
 	return tidy, nil
 }

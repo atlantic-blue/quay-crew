@@ -11,3 +11,8 @@ question that wrapped over four lines would push the output off a short screen. 
 80 columns and says which command holds the rest: `796ed880 asks: aurora serverless version two
 bills… (krewe job show 796ed880)`. A mark on its own says the text stops. It does not say where the
 rest is, and the rest is the reason somebody wrote a question that long.
+
+The reader stops refusing a long question too. `TidyQuestion` in
+[internal/job/asking.go](internal/job/asking.go) refused a question over 4096 bytes, so a session
+that needed a long decision answered got nothing to the person at all. It keeps the words now.
+`QuestionLimit` is the width a surface draws, and the surfaces that draw one line cut there.
