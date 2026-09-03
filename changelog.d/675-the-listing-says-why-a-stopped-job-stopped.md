@@ -1,25 +1,22 @@
 **`krewe job list` says why each stopped job stopped, on the row.** A stopped row read `stopped`, a
 dash, a dash and the title. The reason was on the record and on the wire already, so the only way to
-read it was one `krewe job show` for each stopped row. A person looking at ten stopped jobs typed ten
+read it was one `krewe job show` for each stopped row. A person looking at ten stopped rows typed ten
 commands before they knew which one needed them
 ([#675](https://github.com/atlantic-blue/quay-krewe/issues/675)).
 
-The row now carries a column between the outcome and the title. It holds the words a person typed
-with `krewe job stop`, and it holds the words the system wrote when nobody typed any. This is a live
-listing, from a plane running the in memory store and the echo model on 3 September 2026:
+The row now carries the reason in a column between the outcome and the title. It holds the words a
+person typed with `krewe job stop`. It holds the words the system wrote when nobody typed any. The
+cell is empty on a row that did not stop. Every title then starts in the same place, and the listing
+reads down the screen. `krewe job list system` and `krewe job list --phase stopped` say the same
+thing, because they are the same listing.
 
-    313e183d   pending  -         -                                                  read the gas bill
-    607cc3c2   stopped  -         -         the meter reading is wrong               pay the water bill
-    601aefe3   stopped  -         -         the bank refused the direct debit        read the electricity bill
+This is a real listing. A control plane drew it on 3 September 2026, with the in memory store, the
+echo model and the local sandbox provider:
 
-The column is 40 characters wide. It is there when a row of the listing stopped. It is not there at
-all when no row stopped, so a listing with no stopped work reads as it read before. The cell is empty
-on a row that did not stop, so every title starts in the same place.
+    c9db0133   pending  -         -                                                  check the council tax band
+    3c08cbf7   stopped  -         -         this job's answer states no outcome, so… check the council tax
+    aa03780d   stopped  -         -         the meter reading is wrong               pay the water bill
+    1c462838   stopped  -         -         the bank refused the direct debit        read the electricity bill
 
-A pending job the machine has no room for carries a reason too, and that one stays out of this
-column. It is one fact about the machine, and the listing says it once under the rows. On the rows it
-would be the same sentence on every held row, which buries the row that stopped.
-
-A failed job does not fill the column yet, and a reason longer than the column takes the room it
-needs. Requirement 2 of the issue carries the failed row. Requirement 3 carries the cut and the mark
-that says the text goes on.
+The column, its width and its cut are the ones the failed row uses. Read the two entries beside this
+one for when the column is there at all, and for what happens to a reason longer than it.
