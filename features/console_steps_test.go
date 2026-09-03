@@ -371,6 +371,12 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return c.list(ctx, "")
 	})
 
+	// The command bar is how any word reaches a view, so a spelling the view used to answer to is
+	// typed the way an operator types it: colon, the word, enter, against the real console.
+	sc.Step(`^the operator types "([^"]*)" into the command bar$`, func(ctx context.Context, typed string) error {
+		return consoleFrom(ctx).openModelOn(worldFrom(ctx), typed)
+	})
+
 	sc.Step(`^typing "([^"]*)" in the console opens nothing$`, func(ctx context.Context, typed string) error {
 		registry, err := console.NewDefaultRegistry(worldFrom(ctx).client)
 		if err != nil {
