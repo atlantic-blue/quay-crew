@@ -35,10 +35,11 @@ func openJobRecord(client quaycrewv1.ControlPlaneServiceClient, row Row) tea.Cmd
 	if row.ID == "" || row.Under != "" {
 		return nil
 	}
+	// A console with no system cannot read a job, so enter goes down into what the job ran, the way
+	// it did before this page existed. Taking the key away from the one console that has nothing
+	// else to offer would leave a person with a refusal where they had a listing.
 	if client == nil {
-		return func() tea.Msg {
-			return jobRecordMsg{err: fmt.Errorf("this console cannot read a job: it was opened without a system")}
-		}
+		return nil
 	}
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
