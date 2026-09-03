@@ -366,6 +366,57 @@ func initializeConsoleViewSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// What the row says, read off the screen the operator has. The summary is the line the manifest
+	// carries, so a cell holding anything else is a cell built from something the system did not say.
+	sc.Step(`^the skill's row says what the skill is for$`, func(ctx context.Context) error {
+		c := consoleFrom(ctx)
+		row, err := onlyRow(c)
+		if err != nil {
+			return err
+		}
+		held, err := worldFrom(ctx).client.ListSkills(ctx, &quaycrewv1.ListSkillsRequest{})
+		if err != nil {
+			return err
+		}
+		if len(held.GetSkills()) != 1 {
+			return fmt.Errorf("the system holds %d skills, want the one this scenario imported", len(held.GetSkills()))
+		}
+		summary := held.GetSkills()[0].GetSummary()
+		if summary == "" {
+			return fmt.Errorf("the system says nothing about what %q is for, so this proves nothing", row.ID)
+		}
+		if err := c.openModelOn(worldFrom(ctx), c.active.Name); err != nil {
+			return err
+		}
+		if !strings.Contains(c.model.View(), strings.Join(strings.Fields(summary)[:4], " ")) {
+			return fmt.Errorf("the screen does not say what the skill is for:\n%s", c.model.View())
+		}
+		return nil
+	})
+
+	// The other half, and the reason the row says only that: why a skill is held and not given belongs
+	// to a workspace or to a session, and this listing is the system's own.
+	sc.Step(`^no row says a skill is held and not given$`, func(ctx context.Context) error {
+		held, err := worldFrom(ctx).client.ListSkills(ctx, &quaycrewv1.ListSkillsRequest{})
+		if err != nil {
+			return err
+		}
+		for _, one := range held.GetSkills() {
+			if one.GetLeftOut() != "" {
+				return fmt.Errorf("the system's own listing says %q is left out, so the console could say why",
+					one.GetName())
+			}
+		}
+		for _, row := range consoleFrom(ctx).rows {
+			for _, cell := range row.Cells {
+				if strings.Contains(cell, "left out") {
+					return fmt.Errorf("the row for %q claims a reason the system never sent: %q", row.ID, cell)
+				}
+			}
+		}
+		return nil
+	})
+
 	sc.Step(`^the console lists nothing, and says so$`, func(ctx context.Context) error {
 		c := consoleFrom(ctx)
 		if len(c.rows) != 0 {
