@@ -437,6 +437,14 @@ func (m *Memory) settled(statuses []string, limit int,
 			held[one.Session] = true
 		}
 	}
+	// And the sessions a run of a stage is holding open. A run is not a job, so it names its session
+	// nowhere in the loop above, and a system reading only that loop would take the container back
+	// from underneath a session that is writing a requirement's tests.
+	for _, one := range m.executions {
+		if one.Session != "" && !job.Terminal(one.Phase) {
+			held[one.Session] = true
+		}
+	}
 	wanted := map[string]bool{}
 	for _, status := range statuses {
 		wanted[status] = true

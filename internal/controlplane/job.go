@@ -336,7 +336,9 @@ func (s *Server) GetJob(ctx context.Context, req *quaycrewv1.GetJobRequest) (*qu
 		}
 		return nil, storeError(err, "job")
 	}
-	return &quaycrewv1.GetJobResponse{Job: asJob(found)}, nil
+	on := asJob(found)
+	s.sayWhatIsRunning(ctx, []*quaycrewv1.Job{on})
+	return &quaycrewv1.GetJobResponse{Job: on}, nil
 }
 
 // ListJob says what the system holds, newest first and without answers.
@@ -376,7 +378,36 @@ func (s *Server) ListJobs(ctx context.Context, req *quaycrewv1.ListJobsRequest) 
 	for _, one := range listed {
 		out = append(out, asJob(one))
 	}
+	s.sayWhatIsRunning(ctx, out)
 	return &quaycrewv1.ListJobsResponse{Jobs: out}, nil
+}
+
+// sayWhatIsRunning fills in how many runs of each job's stages are still going.
+//
+// One call for the whole listing, so a hundred jobs cost one. A job whose stage fanned out has no
+// session of its own and is not idle: the work is in one session for each requirement, and this is
+// the only thing on the row that says so. The runs were job rows once, so a surface could count them
+// in the listing it already had.
+//
+// A count that cannot be read leaves every job saying nothing is running, which is what a job with no
+// runs says anyway. The alternative is failing a listing over a number beside the rows.
+func (s *Server) sayWhatIsRunning(ctx context.Context, jobs []*quaycrewv1.Job) {
+	if len(jobs) == 0 {
+		return
+	}
+	ids := make([]string, 0, len(jobs))
+	for _, one := range jobs {
+		ids = append(ids, one.GetId())
+	}
+	running, err := s.store.RunningExecutions(ctx, ids)
+	if err != nil {
+		slog.WarnContext(ctx, "could not count the runs of these jobs, so none of them says what it "+
+			"is running", "jobs", len(ids), "error", err)
+		return
+	}
+	for _, one := range jobs {
+		one.RunningExecutions = int32(running[one.GetId()])
+	}
 }
 
 // StopJob halts job that has not ended, keeping the reason.

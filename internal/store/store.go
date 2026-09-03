@@ -529,6 +529,10 @@ type Store interface {
 	// StopExecution halts a run that has not ended, keeping the reason. It stops that run and nothing
 	// else: the job it belongs to carries on, and its stage reads the run as one that ended.
 	StopExecution(ctx context.Context, id, reason string, event *job.Event) (*job.Execution, error)
+	// RunningExecutions is how many runs of each of these jobs' stages are still going. It is one
+	// query for a whole listing, because what reads it is a listing: a surface drawing a hundred jobs
+	// must not make a hundred calls to say which of them are working.
+	RunningExecutions(ctx context.Context, jobs []string) (map[string]int, error)
 	// RecordJobStep writes down one thing the session doing a running job finished. The same words
 	// twice leave one step, because the record is the set of what is finished rather than a log of
 	// what was said, and a session continuing a job says again what it said before.

@@ -85,14 +85,28 @@ func (w Window) Holds(at time.Time) bool {
 // leaving them out is the whole reason a session can read a week of work and still have room to do
 // any.
 type Digest struct {
-	ID         string
-	Project    string
-	Title      string
-	Role       string
-	Phase      string
+	ID      string
+	Project string
+	Title   string
+	Role    string
+	Phase   string
+	// SpentToken is what this job cost: its own session, and every run of every stage under it.
+	//
+	// The runs are counted here because they are what the job spent. A stage that fans out buys one
+	// session for each requirement, and those sessions are most of what a job costs, so a number that
+	// left them out would tell an operator a week of work was cheap. They used to be job rows of their
+	// own and were counted as separate lines; they are not jobs, so the job they belong to carries
+	// what they cost. See Runs below for how many there were.
 	SpentToken int64
-	// PullRequest is the address the answer named, and empty for a job that opened none.
+	// Runs is how many runs of its stages this job had, which is what explains the cost above. Zero
+	// for a job that never fanned out.
+	Runs int
+	// PullRequest is the address this job's own answer named, and empty for a job that opened none.
 	PullRequest string
+	// Opened is every address the runs of this job's stages opened, which is where the work of a job
+	// that fanned out actually is: the job itself often names none. They are counted once each across
+	// a window, because one requirement has one pull request and two runs land in it.
+	Opened []string
 	// Reason is why a failed or stopped job ended. It is on the digest because "what failed and why"
 	// is one question: a reader who has to ask again for every failure is back where they started.
 	Reason     string
@@ -130,6 +144,8 @@ type Totals struct {
 // counted only the rows it printed would be wrong in exactly the way a reader cannot see.
 func Summarise(digests []*Digest) Totals {
 	total := Totals{}
+	// Every pull request this window opened, so one address counted twice is counted once.
+	seen := map[string]bool{}
 	for _, one := range digests {
 		if one == nil {
 			continue
@@ -147,7 +163,14 @@ func Summarise(digests []*Digest) Totals {
 		}
 		total.SpentToken += one.SpentToken
 		total.Steers += one.Steers
-		if one.PullRequest != "" {
+		// Counted once for each address rather than once for each row that names one. A requirement has
+		// one pull request and two runs land in it, so counting rows would say a job opened twice as
+		// many as it did.
+		for _, address := range append([]string{one.PullRequest}, one.Opened...) {
+			if address == "" || seen[address] {
+				continue
+			}
+			seen[address] = true
 			total.PullRequests++
 		}
 		if !one.StartedAt.IsZero() && !one.FinishedAt.IsZero() && one.FinishedAt.After(one.StartedAt) {
@@ -182,12 +205,13 @@ type HistoryQuery struct {
 	Window    Window
 }
 
-// DigestOf reduces a job to the facts a history reports.
+// DigestOf reduces a job to the facts a history reports, with the runs of its stages folded in.
 //
 // Both stores build a digest through this, so a field added to one is never missing from the other,
 // and the conformance suite is holding two callers of one function rather than two transcriptions of
-// one shape.
-func DigestOf(one *Job) *Digest {
+// one shape. Each store reads the runs its own way and hands them here, so neither can disagree with
+// the other about what a job cost.
+func DigestOf(one *Job, runs []*Execution) *Digest {
 	if one == nil {
 		return nil
 	}
@@ -195,6 +219,15 @@ func DigestOf(one *Job) *Digest {
 		ID: one.ID, Project: one.Project, Title: one.Title, Role: one.Role, Phase: one.Phase,
 		SpentToken: one.SpentTokens, PullRequest: one.PullRequest, Reason: one.Reason,
 		Steers: one.Steers, CreatedAt: one.CreatedAt,
+	}
+	// What the stages of this job spent, and where their work went. A run is not a job, so it is no
+	// line of its own in a history: what it cost belongs to the job that ran it.
+	for _, run := range runs {
+		digest.Runs++
+		digest.SpentToken += run.SpentTokens
+		if run.PullRequest != "" {
+			digest.Opened = append(digest.Opened, run.PullRequest)
+		}
 	}
 	if one.StartedAt != nil {
 		digest.StartedAt = *one.StartedAt

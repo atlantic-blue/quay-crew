@@ -47,6 +47,7 @@ Feature: The requirements a person accepted become failing tests before anything
     Then the jobs listing carries only the job somebody declared
     And 2 workers are writing tests, one for each requirement
     And each run says which job and which stage it is a run of
+    And the job says 2 of its runs are working
     When every worker answers with its run
     And the controller ticks again
     Then the jobs listing carries only the job somebody declared

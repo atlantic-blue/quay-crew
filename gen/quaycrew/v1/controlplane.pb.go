@@ -8986,6 +8986,15 @@ type Job struct {
 	// where each of them came from. What is not in there is the one word a person writes, and a build
 	// somebody sent back carries the same record as a build nobody has answered yet.
 	Accepted bool `protobuf:"varint,69,opt,name=accepted,proto3" json:"accepted,omitempty"`
+	// running_executions is how many runs of this job's stages are still going, counted when the job is
+	// read rather than stored on it.
+	//
+	// It is what a person watching a fan out is looking straight at. A job whose stage fans out has no
+	// session of its own: it waits, and the work is in one session for each requirement. Without this
+	// number the row says the job has no session yet, which reads as nothing happening while five
+	// sessions build. The runs were job rows once, so a surface could count them in the listing it
+	// already had; they are not, so the system counts them here.
+	RunningExecutions int32 `protobuf:"varint,71,opt,name=running_executions,json=runningExecutions,proto3" json:"running_executions,omitempty"`
 	// escalation is what this job does when it goes in circles, as it was declared: "ask", or
 	// "role:<name>". Empty is asking.
 	Escalation string `protobuf:"bytes,41,opt,name=escalation,proto3" json:"escalation,omitempty"`
@@ -9439,6 +9448,13 @@ func (x *Job) GetAccepted() bool {
 		return x.Accepted
 	}
 	return false
+}
+
+func (x *Job) GetRunningExecutions() int32 {
+	if x != nil {
+		return x.RunningExecutions
+	}
+	return 0
 }
 
 func (x *Job) GetEscalation() string {
@@ -13378,7 +13394,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\x9a\x13\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xc9\x13\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -13437,7 +13453,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x0fdesign_accepted\x18A \x01(\bR\x0edesignAccepted\x12\x14\n" +
 	"\x05tests\x18B \x01(\tR\x05tests\x12\x14\n" +
 	"\x05build\x18C \x01(\tR\x05build\x12\x1a\n" +
-	"\baccepted\x18E \x01(\bR\baccepted\x12\x1e\n" +
+	"\baccepted\x18E \x01(\bR\baccepted\x12-\n" +
+	"\x12running_executions\x18G \x01(\x05R\x11runningExecutions\x12\x1e\n" +
 	"\n" +
 	"escalation\x18) \x01(\tR\n" +
 	"escalation\x125\n" +

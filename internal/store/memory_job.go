@@ -545,6 +545,14 @@ func (m *Memory) AnythingMoving(_ context.Context) (bool, error) {
 			return true, nil
 		}
 	}
+	// A run of a stage is the system doing something too. A job that fanned out waits while its runs
+	// work, so a probe that read only the jobs would find nothing moving and take a container back
+	// from the very sessions the work is in.
+	for _, one := range m.executions {
+		if one.Phase == job.PhaseRunning {
+			return true, nil
+		}
+	}
 	return false, nil
 }
 
@@ -817,12 +825,18 @@ func (m *Memory) JobHistory(_ context.Context, query job.HistoryQuery) ([]*job.D
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
+	// The runs of every job, gathered once rather than scanned for each job in the window.
+	runs := map[string][]*job.Execution{}
+	for _, one := range m.executions {
+		runs[one.Job] = append(runs[one.Job], one)
+	}
+
 	history := make([]*job.Digest, 0, len(m.jobs))
 	for _, held := range m.jobs {
 		if !inHistory(held, query) {
 			continue
 		}
-		history = append(history, job.DigestOf(held))
+		history = append(history, job.DigestOf(held, runs[held.ID]))
 	}
 	job.SortDigests(history)
 	return history, nil

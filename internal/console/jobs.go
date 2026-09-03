@@ -198,15 +198,23 @@ func onlyAnAskingJob(row Row) error {
 // as something missing, and this is a job waiting its turn rather than a job with a hole in it.
 const noSessionYet = "not yet"
 
-// sessionsUnder is how many sessions are running under each job, counted off the same listing.
+// sessionsUnder is how many sessions are working under each job.
 //
-// A job that fans out has no session of its own and is not idle: the build stage runs one worker for
-// each vertical, all at once, and the row that declared them waits. Counted here rather than asked
-// for, because the workers are rows in this same answer and a second call to count them would be a
-// second call for a number already on the screen.
+// A job that fans out has no session of its own and is not idle: the build stage runs one session for
+// each vertical, all at once, and the row that declared them waits. The number comes off the row
+// rather than being counted here, because the runs of a stage are not jobs and are in no listing of
+// declared work: a view that counted the rows it holds would say nothing is happening while five
+// sessions build.
+//
+// The jobs under a job are counted too. A session running a job declares work under it, and a flow
+// run declares each of its steps under the job carrying the run, and both of those are sessions
+// working under this row.
 func sessionsUnder(jobs []*quaycrewv1.Job) map[string]int {
 	working := map[string]int{}
 	for _, one := range jobs {
+		if running := int(one.GetRunningExecutions()); running > 0 {
+			working[one.GetId()] += running
+		}
 		if one.GetParent() == "" || job.Terminal(one.GetPhase()) {
 			continue
 		}
