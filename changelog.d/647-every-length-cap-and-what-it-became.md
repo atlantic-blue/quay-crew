@@ -90,15 +90,16 @@ This pull request carries the list. The code for each marking ships in the verti
   whole identifier.
 - `QuestionLimit` in `internal/job/asking.go`, 4096 bytes: cut for display. A question is read in a
   terminal, and the record keeps the whole of it. The reader no longer measures a question against
-  it. It is the width a surface draws.
+  it. It is the width a surface draws, and the surfaces that draw one line cut there and say so.
 - `AttemptLimit` in `internal/job/loop.go`, 4096 bytes: cut for display. It is what the record keeps
   of one attempt, and the measure reads what is kept.
 - `readReason` in `internal/job/pullrequest.go`, 200 bytes: cut for display. A refusal is read in a
   listing beside the address.
 - `QuestionRowLimit` in `internal/job/question.go`, 200 bytes: cut for display. It is one row of a
   question in a terminal.
-- `tellingWidth` in `internal/telling/telling.go`, 60 characters: cut for display. Eighty columns is
-  the narrowest terminal anybody still uses.
+- `lineWidth` in `internal/telling/telling.go`, 80 characters: cut for display. Eighty columns is
+  the narrowest terminal anybody still uses, so the line is cut there and says which command prints
+  the whole question. It was `tellingWidth` at 60, which measured the question alone.
 
 ## The caps that are kept
 

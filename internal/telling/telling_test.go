@@ -3,6 +3,7 @@ package telling_test
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/job"
@@ -92,5 +93,78 @@ func TestTheCountIsSaidAndNothingWaitingSaysNothing(t *testing.T) {
 	}
 	if said := telling.Count([]*quaycrewv1.Waiting{{}, {}, {}, {}}); said != "4 jobs wait for you" {
 		t.Errorf("four jobs waiting says %q", said)
+	}
+}
+
+// Requirement 4 of quay-krewe#647: an operator reads a question that fits the terminal, and reaches
+// the whole text behind it.
+//
+// A cap that refused a long question becomes a warning, so the record now carries questions of any
+// length. This line is the narrow place such a question is drawn in, so this is where the cut lives.
+// Two things decide whether it works for the person reading it, and they pull against each other:
+// the line has to fit a terminal, and the reader has to know there is more and where to get it. A
+// cut that says nothing reads as the whole question, and a person answers half a question.
+func TestALongQuestionSaysInWordsThatItWasCut(t *testing.T) {
+	question := "aurora serverless version two bills a minimum capacity continuously, and a key " +
+		"value store on demand bills nothing at rest, " + strings.Repeat("and there is more to it. ", 40)
+	said := telling.Line(waiting("f71415ba9c2e4d1a8b3c5d7e", job.WaitingAsking, question, 10, false))
+
+	// Eighty columns is the narrowest terminal this line is written for, and it prints above whatever
+	// command the person actually typed.
+	if strings.Contains(said, "\n") {
+		t.Fatalf("the line wraps: %q", said)
+	}
+	if len(said) > 80 {
+		t.Errorf("the line is %d characters and a narrow terminal is 80: %q", len(said), said)
+	}
+	// It still names the job and the start of the question, or the cut took the meaning with it.
+	for _, want := range []string{"f71415ba", "asks", "aurora serverless"} {
+		if !strings.Contains(said, want) {
+			t.Errorf("the line does not say %q: %q", want, said)
+		}
+	}
+	// The words, not a mark. An ellipsis says the text stops and says nothing about where the rest
+	// is, and the rest is the reason the question was worth writing at that length.
+	if !strings.Contains(said, "krewe job show") {
+		t.Errorf("the cut does not say where the whole question is: %q", said)
+	}
+	aQuestionThatFitsIsNotMarkedAsCut(t)
+}
+
+// A question that fits is left alone. It is checked inside the test above rather than beside it,
+// because on its own it passes against the behaviour this replaces and proves nothing.
+func aQuestionThatFitsIsNotMarkedAsCut(t *testing.T) {
+	t.Helper()
+	said := telling.Line(waiting("f71415ba9c2e4d1a8b3c5d7e", job.WaitingAsking,
+		"aurora or a key value store?", 10, false))
+
+	for _, marker := range []string{"krewe job show", "…"} {
+		if strings.Contains(said, marker) {
+			t.Errorf("a question that fits is marked as cut: %q", said)
+		}
+	}
+}
+
+// The cut lands between characters and never inside one. A question written in words that are not
+// English is cut here like any other, and half a character is a question mark on the screen of the
+// person reading it.
+func TestACutQuestionIsStillText(t *testing.T) {
+	// One unbroken run of characters that are two bytes each, so there is no space for the cut to
+	// fall back to and it lands where the arithmetic puts it. The run is offset by a few plain
+	// characters in turn, because a cut counted in bytes lands between two of these characters on one
+	// offset and inside one on the next.
+	for offset := range 4 {
+		question := strings.Repeat("a", offset) + strings.Repeat("é", 400)
+		said := telling.Line(waiting("f71415ba9c2e4d1a8b3c5d7e", job.WaitingAsking, question, 10, false))
+
+		if !utf8.ValidString(said) {
+			t.Fatalf("a question offset by %d characters was cut inside a character: %q", offset, said)
+		}
+		if !strings.Contains(said, "éé") {
+			t.Fatalf("the line lost the words it was cutting: %q", said)
+		}
+		if !strings.Contains(said, "krewe job show") {
+			t.Fatalf("the cut does not say where the whole question is: %q", said)
+		}
 	}
 }
