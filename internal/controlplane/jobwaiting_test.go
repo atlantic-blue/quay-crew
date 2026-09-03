@@ -64,7 +64,7 @@ func TestABriefThatAsksTheJobToWaitLeavesNoRow(t *testing.T) {
 func TestASessionIsRefusedTheSameBrief(t *testing.T) {
 	s := newServer(&model.FakeRunner{})
 	workspace, project := newProject(t, s)
-	raiseDepth(t, s, workspace, 2)
+	raiseDeclared(t, s, workspace, 2)
 	parent := declareJob(t, s, project, "ship the defect fix")
 
 	_, err := s.CreateJob(asJobCredential(context.Background(), parent.GetId(), role.VerbJobCreate),
@@ -120,14 +120,19 @@ func TestAFlowStepThatMergesThePullRequestIsPrepared(t *testing.T) {
 	_, project := newProject(t, s)
 	carrier := declareJob(t, s, project, "flow ship version 1")
 
-	step, _, err := s.PrepareJob(context.Background(), carrier.GetId(), job.Declaration{
+	step, _, err := s.PrepareJob(context.Background(), job.Placement{Run: "a-run"}, job.Declaration{
 		Project: project, Title: "ship step merge",
 		Brief: "Merge the pull request. Every check passed.",
 	})
 	if err != nil {
 		t.Fatalf("a flow's merge step was refused: %v", err)
 	}
-	if step.Parent != carrier.GetId() {
-		t.Fatalf("the step hangs under %q, want the carrier", step.Parent)
+	if step.Run != "a-run" {
+		t.Fatalf("the step belongs to run %q, want the run that declared it", step.Run)
+	}
+	if step.Cause != carrier.GetId() {
+		if step.Cause != "" {
+			t.Fatalf("the step says %q caused it, want nothing: it belongs to its run", step.Cause)
+		}
 	}
 }

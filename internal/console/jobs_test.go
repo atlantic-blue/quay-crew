@@ -21,11 +21,13 @@ type jobClient struct {
 	quaycrewv1.ControlPlaneServiceClient
 
 	jobs  []*quaycrewv1.Job
+	runs  []*quaycrewv1.Execution
 	tasks []*quaycrewv1.Task
 
 	listedFor  string
 	listedFrom string
 	stopped    []string
+	answered   []answered
 	listErr    error
 }
 
@@ -49,6 +51,27 @@ func (j *jobClient) ListJobs(_ context.Context, req *quaycrewv1.ListJobsRequest,
 func (j *jobClient) StopJob(_ context.Context, req *quaycrewv1.StopJobRequest, _ ...grpc.CallOption) (*quaycrewv1.StopJobResponse, error) {
 	j.stopped = append(j.stopped, req.GetId())
 	return &quaycrewv1.StopJobResponse{}, nil
+}
+
+// AnswerJob is the real movement in miniature: the job it names stops asking and goes back to
+// pending, so a listing read afterwards shows what an operator would actually see. A double that
+// only recorded the call would let a key that answers the wrong row pass.
+func (j *jobClient) AnswerJob(_ context.Context, req *quaycrewv1.AnswerJobRequest, _ ...grpc.CallOption) (*quaycrewv1.AnswerJobResponse, error) {
+	for _, one := range j.jobs {
+		if one.GetId() != req.GetId() {
+			continue
+		}
+		j.answered = append(j.answered, answered{id: req.GetId(), said: req.GetAnswer()})
+		one.Phase, one.Question, one.Told = job.PhasePending, "", req.GetAnswer()
+		return &quaycrewv1.AnswerJobResponse{Job: one}, nil
+	}
+	return nil, errors.New("no such job")
+}
+
+// answered is one answer the system was given, so a case can say which row it landed on.
+type answered struct {
+	id   string
+	said string
 }
 
 // Narrowed to the session that was asked for, the way the system narrows it. A double that answers
@@ -85,7 +108,7 @@ func TestAJobRowCarriesTheWholeStoryOfOneJob(t *testing.T) {
 		one.Session, one.Attempts = "2222222222222222bbbbbbbb", 1
 	})
 
-	got := jobRow(running, 0)
+	got := jobRow(running)
 
 	// The identifiers stay whole: stopping the job and descending into what it did both use them.
 	if got.ID != running.GetId() {
@@ -94,7 +117,7 @@ func TestAJobRowCarriesTheWholeStoryOfOneJob(t *testing.T) {
 	if got.Parent != running.GetSession() {
 		t.Fatalf("the row carries %q as the session, want the whole identifier", got.Parent)
 	}
-	want := []string{"11111111", "running", "-", "backlog-clearer", "read the electricity bill",
+	want := []string{"11111111", "running", "-", "-", "backlog-clearer", "read the electricity bill",
 		"22222222", "1", "1m"}
 	if len(got.Cells) != len(want) {
 		t.Fatalf("the row has %d cells, want %d: %q", len(got.Cells), len(want), got.Cells)
@@ -117,15 +140,15 @@ func TestAJobRowCarriesTheWholeStoryOfOneJob(t *testing.T) {
 // A pending job has no session, which is the normal state rather than a fault. An empty cell reads as
 // something missing, so the row says which it is.
 func TestAJobWithNoSessionYetSaysSoRatherThanLeavingTheCellEmpty(t *testing.T) {
-	got := jobRow(aJob("1111111111111111aaaaaaaa", job.PhasePending, nil), 0)
+	got := jobRow(aJob("1111111111111111aaaaaaaa", job.PhasePending, nil))
 
 	if got.Parent != "" {
 		t.Fatalf("a pending job carries %q as its session, want none", got.Parent)
 	}
 	// The literal rather than the constant: a case that reads the constant passes against a
 	// constant emptied out, which is the one mistake this is here to catch.
-	if got.Cells[5] != "not yet" {
-		t.Fatalf(`the session cell says %q, want "not yet"`, got.Cells[5])
+	if got.Cells[sessionColumn] != "not yet" {
+		t.Fatalf(`the session cell says %q, want "not yet"`, got.Cells[sessionColumn])
 	}
 	if got.State != StateUnknown {
 		t.Fatalf("a pending job is drawn as %v, want no claim at all", got.State)
@@ -135,18 +158,18 @@ func TestAJobWithNoSessionYetSaysSoRatherThanLeavingTheCellEmpty(t *testing.T) {
 func TestAFailedJobIsMarkedForAttention(t *testing.T) {
 	got := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseFailed, func(one *quaycrewv1.Job) {
 		one.Session, one.Attempts = "2222222222222222bbbbbbbb", 3
-	}), 0)
+	}))
 
 	if got.State != StateFailed {
 		t.Fatalf("a failed job is drawn as %v, want failed", got.State)
 	}
-	if got.Cells[1] != job.PhaseFailed {
-		t.Fatalf("the phase cell says %q, want %q", got.Cells[1], job.PhaseFailed)
+	if got.Cells[phaseColumn] != job.PhaseFailed {
+		t.Fatalf("the phase cell says %q, want %q", got.Cells[phaseColumn], job.PhaseFailed)
 	}
 	// Three tries is the number that says this is not a one off, and it is the reason the column is
 	// there at all.
-	if got.Cells[6] != "3" {
-		t.Fatalf("the attempts cell says %q, want 3", got.Cells[6])
+	if got.Cells[attemptsColumn] != "3" {
+		t.Fatalf("the attempts cell says %q, want 3", got.Cells[attemptsColumn])
 	}
 }
 
@@ -195,7 +218,7 @@ func TestStoppingAJobAsksFirstAndUsesTheWholeIdentifier(t *testing.T) {
 		t.Fatalf("Stop answers to %v, want the keys the sessions view already stops on", action.Keys())
 	}
 
-	row := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseRunning, nil), 0)
+	row := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseRunning, nil))
 	if err := action.Run(context.Background(), row); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
@@ -250,24 +273,24 @@ func TestEnterOnAJobOpensWhatItDid(t *testing.T) {
 			OccurredAt: timestamppb.New(time.Now()),
 		}},
 	}
-	model := newTestModel(t, Jobs(client), Tasks(client))
-	model, _ = update(t, model, rowsFor(model, jobRow(client.jobs[0], 0)))
+	model := newTestModel(t, Jobs(client), Exec(client))
+	model, _ = update(t, model, rowsFor(model, jobRow(client.jobs[0])))
 
 	model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
 	if model.err != nil {
 		t.Fatalf("enter on a job refused: %v", model.err)
 	}
-	if model.active.Name != "tasks" {
-		t.Fatalf("enter left the operator in %q, want the job's tasks", model.active.Name)
+	if model.active.Name != "exec" {
+		t.Fatalf("enter left the operator in %q, want what the job ran", model.active.Name)
 	}
 	if model.parent != "2222222222222222bbbbbbbb" {
-		t.Fatalf("the tasks view is scoped to %q, want the job's session", model.parent)
+		t.Fatalf("the exec view is scoped to %q, want the job's session", model.parent)
 	}
 	// The listing the key asked for, run and fed back the way the runtime does it, so what is
 	// asserted is the screen rather than the intent.
 	if cmd == nil {
-		t.Fatal("enter asked for no listing, so the tasks view would draw empty")
+		t.Fatal("enter asked for no listing, so the exec view would draw empty")
 	}
 	model, _ = update(t, model, cmd())
 	if len(model.rows) != 1 {
@@ -285,8 +308,8 @@ func TestEnterOnAJobOpensWhatItDid(t *testing.T) {
 // phase so it says why rather than only that it will not.
 func TestEnterOnAJobWithNoSessionYetSaysWhy(t *testing.T) {
 	client := &jobClient{jobs: []*quaycrewv1.Job{aJob("1111111111111111aaaaaaaa", job.PhasePending, nil)}}
-	model := newTestModel(t, Jobs(client), Tasks(client))
-	model, _ = update(t, model, rowsFor(model, jobRow(client.jobs[0], 0)))
+	model := newTestModel(t, Jobs(client), Exec(client))
+	model, _ = update(t, model, rowsFor(model, jobRow(client.jobs[0])))
 
 	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
 
@@ -333,13 +356,13 @@ func actionNamed(resource Resource, label string) (Action, bool) {
 func TestTheOutcomeCellSaysWhatTheJobEndedOn(t *testing.T) {
 	done := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseDone, func(one *quaycrewv1.Job) {
 		one.Outcome = job.OutcomeBlocked
-	}), 0)
+	}))
 	if done.Cells[outcomeColumn] != job.OutcomeBlocked {
 		t.Fatalf("the outcome cell says %q, want %q", done.Cells[outcomeColumn], job.OutcomeBlocked)
 	}
 	// A job that has not ended on a word says so rather than leaving a hole in the row. The literal
 	// rather than the constant, because a case reading the constant passes against it emptied out.
-	running := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseRunning, nil), 0)
+	running := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseRunning, nil))
 	if running.Cells[outcomeColumn] != "-" {
 		t.Fatalf(`the outcome cell of a running job says %q, want "-"`, running.Cells[outcomeColumn])
 	}
@@ -370,79 +393,75 @@ func TestEveryOutcomeIsColouredOrLeftAlone(t *testing.T) {
 	}
 }
 
-// A job whose workers are running has no session of its own and is not idle. The build stage runs one
-// worker for each vertical, all at once, and the row that declared them waits, so a cell reading
-// "not yet" would say nothing is happening while three sessions build.
-func TestAJobWhoseWorkersAreRunningSaysHowManyAreAtWork(t *testing.T) {
-	parent := aJob("1111111111111111aaaaaaaa", job.PhasePending, nil)
-	building := func(id, phase string) *quaycrewv1.Job {
-		return aJob(id, phase, func(one *quaycrewv1.Job) {
-			one.Parent = parent.GetId()
-			one.Title = "build vertical 1: a person pastes a link"
-			one.Session = id
-		})
-	}
-	listed := []*quaycrewv1.Job{
-		parent,
-		building("2222222222222222bbbbbbbb", job.PhaseRunning),
-		building("3333333333333333cccccccc", job.PhaseRunning),
-		// The worker that finished is not at work any more, so it is not counted. A count that included
-		// it would say two sessions are building after both have landed.
-		building("4444444444444444dddddddd", job.PhaseDone),
+// A job's runs are drawn under it, and they are the only thing that is: a job belongs to its project
+// and nothing else belongs to a job. The row a person declared used to be buried under the rows its
+// stages spawned, and a job a session declared stood in the listing as though it were a part of one.
+func TestTheRunsOfAJobAreDrawnUnderIt(t *testing.T) {
+	declared := aJob("1111111111111111aaaaaaaa", job.PhaseRunning, nil)
+	run := &quaycrewv1.Execution{
+		Id: "2222222222222222bbbbbbbb", Job: declared.GetId(), Stage: job.StageBuild, Number: 1,
+		Phase: job.PhaseRunning, Session: "3333333333333333cccccccc",
 	}
 
-	working := sessionsUnder(listed)
-	got := jobRow(parent, working[parent.GetId()])
-
-	if got.Cells[5] != "2 working" {
-		t.Fatalf(`the session cell of a job with two live workers says %q, want "2 working"`, got.Cells[5])
+	under := executionRow(run)
+	if under.Under != declared.GetId() {
+		t.Fatalf("the run is drawn under %q, want the job it belongs to", under.Under)
 	}
-	// The worker's own row still says the conversation it runs in, because that is what descending
-	// into it uses.
-	if worker := jobRow(listed[1], working[listed[1].GetId()]); worker.Cells[5] == "2 working" {
-		t.Fatalf("a worker's own row says %q, want the conversation it runs in", worker.Cells[5])
+	if got := jobRow(declared).Under; got != "" {
+		t.Fatalf("the job is drawn under %q, want nothing: a job is not under anything", got)
 	}
-	// And a job with no workers at all still says it has no session yet rather than counting nothing.
-	if alone := jobRow(parent, 0); alone.Cells[5] != "not yet" {
-		t.Fatalf(`a job with no workers says %q, want "not yet"`, alone.Cells[5])
-	}
-}
-
-// ---------- a job and the parts it fanned out into ----------
-
-// aPart is one part of a plan approved on the job above it: the row a fan out produces, five at a
-// time, which used to sit beside the job that declared them.
-func aPart(id, parent, title string, fill func(*quaycrewv1.Job)) *quaycrewv1.Job {
-	return aJob(id, job.PhaseRunning, func(part *quaycrewv1.Job) {
-		part.Parent, part.Title = parent, title
-		if fill != nil {
-			fill(part)
-		}
+	// A job a session declared is a job in its project, so it stands on its own row.
+	caused := aJob("4444444444444444dddddddd", job.PhaseRunning, func(one *quaycrewv1.Job) {
+		one.Cause = declared.GetId()
 	})
+	if got := jobRow(caused).Under; got != "" {
+		t.Fatalf("a job a session declared is drawn under %q, want nothing", got)
+	}
+	// And a step of a flow run is a job too, listed beside the rest rather than folded away.
+	step := aJob("5555555555555555eeeeeeee", job.PhaseRunning, func(one *quaycrewv1.Job) {
+		one.Run = "a-run"
+	})
+	if got := jobRow(step).Under; got != "" {
+		t.Fatalf("a step of a run is drawn under %q, want nothing", got)
+	}
 }
 
-// aFanOut is the shape this whole view was rebuilt for: one job a person declared, and the five parts
-// its test stage fanned out into, newest first the way both stores answer.
-func aFanOut() []*quaycrewv1.Job {
+// ---------- a job and the runs its stage fanned out into ----------
+
+// aFanOut is the shape this whole view was rebuilt for: one job a person declared, and the five runs
+// its test stage fanned out into. The runs are not jobs, so they arrive from their own listing.
+func aFanOut() *jobClient {
 	declared := aJob("1111111111111111aaaaaaaa", job.PhaseRunning, func(one *quaycrewv1.Job) {
 		one.Title, one.Session = "read the electricity bill", "2222222222222222bbbbbbbb"
+		one.Project = "a-project"
 	})
-	jobs := make([]*quaycrewv1.Job, 0, 6)
+	runs := make([]*quaycrewv1.Execution, 0, 5)
 	for at := 1; at <= 5; at++ {
-		jobs = append(jobs, aPart(
-			fmt.Sprintf("777777777777777%dpppppppp", at), declared.GetId(),
-			fmt.Sprintf("tests for requirement %d", at),
-			func(one *quaycrewv1.Job) { one.Session = fmt.Sprintf("888888888888888%dssssssss", at) }))
+		runs = append(runs, &quaycrewv1.Execution{
+			Id:      fmt.Sprintf("777777777777777%dpppppppp", at),
+			Job:     declared.GetId(),
+			Stage:   job.StageTest,
+			Number:  int32(at),
+			Phase:   job.PhaseRunning,
+			Session: fmt.Sprintf("888888888888888%dssssssss", at),
+		})
 	}
-	return append(jobs, declared)
+	return &jobClient{jobs: []*quaycrewv1.Job{declared}, runs: runs}
 }
 
 // onJobs stands the console on the jobs view over a listing the resource itself built, so what is
 // asserted below is the screen the operator has rather than rows a case wrote by hand.
 func onJobs(t *testing.T, client *jobClient) Model {
 	t.Helper()
-	model := newTestModel(t, Jobs(client), Tasks(client))
-	rows, err := Jobs(client).List(context.Background(), "")
+	return onJobsIn(t, client, "")
+}
+
+// onJobsIn is the same view drilled into one project, which is where the runs of a job are drawn:
+// the listing of every project in the crew holds jobs alone.
+func onJobsIn(t *testing.T, client *jobClient, project string) Model {
+	t.Helper()
+	model := newTestModel(t, Jobs(client), Exec(client))
+	rows, err := Jobs(client).List(context.Background(), project)
 	if err != nil {
 		t.Fatalf("listing jobs: %v", err)
 	}
@@ -454,7 +473,7 @@ func onJobs(t *testing.T, client *jobClient) Model {
 // used to be six rows with nothing saying which was which, and the one somebody asked for was the one
 // at the bottom.
 func TestAJobThatFannedOutDrawsAsOneRow(t *testing.T) {
-	model := onJobs(t, &jobClient{jobs: aFanOut()})
+	model := onJobsIn(t, aFanOut(), "a-project")
 
 	if got := len(model.Listed()); got != 1 {
 		t.Fatalf("the jobs view draws %d rows, want the one job a person declared", got)
@@ -475,7 +494,7 @@ func TestAJobThatFannedOutDrawsAsOneRow(t *testing.T) {
 
 // The way onto a part, read off the screen it leaves rather than off the call the key made.
 func TestTabDrawsThePartsUnderTheJobAndTabAgainTakesThemAway(t *testing.T) {
-	model := onJobs(t, &jobClient{jobs: aFanOut()})
+	model := onJobsIn(t, aFanOut(), "a-project")
 
 	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyTab})
 
@@ -513,7 +532,8 @@ func TestTabDrawsThePartsUnderTheJobAndTabAgainTakesThemAway(t *testing.T) {
 // A part that fails is a thing somebody has to open, so enter on one has to reach that part's own
 // work. It is the row under the cursor and not the job above it: the two are one keystroke apart.
 func TestEnterOnAPartOpensThatPartAndNotTheJobAboveIt(t *testing.T) {
-	client := &jobClient{jobs: aFanOut(), tasks: []*quaycrewv1.Task{
+	client := aFanOut()
+	client.tasks = []*quaycrewv1.Task{
 		{
 			Id: "4444444444444444dddddddd", Session: "2222222222222222bbbbbbbb", Status: "done",
 			Prompt: "read the electricity bill", OccurredAt: timestamppb.New(time.Now()),
@@ -522,8 +542,8 @@ func TestEnterOnAPartOpensThatPartAndNotTheJobAboveIt(t *testing.T) {
 			Id: "5555555555555555eeeeeeee", Session: "8888888888888881ssssssss", Status: "done",
 			Prompt: "write the failing test for requirement 1", OccurredAt: timestamppb.New(time.Now()),
 		},
-	}}
-	model := onJobs(t, client)
+	}
+	model := onJobsIn(t, client, "a-project")
 
 	model, _ = update(t, model, tea.KeyMsg{Type: tea.KeyTab})
 	model, _ = update(t, model, runes("j"))
@@ -550,7 +570,7 @@ func TestEnterOnAPartOpensThatPartAndNotTheJobAboveIt(t *testing.T) {
 		t.Fatalf("the screen does not carry what the part was asked:\n%s", screen)
 	}
 	// And the breadcrumb says whose work this is, which is the other half of landing on the right row.
-	if !strings.Contains(screen, "tasks(tests for requirement 1)") {
+	if !strings.Contains(screen, "exec(tests for requirement 1)") {
 		t.Fatalf("the screen does not say it is showing that part's work:\n%s", screen)
 	}
 	if strings.Contains(screen, "read the electricity bill") {
@@ -561,7 +581,7 @@ func TestEnterOnAPartOpensThatPartAndNotTheJobAboveIt(t *testing.T) {
 // The second way onto a part, and the reason a filtered listing is flat: a part hidden under a closed
 // job would otherwise be a row the filter cannot find.
 func TestFilteringFindsAPartWithoutOpeningTheJobAboveIt(t *testing.T) {
-	model := onJobs(t, &jobClient{jobs: aFanOut()})
+	model := onJobsIn(t, aFanOut(), "a-project")
 
 	model, _ = update(t, model, runes("/"))
 	model = typeAll(t, model, "requirement 3")
@@ -588,7 +608,7 @@ func TestAJobWithNoPartsDrawsAsItAlwaysDid(t *testing.T) {
 	if len(listed) != 1 {
 		t.Fatalf("the jobs view draws %d rows, want the one job", len(listed))
 	}
-	want := jobRow(client.jobs[0], 0).Cells
+	want := jobRow(client.jobs[0]).Cells
 	for at, cell := range want {
 		if listed[0].Cells[at] != cell {
 			t.Fatalf("cell %d is %q, want %q (whole row %q)", at, listed[0].Cells[at], cell, listed[0].Cells)
@@ -604,18 +624,234 @@ func TestAJobWithNoPartsDrawsAsItAlwaysDid(t *testing.T) {
 	}
 }
 
-// A part whose job is not in the listing stays on screen. A row that quietly disappears is worse than
-// a row in the wrong place, and a listing narrowed to one project is where this arrives.
-func TestAPartWhoseJobIsNotListedIsStillDrawn(t *testing.T) {
-	client := &jobClient{jobs: []*quaycrewv1.Job{
-		aPart("7777777777777771pppppppp", "9999999999999999zzzzzzzz", "tests for requirement 1", nil),
+// A run whose job is not in the listing stays on screen. A row that quietly disappears is worse than
+// a row in the wrong place, and a listing narrowed by a phase is where this arrives.
+func TestARunWhoseJobIsNotListedIsStillDrawn(t *testing.T) {
+	client := &jobClient{runs: []*quaycrewv1.Execution{
+		{
+			Id: "7777777777777771pppppppp", Job: "9999999999999999zzzzzzzz",
+			Stage: job.StageTest, Number: 1, Phase: job.PhaseRunning,
+		},
 	}}
-	model := onJobs(t, client)
+	model := onJobsIn(t, client, "a-project")
 
 	if got := len(model.Listed()); got != 1 {
-		t.Fatalf("the jobs view draws %d rows, want the part whose job is somewhere else", got)
+		t.Fatalf("the jobs view draws %d rows, want the run whose job is somewhere else", got)
 	}
 	if !strings.Contains(model.View(), "tests for requirement 1") {
-		t.Fatalf("the part is not on screen at all:\n%s", model.View())
+		t.Fatalf("the run is not on screen at all:\n%s", model.View())
 	}
+}
+
+// The column the phase cannot be, in the other direction. A job waiting for an answer about what it
+// understood and a job waiting for an answer about a failed build both read "asking", and those two
+// are days apart.
+func TestTheJobsListingSaysWhichStageAJobIsIn(t *testing.T) {
+	// A job that states a sentence and has not answered for what it understood is in ideation, which
+	// is the first of the four.
+	asking := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseAsking, func(one *quaycrewv1.Job) {
+		one.Product, one.Question = "a person pastes a link and gets a summary", "who reads this?"
+	}))
+	if got := asking.Cells[stageColumn]; got != job.StageIdeation {
+		t.Fatalf("the stage cell says %q, want %q", got, job.StageIdeation)
+	}
+	// The reading is the job package's, not a second one written here, so a job past ideation reads
+	// as the package says it does rather than as this file guesses.
+	answered := aJob("1111111111111111aaaaaaaa", job.PhaseRunning, func(one *quaycrewv1.Job) {
+		one.Product, one.IdeationAnswer = "a person pastes a link and gets a summary", "yes"
+	})
+	if got := jobRow(answered).Cells[stageColumn]; got != job.StageOfWire(answered).Says() {
+		t.Fatalf("the stage cell says %q and the job package says %q", got, job.StageOfWire(answered).Says())
+	}
+	// A job that states no sentence is an errand and runs no stages. The literal rather than the
+	// constant: a case reading the constant passes against it emptied out.
+	if got := jobRow(aJob("1111111111111111aaaaaaaa", job.PhaseRunning, nil)).Cells[stageColumn]; got != "-" {
+		t.Fatalf(`the stage cell of an errand says %q, want "-"`, got)
+	}
+}
+
+// On the screen rather than in the row, because a column the table drops on a narrow window is a
+// column nobody reads. The title is what pays for it, so it is checked here too.
+func TestTheStageIsOnScreenBesideThePhase(t *testing.T) {
+	client := &jobClient{jobs: []*quaycrewv1.Job{
+		aJob("1111111111111111aaaaaaaa", job.PhaseAsking, func(one *quaycrewv1.Job) {
+			one.Product = "a person pastes a link and gets a summary"
+		}),
+	}}
+	model := newTestModel(t, Jobs(client))
+	model.width, model.height = 100, 20
+	model, _ = update(t, model, rowsFor(model, jobRow(client.jobs[0])))
+
+	drawn := model.View()
+	for _, want := range []string{"STAGE", job.StageIdeation, job.PhaseAsking, "read the electricity"} {
+		if !strings.Contains(drawn, want) {
+			t.Fatalf("the jobs listing does not carry %q at %d columns:\n%s", want, model.width, drawn)
+		}
+	}
+}
+
+// A job that stops for a person is answered from the console. Driven as an operator drives it: press
+// the key, type the answer, press enter, and read what is on the screen afterwards.
+func TestTheAnswerKeyAnswersTheJobUnderTheCursor(t *testing.T) {
+	client := &jobClient{jobs: []*quaycrewv1.Job{
+		aJob("1111111111111111aaaaaaaa", job.PhaseRunning, nil),
+		aJob("2222222222222222bbbbbbbb", job.PhaseAsking, func(one *quaycrewv1.Job) {
+			one.Title, one.Question = "read the water bill", "which meter?"
+		}),
+		aJob("3333333333333333cccccccc", job.PhaseAsking, func(one *quaycrewv1.Job) {
+			one.Title, one.Question = "read the gas bill", "which meter?"
+		}),
+	}}
+	model := newTestModel(t, Jobs(client))
+	model, _ = update(t, model, rowsFor(model,
+		jobRow(client.jobs[0]), jobRow(client.jobs[1]), jobRow(client.jobs[2])))
+	// The second row, so a key that answers the first or the last row cannot pass.
+	model, _ = update(t, model, runes("j"))
+
+	model, _ = update(t, model, runes("a"))
+	if model.mode != modeType {
+		t.Fatalf("a opened mode %v, want the line that asks for an answer", model.mode)
+	}
+	if !strings.Contains(model.View(), "read the water bill") {
+		t.Fatalf("the line does not name the job it is about:\n%s", model.View())
+	}
+	model = typeAll(t, model, "the one in the hall")
+	model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("enter sent no answer, so the job is still waiting for a person")
+	}
+	// The answer, and then the listing it asks for, both fed back the way the runtime feeds them.
+	model, refresh := update(t, model, cmd())
+	if model.err != nil {
+		t.Fatalf("answering refused: %v", model.err)
+	}
+	if refresh == nil {
+		t.Fatal("nothing was listed after the answer, so the screen would still say asking")
+	}
+	model, _ = update(t, model, refresh())
+
+	if len(client.answered) != 1 {
+		t.Fatalf("the system was answered %d times, want once: %+v", len(client.answered), client.answered)
+	}
+	if client.answered[0].id != "2222222222222222bbbbbbbb" {
+		t.Fatalf("the answer went to %q, want the job under the cursor", client.answered[0].id)
+	}
+	if client.answered[0].said != "the one in the hall" {
+		t.Fatalf("the system was told %q, want what was typed", client.answered[0].said)
+	}
+	// The screen the operator is left with: that row has stopped asking, and the row beside it, which
+	// was asking the same question, has not been touched.
+	answered, found := lineFor(model, "read the water bill")
+	if !found {
+		t.Fatalf("the answered job is not on the screen:\n%s", model.View())
+	}
+	if !strings.Contains(answered, job.PhasePending) {
+		t.Fatalf("the answered row reads %q, want it back in the queue", answered)
+	}
+	untouched, found := lineFor(model, "read the gas bill")
+	if !found {
+		t.Fatalf("the other asking job is not on the screen:\n%s", model.View())
+	}
+	if !strings.Contains(untouched, job.PhaseAsking) {
+		t.Fatalf("the row beside it reads %q, want it still asking", untouched)
+	}
+}
+
+// Most rows are not asking anything. The key says so rather than opening a line and taking an answer
+// nothing is waiting for.
+func TestTheAnswerKeyLeavesAJobThatIsNotAskingAlone(t *testing.T) {
+	client := &jobClient{jobs: []*quaycrewv1.Job{aJob("1111111111111111aaaaaaaa", job.PhaseRunning, nil)}}
+	model := newTestModel(t, Jobs(client))
+	model, _ = update(t, model, rowsFor(model, jobRow(client.jobs[0])))
+
+	model, cmd := update(t, model, runes("a"))
+
+	if model.mode != modeBrowse {
+		t.Fatalf("a on a running job opened mode %v, want the listing left as it was", model.mode)
+	}
+	if cmd != nil {
+		t.Fatal("a on a running job asked the system for something")
+	}
+	if len(client.answered) != 0 {
+		t.Fatalf("a running job was answered: %+v", client.answered)
+	}
+	drawn := model.View()
+	if !strings.Contains(drawn, job.PhaseAsking) || !strings.Contains(drawn, "11111111") {
+		t.Fatalf("the screen does not say why the key did nothing:\n%s", drawn)
+	}
+}
+
+// An empty line is a cancel here rather than an answer. A job restarted with nothing to go on, and a
+// person who believes they answered it, is worse than a key that refused.
+func TestAnEmptyAnswerIsRefusedAndLeavesTheJobAsking(t *testing.T) {
+	client := &jobClient{jobs: []*quaycrewv1.Job{
+		aJob("1111111111111111aaaaaaaa", job.PhaseAsking, func(one *quaycrewv1.Job) {
+			one.Question = "which meter?"
+		}),
+	}}
+	model := newTestModel(t, Jobs(client))
+	model, _ = update(t, model, rowsFor(model, jobRow(client.jobs[0])))
+
+	model, _ = update(t, model, runes("a"))
+	model, cmd := update(t, model, tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("enter on an empty line did nothing at all, so the operator is told nothing")
+	}
+	model, _ = update(t, model, cmd())
+
+	if len(client.answered) != 0 {
+		t.Fatalf("an empty line was sent as an answer: %+v", client.answered)
+	}
+	if model.err == nil {
+		t.Fatal("an empty answer was swallowed, which reads as the job having been answered")
+	}
+	if !strings.Contains(model.View(), "11111111") {
+		t.Fatalf("the refusal does not name the job it is about:\n%s", model.View())
+	}
+}
+
+// lineFor is the drawn row carrying a piece of text, so a case can read one row of the screen rather
+// than the whole of it.
+func lineFor(model Model, text string) (string, bool) {
+	for _, line := range strings.Split(model.View(), "\n") {
+		if strings.Contains(line, text) {
+			return line, true
+		}
+	}
+	return "", false
+}
+
+// The same cell on a job whose stage fanned out. Its runs are not jobs, so they are in no listing of
+// declared work: the count comes off the row, and without it the row says "not yet" while a session
+// for every requirement is working.
+func TestAJobWhoseRunsAreWorkingSaysHowManyAreAtWork(t *testing.T) {
+	one := aJob("1111111111111111aaaaaaaa", job.PhasePending, func(one *quaycrewv1.Job) {
+		one.RunningExecutions = 3
+	})
+
+	got := jobRow(one)
+	if got.Cells[sessionColumn] != "3 working" {
+		t.Fatalf(`the session cell of a job with three runs says %q, want "3 working"`,
+			got.Cells[sessionColumn])
+	}
+
+	// A job whose runs have all landed says what it always said: it has no session of its own yet.
+	settled := aJob("5555555555555555eeeeeeee", job.PhasePending, nil)
+	if row := jobRow(settled); row.Cells[sessionColumn] != "not yet" {
+		t.Fatalf(`a job with no runs says %q, want "not yet"`, row.Cells[sessionColumn])
+	}
+}
+
+// ListExecutions is the runs the jobs view reads to draw each job's runs beneath it. A job narrows
+// it and nothing else does here, because every run this double holds is in the one project.
+func (j *jobClient) ListExecutions(_ context.Context, req *quaycrewv1.ListExecutionsRequest, _ ...grpc.CallOption) (
+	*quaycrewv1.ListExecutionsResponse, error) {
+	matched := make([]*quaycrewv1.Execution, 0, len(j.runs))
+	for _, run := range j.runs {
+		if req.GetJob() != "" && run.GetJob() != req.GetJob() {
+			continue
+		}
+		matched = append(matched, run)
+	}
+	return &quaycrewv1.ListExecutionsResponse{Executions: matched}, nil
 }

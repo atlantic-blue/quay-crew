@@ -169,17 +169,33 @@ func TestAnErrandRunsNoStages(t *testing.T) {
 	}
 }
 
-func TestAChildJobCarriesTheStageOfTheJobAboveIt(t *testing.T) {
+// A step of a flow run follows the graph a person imported, which is the plan, so it runs none of the
+// four stages. What decides that is the run it belongs to and not a job above it: no job is above it.
+func TestAStepOfAFlowRunCarriesNoStageOfItsOwn(t *testing.T) {
 	stage := StageOf(&Job{
 		Product: "you paste a link and get the text back",
-		Parent:  "job-above",
-		Depth:   1,
+		Run:     "a-run",
 	})
 	if stage.Name != "" {
-		t.Fatalf("a child job is in stage %q of its own", stage.Name)
+		t.Fatalf("a step of a run is in stage %q of its own", stage.Name)
 	}
 	if stage.Outside == "" {
-		t.Fatalf("a child job does not say why it has no stage of its own")
+		t.Fatalf("a step of a run does not say why it has no stage of its own")
+	}
+}
+
+// And a job a session declared is a job like any other. It states the sentence, so it runs the four
+// stages, starting at the first: what caused it says how it came about and nothing about what it is.
+func TestAJobASessionDeclaredRunsItsOwnStages(t *testing.T) {
+	stage := StageOf(&Job{
+		Product: "you paste a link and get the text back",
+		Cause:   "the-job-whose-session-declared-it",
+	})
+	if stage.Outside != "" {
+		t.Fatalf("a job a session declared runs no stages, saying %q", stage.Outside)
+	}
+	if stage.Name != StageIdeation {
+		t.Fatalf("a job a session declared is in stage %q, want ideation", stage.Name)
 	}
 }
 

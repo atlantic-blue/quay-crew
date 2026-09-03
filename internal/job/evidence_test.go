@@ -342,7 +342,7 @@ func TestAWorkerIsToldHowToShowEachKind(t *testing.T) {
 			told := job.BuildTheVertical(
 				&job.Job{Workspace: "acme", Product: "a person sees it"},
 				job.Requirement{Number: 2, Text: "a person sees it", Shown: "the row", Evidence: kind},
-				[]string{"TestItFails"},
+				[]string{"TestItFails"}, job.Opened{},
 			)
 			for _, want := range wants {
 				if !strings.Contains(told, want) {

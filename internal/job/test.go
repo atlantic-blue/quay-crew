@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/atlantic-blue/quay-krewe/internal/publish"
 )
@@ -118,8 +117,10 @@ func WriteFailingTests(one *Job, wanted Requirement) string {
 		"exists to stop.")
 	said = append(said, "Write the tests for this requirement only. Another worker is writing the "+
 		"tests for each of the others at the same time, and it holds that requirement.")
-	if branch := TestBranch(one); branch != "" {
-		said = append(said, TheTestsGoOnABranch(branch))
+	// Where the work goes, and it is the whole difference between tests that hold a requirement and
+	// tests that die with the sandbox. Only a job that works in a repository has anywhere to put them.
+	if branch := BranchFor(one, wanted); branch != "" {
+		said = append(said, CutTheBranch(branch), AnOpenRedPullRequest(branch))
 	}
 	said = append(said, theShapeOfATestReport(wanted))
 	return strings.Join(said, "\n\n")
@@ -264,23 +265,23 @@ func TestsRed(wanted []Requirement, reports map[int]TestReport) error {
 // requirement any one of these tests holds. That provenance is the claim's rather than the test
 // name's: the worker that wrote this failure held the claim on that requirement and no other worker
 // could take it.
-func TestsText(wanted []Requirement, reports map[int]TestReport, branch string) string {
+func TestsText(one *Job, wanted []Requirement, reports map[int]TestReport) string {
 	var lines []string
-	// The branch first, because it is the one line about where the tests are rather than about what
-	// they say. A reader of the record can then open them, and so can the person reading it in a
-	// terminal, without knowing how the system names a branch.
-	if branch != "" {
-		lines = append(lines, "Branch: "+branch)
-	}
-	for _, one := range wanted {
-		report, held := reports[one.Number]
+	for _, requirement := range wanted {
+		report, held := reports[requirement.Number]
 		if !held {
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("Requirement %d: %s", one.Number, one.Text),
-			fmt.Sprintf("Ran %d: %d", one.Number, report.Ran))
+		lines = append(lines, fmt.Sprintf("Requirement %d: %s", requirement.Number, requirement.Text))
+		// The branch under the requirement it carries, because that is where a reader of the record
+		// opens these tests and where the worker that builds this requirement checks them out. One
+		// branch line for the job would name a place none of these tests are.
+		if branch := BranchFor(one, requirement); branch != "" {
+			lines = append(lines, fmt.Sprintf("Branch %d: %s", requirement.Number, branch))
+		}
+		lines = append(lines, fmt.Sprintf("Ran %d: %d", requirement.Number, report.Ran))
 		for _, failing := range report.Failing {
-			lines = append(lines, fmt.Sprintf("Fails %d: %s", one.Number, failing))
+			lines = append(lines, fmt.Sprintf("Fails %d: %s", requirement.Number, failing))
 		}
 	}
 	return strings.Join(lines, "\n")
@@ -353,19 +354,20 @@ func NoRedSuite(why string) string {
 // output, and the work these jobs do is deliberately red, so a gate would refuse every one of them
 // for doing exactly what it was asked. What checks them instead is the stage itself: the report is
 // read off each answer, and the requirement it was written for has to be the one it holds.
-func TestWorkers(one *Job, wanted []Requirement) []*Job {
-	var workers []*Job
+func TestExecutions(one *Job, wanted []Requirement) []*Execution {
+	var runs []*Execution
 	for _, requirement := range wanted {
-		workers = append(workers, &Job{
-			ID: newRowID(), Workspace: one.Workspace, Project: one.Project,
-			Parent: one.ID, Depth: one.Depth + 1, Version: 1, Phase: PhasePending,
-			Title: TestsFor(requirement), Brief: WriteFailingTests(one, requirement),
-			Mode: one.Mode, Repository: one.Repository, Product: one.Product, Request: one.Request,
-			Claim: ClaimOnRequirement(one.ID, requirement), Ungated: true,
+		runs = append(runs, &Execution{
+			ID: newRowID(), Job: one.ID, Stage: StageTest, Number: requirement.Number,
+			Claim: ClaimOnRequirement(one.ID, requirement), Phase: PhasePending,
+			// The branch this requirement's work lives on, from its first failing test to its last
+			// passing one. It is on the row because the run that builds the same requirement has to find
+			// it, and it is written here rather than derived a second time by that run.
+			Branch:  BranchFor(one, requirement),
 			TraceID: one.TraceID, ParentSpanID: one.ParentSpanID,
 		})
 	}
-	return workers
+	return runs
 }
 
 // ReportFrom is the report the worker holding one requirement answered with, and the refusal where
@@ -378,15 +380,26 @@ func TestWorkers(one *Job, wanted []Requirement) []*Job {
 // wrote in its answer. The two disagreeing is a worker that wrote for somebody else's requirement,
 // and it is refused: a report filed under the wrong number would leave one requirement covered twice
 // and another not at all.
-func ReportFrom(workers []*Job, requirement Requirement) (TestReport, string) {
-	if len(workers) == 0 {
+func ReportFrom(one *Job, runs []*Execution, requirement Requirement) (TestReport, string) {
+	if len(runs) == 0 {
 		return TestReport{}, fmt.Sprintf("requirement %d, %q: nothing has written its tests",
 			requirement.Number, requirement.Text)
 	}
-	worker := workers[len(workers)-1]
+	worker := runs[len(runs)-1]
 	if worker.Answer == "" {
-		return TestReport{}, fmt.Sprintf("requirement %d, %q: the worker holding it %s and said nothing, %s",
+		return TestReport{}, fmt.Sprintf("requirement %d, %q: the run holding it %s and said nothing, %s",
 			requirement.Number, requirement.Text, worker.Phase, oneLine(worker.Reason))
+	}
+	// A worker that pushed nothing is a failed worker rather than a quiet pass. Its report can be
+	// perfect and the tests it describes are in a sandbox that has gone, so nothing holds this
+	// requirement and the worker that builds it has nothing to read. What says the tests reached a
+	// branch is the pull request the system read off the answer itself, rather than the worker's word
+	// about its own push.
+	if one.Repository != "" && worker.PullRequest == "" {
+		return TestReport{}, fmt.Sprintf("requirement %d, %q: the run holding it opened no pull "+
+			"request against %s, so its tests reached no branch and went with the sandbox that wrote "+
+			"them. Nothing can build against them", requirement.Number, requirement.Text,
+			one.Repository)
 	}
 	report, err := ReadTestReport(worker.Answer)
 	if err != nil {
@@ -394,7 +407,7 @@ func ReportFrom(workers []*Job, requirement Requirement) (TestReport, string) {
 			requirement.Number, requirement.Text, oneLine(err.Error()))
 	}
 	if report.Requirement != requirement.Number {
-		return TestReport{}, fmt.Sprintf("requirement %d, %q: the worker holding it reported on "+
+		return TestReport{}, fmt.Sprintf("requirement %d, %q: the run holding it reported on "+
 			"requirement %d instead", requirement.Number, requirement.Text, report.Requirement)
 	}
 	return report, ""
@@ -424,7 +437,7 @@ func (c *Controller) writeTheTests(ctx context.Context, one *Job) {
 		c.askAboutTheTests(ctx, one, oneLine(TestsRed(wanted, nil).Error()))
 		return
 	}
-	workers, err := c.workersOn(ctx, one, wanted)
+	runs, err := c.runsOfTheStage(ctx, one, StageTest)
 	if err != nil {
 		c.logger.WarnContext(ctx, "could not read which requirements have their tests being written",
 			"job", one.ID, "error", err)
@@ -435,12 +448,12 @@ func (c *Controller) writeTheTests(ctx context.Context, one *Job) {
 	reports := map[int]TestReport{}
 	var refused []string
 	for _, requirement := range wanted {
-		theirs := workers[ClaimOnRequirement(one.ID, requirement)]
-		if live(theirs) {
+		theirs := runs[requirement.Number]
+		if LiveExecution(theirs) {
 			running++
 			continue
 		}
-		report, why := ReportFrom(theirs, requirement)
+		report, why := ReportFrom(one, theirs, requirement)
 		// A report is the worker's word about its own run, and the branch is the thing anybody else can
 		// read. So the tests have to be on it before the report counts: the delivery is asked for here,
 		// once the worker has finished and while its container is still there, because that is where
@@ -461,7 +474,7 @@ func (c *Controller) writeTheTests(ctx context.Context, one *Job) {
 		// to carry on, and otherwise it is what that person is asked about.
 		if len(theirs) < TestAttempts && (len(theirs) == 0 || one.Told != "") {
 			missing++
-			c.declareTheWorker(ctx, one, requirement)
+			c.runTheTests(ctx, one, requirement)
 			continue
 		}
 		refused = append(refused, why)
@@ -481,7 +494,7 @@ func (c *Controller) writeTheTests(ctx context.Context, one *Job) {
 	}
 
 	record := c.event(ctx, one, EventTested, WrittenTheTests(wanted, reports))
-	if _, err := c.store.RecordJobTests(ctx, one.ID, TestsText(wanted, reports, TestBranch(one)), record); err != nil {
+	if _, err := c.store.RecordJobTests(ctx, one.ID, TestsText(one, wanted, reports), record); err != nil {
 		if !errors.Is(err, ErrNotPending) {
 			c.logger.WarnContext(ctx, "could not record the failing tests a job's requirements became",
 				"job", one.ID, "error", err)
@@ -503,13 +516,13 @@ func (c *Controller) writeTheTests(ctx context.Context, one *Job) {
 // The newest worker is the one delivered, which is the one the report was read off. Asked on the
 // tick that gathers rather than when the worker settles, because a stage that reads its workers is
 // the thing that knows which of them the record stands on.
-func (c *Controller) delivered(ctx context.Context, one *Job, workers []*Job,
+func (c *Controller) delivered(ctx context.Context, one *Job, runs []*Execution,
 	requirement Requirement) string {
-	branch := TestBranch(one)
-	if branch == "" || len(workers) == 0 {
+	branch := BranchFor(one, requirement)
+	if branch == "" || len(runs) == 0 {
 		return ""
 	}
-	worker := workers[len(workers)-1]
+	worker := runs[len(runs)-1]
 	if c.publisher == nil {
 		return TestsNotOnTheBranch(requirement, branch,
 			"this system has no way to reach a session's files, so it could not put them there")
@@ -539,61 +552,40 @@ func whyTheTestsAreNotThere(found publish.Work) string {
 	}
 }
 
-// workersOn is every worker declared for each of this job's requirements, by the claim it holds,
-// oldest first.
+// runsOfTheStage is every run this stage of this job has had, under the requirement or the vertical
+// each one is for, oldest first.
 //
-// Keyed on the claim rather than on the parent, because the claim is what says which requirement a
-// worker holds and a parent says only that the worker belongs to this job. It is a list rather than
-// one job, because a requirement whose first worker died can have a second, and how many it has is
-// the bound on how many more it gets.
-func (c *Controller) workersOn(ctx context.Context, one *Job, wanted []Requirement) (
-	map[string][]*Job, error) {
-	claims := make([]string, 0, len(wanted))
-	for _, requirement := range wanted {
-		claims = append(claims, ClaimOnRequirement(one.ID, requirement))
-	}
-	held, err := c.store.JobsClaiming(ctx, one.Workspace, claims)
+// Read as the runs of the stage rather than as rows holding a claim. The table says which job and
+// which stage each run belongs to, so the two stages of one job never read each other's runs, and a
+// stage never has to ask whether a row it found is really one of its own. It is a list under each
+// number, because a requirement whose first run died can have a second, and how many it has is the
+// bound on how many more it gets.
+func (c *Controller) runsOfTheStage(ctx context.Context, one *Job, stage string) (
+	map[int][]*Execution, error) {
+	runs, err := c.store.ListExecutions(ctx, ExecutionFilter{Job: one.ID, Stage: stage})
 	if err != nil {
 		return nil, err
 	}
-	workers := map[string][]*Job{}
-	for _, worker := range held {
-		workers[worker.Claim] = append(workers[worker.Claim], worker)
-	}
-	return workers, nil
+	return ExecutionsByNumber(runs), nil
 }
 
-// live says whether any of these workers is still writing.
-func live(workers []*Job) bool {
-	for _, worker := range workers {
-		if !Terminal(worker.Phase) {
-			return true
-		}
-	}
-	return false
-}
-
-// declareTheWorker declares the one job that writes the tests for one requirement.
+// runTheTests writes the one run that writes the tests for one requirement.
 //
-// A claim refused here is the mechanism working rather than a failure: another controller declared
-// this worker a moment ago, and two workers writing the tests for one requirement is exactly what the
-// claim exists to stop. The row waits either way, and the next tick reads the worker that other
-// controller declared.
-func (c *Controller) declareTheWorker(ctx context.Context, one *Job, requirement Requirement) {
-	worker := TestWorkers(one, []Requirement{requirement})[0]
-	record := &Event{
-		ID: newRowID(), Job: worker.ID, Kind: EventDeclared, Workspace: worker.Workspace,
-		Project: worker.Project, Parent: worker.Parent, Depth: worker.Depth,
-		Detail: fmt.Sprintf("the tests for requirement %d of job %s, %q",
-			requirement.Number, one.ID, requirement.Text),
-		TraceID: worker.TraceID, OccurredAt: time.Now().UTC(),
-	}
-	if err := c.store.CreateJob(ctx, worker, record); err != nil {
+// A claim refused here is the mechanism working rather than a failure: another controller wrote this
+// run a moment ago, and two sessions writing the tests for one requirement is exactly what the claim
+// exists to stop. The row waits either way, and the next tick reads the run that other controller
+// wrote.
+func (c *Controller) runTheTests(ctx context.Context, one *Job, requirement Requirement) {
+	run := TestExecutions(one, []Requirement{requirement})[0]
+	record := c.executionEvent(ctx, one, run, EventRan,
+		fmt.Sprintf("the tests for requirement %d of job %s, %q",
+			requirement.Number, one.ID, requirement.Text))
+	if err := c.store.CreateExecution(ctx, run, record); err != nil {
 		var taken *Held
 		if errors.As(err, &taken) {
 			return
 		}
-		c.logger.WarnContext(ctx, "could not declare the worker that writes a requirement's tests",
+		c.logger.WarnContext(ctx, "could not write the run that writes a requirement's tests",
 			"job", one.ID, "requirement", requirement.Number, "error", err)
 		return
 	}

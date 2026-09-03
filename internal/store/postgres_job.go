@@ -14,11 +14,11 @@ import (
 // jobColumns is the row every read of a job selects, in one place so a reader and a
 // listing cannot drift into scanning different things.
 const jobColumns = `id, workspace, project, title, brief, role, role_version, mode, expect_file,
-	expect_contains, after_jobs, deadline, budget_tokens, labels, requires, coalesce(parent, ''), depth, version,
+	expect_contains, after_jobs, deadline, budget_tokens, labels, requires, cause, run, version,
 	phase, session, attempts, answer, outcome, reason, question, told, resuming, spent_tokens, observed_version,
 	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product, steers, claim,
 	escalation, looped_step, escalated_to, plan, plan_approved, ideation, ideation_answer,
-	design, design_accepted, tests, build, building, accepted,
+	design, design_accepted, tests, build, accepted,
 	ungated, reviewed, tested,
 	pull_request_status, pull_request_checks, pull_request_check, pull_request_review,
 	pull_request_read_at, pull_request_failed,
@@ -108,28 +108,28 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into jobs (id, workspace, project, title, brief, role, role_version, mode, expect_file,
-			expect_contains, after_jobs, deadline, budget_tokens, labels, requires, parent, depth, version, phase,
+			expect_contains, after_jobs, deadline, budget_tokens, labels, requires, cause, run, version, phase,
 			session, attempts, answer, outcome, reason, question, told, spent_tokens, observed_version, started_at,
 			finished_at, lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product,
-			resuming, claim, escalation, ungated, reviewed, tested, tests, build, building,
+			resuming, claim, escalation, ungated, reviewed, tested, tests, build,
 			pull_request_status,
 			pull_request_checks, pull_request_check, pull_request_review, pull_request_read_at,
 			pull_request_failed, request, created_at, updated_at, accepted)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
 			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38,
-			$39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53,
-			coalesce($54::timestamptz, now()), coalesce($55::timestamptz, now()), $56)`,
+			$39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52,
+			coalesce($53::timestamptz, now()), coalesce($54::timestamptz, now()), $55)`,
 		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
 		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
 		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
-		afterOrEmpty(declared.Requires), nullIfEmpty(declared.Parent), declared.Depth, declared.Version, declared.Phase,
+		afterOrEmpty(declared.Requires), declared.Cause, declared.Run, declared.Version, declared.Phase,
 		declared.Session, declared.Attempts, declared.Answer, declared.Outcome, declared.Reason, declared.Question,
 		declared.Told, declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt,
 		declared.LeaseOwner, declared.LeaseUntil, declared.TraceID, declared.ParentSpanID,
 		declared.Repository, declared.PullRequest, declared.Product, declared.Resuming,
 		declared.Claim, declared.Escalation,
 		declared.Ungated, declared.Reviewed, declared.Tested, declared.Tests,
-		declared.Build, declared.Building,
+		declared.Build,
 		declared.PullRequestState.Status, declared.PullRequestState.Checks,
 		declared.PullRequestState.FailedCheck, declared.PullRequestState.Review,
 		stampOrNil(declared.PullRequestState.ReadAt), declared.PullRequestState.Failed,
@@ -203,11 +203,8 @@ func (p *Postgres) ListJobs(ctx context.Context, filter job.Filter) ([]*job.Job,
 	case filter.Workspace != "":
 		add(` and workspace = $%d`, filter.Workspace)
 	}
-	switch {
-	case filter.Parent != "":
-		add(` and parent = $%d`, filter.Parent)
-	case filter.Root:
-		query += ` and parent is null`
+	if filter.Run != "" {
+		add(` and run = $%d`, filter.Run)
 	}
 	if filter.Phase != "" {
 		add(` and phase = $%d`, filter.Phase)
@@ -414,7 +411,7 @@ func (p *Postgres) ApproveJobPlan(ctx context.Context, id string, event *job.Eve
 // worked backwards.
 func (p *Postgres) ListJobEvents(ctx context.Context, id string) ([]*job.Event, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, kind, job, workspace, project, parent, depth, detail, trace_id, occurred_at
+		select id, kind, job, workspace, project, execution, detail, trace_id, occurred_at
 		from job_events where job = $1 order by seq`, id)
 	if err != nil {
 		return nil, fmt.Errorf("list job events: %w", err)
@@ -425,7 +422,7 @@ func (p *Postgres) ListJobEvents(ctx context.Context, id string) ([]*job.Event, 
 	for rows.Next() {
 		var event job.Event
 		if err := rows.Scan(&event.ID, &event.Kind, &event.Job, &event.Workspace, &event.Project,
-			&event.Parent, &event.Depth, &event.Detail, &event.TraceID, &event.OccurredAt); err != nil {
+			&event.Execution, &event.Detail, &event.TraceID, &event.OccurredAt); err != nil {
 			return nil, fmt.Errorf("scan job event: %w", err)
 		}
 		events = append(events, &event)
@@ -446,11 +443,12 @@ func appendJobEvent(ctx context.Context, tx pgx.Tx, event *job.Event) error {
 		return errors.New("store: a job event needs an id and a kind")
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into job_events (id, kind, job, workspace, project, parent, depth, detail, trace_id, occurred_at)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		insert into job_events (id, kind, job, workspace, project, execution, detail,
+			trace_id, occurred_at)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		on conflict (id) do nothing`,
 		event.ID, event.Kind, event.Job, event.Workspace, event.Project,
-		event.Parent, event.Depth, event.Detail, event.TraceID, event.OccurredAt); err != nil {
+		event.Execution, event.Detail, event.TraceID, event.OccurredAt); err != nil {
 		return fmt.Errorf("append job event: %w", err)
 	}
 	return nil
@@ -468,14 +466,14 @@ func scanJob(row rowScanner) (*job.Job, error) {
 	var readAt *time.Time
 	if err := row.Scan(&found.ID, &found.Workspace, &found.Project, &found.Title, &found.Brief,
 		&found.Role, &found.RoleVersion, &found.Mode, &found.ExpectFile, &found.ExpectContains,
-		&found.After, &found.Deadline, &found.BudgetTokens, &labels, &found.Requires, &found.Parent, &found.Depth,
+		&found.After, &found.Deadline, &found.BudgetTokens, &labels, &found.Requires, &found.Cause, &found.Run,
 		&found.Version, &found.Phase, &found.Session, &found.Attempts, &found.Answer, &found.Outcome, &found.Reason,
 		&found.Question, &found.Told, &found.Resuming, &found.SpentTokens, &found.ObservedVersion,
 		&found.LeaseOwner, &found.LeaseUntil, &found.TraceID, &found.ParentSpanID,
 		&found.Repository, &found.PullRequest, &found.Product, &found.Steers, &found.Claim,
 		&found.Escalation, &found.LoopedStep, &found.EscalatedTo, &found.Plan, &found.PlanApproved,
 		&found.Ideation, &found.IdeationAnswer,
-		&found.Design, &found.DesignAccepted, &found.Tests, &found.Build, &found.Building, &found.Accepted,
+		&found.Design, &found.DesignAccepted, &found.Tests, &found.Build, &found.Accepted,
 		&found.Ungated, &found.Reviewed, &found.Tested,
 		&found.PullRequestState.Status, &found.PullRequestState.Checks,
 		&found.PullRequestState.FailedCheck, &found.PullRequestState.Review,
@@ -527,24 +525,13 @@ func afterOrEmpty(after []string) []string {
 	return after
 }
 
-// nullIfEmpty keeps a root's parent null rather than an empty string, so the foreign key holds and
-// "job with no parent" is a query rather than a convention.
-func nullIfEmpty(value string) any {
-	if value == "" {
-		return nil
-	}
-	return value
-}
-
 // RunnableJob is the job a controller may start: pending with nothing it waits for, oldest
 // declared first.
 //
-// A job under a parent and a job in a role are both started. A role because the controller runs it as
-// that role, and a parent because a flow run declares every step under its own job, so a controller
-// that started roots only would leave every step of every automation pending forever. What is still
-// left out is job that waits for something, because nothing honours ordering yet. The tree budget is
-// enforced for none of these and for a root either, so nothing is honoured less here than anywhere
-// else.
+// Every pending job is started, whoever declared it: a job an operator wrote, a job a session
+// declared and a step of a flow run are all jobs, and a controller that read only some of them would
+// leave the rest pending forever. What is still left out is a job that waits for something, because
+// nothing honours ordering yet.
 func (p *Postgres) RunnableJob(ctx context.Context, limit int) ([]*job.Job, error) {
 	return p.jobMatching(ctx, `
 		where phase = $1 and cardinality(after_jobs) = 0
@@ -576,8 +563,9 @@ func (p *Postgres) ExpiredJob(ctx context.Context, limit int) ([]*job.Job, error
 func (p *Postgres) AnythingMoving(ctx context.Context) (bool, error) {
 	var moving bool
 	if err := p.pool.QueryRow(ctx,
-		`select exists (select 1 from jobs where phase = any($1))`,
-		[]string{job.PhaseRunning, job.PhaseAsking}).Scan(&moving); err != nil {
+		`select exists (select 1 from jobs where phase = any($1))
+		    or exists (select 1 from executions where phase = $2)`,
+		[]string{job.PhaseRunning, job.PhaseAsking}, job.PhaseRunning).Scan(&moving); err != nil {
 		return false, fmt.Errorf("read whether anything is moving: %w", err)
 	}
 	return moving, nil
@@ -855,25 +843,40 @@ func (p *Postgres) LandJob(ctx context.Context, id string, landed job.Landing, e
 //
 // It is deliberately short. A history never selects the brief, the answer or the steps, which is the
 // difference between a read a session can afford and one that fills its context before it starts.
-const digestColumns = `id, project, title, role, phase, spent_tokens, pull_request, reason, steers,
-	created_at, started_at, finished_at`
+const digestColumns = `j.id, j.project, j.title, j.role, j.phase, j.spent_tokens, j.pull_request,
+	j.reason, j.steers, j.created_at, j.started_at, j.finished_at`
+
+// runColumns is what the runs of a job add to its digest: how many there were, what they spent, and
+// the addresses their work is open at.
+//
+// A run is not a job, so it is no line of its own in a history. What it cost belongs to the job that
+// ran it, and a history that left it out would tell an operator that a week of fan outs was cheap.
+const runColumns = `coalesce(x.runs, 0), coalesce(x.spent, 0), coalesce(x.opened, '{}')`
+
+// theRunsOfEachJob is the aggregate those three columns come from, joined to one job at a time.
+const theRunsOfEachJob = `left join lateral (
+		select count(*) as runs, sum(spent_tokens) as spent,
+		       array_remove(array_agg(distinct nullif(pull_request, '')), null) as opened
+		from executions where job = j.id
+	) x on true`
 
 // JobHistory returns every job declared inside a window, as digests, newest first.
 //
 // Bounded by the window rather than by a limit, because the caller adds these up before it cuts them
 // down: a total taken over a page would be a number that is wrong in the one way a reader cannot see.
 func (p *Postgres) JobHistory(ctx context.Context, query job.HistoryQuery) ([]*job.Digest, error) {
-	statement := `select ` + digestColumns + ` from jobs where created_at >= $1 and created_at < $2`
+	statement := `select ` + digestColumns + `, ` + runColumns + ` from jobs j ` + theRunsOfEachJob +
+		` where j.created_at >= $1 and j.created_at < $2`
 	args := []any{query.Window.Since, query.Window.Until}
 	switch {
 	case query.Project != "":
 		args = append(args, query.Project)
-		statement += fmt.Sprintf(` and project = $%d`, len(args))
+		statement += fmt.Sprintf(` and j.project = $%d`, len(args))
 	case query.Workspace != "":
 		args = append(args, query.Workspace)
-		statement += fmt.Sprintf(` and workspace = $%d`, len(args))
+		statement += fmt.Sprintf(` and j.workspace = $%d`, len(args))
 	}
-	statement += ` order by created_at desc, id desc`
+	statement += ` order by j.created_at desc, j.id desc`
 
 	rows, err := p.pool.Query(ctx, statement, args...)
 	if err != nil {
@@ -900,8 +903,11 @@ func (p *Postgres) JobHistory(ctx context.Context, query job.HistoryQuery) ([]*j
 func scanDigest(row rowScanner) (*job.Digest, error) {
 	var one job.Digest
 	var started, finished *time.Time
+	var runs int
+	var spent int64
 	if err := row.Scan(&one.ID, &one.Project, &one.Title, &one.Role, &one.Phase, &one.SpentToken,
-		&one.PullRequest, &one.Reason, &one.Steers, &one.CreatedAt, &started, &finished); err != nil {
+		&one.PullRequest, &one.Reason, &one.Steers, &one.CreatedAt, &started, &finished,
+		&runs, &spent, &one.Opened); err != nil {
 		return nil, err
 	}
 	if started != nil {
@@ -910,6 +916,9 @@ func scanDigest(row rowScanner) (*job.Digest, error) {
 	if finished != nil {
 		one.FinishedAt = finished.UTC()
 	}
+	// What this job's runs cost is part of what the job cost. They are added here rather than being
+	// left as a second number a reader has to add up for themselves.
+	one.Runs, one.SpentToken = runs, one.SpentToken+spent
 	one.CreatedAt = one.CreatedAt.UTC()
 	return &one, nil
 }
@@ -1080,4 +1089,14 @@ func (p *Postgres) SendJobBackToBuild(ctx context.Context, id string,
 			lease_owner = '', lease_until = null, updated_at = now(), asked_at = null, raised_at = null
 		where id = $1 and phase = $3 and build <> '' and accepted = false`,
 		job.PhasePending, job.PhasePending)
+}
+
+// JobsCausedBy is how many jobs the session running this one declared.
+func (p *Postgres) JobsCausedBy(ctx context.Context, cause string) (int, error) {
+	caused := 0
+	if err := p.pool.QueryRow(ctx,
+		`select count(*) from jobs where cause = $1`, cause).Scan(&caused); err != nil {
+		return 0, fmt.Errorf("jobs caused by: %w", err)
+	}
+	return caused, nil
 }

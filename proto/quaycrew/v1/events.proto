@@ -119,19 +119,18 @@ message JobEvent {
   string kind = 2;
   // job is the job this happened to, and the key the record is published under.
   string job = 3;
-  // workspace, project, parent and depth are where the job sits in the tree, denormalised
-  // deliberately: a consumer must not have to query the store to know what it is reading. parent is
-  // empty for a root.
+  // workspace and project are where the job sits, denormalised deliberately: a consumer must not
+  // have to query the store to know what it is reading.
   string workspace = 4;
   string project = 5;
-  string parent = 6;
-  int32 depth = 7;
+  reserved 6, 7;
+  reserved "parent", "depth";
   // detail is one short line about this event: the title declared, the session and attempt, what it
   // spent, the reason it stopped. It can carry what a caller typed, so it goes through the system's
   // redactor before it is written or exported.
   string detail = 8;
-  // trace_id is the trace the whole tree belongs to, minted at the root and inherited by every
-  // descendant, so one identifier joins a job, its children, its tasks and its spans.
+  // trace_id is the trace this work belongs to, so one identifier joins a job, its executions, its
+  // tasks and its spans.
   string trace_id = 9;
   // occurred_at is when it happened.
   google.protobuf.Timestamp occurred_at = 10;

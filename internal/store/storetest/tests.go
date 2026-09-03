@@ -143,7 +143,7 @@ func runJobTestConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
-	t.Run("the workers of a fan out are found by the claim each one holds", func(t *testing.T) {
+	t.Run("the runs of a fan out are read as the executions of that stage", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		workspace, project := aProject(t, s)
@@ -156,73 +156,82 @@ func runJobTestConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if len(wanted) != 2 {
 			t.Fatalf("the accepted list carries %d requirements, want 2", len(wanted))
 		}
-		workers := job.TestWorkers(kept, wanted)
-		for _, worker := range workers {
-			if err := s.CreateJob(ctx, worker, declaredEvent(worker)); err != nil {
-				t.Fatalf("CreateJob: %v", err)
+		runs := job.TestExecutions(kept, wanted)
+		for _, run := range runs {
+			if err := s.CreateExecution(ctx, run, ranEvent(id, workspace, project, run)); err != nil {
+				t.Fatalf("CreateExecution: %v", err)
 			}
 		}
 
-		// A second worker for a requirement one already holds is refused, by the claim rather than by
+		// A second run for a requirement one already holds is refused, by the claim rather than by
 		// anything the fan out remembers.
-		second := job.TestWorkers(kept, wanted[:1])[0]
-		err = s.CreateJob(ctx, second, declaredEvent(second))
+		second := job.TestExecutions(kept, wanted[:1])[0]
+		err = s.CreateExecution(ctx, second, ranEvent(id, workspace, project, second))
 		var taken *job.Held
 		if !errors.As(err, &taken) {
-			t.Fatalf("a second worker for requirement 1 was declared, and the store said %v", err)
+			t.Fatalf("a second run for requirement 1 was written, and the store said %v", err)
 		}
-		if taken.Holder != workers[0].ID {
-			t.Fatalf("the refusal names job %q, and %q holds the claim", taken.Holder, workers[0].ID)
+		if taken.Holder != runs[0].ID {
+			t.Fatalf("the refusal names run %q, and %q holds the claim", taken.Holder, runs[0].ID)
 		}
 
-		// And the fan out reads its workers back whole. The answer is what it came for, and a listing
-		// leaves the answer out.
+		// And the fan out reads its runs back whole. The answer is what it came for.
 		answered := "Requirement: 1\nRan: 12\nFailing 1: TestItFails"
-		if _, err := s.StartJob(ctx, workers[0].ID, aLease("controller-1"),
-			[]*job.Event{startedEvent(workers[0].ID, workspace, project)}); err != nil {
-			t.Fatalf("StartJob: %v", err)
+		if _, err := s.StartExecution(ctx, runs[0].ID, aLease("controller-1"), nil); err != nil {
+			t.Fatalf("StartExecution: %v", err)
 		}
-		if _, err := s.LandJob(ctx, workers[0].ID, job.Landing{
+		if _, err := s.LandExecution(ctx, runs[0].ID, job.ExecutionLanding{
 			Phase: job.PhaseDone, Answer: answered, Outcome: job.OutcomeProved,
-		}, answeredEvent(workers[0].ID, workspace, project)); err != nil {
-			t.Fatalf("LandJob: %v", err)
+		}, nil); err != nil {
+			t.Fatalf("LandExecution: %v", err)
 		}
 
-		var claims []string
-		for _, requirement := range wanted {
-			claims = append(claims, job.ClaimOnRequirement(id, requirement))
-		}
-		found, err := s.JobsClaiming(ctx, workspace, claims)
+		found, err := s.ListExecutions(ctx, job.ExecutionFilter{Job: id, Stage: job.StageTest})
 		if err != nil {
-			t.Fatalf("JobsClaiming: %v", err)
+			t.Fatalf("ListExecutions: %v", err)
 		}
 		if len(found) != 2 {
-			t.Fatalf("the fan out reads back %d workers for 2 requirements", len(found))
+			t.Fatalf("the fan out reads back %d runs for 2 requirements", len(found))
 		}
-		for _, worker := range found {
-			if worker.Claim == job.ClaimOnRequirement(id, wanted[0]) {
-				// The one that finished, read back with what it said. A settled worker has let its claim go,
-				// so a query that asked who still holds it would find nothing and the stage would never
-				// close.
-				if !strings.Contains(worker.Answer, "Failing 1: TestItFails") {
-					t.Fatalf("the worker that answered reads back with %q", worker.Answer)
-				}
-				if worker.Phase != job.PhaseDone {
-					t.Fatalf("the worker that answered reads back as %q", worker.Phase)
-				}
+		for _, run := range found {
+			if run.Job != id {
+				t.Fatalf("a run reads back under job %q, want %q", run.Job, id)
 			}
-			if worker.Parent != id {
-				t.Fatalf("a worker reads back under %q, want %q", worker.Parent, id)
+			if run.Stage != job.StageTest {
+				t.Fatalf("a run reads back in stage %q, want %q", run.Stage, job.StageTest)
+			}
+			if run.Number != 1 {
+				continue
+			}
+			// The one that finished, read back with what it said. A settled run has let its claim go, so
+			// a query that asked who still holds it would find nothing and the stage would never close.
+			if !strings.Contains(run.Answer, "Failing 1: TestItFails") {
+				t.Fatalf("the run that answered reads back with %q", run.Answer)
+			}
+			if run.Phase != job.PhaseDone {
+				t.Fatalf("the run that answered reads back as %q", run.Phase)
 			}
 		}
 
-		// A claim nothing holds answers with nothing rather than with everything.
-		none, err := s.JobsClaiming(ctx, workspace, []string{"nobody claims this"})
+		// The job's own listing carries none of them. Nobody declared a run, so no listing of declared
+		// work may show one.
+		listed, err := s.ListJobs(ctx, job.Filter{Project: project})
 		if err != nil {
-			t.Fatalf("JobsClaiming: %v", err)
+			t.Fatalf("ListJobs: %v", err)
 		}
-		if len(none) != 0 {
-			t.Fatalf("a claim nothing holds answered with %d jobs", len(none))
+		for _, one := range listed {
+			if one.ID != id {
+				t.Fatalf("the jobs listing carries %q, which nobody declared", one.ID)
+			}
+		}
+
+		// The build stage of the same job reads none of the test stage's runs.
+		other, err := s.ListExecutions(ctx, job.ExecutionFilter{Job: id, Stage: job.StageBuild})
+		if err != nil {
+			t.Fatalf("ListExecutions: %v", err)
+		}
+		if len(other) != 0 {
+			t.Fatalf("the build stage reads %d runs of the test stage", len(other))
 		}
 	})
 }

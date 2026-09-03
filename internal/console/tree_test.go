@@ -51,6 +51,13 @@ func (t *treeClient) ListJobs(_ context.Context, req *quaycrewv1.ListJobsRequest
 	return &quaycrewv1.ListJobsResponse{Jobs: matched}, nil
 }
 
+// ListExecutions is the runs of a project's jobs, which the jobs view reads to draw each job's runs
+// beneath it. This tree holds none, and none is an answer.
+func (t *treeClient) ListExecutions(_ context.Context, _ *quaycrewv1.ListExecutionsRequest, _ ...grpc.CallOption) (
+	*quaycrewv1.ListExecutionsResponse, error) {
+	return &quaycrewv1.ListExecutionsResponse{}, nil
+}
+
 func (t *treeClient) ListSessions(_ context.Context, req *quaycrewv1.ListSessionsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListSessionsResponse, error) {
 	matched := make([]*quaycrewv1.Session, 0, len(t.sessions))
 	for _, session := range t.sessions {
@@ -197,7 +204,7 @@ func TestTheConsoleOpensAtTheTopAndGoesDownFourLevelsAndBackUp(t *testing.T) {
 
 	// Level four. The running work: what the job's session was asked, and what came back.
 	model = walk(t, model, enter())
-	if model.active.Name != "tasks" {
+	if model.active.Name != "exec" {
 		t.Fatalf("enter on a job opens %q, want the work running under it", model.active.Name)
 	}
 	if model.parent != "4444444444444444dddddddd" {
@@ -310,18 +317,23 @@ func TestAJobWithNoSessionYetRefusesTheLastLevelAndSaysWhy(t *testing.T) {
 	screenSays(t, model, job.PhasePending)
 }
 
-// The deepest level is where a person watches something happen, so the two keys that reach the
-// machine live there. Both act on the session the level is scoped to.
+// The deepest level is where a person watches something happen, so the keys that reach the machine
+// live there. Both act on the session the level is scoped to, and enter acts on the row.
 func TestTheRunningWorkOpensTheConversationAndAShell(t *testing.T) {
 	client := aSystemWithOneOfEverything()
-	work := Tasks(client)
+	work := Exec(client)
 
 	open, found := actionNamed(work, "Open")
 	if !found {
 		t.Fatal("the running work has no key that opens the conversation")
 	}
-	if !open.Bound("enter") || !open.OnScope {
-		t.Fatalf("Open answers to %v and OnScope=%v, want enter acting on the session", open.Keys(), open.OnScope)
+	// The way off enter. Enter reads the task now, and the conversation kept the key it already
+	// answered to, so an operator who reached for it still lands on the conversation.
+	if !open.Bound("a") || !open.OnScope {
+		t.Fatalf("Open answers to %v and OnScope=%v, want a acting on the session", open.Keys(), open.OnScope)
+	}
+	if open.Bound("enter") {
+		t.Fatal("enter still opens the conversation, so the row under the cursor has no key of its own")
 	}
 	shell, found := actionNamed(work, "Shell")
 	if !found {
@@ -333,7 +345,7 @@ func TestTheRunningWorkOpensTheConversationAndAShell(t *testing.T) {
 }
 
 // The case a row could never answer: a job whose session has produced no task yet lists nothing, and
-// that is exactly the job somebody is watching. The key has to reach the session anyway.
+// that is exactly the job somebody is watching. The keys have to reach the session anyway.
 func TestShellingInWorksOnAJobWhoseSessionHasAnsweredNothingYet(t *testing.T) {
 	client := aSystemWithOneOfEverything()
 	client.tasks = nil
@@ -357,6 +369,144 @@ func TestShellingInWorksOnAJobWhoseSessionHasAnsweredNothingYet(t *testing.T) {
 	line := strings.Join(handed, " ")
 	if !strings.Contains(line, "4444444444444444dddddddd") {
 		t.Fatalf("the shell command is %q, want the job's session in it", line)
+	}
+}
+
+// A task is a paragraph, and the panel is about a hundred characters wide. A line left whole is a
+// line cut at the border, which is the fault this key exists to answer, one order of magnitude along.
+func TestALongAskIsReadWholeRatherThanCutAtTheBorder(t *testing.T) {
+	const ask = "read the electricity bill for the flat in the north of the city, work out what " +
+		"the standing charge came to over the quarter, and say whether the supplier moved it " +
+		"without telling anybody"
+	client := aSystemWithOneOfEverything()
+	client.tasks[0].Prompt = ask
+
+	model := openedOnTheTree(t, client)
+	model = walk(t, walk(t, walk(t, model, enter()), enter()), enter())
+	model = walk(t, model, enter())
+
+	// Every word of it, in the order it was written, across however many rows the panel needed.
+	if drawn := drawnText(model); !strings.Contains(drawn, ask) {
+		t.Fatalf("the screen does not carry the whole ask:\n%s", model.View())
+	}
+}
+
+// drawnText is what the screen says with the frame taken off and the rows run together, so a sentence
+// wrapped over several rows reads as the sentence it is.
+func drawnText(model Model) string {
+	drawn := strings.NewReplacer("│", " ", "╭", " ", "╮", " ", "╰", " ", "╯", " ").Replace(model.View())
+	return strings.Join(strings.Fields(drawn), " ")
+}
+
+// Wrapping is where a reading of any length is kept, so the pieces are checked on their own too: a
+// word too long for the panel is broken rather than dropped, and nothing is lost between two pieces.
+func TestWrappingKeepsEveryWord(t *testing.T) {
+	for _, one := range []struct {
+		name string
+		line string
+		wide int
+		want []string
+	}{
+		{"a line that already fits", "pay the bill", 20, []string{"pay the bill"}},
+		{"broken on its spaces", "pay the water bill today", 10, []string{"pay the", "water bill", "today"}},
+		{"a word longer than the panel", "aaaaaaaa bb", 4, []string{"aaaa", "aaaa", "bb"}},
+		{"nothing at all", "", 10, []string{""}},
+	} {
+		t.Run(one.name, func(t *testing.T) {
+			got := wrapTo(one.line, one.wide)
+			if strings.Join(got, "|") != strings.Join(one.want, "|") {
+				t.Fatalf("wrapping %q at %d gives %q, want %q", one.line, one.wide, got, one.want)
+			}
+			for _, piece := range got {
+				if len([]rune(piece)) > one.wide {
+					t.Fatalf("the piece %q is wider than the %d the panel has", piece, one.wide)
+				}
+			}
+		})
+	}
+}
+
+// The fault this level had: every row opened the same shell, so the one key that means "this one"
+// could not reach the task under the cursor. The column holds 34 characters, so what a row shows is a
+// fragment of a sentence, and the whole of it was only at the command line.
+func TestEnterOnATaskOpensTheTaskUnderTheCursor(t *testing.T) {
+	const second = "pay the water bill before the fourteenth or the supply is cut off"
+	client := aSystemWithOneOfEverything()
+	client.tasks = append(client.tasks, &quaycrewv1.Task{
+		Id: "6666666666666666ffffffff", Session: "4444444444444444dddddddd",
+		Status: "done", Prompt: second, Reply: "it is paid",
+		OccurredAt: timestamppb.New(time.Now().Add(time.Minute)),
+	})
+
+	model := openedOnTheTree(t, client)
+	model = walk(t, walk(t, walk(t, model, enter()), enter()), enter())
+	if len(model.Listed()) != 2 {
+		t.Fatalf("the running work lists %d rows, want the two tasks this is about", len(model.Listed()))
+	}
+	model = walk(t, model, tea.KeyMsg{Type: tea.KeyDown})
+	if row, found := model.Selected(); !found || row.ID != "6666666666666666ffffffff" {
+		t.Fatalf("the cursor is on %+v, want the second task", row)
+	}
+
+	model = walk(t, model, enter())
+
+	// The whole sentence, which no row on this level could ever have drawn, and the answer under it.
+	screenSays(t, model, second, "it is paid")
+	// The first task's own answer, which is what a key that opened the row above this one would show.
+	screenDoesNotSay(t, model, "it is due on the 14th")
+	// And the way out: any other key puts the rows back, so the reading is somewhere a person leaves.
+	model = walk(t, model, escape())
+	screenSays(t, model, "it is due on the 14th")
+}
+
+// Enter used to hand the terminal to a shell in the session's container. It reads the task now, and a
+// key that suspends the console into somebody else's container is not a thing to do by accident.
+func TestEnterOnATaskOpensNoShell(t *testing.T) {
+	client := aSystemWithOneOfEverything()
+	model := openedOnTheTree(t, client)
+	model = walk(t, walk(t, walk(t, model, enter()), enter()), enter())
+
+	var handed []string
+	model = model.WithTerminal(func(command *exec.Cmd, done func(error) tea.Msg) tea.Cmd {
+		handed = command.Args
+		return func() tea.Msg { return done(nil) }
+	})
+	model = walk(t, model, enter())
+
+	if handed != nil {
+		t.Fatalf("enter handed the terminal to %q, want the task on the screen instead", strings.Join(handed, " "))
+	}
+	if model.err != nil {
+		t.Fatalf("enter on a task refused: %v", model.err)
+	}
+	screenSays(t, model, "read the electricity bill", "it is due on the 14th")
+}
+
+// The other half of the case a row could never answer. Enter needs a row and this session has none,
+// so the conversation keeps a key that acts on the session the level is scoped to.
+func TestTheConversationIsStillReachableWhenNoTaskHasAnswered(t *testing.T) {
+	client := aSystemWithOneOfEverything()
+	client.tasks = nil
+
+	model := openedOnTheTree(t, client)
+	model = walk(t, walk(t, walk(t, model, enter()), enter()), enter())
+	if len(model.Listed()) != 0 {
+		t.Fatalf("the running work lists %d rows, want none, which is the case this is about", len(model.Listed()))
+	}
+
+	var handed []string
+	model = model.WithTerminal(func(command *exec.Cmd, done func(error) tea.Msg) tea.Cmd {
+		handed = command.Args
+		return func() tea.Msg { return done(nil) }
+	})
+	model = walk(t, model, runes("a"))
+
+	if model.err != nil {
+		t.Fatalf("opening the conversation refused: %v", model.err)
+	}
+	line := strings.Join(handed, " ")
+	if !strings.Contains(line, "krewe-s1") || !strings.Contains(line, "--resume") {
+		t.Fatalf("the command is %q, want the conversation in the job's own sandbox", line)
 	}
 }
 
@@ -452,7 +602,7 @@ func TestEveryLevelFitsAWindowTooNarrowForItsWidestRow(t *testing.T) {
 	model.width, model.height = 40, 20
 	model = settle(t, model, listCmd(model.active, model.parent))
 
-	for _, level := range []string{"workspaces", "projects", "jobs", "tasks"} {
+	for _, level := range []string{"workspaces", "projects", "jobs", "exec"} {
 		if model.active.Name != level {
 			t.Fatalf("the walk is on %q, want %q", model.active.Name, level)
 		}
@@ -461,7 +611,7 @@ func TestEveryLevelFitsAWindowTooNarrowForItsWidestRow(t *testing.T) {
 				t.Fatalf("on %s a line is %d wide in a window of %d: %q", level, width, model.width, line)
 			}
 		}
-		if level != "tasks" {
+		if level != "exec" {
 			model = walk(t, model, enter())
 		}
 	}

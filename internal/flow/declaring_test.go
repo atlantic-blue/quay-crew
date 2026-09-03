@@ -59,9 +59,9 @@ func TestARunOutWithAStepHoldsNoDispatchOpen(t *testing.T) {
 	}
 }
 
-// One tree, and it is the job tree. A step hangs under the run's own job, one level deeper, which
-// is what makes the depth limit and the tree budget bound a run at all.
-func TestAStepHangsUnderTheRunOneLevelDeeper(t *testing.T) {
+// A step belongs to the run, and the run knows which job carries it. Neither is a job under a job:
+// the job carrying the run is a job in its project, and so is every step.
+func TestAStepBelongsToTheRunAndNotToAJob(t *testing.T) {
 	engine, it, workspace, project := aSystem(t, twoStepGraph)
 	ctx := context.Background()
 
@@ -75,8 +75,9 @@ func TestAStepHangsUnderTheRunOneLevelDeeper(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetJob: %v", err)
 	}
-	if carrying.Parent != "" || carrying.Depth != 0 {
-		t.Fatalf("a run an operator started hangs under %q at depth %d, want a root", carrying.Parent, carrying.Depth)
+	if carrying.Cause != "" || carrying.Run != "" {
+		t.Fatalf("a run an operator started is carried by a job caused by %q inside run %q, want neither",
+			carrying.Cause, carrying.Run)
 	}
 	if !strings.Contains(carrying.Brief, "fix-red") || !strings.Contains(carrying.Brief, "version 1") {
 		t.Errorf("the run's own job says %q, want it to name the flow and its version", carrying.Brief)
@@ -88,11 +89,27 @@ func TestAStepHangsUnderTheRunOneLevelDeeper(t *testing.T) {
 	}
 
 	step := stepOf(t, it, run)
-	if step.Parent != carrier {
-		t.Errorf("the step hangs under %q, want the run's own job %q", step.Parent, carrier)
+	if step.Run != run.ID {
+		t.Errorf("the step belongs to run %q, want the run that declared it %q", step.Run, run.ID)
 	}
-	if step.Depth != carrying.Depth+1 {
-		t.Errorf("the step is at depth %d and the run at %d, want one deeper", step.Depth, carrying.Depth)
+	if step.Cause != "" {
+		t.Errorf("the step says %q caused it: a step belongs to its run and to nothing else", step.Cause)
+	}
+	// The run reads its own steps, and the job carrying it lists none.
+	steps, err := it.store.ListJobs(ctx, job.Filter{Run: run.ID})
+	if err != nil || len(steps) != 1 || steps[0].ID != step.ID {
+		t.Fatalf("the run reads back %d steps (%v), want its one step", len(steps), err)
+	}
+	if carried, _ := it.store.ListJobs(ctx, job.Filter{Run: carrier}); len(carried) != 0 {
+		t.Errorf("the job carrying the run lists %d steps of its own", len(carried))
+	}
+	// And the step is given the sentence the graph serves, read off the job carrying the run, so a
+	// session doing one node is told what a person gets out of the whole thing.
+	if step.Product != carrying.Product {
+		t.Errorf("the step serves %q and the run serves %q", step.Product, carrying.Product)
+	}
+	if step.TraceID != carrying.TraceID {
+		t.Errorf("the step is in trace %q and the run in %q, want one trace over the run", step.TraceID, carrying.TraceID)
 	}
 }
 
@@ -427,8 +444,8 @@ edges:
 	if tests.Role != "test-writer" {
 		t.Errorf("the step went out as job in role %q, want test-writer", tests.Role)
 	}
-	if tests.Parent != plan.Parent {
-		t.Errorf("the two steps hang under %q and %q, want both under the run", tests.Parent, plan.Parent)
+	if tests.Run != plan.Run {
+		t.Errorf("the two steps belong to runs %q and %q, want both to the one run", tests.Run, plan.Run)
 	}
 }
 
@@ -494,7 +511,7 @@ func TestARunsOwnJobIsNeverOfferedToAController(t *testing.T) {
 		t.Fatalf("ImportFlowGraph: %v", err)
 	}
 	watching := &watchingStore{Store: kept}
-	it := &system{store: kept, maxDepth: 4}
+	it := &system{store: kept, maxDeclared: 4}
 	engine := flow.NewEngine(watching, it, nil, it)
 
 	if _, err := engine.Start(ctx, "fix-red", workspace.GetId(), project.GetId(), nil); err != nil {

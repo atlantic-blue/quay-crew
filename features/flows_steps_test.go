@@ -177,7 +177,7 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the run's step is a job under the run, one level deeper$`, func(ctx context.Context) error {
+	sc.Step(`^the run's step is a job of the run and of no job$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		kept, err := w.store.GetFlowRun(ctx, w.flowRun.ID)
 		if err != nil {
@@ -191,11 +191,15 @@ func initializeFlowSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		if step.Parent != carrier.ID {
-			return fmt.Errorf("the step hangs under %q, want the job carrying the run %q", step.Parent, carrier.ID)
+		if step.Run != kept.ID {
+			return fmt.Errorf("the step belongs to run %q, want the run that declared it %q", step.Run, kept.ID)
 		}
-		if step.Depth != carrier.Depth+1 {
-			return fmt.Errorf("the step is at depth %d and the run at %d, want one deeper", step.Depth, carrier.Depth)
+		if step.Cause != "" {
+			return fmt.Errorf("the step says %q caused it: a step belongs to its run and to nothing else",
+				step.Cause)
+		}
+		if carrier.Run != "" {
+			return fmt.Errorf("the job carrying the run is itself a step of run %q", carrier.Run)
 		}
 		if step.Brief == "" {
 			return fmt.Errorf("the step was written down with no brief, so nothing would be asked")
@@ -695,15 +699,14 @@ func runCarrier(ctx context.Context, w *world) (*job.Job, error) {
 // runSteps is every job the run declared for a step, oldest first. Found by the labels each
 // one carries, which is the road a person takes too: krewe job list --label flow.run=<run>.
 func runSteps(ctx context.Context, w *world) ([]*job.Job, error) {
-	listed, err := w.store.ListJobs(ctx, job.Filter{LabelKey: "flow.run", LabelValue: w.flowRun.ID})
+	// Read off the run, which is what a step belongs to. The job carrying the run is not one of
+	// them: it carries the run and declared none of its steps.
+	listed, err := w.store.ListJobs(ctx, job.Filter{Run: w.flowRun.ID})
 	if err != nil {
 		return nil, err
 	}
 	out := make([]*job.Job, 0, len(listed))
 	for at := len(listed) - 1; at >= 0; at-- {
-		if listed[at].Labels["flow.node"] == "" {
-			continue
-		}
 		whole, err := w.store.GetJob(ctx, listed[at].ID)
 		if err != nil {
 			return nil, err

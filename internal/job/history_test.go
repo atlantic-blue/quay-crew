@@ -200,7 +200,7 @@ func TestADigestCarriesTheFactsAndNotTheProse(t *testing.T) {
 		Steers: 2, Brief: "a thousand words of brief", Answer: "a very long answer",
 		Steps:     []job.Step{{Seq: 1, Summary: "read the history"}},
 		CreatedAt: at(28), StartedAt: &started, FinishedAt: &finished,
-	})
+	}, nil)
 	if digest.Title != "write the post" || digest.Role != "marketing" || digest.SpentToken != 4200 {
 		t.Fatalf("the digest reads %+v", digest)
 	}
@@ -215,7 +215,7 @@ func TestADigestCarriesTheFactsAndNotTheProse(t *testing.T) {
 // A job that never started reads as not known rather than as the first of January year one, which is
 // what the zero time would draw as.
 func TestADigestOfAJobThatNeverRanHasNoMoments(t *testing.T) {
-	digest := job.DigestOf(&job.Job{ID: "job-1", Phase: job.PhasePending, CreatedAt: at(28)})
+	digest := job.DigestOf(&job.Job{ID: "job-1", Phase: job.PhasePending, CreatedAt: at(28)}, nil)
 	if !digest.StartedAt.IsZero() || !digest.FinishedAt.IsZero() {
 		t.Fatalf("a job that never ran reads as started %s and finished %s",
 			digest.StartedAt, digest.FinishedAt)
@@ -232,5 +232,40 @@ func TestAHistoryIsNewestFirst(t *testing.T) {
 	if history[0].ID != "c" || history[1].ID != "a" || history[2].ID != "b" {
 		t.Fatalf("the history reads %s, %s, %s; want c, a, b",
 			history[0].ID, history[1].ID, history[2].ID)
+	}
+}
+
+// What a job cost is what its stages cost. A run is not a job, so it is no line of its own in a
+// history, and a number that left the runs out would say a week of fan outs was cheap: a stage buys
+// one session for each requirement, and those sessions are most of what a job spends.
+func TestAJobsCostIsItsOwnSessionPlusEveryRunOfItsStages(t *testing.T) {
+	digest := job.DigestOf(&job.Job{
+		ID: "job-1", Phase: job.PhaseDone, SpentTokens: 1_000,
+		PullRequest: "https://github.com/an/owner/pull/1", CreatedAt: at(28),
+	}, []*job.Execution{
+		{ID: "run-1", Job: "job-1", Stage: job.StageTest, Number: 1, SpentTokens: 4_000,
+			PullRequest: "https://github.com/an/owner/pull/2"},
+		{ID: "run-2", Job: "job-1", Stage: job.StageBuild, Number: 1, SpentTokens: 9_000,
+			PullRequest: "https://github.com/an/owner/pull/2"},
+		{ID: "run-3", Job: "job-1", Stage: job.StageTest, Number: 2, SpentTokens: 500},
+	})
+	if digest.SpentToken != 14_500 {
+		t.Fatalf("the job reads as costing %d, want its own 1000 and the 13500 its runs spent",
+			digest.SpentToken)
+	}
+	if digest.Runs != 3 {
+		t.Fatalf("the job reads as having %d runs, want the 3 its stages made", digest.Runs)
+	}
+
+	// And the window adds up the same way, counting one address once however many runs land in it:
+	// a requirement has one pull request, and the run that writes its tests and the run that builds
+	// it are both in that one.
+	total := job.Summarise([]*job.Digest{digest})
+	if total.SpentToken != 14_500 {
+		t.Fatalf("the window reads as costing %d", total.SpentToken)
+	}
+	if total.PullRequests != 2 {
+		t.Fatalf("the window reads as %d pull requests, want the 2 distinct addresses it opened",
+			total.PullRequests)
 	}
 }

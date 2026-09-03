@@ -220,15 +220,28 @@ type Store interface {
 	// fans out again against what the person said was missing. It applies to a job that carries a build
 	// record and no acceptance, so an accepted job can never be sent back over its own acceptance.
 	SendJobBackToBuild(ctx context.Context, id string, events ...*Event) (*Job, error)
-	// CreateJob declares one job and the record of declaring it, in one transaction. It is how a test
-	// stage and a build stage fan out, and it is the same call every other declaration goes through,
-	// so the claim on a requirement or on a vertical is refused here exactly as a claim typed by a
-	// person is.
+	// CreateJob declares one job and the record of declaring it, in one transaction.
 	CreateJob(ctx context.Context, declared *Job, event *Event) error
-	// JobsClaiming is the jobs in one workspace claiming any of these pieces of work, whole. It is how
-	// a fan out finds the workers it declared: each one holds the claim on its own requirement, and
-	// what the fan out needs back is the answer each of them gave.
+	// JobsClaiming is the jobs in one workspace claiming any of these pieces of work, whole.
 	JobsClaiming(ctx context.Context, workspace string, claims []string) ([]*Job, error)
+	// CreateExecution writes one run of one stage of one job, which is how a stage fans out. The
+	// claim on the requirement or the vertical is refused here, so two controllers ticking one stage
+	// at the same moment run one session and not two. See execution.go.
+	CreateExecution(ctx context.Context, run *Execution, event *Event) error
+	// ListExecutions is the runs of one stage of one job, oldest first. It is how a stage gathers:
+	// what has run for each requirement or vertical, and what the newest of them answered.
+	ListExecutions(ctx context.Context, filter ExecutionFilter) ([]*Execution, error)
+	// The same four questions the job queries above answer, asked of the runs. A run is dispatched,
+	// held, taken over and landed the way a job is, and it passes through no stages and no gates.
+	RunnableExecutions(ctx context.Context, limit int) ([]*Execution, error)
+	HeldExecutions(ctx context.Context, owner string, limit int) ([]*Execution, error)
+	ExpiredExecutions(ctx context.Context, limit int) ([]*Execution, error)
+	StartExecution(ctx context.Context, id string, lease Lease, event *Event) (*Execution, error)
+	TakeOverExecution(ctx context.Context, id string, lease Lease) (*Execution, error)
+	RenewExecutionLease(ctx context.Context, id string, lease Lease) error
+	RecordExecutionSession(ctx context.Context, id, session string) error
+	RecordExecutionBranch(ctx context.Context, id, branch string) error
+	LandExecution(ctx context.Context, id string, landed ExecutionLanding, event *Event) (*Execution, error)
 	// AskJob puts a question to a person and stops the job there. It applies only to a running job.
 	//
 	// The controller reaches for it where a session answered that a person has to decide, so that job
@@ -535,14 +548,14 @@ func (c *Controller) Publishing(publisher Publisher) *Controller {
 //
 // Asked once, at the moment of stopping, and never while a job is running: it costs commands inside a
 // container, and a job still working has not finished the work this is about.
-func (c *Controller) published(ctx context.Context, one *Job) publish.Work {
+func (c *Controller) published(ctx context.Context, session string) publish.Work {
 	if c.publisher == nil {
 		return publish.Work{
 			State: publish.Unreadable,
 			Why:   "this system has no way to reach a session's files",
 		}
 	}
-	return c.publisher.PublishSessionWork(ctx, one.Session)
+	return c.publisher.PublishSessionWork(ctx, session)
 }
 
 // Revoking returns a controller that takes a job's credentials back as it writes the end of that
@@ -603,8 +616,14 @@ func (c *Controller) Tick(ctx context.Context) {
 	// Recovery first, so job a dead controller left behind is in this controller's hands before it
 	// reads what it holds, and one tick both takes the job over and writes what came of it.
 	c.recoverAbandoned(ctx)
+	c.recoverAbandonedExecutions(ctx)
 	c.adoptAnswers(ctx, turnedAway)
+	// The runs of the stages, in the same order and for the same reasons. They are a separate pass
+	// because a run is not a job: it answers no gate, writes no plan and settles nothing. See
+	// executionrun.go.
+	c.adoptExecutions(ctx)
 	c.startDeclared(ctx, turnedAway)
+	c.runExecutions(ctx)
 	// Last but one, so a session this tick has just dispatched into is not a candidate on the same
 	// pass. The three above decide what is wanted alive; this one acts on what is left.
 	c.putAway(ctx)
@@ -1105,7 +1124,7 @@ func (c *Controller) adopt(ctx context.Context, one *Job, turnedAway givenUp) {
 			return
 		}
 		landing.Phase, landing.Reason, kind = PhaseStopped,
-			WhyNoPullRequest(one.Repository, one.Mode, one.Session, c.published(ctx, one)), EventStopped
+			WhyNoPullRequest(one.Repository, one.Mode, one.Session, c.published(ctx, one.Session)), EventStopped
 	}
 	// A plan a person approved and the work then walked away from is the same failure as no plan at
 	// all, one step further along, so the record is held against the plan before the job is called
@@ -1232,7 +1251,7 @@ func (c *Controller) askForThePullRequest(ctx context.Context, one *Job, asked i
 		return false
 	}
 	if _, err := c.plane.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-		Project: one.Project, Handle: ConversationFor(one), Text: AskedForThePullRequest(one.Repository),
+		Project: one.Project, Handle: ConversationFor(one), Text: AskedForThePullRequest(one, nil),
 		PermissionMode: one.Mode, Detach: true, Role: RoleNow(one), Job: one.ID,
 	}); err != nil {
 		// A system that cannot ask again lands the job below with the reason, rather than holding a row
@@ -1819,7 +1838,7 @@ func (c *Controller) event(ctx context.Context, one *Job, kind, detail string) *
 	}
 	return &Event{
 		ID: newRowID(), Kind: kind, Job: one.ID, Workspace: one.Workspace, Project: one.Project,
-		Parent: one.Parent, Depth: one.Depth, Detail: detail, TraceID: one.TraceID,
+		Detail: detail, TraceID: one.TraceID,
 		OccurredAt: time.Now().UTC(),
 	}
 }

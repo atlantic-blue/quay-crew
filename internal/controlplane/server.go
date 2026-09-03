@@ -1361,13 +1361,13 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 			opened *quaycrewv1.TaskEvent) {
 			defer s.tasking.Done()
 			_, _ = s.task(context.WithoutCancel(ctx), session, text, credential, building, opened)
-		}(session, req.GetText(), s.credentialFor(ctx, req.GetJob()),
-			s.buildingUnderTheBoundary(ctx, req.GetJob()), opened)
+		}(session, req.GetText(), s.credentialForTask(ctx, req),
+			s.buildingUnderTheBoundary(ctx, req.GetExecution()), opened)
 		return &quaycrewv1.DispatchResponse{Id: session.GetId(), Handle: handle}, nil
 	}
 
-	reply, err := s.task(ctx, session, req.GetText(), s.credentialFor(ctx, req.GetJob()),
-		s.buildingUnderTheBoundary(ctx, req.GetJob()), nil)
+	reply, err := s.task(ctx, session, req.GetText(), s.credentialForTask(ctx, req),
+		s.buildingUnderTheBoundary(ctx, req.GetExecution()), nil)
 	if err != nil {
 		return nil, err
 	}

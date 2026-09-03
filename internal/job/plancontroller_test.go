@@ -284,12 +284,12 @@ func TestAnErrandRunsWithNoPlanAndNoQuestion(t *testing.T) {
 	}
 }
 
-// A job declared under another is one part of a plan a person already approved. Stopping at each one
-// puts a person back in the loop for every job in the tree.
-func TestAJobUnderAnotherIsNotPlanned(t *testing.T) {
+// A step of a flow run follows the graph a person imported, which is its plan. Stopping at each node
+// puts a person back in the loop for every step of every automation.
+func TestAStepOfAFlowRunIsNotPlanned(t *testing.T) {
 	controller, kept, plane := aController(t)
 	one := plannedJob()
-	one.Parent, one.Depth = "job-above", 1
+	one.Run = "a-run"
 	kept.add(one)
 	ctx := context.Background()
 

@@ -74,7 +74,7 @@ func aJobIn(t *testing.T, s *controlplane.Server, workspace, project, title stri
 	t.Helper()
 	ctx := context.Background()
 	if _, err := s.SetWorkspaceLimits(ctx, &quaycrewv1.SetWorkspaceLimitsRequest{
-		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDepth: 3},
+		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDeclared: 3},
 	}); err != nil {
 		t.Fatalf("SetWorkspaceLimits: %v", err)
 	}

@@ -31,18 +31,18 @@ Feature: A job counts the steers it took, so the next one can be compared with i
     Then the command succeeds
     And reading that job back through the tool says "1 steer"
 
-  # The count is the score of the tree, so where inside the tree a steer landed does not change it.
-  Scenario: A steer against a child counts on the job at the top
+  # A steer belongs to the job it landed on. The job whose session declared that one is a job in its
+  # own right, so its count does not move.
+  Scenario: A steer against a job a session declared counts on that job alone
     Given a job in flight titled "build the transcripts page"
     And the session running it declared a job of its own
-    When the operator steers that child with "it chose a store that bills while idle"
-    Then reading the job at the top back through the tool says "1 steer"
+    When the operator steers that job with "it chose a store that bills while idle"
+    Then reading that job back through the tool says "0 steers"
 
   Scenario: The report says what was said, when, and which job it landed on
     Given a job in flight titled "build the transcripts page"
-    And the session running it declared a job of its own
     And the operator steered the job in flight with "the workspace has no secrets"
-    And the operator steered that child with "it chose a store that bills while idle"
+    And the operator steered the job in flight with "it chose a store that bills while idle"
     When the operator reads the steers of that job back
     Then the report says "the workspace has no secrets" before "it chose a store that bills while idle"
     And the report says "2 steers"

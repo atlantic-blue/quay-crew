@@ -77,7 +77,7 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 	// Asking and still in ideation. That pair is the useful thing to read, and it is the reason the
 	// stage sits beside the phase rather than replacing it.
 	if stage := job.StageOf(&job.Job{
-		Product: asking.GetProduct(), Parent: asking.GetParent(),
+		Product: asking.GetProduct(), Run: asking.GetRun(),
 		IdeationAnswer: asking.GetIdeationAnswer(),
 		Plan:           asking.GetPlan(), PlanApproved: asking.GetPlanApproved(),
 	}); stage.Name != job.StageIdeation {
@@ -210,26 +210,37 @@ func TestTheStageIsReadOffTheWireThroughPostgres(t *testing.T) {
 			verticals, passing, whole.GetBuild())
 	}
 
-	// And every worker of that fan out reads back under the boundary, which is what the dispatch reads
-	// to tell the session's runtime. A flag written and never selected would build under no gate at
-	// all, and the suite would agree with whatever the build wrote.
-	workers, listErr := client.ListJobs(ctx,
+	// And every run of that fan out reads back in the build stage, which is what the dispatch reads to
+	// tell the session's runtime. A run read back in any other stage would build under no gate at all,
+	// and the suite would agree with whatever the build wrote.
+	runs, listErr := client.ListExecutions(ctx,
+		&quaycrewv1.ListExecutionsRequest{Job: id, Stage: job.StageBuild})
+	if listErr != nil {
+		t.Fatalf("ListExecutions: %v", listErr)
+	}
+	builders := 0
+	for _, run := range runs.GetExecutions() {
+		builders++
+		if run.GetStage() != job.StageBuild {
+			t.Fatalf("the run of vertical %d reads back in stage %q, so it built outside the boundary",
+				run.GetNumber(), run.GetStage())
+		}
+	}
+	if builders != verticals {
+		t.Fatalf("%d runs built %d verticals", builders, verticals)
+	}
+
+	// And no row nobody declared stands in the listing of declared work, which is the whole of the
+	// split: a job with five runs under it used to be six rows on the screen.
+	onTheBoard, listErr := client.ListJobs(ctx,
 		&quaycrewv1.ListJobsRequest{Project: project.GetProject().GetId()})
 	if listErr != nil {
 		t.Fatalf("ListJobs: %v", listErr)
 	}
-	builders := 0
-	for _, one := range workers.GetJobs() {
-		if one.GetParent() != id || !strings.HasPrefix(one.GetTitle(), "build vertical") {
-			continue
+	for _, one := range onTheBoard.GetJobs() {
+		if one.GetId() != id {
+			t.Fatalf("the jobs listing carries %q, %q, which nobody declared", one.GetId(), one.GetTitle())
 		}
-		builders++
-		if !one.GetBuilding() {
-			t.Fatalf("worker %q reads back outside the boundary", one.GetTitle())
-		}
-	}
-	if builders != verticals {
-		t.Fatalf("%d workers built %d verticals", builders, verticals)
 	}
 
 	// Every vertical arrives with the kind of evidence it asked for and a label saying where that came
@@ -361,7 +372,7 @@ func stageOnTheWire(t *testing.T, ctx context.Context,
 	t.Helper()
 	one := readJob(t, ctx, client, id)
 	return job.StageOf(&job.Job{
-		Product: one.GetProduct(), Parent: one.GetParent(),
+		Product: one.GetProduct(), Run: one.GetRun(),
 		IdeationAnswer: one.GetIdeationAnswer(),
 		Design:         one.GetDesign(), DesignAccepted: one.GetDesignAccepted(),
 		Tests: one.GetTests(), Build: one.GetBuild(), Accepted: one.GetAccepted(),
