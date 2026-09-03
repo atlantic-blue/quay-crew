@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/display"
@@ -15,14 +16,28 @@ import (
 // Line is the one line a surface prints for one waiting job: what it is, what it wants, and how
 // long it has been waiting where the wait has passed the limit.
 //
+// The record holds a question of any length, and this line is one line wide, so a long question is
+// cut here and the line says which command prints all of it. A cut that says nothing reads as the
+// whole question, and a person answers half a question.
+//
 // The age is named only past the limit. A job that stopped a minute ago and one that stopped an hour
 // ago are different things, and an age on every line is an age nobody reads.
 func Line(one *quaycrewv1.Waiting) string {
-	line := fmt.Sprintf("%s %s: %s", display.ShortID(one.GetJob()), wants(one.GetWhy()), oneLine(one.GetWant()))
+	id := display.ShortID(one.GetJob())
+	head := fmt.Sprintf("%s %s: ", id, wants(one.GetWhy()))
+	age := ""
 	if one.GetOverLimit() {
-		line += fmt.Sprintf(" (waited %s)", job.Waited(waitedFor(one)))
+		age = fmt.Sprintf(" (waited %s)", job.Waited(waitedFor(one)))
 	}
-	return line
+	said := strings.Join(strings.Fields(one.GetWant()), " ")
+	if said == "" {
+		return head + "it says nothing about what it wants" + age
+	}
+	if len(head)+len(said)+len(age) <= lineWidth {
+		return head + said + age
+	}
+	where := fmt.Sprintf(" (%s %s)", theWholeQuestion, id)
+	return head + cutTo(said, lineWidth-len(head)-len(age)-len(where)-len(ellipsis)) + ellipsis + where + age
 }
 
 // Count is how a surface with room for one line says how many jobs wait, and empty where none do.
@@ -58,20 +73,37 @@ func waitedFor(one *quaycrewv1.Waiting) time.Duration {
 	return time.Duration(one.GetWaitedSeconds()) * time.Second
 }
 
-// oneLine holds what a job wants to a single line, since these are printed above a command's output
-// and drawn inside a bordered panel. A question that wrapped over four lines would push the output
-// off a short screen.
-func oneLine(said string) string {
-	said = strings.Join(strings.Fields(said), " ")
-	if said == "" {
-		return "it says nothing about what it wants"
+// cutTo is the start of what a job wants, in at most room bytes, ending on a whole word where one
+// ends near enough to the cut. It never splits a character, because half a character is a question
+// mark on the screen of anybody whose question was not written in English.
+func cutTo(said string, room int) string {
+	if room < 1 {
+		return ""
 	}
-	if len(said) <= tellingWidth {
+	if len(said) <= room {
 		return said
 	}
-	return said[:tellingWidth-1] + "…"
+	kept := said[:room]
+	for len(kept) > 0 && !utf8.RuneStart(kept[len(kept)-1]) {
+		kept = kept[:len(kept)-1]
+	}
+	if kept != "" && !utf8.ValidString(kept) {
+		kept = kept[:len(kept)-1]
+	}
+	if word := strings.LastIndexByte(kept, ' '); word >= room/2 {
+		kept = kept[:word]
+	}
+	return strings.TrimRight(kept, " ")
 }
 
-// tellingWidth is how much of what a job wants one line carries. Eighty is the narrowest terminal
-// anybody still uses, and the identifier and the verb in front of it take about twenty.
-const tellingWidth = 60
+const (
+	// lineWidth is the whole width of this line. Eighty is the narrowest terminal anybody still uses,
+	// and the line prints above whatever command the person actually typed.
+	lineWidth = 80
+	// ellipsis marks where the cut fell.
+	ellipsis = "…"
+	// theWholeQuestion is the command that prints the question the line could only start. A mark on
+	// its own says the text stops and says nothing about where the rest is, and the rest is the reason
+	// a person wrote a question that long.
+	theWholeQuestion = "krewe job show"
+)

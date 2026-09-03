@@ -62,3 +62,12 @@ Feature: A job that stops for a person tells them
     And a person answered it and the job ran on
     When that job fails and a surface names it
     Then krewe job show dates the wait from the failure, not from the answered question
+
+  # A cap that refused a long question becomes a warning, so the record carries a question of any
+  # length. The line an operator reads is still one line, so it cuts what it draws there and says
+  # where the whole question is.
+  Scenario: A question too long for one line is cut where it is drawn, and whole in the record
+    Given the session running that job asked a question longer than a terminal line
+    When the operator runs any command
+    Then the telling fits a narrow terminal, and says where the whole question is
+    And krewe job show prints the whole question
