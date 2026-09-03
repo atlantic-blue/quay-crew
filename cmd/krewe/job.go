@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/display"
@@ -317,19 +318,23 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	// read before somebody starts work a job already has, and a column of blanks on every listing is a
 	// column nobody reads by the second week.
 	claiming := anythingClaimed(resp.GetJobs())
+	// The same rule for the reason a job stopped: the column arrives with the first row that has one,
+	// and it goes away again with them.
+	saying := anythingSaidWhy(resp.GetJobs())
 	for _, one := range resp.GetJobs() {
 		if holding == "" && heldForRoom(one) {
 			holding = one.GetReason()
 		}
 		if where.where == "" {
-			fmt.Fprintf(out, "%-10s %-24s %-8s %-9s %-9s %s%s\n", display.ShortID(one.GetId()),
+			fmt.Fprintf(out, "%-10s %-24s %-8s %-9s %-9s %s%s%s\n", display.ShortID(one.GetId()),
 				addresses[one.GetProject()], phaseOf(one), job.StageOfWire(one).Says(),
-				outcomeOf(one), claimColumn(one, claiming), truncateLine(one.GetTitle()))
+				outcomeOf(one), reasonColumn(one, saying), claimColumn(one, claiming),
+				truncateLine(one.GetTitle()))
 			continue
 		}
-		fmt.Fprintf(out, "%-10s %-8s %-9s %-9s %s%s\n",
+		fmt.Fprintf(out, "%-10s %-8s %-9s %-9s %s%s%s\n",
 			display.ShortID(one.GetId()), phaseOf(one), job.StageOfWire(one).Says(),
-			outcomeOf(one), claimColumn(one, claiming),
+			outcomeOf(one), reasonColumn(one, saying), claimColumn(one, claiming),
 			truncateLine(one.GetTitle()))
 	}
 	// Said once, under the listing, because an operator reading a column of "held" needs to know it
@@ -357,16 +362,60 @@ func claimColumn(one *quaycrewv1.Job, claiming bool) string {
 	if !claiming {
 		return ""
 	}
-	claim := one.GetClaim()
-	if len(claim) > claimWidth {
-		claim = claim[:claimWidth-1] + "…"
-	}
-	return fmt.Sprintf("%-*s ", claimWidth, claim)
+	return fmt.Sprintf("%-*s ", claimWidth, cutToColumn(one.GetClaim(), claimWidth))
 }
 
 // claimWidth is how wide the claim column is. It holds an owner, a name and an issue number, which is
 // what most claims are, and cuts anything longer rather than pushing the title off the line.
 const claimWidth = 28
+
+// anythingSaidWhy says whether any row in a listing carries a reason a person reads on the row.
+func anythingSaidWhy(jobs []*quaycrewv1.Job) bool {
+	for _, one := range jobs {
+		if reasonOnRow(one) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// reasonColumn is why a job stopped, in a column, and nothing at all where no row in the listing
+// says why.
+func reasonColumn(one *quaycrewv1.Job, saying bool) string {
+	if !saying {
+		return ""
+	}
+	return fmt.Sprintf("%-*s ", reasonWidth, cutToColumn(asOneLine(reasonOnRow(one)), reasonWidth))
+}
+
+// reasonOnRow is the reason a row draws, which is why a job stopped or what it failed on. A pending
+// job the machine is holding back carries one too, and that one stays off the row: it is one fact
+// about the machine, said once under the listing, rather than one fact per row.
+func reasonOnRow(one *quaycrewv1.Job) string {
+	if heldForRoom(one) {
+		return ""
+	}
+	return one.GetReason()
+}
+
+// reasonWidth is how wide the reason column is. A reason is free text somebody types, so it shares
+// the line with the title and cuts rather than pushing the title off the terminal.
+const reasonWidth = 40
+
+// asOneLine is a text as one line, because a row is one line and a line break in a field draws a
+// second row that reads as a job with no identifier and no title.
+func asOneLine(text string) string {
+	return strings.Join(strings.Fields(text), " ")
+}
+
+// cutToColumn is a text at the width a column draws it in, with the last character saying the text
+// goes on. Both columns of this listing cut the same way, so a person learns the mark once.
+func cutToColumn(text string, width int) string {
+	if utf8.RuneCountInString(text) <= width {
+		return text
+	}
+	return string([]rune(text)[:width-1]) + "…"
+}
 
 // phaseOf is the word the listing carries. A pending job the system is holding back reads "held"
 // rather than "pending": both are waiting, and only one of them is waiting for a machine.

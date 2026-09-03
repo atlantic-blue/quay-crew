@@ -78,6 +78,8 @@ This pull request carries the list. The code for each marking ships in the verti
 
 - `claimWidth` in `cmd/krewe/job.go`, 28 characters: cut for display. The claim shares a line with
   the title.
+- `reasonWidth` in `cmd/krewe/job.go`, 40 characters: cut for display. The reason a job stopped
+  shares a line with the title, and the record keeps the whole of it.
 - `Limit` in `hooks/prose-gate/main.go`, 5 findings: cut for display. The gate says how many more
   there are, and reports them on the next attempt.
 - `descriptionLimit` in `internal/controlplane/describe.go`, 60 characters: cut for display. A
