@@ -86,12 +86,9 @@ func TestASessionDeclaresASubJobAndTheSystemRunsItInASessionOfItsOwn(t *testing.
 		t.Fatalf("the session declared %d jobs, want 1. It said:\n%s", len(children), parentSession)
 	}
 	child := children[0]
-	if child.GetParent() != declared {
-		t.Fatalf("the sub job hangs under %q, want the job the session was running, %q", child.GetParent(), declared)
-	}
-	if child.GetDepth() != 1 {
-		t.Fatalf("the sub job is at depth %d, want 1: depth comes from the parent, and the parent from the credential",
-			child.GetDepth())
+	if child.GetCause() != declared {
+		t.Fatalf("the sub job says %q caused it, want the job the session was running, %q",
+			child.GetCause(), declared)
 	}
 	if child.GetRole() != implementerRole {
 		t.Fatalf("the sub job runs as %q, want the role the session named", child.GetRole())
@@ -147,11 +144,9 @@ func TestASessionDeclaresAChildLongAfterTheFirstMinuteOfItsJob(t *testing.T) {
 	}
 	// From the credential and never from the caller, the same as at the first second of the job.
 	child := children[0]
-	if child.GetParent() != declared {
-		t.Fatalf("the sub job hangs under %q, want the job the session was running, %q", child.GetParent(), declared)
-	}
-	if child.GetDepth() != 1 {
-		t.Fatalf("the sub job is at depth %d, want 1", child.GetDepth())
+	if child.GetCause() != declared {
+		t.Fatalf("the sub job says %q caused it, want the job the session was running, %q",
+			child.GetCause(), declared)
 	}
 }
 
@@ -286,7 +281,7 @@ func aSystemWhoseSessionsCanReachIt(ctx context.Context, t *testing.T) *reachabl
 
 	// Depth starts at zero, so no session declares anything until an operator raises it.
 	if _, err := server.SetWorkspaceLimits(ctx, &quaycrewv1.SetWorkspaceLimitsRequest{
-		Limits: &quaycrewv1.WorkspaceLimits{Workspace: system.workspaceID, MaxDepth: 2},
+		Limits: &quaycrewv1.WorkspaceLimits{Workspace: system.workspaceID, MaxDeclared: 2},
 	}); err != nil {
 		t.Fatalf("raise the ceiling: %v", err)
 	}
@@ -364,13 +359,22 @@ func (c *reachableSystem) jobNamed(ctx context.Context, t *testing.T, id string)
 }
 
 // children is what one job has hanging under it.
-func (c *reachableSystem) children(ctx context.Context, t *testing.T, parent string) []*quaycrewv1.Job {
+// children is every job the session running one job declared. A cause is not a filter, so the
+// listing of the project is read and the rows are picked out of it, which is what a person reading
+// that listing sees too.
+func (c *reachableSystem) children(ctx context.Context, t *testing.T, cause string) []*quaycrewv1.Job {
 	t.Helper()
-	listed, err := c.server.ListJobs(ctx, &quaycrewv1.ListJobsRequest{Project: c.projectID, Parent: parent})
+	listed, err := c.server.ListJobs(ctx, &quaycrewv1.ListJobsRequest{Project: c.projectID})
 	if err != nil {
-		t.Fatalf("list what hangs under the job: %v", err)
+		t.Fatalf("list the jobs of the project: %v", err)
 	}
-	return listed.GetJobs()
+	caused := make([]*quaycrewv1.Job, 0, len(listed.GetJobs()))
+	for _, one := range listed.GetJobs() {
+		if one.GetCause() == cause {
+			caused = append(caused, one)
+		}
+	}
+	return caused
 }
 
 // postgresOnTheSystemsNetwork starts a real store where the composed stack keeps it, on the system's own

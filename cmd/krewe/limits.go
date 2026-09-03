@@ -15,6 +15,9 @@ import (
 // The flags a ceiling is set with. Each is its own number, so setting one and leaving the rest is a
 // read of the row and a write of it back.
 const (
+	flagMaxDeclared = "--max-declared"
+	// The flag the ceiling used to be typed as, kept so it is refused by name with the flag to type
+	// instead: it is in scripts and in notes, and a flag quietly ignored leaves a ceiling unchanged.
 	flagMaxDepth   = "--max-depth"
 	flagMaxRunning = "--max-running"
 	// What one sandbox in this workspace asks the machine for, in the units the room view prints:
@@ -49,11 +52,18 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 	if err != nil {
 		return err
 	}
+	// The flag the ceiling used to be typed as. It is refused by name rather than ignored: a flag
+	// that is quietly dropped leaves the operator believing a ceiling moved that did not.
+	if values.has(flagMaxDepth) {
+		return fmt.Errorf("%s is gone: a job cannot be under another job, so there is no depth to "+
+			"bound. The ceiling is how many jobs one session may declare: krewe limits <workspace> %s <n>",
+			flagMaxDepth, flagMaxDeclared)
+	}
 	if len(rest) > 1 {
 		return fmt.Errorf("usage: krewe limits [<workspace>] [%s <n>] [%s <n>] [%s <n>] "+
 			"[%s <duration>] [%s <duration>] [%s <duration>] [%s <duration>] [%s <mebibytes>] "+
 			"[%s <per cent>] [%s <per cent>]",
-			flagMaxDepth, flagMaxRunning, flagBudgetTokens, flagLease, flagReclaim, flagArchive,
+			flagMaxDeclared, flagMaxRunning, flagBudgetTokens, flagLease, flagReclaim, flagArchive,
 			flagWaiting, flagRequestMemory, flagRequestProcessor, flagContextCeiling)
 	}
 	typed := ""
@@ -81,7 +91,7 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 		flag string
 		set  func(int64)
 	}{
-		{flagMaxDepth, func(n int64) { asked.MaxDepth = int32(n) }},
+		{flagMaxDeclared, func(n int64) { asked.MaxDeclared = int32(n) }},
 		{flagMaxRunning, func(n int64) { asked.MaxRunning = int32(n) }},
 		{flagBudgetTokens, func(n int64) { asked.BudgetTokens = n }},
 		{flagRequestMemory, func(n int64) { asked.RequestMemoryMib = int32(n) }},
@@ -128,7 +138,7 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 	}
 
 	fmt.Fprintf(out, "%s\n", located.Path)
-	fmt.Fprintf(out, "max depth      %d%s\n", asked.GetMaxDepth(), depthMeans(asked.GetMaxDepth()))
+	fmt.Fprintf(out, "max declared   %d%s\n", asked.GetMaxDeclared(), declaredMeans(asked.GetMaxDeclared()))
 	fmt.Fprintf(out, "max running    %s\n", unsetOr(int64(asked.GetMaxRunning())))
 	fmt.Fprintf(out, "request        %s%s\n", requestOf(asked), systemsOwn(asked))
 	fmt.Fprintf(out, "budget tokens  %s\n", unsetOr(asked.GetBudgetTokens()))
@@ -140,7 +150,7 @@ func runLimits(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 	fmt.Fprintf(out, "ctx ceiling    %d%%%s\n", ceilingOf(asked), ceilingMeans(asked))
 	fmt.Fprintf(out, "waiting        %s%s\n", waitingOf(asked), waitingMeans(asked))
 	if !setting {
-		fmt.Fprintf(out, "\nraise one with krewe limits %s %s <n>\n", located.Path, flagMaxDepth)
+		fmt.Fprintf(out, "\nraise one with krewe limits %s %s <n>\n", located.Path, flagMaxDeclared)
 	}
 	return nil
 }
@@ -165,10 +175,10 @@ func systemsOwn(limits *quaycrewv1.WorkspaceLimits) string {
 	return "  (the system's own, until this workspace sets its own)"
 }
 
-// depthMeans says out loud what the number does, because zero reads as "no limit" to everybody who
-// has met one before and here it means the opposite.
-func depthMeans(depth int32) string {
-	if depth == 0 {
+// declaredMeans says out loud what the number does, because zero reads as "no limit" to everybody
+// who has met one before and here it means the opposite.
+func declaredMeans(declared int32) string {
+	if declared == 0 {
 		return "  (no session here may declare a job)"
 	}
 	return ""
@@ -217,7 +227,7 @@ func leaseOr(seconds int32) string {
 // from refusing these.
 func limitsFlagsTaken() map[string]bool {
 	return map[string]bool{
-		flagMaxDepth: true, flagMaxRunning: true, flagBudgetTokens: true, flagLease: true,
+		flagMaxDeclared: true, flagMaxDepth: true, flagMaxRunning: true, flagBudgetTokens: true, flagLease: true,
 		flagReclaim: true, flagArchive: true, flagWaiting: true,
 		flagRequestMemory: true, flagRequestProcessor: true,
 		flagContextCeiling: true,

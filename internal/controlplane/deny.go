@@ -115,7 +115,12 @@ func DeniedToJob(fullMethod string, request any, grant auth.Grant) error {
 	// The job a caller names on a dispatch decides which credential the system mints for that task, so
 	// only the operator may name one. A session that could name any job could mint itself
 	// that job's grant.
-	if named, ok := request.(*quaycrewv1.DispatchRequest); ok && named.GetJob() != "" {
+	//
+	// The run a caller names decides the boundary that task works under, so the same rule holds for
+	// it: a session that could name a run of the test stage would be a build session out from under
+	// the gate that refuses it a write to a test.
+	if named, ok := request.(*quaycrewv1.DispatchRequest); ok &&
+		(named.GetJob() != "" || named.GetExecution() != "") {
 		return status.Error(codes.PermissionDenied,
 			"a session may not name the job a task runs for: the system reads that from the credential")
 	}
@@ -141,6 +146,12 @@ var jobVerbs = map[string]string{
 	// the verb that exists rather than a second one meaning the same thing.
 	quaycrewv1.ControlPlaneService_GetHistory_FullMethodName: role.VerbJobRead,
 	quaycrewv1.ControlPlaneService_StopJob_FullMethodName:    role.VerbJobStop,
+	// The runs of a job's stages take the job's own two verbs. A run is one run of one stage of one
+	// job, so reading the runs is reading that job, and stopping one is stopping part of it. A
+	// separate pair of verbs would mean a role granting job.read could be surprised by what it
+	// cannot see.
+	quaycrewv1.ControlPlaneService_ListExecutions_FullMethodName: role.VerbJobRead,
+	quaycrewv1.ControlPlaneService_StopExecution_FullMethodName:  role.VerbJobStop,
 }
 
 // shortMethod is the call's own name, without the service in front of it.

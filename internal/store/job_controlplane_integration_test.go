@@ -100,8 +100,9 @@ func TestJobRoundTripsThroughPostgres(t *testing.T) {
 	if one.GetBudgetTokens() != 5000 || one.GetMode() != model.PermissionPlan {
 		t.Fatalf("the budget is %d and the mode is %q", one.GetBudgetTokens(), one.GetMode())
 	}
-	if one.GetParent() != "" || one.GetDepth() != 0 {
-		t.Fatalf("the job has parent %q at depth %d, want a root", one.GetParent(), one.GetDepth())
+	if one.GetCause() != "" || one.GetRun() != "" {
+		t.Fatalf("the job says %q caused it and it is a step of run %q, want neither",
+			one.GetCause(), one.GetRun())
 	}
 	if one.GetCreatedAt() == nil || one.GetCreatedAt().AsTime().IsZero() {
 		t.Fatal("the database did not stamp when the job was declared")
@@ -186,19 +187,20 @@ func TestAListingNarrowsInTheDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)
 	}
-	// A child, written through the store because the parent comes from a credential and nothing
-	// mints one yet. The foreign key on parent is the part being proved.
+	// A second job, one a session declared, written through the store because the cause comes from a
+	// credential and nothing mints one here. It is a step of a run as well, so the filter that reads
+	// a run's steps is proved against the column rather than against the memory store alone.
 	child := &job.Job{
 		ID: store.NewID(), Workspace: workspace, Project: project, Title: "the child",
-		Brief: "under the root", Parent: root.GetJob().GetId(), Depth: 1,
+		Brief: "declared by a session", Cause: root.GetJob().GetId(), Run: "run-1",
 		Version: 1, Phase: job.PhasePending,
 	}
 	if err := kept.CreateJob(ctx, child, &job.Event{
 		ID: store.NewID(), Kind: job.EventDeclared, Job: child.ID,
-		Workspace: workspace, Project: project, Parent: child.Parent, Depth: 1,
+		Workspace: workspace, Project: project,
 		Detail: child.Title, OccurredAt: time.Now().UTC(),
 	}); err != nil {
-		t.Fatalf("CreateJob for the child: %v", err)
+		t.Fatalf("CreateJob for the second job: %v", err)
 	}
 
 	for _, tc := range []struct {
@@ -208,8 +210,7 @@ func TestAListingNarrowsInTheDatabase(t *testing.T) {
 	}{
 		{"the project", &quaycrewv1.ListJobsRequest{Project: project}, []string{child.ID, root.GetJob().GetId()}},
 		{"the workspace", &quaycrewv1.ListJobsRequest{Workspace: workspace}, []string{child.ID, root.GetJob().GetId()}},
-		{"the children of one", &quaycrewv1.ListJobsRequest{Parent: root.GetJob().GetId()}, []string{child.ID}},
-		{"the roots", &quaycrewv1.ListJobsRequest{Project: project, RootsOnly: true}, []string{root.GetJob().GetId()}},
+		{"the steps of one run", &quaycrewv1.ListJobsRequest{Run: "run-1"}, []string{child.ID}},
 		{"one phase", &quaycrewv1.ListJobsRequest{Project: project, Phase: job.PhasePending}, []string{child.ID, root.GetJob().GetId()}},
 		{"one label", &quaycrewv1.ListJobsRequest{Project: project, LabelKey: "owner", LabelValue: "house"}, []string{root.GetJob().GetId()}},
 		{"a label key alone", &quaycrewv1.ListJobsRequest{Project: project, LabelKey: "owner"}, []string{root.GetJob().GetId()}},
@@ -303,78 +304,88 @@ func TestJobOutlivesTheProcessThatDeclaredIt(t *testing.T) {
 	}
 }
 
-// The one sentence a job serves reaches every job under it, and the database is what carries it
-// there. A controller reads a child hours later, in another process, and hands its session whatever
-// the row says: a sentence held only by the caller that declared the tree is a sentence no session
-// ever sees.
-func TestTheSentenceReachesEveryJobInTheTreeInTheDatabase(t *testing.T) {
+// A job a session declares states its own sentence, and the database is what carries whatever it
+// states. Nothing is taken from the job whose session declared it: no job sits under another, so
+// there is nothing to take it from.
+func TestAJobASessionDeclaresStatesItsOwnSentenceInTheDatabase(t *testing.T) {
 	s, kept := aSystemOnPostgres(t)
 	ctx := context.Background()
-	_, project := aProjectOnPostgres(t, s)
+	workspace, project := aProjectOnPostgres(t, s)
+	if _, err := s.SetWorkspaceLimits(ctx, &quaycrewv1.SetWorkspaceLimitsRequest{
+		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDeclared: 2},
+	}); err != nil {
+		t.Fatalf("SetWorkspaceLimits: %v", err)
+	}
 	sentence := "paste a link and get the text back"
 
-	root, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
+	asked, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "build the transcript page",
 		Brief: "read the design and build what it describes", Product: sentence,
 	})
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)
 	}
-	if got := root.GetJob().GetProduct(); got != sentence {
-		t.Fatalf("the job at the top serves %q, want %q", got, sentence)
+	if got := asked.GetJob().GetProduct(); got != sentence {
+		t.Fatalf("the job an operator declared serves %q, want %q", got, sentence)
 	}
 
-	// Two levels down, declared the way the system declares a job under one it is already running.
-	child := declaredUnder(t, s, kept, project, root.GetJob().GetId(), "decide what the address carries")
-	grandchild := declaredUnder(t, s, kept, project, child, "write the page")
+	// One the session running it declared, saying nothing about what a person gets. It is an errand,
+	// and it is a job in the same project.
+	errand := declaredBy(t, s, kept, project, asked.GetJob().GetId(), "decide what the address carries", "")
+	// And one that states a sentence of its own, which stands: there is nothing above it to disagree
+	// with.
+	own := declaredBy(t, s, kept, project, asked.GetJob().GetId(), "write the page",
+		"search the archive by video id")
 
-	for _, id := range []string{child, grandchild} {
-		found, err := s.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: id})
+	for _, tc := range []struct {
+		id   string
+		want string
+	}{
+		{errand, ""},
+		{own, "search the archive by video id"},
+	} {
+		found, err := s.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: tc.id})
 		if err != nil {
 			t.Fatalf("GetJob: %v", err)
 		}
-		if got := found.GetJob().GetProduct(); got != sentence {
-			t.Fatalf("job %s serves %q, want %q", id, got, sentence)
+		if got := found.GetJob().GetProduct(); got != tc.want {
+			t.Fatalf("job %s serves %q, want %q", tc.id, got, tc.want)
+		}
+		if found.GetJob().GetCause() != asked.GetJob().GetId() {
+			t.Fatalf("job %s says %q caused it", tc.id, found.GetJob().GetCause())
 		}
 	}
 
 	// And what a controller would hand the session, read off the row rather than off the call that
 	// declared it.
-	read, err := kept.GetJob(ctx, grandchild)
+	read, err := kept.GetJob(ctx, own)
 	if err != nil {
 		t.Fatalf("GetJob: %v", err)
 	}
-	if asked := job.Asked(read); !strings.Contains(asked, sentence) {
-		t.Fatalf("the session two levels down is asked %q, and it never sees the sentence", asked)
+	if asked := job.Asked(read); !strings.Contains(asked, "search the archive by video id") {
+		t.Fatalf("the session is asked %q, and it never sees the sentence its job states", asked)
 	}
 
-	// A second product is refused rather than written, because a tree with two has none.
-	_, _, err = s.PrepareJob(ctx, root.GetJob().GetId(), job.Declaration{
-		Project: project, Title: "search the archive", Brief: "index every video by its identifier",
-		Product: "search the archive by video id",
-	})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("a child stating a second product was answered with %v", err)
-	}
+	// Three rows, side by side in the project. None of them is under another.
 	listed, err := kept.ListJobs(ctx, job.Filter{Project: project})
 	if err != nil {
 		t.Fatalf("ListJobs: %v", err)
 	}
 	if len(listed) != 3 {
-		t.Fatalf("the project holds %d jobs, want the three that were accepted", len(listed))
+		t.Fatalf("the project holds %d jobs, want the three that were declared", len(listed))
 	}
 }
 
-// declaredUnder writes one job under another, the way the system does it for a session running that
-// job: the control plane holds the declaration to every rule, and the store writes the row.
-func declaredUnder(t *testing.T, s *controlplane.Server, kept store.Store, project, under, brief string) string {
+// declaredBy writes one job the way the system writes it for a session running another: the control
+// plane holds the declaration to every rule and names what caused it, and the store writes the row.
+func declaredBy(t *testing.T, s *controlplane.Server, kept store.Store, project, cause, brief, product string) string {
 	t.Helper()
 	ctx := context.Background()
-	declared, event, err := s.PrepareJob(ctx, under, job.Declaration{
-		Project: project, Title: brief, Brief: brief,
+	declared, event, err := s.PrepareJob(ctx, job.Placement{Cause: cause}, job.Declaration{
+		Project: project, Title: brief, Brief: brief, Product: product,
 	})
 	if err != nil {
-		t.Fatalf("PrepareJob under %s: %v", under, err)
+		t.Fatalf("PrepareJob caused by %s: %v", cause, err)
 	}
 	if err := kept.CreateJob(ctx, declared, event); err != nil {
 		t.Fatalf("CreateJob: %v", err)
@@ -382,8 +393,7 @@ func declaredUnder(t *testing.T, s *controlplane.Server, kept store.Store, proje
 	return declared.ID
 }
 
-// A steer recorded against a job in flight is read back on that job, and the count reaches the job
-// at the top of the tree.
+// A steer recorded against a job in flight is read back on that job, and the count is that job's.
 //
 // Only the real engine says this. The steer is a row of its own and the count is a column on another
 // table, written in one transaction, so what is proved here is the half the in memory store cannot
@@ -394,7 +404,7 @@ func TestASteerIsReadBackOnTheJobThroughPostgres(t *testing.T) {
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 	if _, err := s.SetWorkspaceLimits(ctx, &quaycrewv1.SetWorkspaceLimitsRequest{
-		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDepth: 2},
+		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDeclared: 2},
 	}); err != nil {
 		t.Fatalf("SetWorkspaceLimits: %v", err)
 	}
@@ -404,8 +414,8 @@ func TestASteerIsReadBackOnTheJobThroughPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)
 	}
-	// The child is declared the way a session declares one: the parent comes off the credential the
-	// caller presented, never off the request.
+	// The second job is declared the way a session declares one: what caused it comes off the
+	// credential the caller presented, never off the request.
 	under := auth.WithGrant(ctx, auth.Grant{Job: root.GetJob().GetId(), Verbs: []string{role.VerbJobCreate}})
 	declared, err := s.CreateJob(under, &quaycrewv1.CreateJobRequest{
 		Project: project, Title: "fetch the captions", Brief: "fetch them once and keep them",
@@ -424,36 +434,38 @@ func TestASteerIsReadBackOnTheJobThroughPostgres(t *testing.T) {
 		}
 	}
 
-	read, err := s.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: root.GetJob().GetId()})
-	if err != nil {
-		t.Fatalf("GetJob: %v", err)
-	}
-	if read.GetJob().GetSteers() != 2 {
-		t.Fatalf("the job at the top counts %d steers, want the tree's 2", read.GetJob().GetSteers())
-	}
-	onTheChild, err := s.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: child})
-	if err != nil {
-		t.Fatalf("GetJob on the child: %v", err)
-	}
-	if onTheChild.GetJob().GetSteers() != 1 {
-		t.Fatalf("the child counts %d steers, want 1", onTheChild.GetJob().GetSteers())
+	// Each count is its own job's. A steer belongs to the job it landed on, and the job whose session
+	// declared that one is a job in its own right.
+	for _, counted := range []struct {
+		name string
+		id   string
+		want int32
+	}{
+		{name: "the job an operator declared", id: root.GetJob().GetId(), want: 1},
+		{name: "the job its session declared", id: child, want: 1},
+	} {
+		read, err := s.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: counted.id})
+		if err != nil {
+			t.Fatalf("GetJob %s: %v", counted.name, err)
+		}
+		if read.GetJob().GetSteers() != counted.want {
+			t.Fatalf("%s counts %d steers, want %d", counted.name, read.GetJob().GetSteers(), counted.want)
+		}
 	}
 
 	listed, err := s.ListSteers(ctx, &quaycrewv1.ListSteersRequest{Job: child})
 	if err != nil {
 		t.Fatalf("ListSteers: %v", err)
 	}
-	if len(listed.GetSteers()) != 2 {
-		t.Fatalf("the report carries %d steers, want the tree's 2", len(listed.GetSteers()))
+	if len(listed.GetSteers()) != 1 {
+		t.Fatalf("the report carries %d steers, want the one made against that job", len(listed.GetSteers()))
 	}
-	if listed.GetSteers()[0].GetText() != "the workspace has no secrets" {
-		t.Fatalf("the report opens with %q", listed.GetSteers()[0].GetText())
+	if listed.GetSteers()[0].GetJob() != child {
+		t.Fatalf("the steer says it landed on %q, want the job the report was read against",
+			listed.GetSteers()[0].GetJob())
 	}
-	if listed.GetSteers()[1].GetJob() != child {
-		t.Fatalf("the second steer says it landed on %q, want the child", listed.GetSteers()[1].GetJob())
-	}
-	if listed.GetRoot().GetId() != root.GetJob().GetId() {
-		t.Fatalf("the report names %q as the job at the top", listed.GetRoot().GetId())
+	if listed.GetJob().GetId() != child {
+		t.Fatalf("the report names %q, want the job it was read against", listed.GetJob().GetId())
 	}
 }
 

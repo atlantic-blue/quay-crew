@@ -71,13 +71,13 @@ func initializeSteersSteps(sc *godog.ScenarioContext) {
 			return steerTheTool(ctx, steersFrom(ctx).jobs[0].GetId(), said)
 		})
 
-	sc.Step(`^the operator steer(?:s|ed) that child with "([^"]*)"$`,
+	sc.Step(`^the operator steer(?:s|ed) that job with "([^"]*)"$`,
 		func(ctx context.Context, said string) error {
-			child := steersFrom(ctx).child
-			if child == nil {
-				return fmt.Errorf("this scenario declared no child to steer")
+			caused := steersFrom(ctx).child
+			if caused == nil {
+				return fmt.Errorf("this scenario declared no other job to steer")
 			}
-			return steerTheTool(ctx, child.GetId(), said)
+			return steerTheTool(ctx, caused.GetId(), said)
 		})
 
 	// No identifier at all, which is the form that gets typed in the moment.
@@ -118,11 +118,6 @@ func initializeSteersSteps(sc *godog.ScenarioContext) {
 		return readJobBack(ctx, steersFrom(ctx).jobs[0].GetId(), want)
 	})
 
-	sc.Step(`^reading the job at the top back through the tool says "([^"]*)"$`,
-		func(ctx context.Context, want string) error {
-			return readJobBack(ctx, steersFrom(ctx).jobs[0].GetId(), want)
-		})
-
 	sc.Step(`^the report says "([^"]*)" before "([^"]*)"$`, func(ctx context.Context, first, second string) error {
 		report := toolFrom(ctx).stdout
 		at, then := strings.Index(report, first), strings.Index(report, second)
@@ -143,10 +138,8 @@ func initializeSteersSteps(sc *godog.ScenarioContext) {
 	// needing a person, which is the half somebody acts on.
 	sc.Step(`^the report names the job each steer landed on$`, func(ctx context.Context) error {
 		scenario := steersFrom(ctx)
-		for _, landed := range []*quaycrewv1.Job{scenario.jobs[0], scenario.child} {
-			if err := says("the report", toolFrom(ctx).stdout, landed.GetId()[:8]); err != nil {
-				return err
-			}
+		if err := says("the report", toolFrom(ctx).stdout, scenario.jobs[0].GetId()[:8]); err != nil {
+			return err
 		}
 		return nil
 	})
@@ -199,7 +192,7 @@ func aJobToSteer(ctx context.Context, title string) error {
 		return err
 	}
 	if _, err := w.client.SetWorkspaceLimits(ctx, &quaycrewv1.SetWorkspaceLimitsRequest{
-		Limits: &quaycrewv1.WorkspaceLimits{Workspace: w.workspaceID, MaxDepth: 2},
+		Limits: &quaycrewv1.WorkspaceLimits{Workspace: w.workspaceID, MaxDeclared: 2},
 	}); err != nil {
 		return err
 	}

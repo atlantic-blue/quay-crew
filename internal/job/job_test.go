@@ -1,6 +1,7 @@
 package job_test
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -35,18 +36,17 @@ func TestAnIdentifierTheCallerChoseIsRefused(t *testing.T) {
 	}
 }
 
-// The parent is read from the credential. A parent in the request is refused rather than ignored,
-// because the depth limit only bounds anything while the caller cannot lie about its parent.
-func TestAParentInTheRequestIsRefused(t *testing.T) {
-	d := declared()
-	d.Parent = "0123456789abcdef01234567"
-
-	err := d.Validate()
-	if err == nil {
-		t.Fatal("a caller set the parent and was allowed to")
-	}
-	if !strings.Contains(err.Error(), "credential") {
-		t.Fatalf("the refusal says %q, want it to say the parent comes from the credential", err)
+// A job cannot be under another job, so a caller has no way to say it is. The field a caller used to
+// set is not on the declaration at all, which is the strongest form of the refusal: there is nothing
+// to send.
+func TestADeclarationCannotPutAJobUnderAnything(t *testing.T) {
+	written := reflect.TypeOf(job.Declaration{})
+	for at := 0; at < written.NumField(); at++ {
+		switch written.Field(at).Name {
+		case "Parent", "Depth", "Cause", "Run":
+			t.Fatalf("a declaration carries %s, so a caller could put a job under something",
+				written.Field(at).Name)
+		}
 	}
 }
 

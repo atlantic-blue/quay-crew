@@ -99,8 +99,9 @@ func TestTheFlagsJobTakesReachTheCommand(t *testing.T) {
 	}
 }
 
-// The parent is refused by name, with the sentence that says where a parent comes from.
-func TestTheParentFlagIsRefusedWithTheReason(t *testing.T) {
+// The way off the flag that used to put a job under another one. It is still in scripts and in
+// people's fingers, so it is refused by name and the refusal says what is true instead.
+func TestTheParentFlagIsRefusedNamingWhatIsTrueInstead(t *testing.T) {
 	client := aSystemToJobIn(t)
 
 	_, err := runKrewe(t, client, "job", "create", "--title", "read the bill", "--brief", "open it",
@@ -108,8 +109,41 @@ func TestTheParentFlagIsRefusedWithTheReason(t *testing.T) {
 	if err == nil {
 		t.Fatal("a parent given on the command line was accepted")
 	}
-	if !strings.Contains(err.Error(), "credential") {
-		t.Fatalf("the refusal says %q, want it to say the parent comes from the credential", err)
+	for _, want := range []string{"--parent", "cannot be under another job"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("the refusal says %q, want it to say %q", err, want)
+		}
+	}
+}
+
+// And the flag that narrowed a listing to the jobs with nothing above them. Every job is one now.
+func TestTheRootsFlagIsRefusedNamingWhatToRunInstead(t *testing.T) {
+	client := aSystemToJobIn(t)
+
+	_, err := runKrewe(t, client, "job", "list", "--roots")
+	if err == nil {
+		t.Fatal("--roots was accepted, so a listing narrowed by nothing reads as narrowed")
+	}
+	for _, want := range []string{"--roots", "krewe job list"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("the refusal says %q, want it to say %q", err, want)
+		}
+	}
+}
+
+// And the flag the ceiling used to be typed as. A ceiling that was quietly not set is a workspace an
+// operator believes they raised.
+func TestTheMaxDepthFlagIsRefusedNamingTheFlagToType(t *testing.T) {
+	client := aSystemToJobIn(t)
+
+	_, err := runKrewe(t, client, "limits", "me", "--max-depth", "2")
+	if err == nil {
+		t.Fatal("--max-depth was accepted, so a ceiling nobody set reads as set")
+	}
+	for _, want := range []string{"--max-depth", "--max-declared"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("the refusal says %q, want it to say %q", err, want)
+		}
 	}
 }
 

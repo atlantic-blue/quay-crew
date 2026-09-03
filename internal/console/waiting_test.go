@@ -141,7 +141,7 @@ func TestTheTellingIsDrawnWhicheverViewIsOpen(t *testing.T) {
 	}{
 		{"the listing", modeBrowse},
 		{"the help panel", modeHelp},
-		{"the output of a command", modeOutput},
+		{"the output of a command", modeReading},
 	} {
 		t.Run(view.name, func(t *testing.T) {
 			drawn := model

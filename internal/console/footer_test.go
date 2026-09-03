@@ -41,7 +41,7 @@ func TestTheFooterSaysTheAddressAtEveryLevel(t *testing.T) {
 	}{
 		{"projects", "acme"},
 		{"jobs", "acme/house-bills"},
-		{"tasks", "acme/house-bills/33333333"},
+		{"exec", "acme/house-bills/33333333"},
 	} {
 		model = walk(t, model, enter())
 		if got := model.Position(); got != want.address {
@@ -86,7 +86,7 @@ func TestTheFooterFollowsTheWayBackFromTheDeepestLevel(t *testing.T) {
 // leave untested: a console can go down four levels and say nothing about coming back.
 func TestEveryLevelBelowTheTopSaysHowToLeave(t *testing.T) {
 	model := withBuild(openedOnTheTree(t, aSystemWithOneOfEverything()))
-	for _, level := range []string{"projects", "jobs", "tasks"} {
+	for _, level := range []string{"projects", "jobs", "exec"} {
 		model = walk(t, model, enter())
 		if row := footerOf(model); !strings.Contains(row, "esc to go back") {
 			t.Fatalf("the %s level does not say how to leave:\n%s", level, row)

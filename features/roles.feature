@@ -246,15 +246,15 @@ Feature: A role is imported, pinned to a version, and attached at a level
     And the listing says the "releaser" role runs on "sonnet"
 
   Scenario: The orchestrator declares the children that do the work
-    Given the workspace allows jobs down to depth 2
+    Given the workspace lets one session declare 2 jobs
     And a job running as the "orchestrator" role this build ships
     When that session declares a job running as the "test-writer" role
-    Then the new job hangs under the job that declared it, one level deeper
+    Then the new job records the job that declared it as its cause
 
   # The other direction, and the reason the lists differ: a session that can push and can also fan
   # work out could spend a whole budget on pushes nobody reviewed.
   Scenario: The releaser releases what it was given and declares nothing
-    Given the workspace allows jobs down to depth 2
+    Given the workspace lets one session declare 2 jobs
     And a job running as the "releaser" role this build ships
     When that session declares a job running as the "test-writer" role
     Then the system refuses it and names the verb it lacks
@@ -262,10 +262,10 @@ Feature: A role is imported, pinned to a version, and attached at a level
   # A boundary in the direction that costs money. The infrastructure writer declares its own
   # children, and it cannot stop a job, which is the one verb an orchestrator holds and it does not.
   Scenario: The infrastructure writer declares children and stops none
-    Given the workspace allows jobs down to depth 2
+    Given the workspace lets one session declare 2 jobs
     And a job running as the "infrastructure-writer" role this build ships
     When that session declares a job running as the "implementer" role
-    Then the new job hangs under the job that declared it, one level deeper
+    Then the new job records the job that declared it as its cause
     And that session may not stop a job
 
   # The writer is the one role that writes prose for a person outside the work. Before it, every

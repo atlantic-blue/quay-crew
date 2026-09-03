@@ -23,7 +23,7 @@ Feature: A role reads the plan before the build and reports what it does not ans
   # The boundary first. A critic that could declare a job could turn its own report into a build, and
   # then nobody has read the plan from outside it.
   Scenario: A session running as the plan critic declares nothing
-    Given the workspace allows jobs down to depth 2
+    Given the workspace lets one session declare 2 jobs
     And a job running as the "plan-critic" role this build ships
     When that session declares a job running as the "test-writer" role
     Then the system refuses it and names the verb it lacks

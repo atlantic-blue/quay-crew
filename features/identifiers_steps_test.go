@@ -395,7 +395,7 @@ func initializeIdentifierSteps(sc *godog.ScenarioContext) {
 		if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")}); err != nil {
 			return err
 		}
-		if !strings.Contains(c.model.View(), "tasks") {
+		if !strings.Contains(c.model.View(), "exec") {
 			return fmt.Errorf("t after opening a conversation did not reach the history:\n%s", c.model.View())
 		}
 		return nil

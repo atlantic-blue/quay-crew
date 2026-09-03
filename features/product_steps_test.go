@@ -54,22 +54,6 @@ func initializeProductSteps(sc *godog.ScenarioContext) {
 			return declareUnderTheSession(ctx, 0, sentence)
 		})
 
-	// The job the session declared is a job like any other, so the system mints a credential for it
-	// the same way, and that credential declares one level deeper.
-	sc.Step(`^the session running that job declares another$`, func(ctx context.Context) error {
-		scenario := productFrom(ctx)
-		if len(scenario.declared) == 0 {
-			return fmt.Errorf("this scenario declared nothing to go under")
-		}
-		deeper := scenario.declared[len(scenario.declared)-1]
-		token, minted := worldFrom(ctx).server.JobCredentialForTest(ctx, deeper.GetId())
-		if !minted {
-			return fmt.Errorf("the system minted no credential for the job at depth %d", deeper.GetDepth())
-		}
-		scenario.tokens = append(scenario.tokens, token)
-		return declareUnderTheSession(ctx, len(scenario.tokens)-1, "")
-	})
-
 	sc.Step(`^the new job says a person "([^"]*)"$`, func(ctx context.Context, sentence string) error {
 		w, scenario := worldFrom(ctx), productFrom(ctx)
 		if w.lastErr != nil {

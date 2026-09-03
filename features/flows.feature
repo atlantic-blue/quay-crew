@@ -44,7 +44,7 @@ Feature: A flow runs a graph across sessions
     When the operator starts the flow "fix-red" in the project, without driving the system
     Then the flow run is working
     And the system was asked to run 0 tasks
-    And the run's step is a job under the run, one level deeper
+    And the run's step is a job of the run and of no job
 
   Scenario: A run whose step is running holds no call open
     Given the model takes longer over a task than anybody will wait

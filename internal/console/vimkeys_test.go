@@ -381,7 +381,7 @@ func TestTheHistoryIsOnT(t *testing.T) {
 		{"archived", func() Resource { return Archived(&fakeClient{}) }},
 	} {
 		t.Run(view.name, func(t *testing.T) {
-			registry, err := NewRegistry(view.build(), staticResource("tasks"))
+			registry, err := NewRegistry(view.build(), staticResource("exec"))
 			if err != nil {
 				t.Fatalf("NewRegistry: %v", err)
 			}
@@ -393,8 +393,8 @@ func TestTheHistoryIsOnT(t *testing.T) {
 			model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme"}}))
 
 			model = press(t, model, "t")
-			if model.active.Name != "tasks" {
-				t.Fatalf("t on %s opened %s, want the tasks", view.name, model.active.Name)
+			if model.active.Name != "exec" {
+				t.Fatalf("t on %s opened %s, want the exec view", view.name, model.active.Name)
 			}
 		})
 	}

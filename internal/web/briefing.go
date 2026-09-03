@@ -49,10 +49,6 @@ type jobRow struct {
 	Title string
 	Phase string
 	Age   string
-	// Depth is how far under its root this row sits, which is what indents the tree. Context marks a
-	// row drawn only so the row beneath it has its work above it: it answers no question itself.
-	Depth   int
-	Context bool
 	// Session is the conversation the job runs in, and SessionID links to it. Empty until one exists.
 	Session   string
 	SessionID string
@@ -133,19 +129,19 @@ func (v *view) briefing(w http.ResponseWriter, r *http.Request) {
 //
 // runs is the flow run carried by each job that is asking, which decides the command its row offers.
 func blocks(jobs []*quaycrewv1.Job, names map[string]string, runs map[string]string) []block {
-	produced := tree(jobs, names, landed, ended, asLanded, landedAtMost)
+	produced := listing(jobs, names, landed, ended, asLanded, landedAtMost)
 	return []block{
 		{
 			ID:      "waiting",
 			Heading: "waiting on you",
 			Says:    "Nothing is waiting on you.",
-			Rows:    tree(jobs, names, asking, since, answering(runs), 0),
+			Rows:    listing(jobs, names, asking, since, answering(runs), 0),
 		},
 		{
 			ID:      "blocked",
 			Heading: "blocked",
 			Says:    "Nothing is blocked.",
-			Rows:    tree(jobs, names, blocked, ended, asBlocked, 0),
+			Rows:    listing(jobs, names, blocked, ended, asBlocked, 0),
 		},
 		{
 			ID:      "produced",
@@ -158,7 +154,7 @@ func blocks(jobs []*quaycrewv1.Job, names map[string]string, runs map[string]str
 			ID:      "running",
 			Heading: "running",
 			Says:    "Nothing is running.",
-			Rows:    tree(jobs, names, running, declared, asRunning, 0),
+			Rows:    listing(jobs, names, running, declared, asRunning, 0),
 		},
 	}
 }
@@ -287,13 +283,7 @@ func leftOut(jobs []*quaycrewv1.Job, matches func(*quaycrewv1.Job) bool, rows []
 			found++
 		}
 	}
-	drawn := 0
-	for _, row := range rows {
-		// A row drawn only to carry the tree is not an answer, so it does not count against the cap.
-		if !row.Context {
-			drawn++
-		}
-	}
+	drawn := len(rows)
 	if drawn >= found {
 		return ""
 	}
@@ -301,22 +291,12 @@ func leftOut(jobs []*quaycrewv1.Job, matches func(*quaycrewv1.Job) bool, rows []
 		". The rest is in krewe job list."
 }
 
-// branch is one root job and the rows under it that this block draws, in the order the tree runs.
-type branch struct {
-	rows []jobRow
-	// latest is the newest moment among the rows that answered, which is what orders the branches.
-	latest time.Time
-	// found is how many rows in this branch answered, which is what the cap counts.
-	found int
-}
-
-// tree draws the jobs that answer a block, each under the ancestors it belongs to.
+// listing draws the jobs that answer a block, newest first.
 //
-// A flat list of eleven sessions with no relation between them is the problem section 12 names, and a
-// flat list of eleven jobs is the same problem one level up. So a row that answers is drawn with its
-// parents above it, dimmed and carrying nothing of their own, and the branches are ordered by the
-// newest thing that happened in each.
-func tree(
+// A job belongs to its project and nothing sits under it, so there is nothing to indent: what a
+// reader gets is the rows that answered, in the order things last happened to them, capped so the
+// page stays readable.
+func listing(
 	jobs []*quaycrewv1.Job,
 	names map[string]string,
 	matches func(*quaycrewv1.Job) bool,
@@ -324,101 +304,28 @@ func tree(
 	say func(*jobRow, *quaycrewv1.Job),
 	limit int,
 ) []jobRow {
-	known := make(map[string]*quaycrewv1.Job, len(jobs))
+	answered := make([]*quaycrewv1.Job, 0, len(jobs))
 	for _, one := range jobs {
-		known[one.GetId()] = one
-	}
-	children := map[string][]*quaycrewv1.Job{}
-	roots := make([]*quaycrewv1.Job, 0, len(jobs))
-	for _, one := range jobs {
-		// A job whose parent the listing does not hold is drawn as a root of its own rather than
-		// dropped, because a row that answers the question must never disappear into a gap.
-		if parent := one.GetParent(); parent != "" && known[parent] != nil {
-			children[parent] = append(children[parent], one)
-			continue
-		}
-		roots = append(roots, one)
-	}
-
-	branches := make([]branch, 0, len(roots))
-	for _, root := range roots {
-		grown := grow(root, children, names, matches, moment, say, 0, map[string]bool{})
-		if grown.found > 0 {
-			branches = append(branches, grown)
+		if matches(one) {
+			answered = append(answered, one)
 		}
 	}
-	sort.SliceStable(branches, func(a, b int) bool { return branches[a].latest.After(branches[b].latest) })
+	sort.SliceStable(answered, func(a, b int) bool { return moment(answered[a]).After(moment(answered[b])) })
 
-	// The branch is the unit the cap counts in, because half a tree is worse than a long one: the rows
-	// left would hang off parents whose other children silently went. So the first branch is always
-	// drawn whole, however big it is, and the cap decides whether the next one joins it.
-	rows := make([]jobRow, 0, len(jobs))
-	drawn := 0
-	for _, one := range branches {
-		if limit > 0 && drawn > 0 && drawn+one.found > limit {
+	rows := make([]jobRow, 0, len(answered))
+	for _, one := range answered {
+		if limit > 0 && len(rows) >= limit {
 			break
 		}
-		rows = append(rows, one.rows...)
-		drawn += one.found
-		if limit > 0 && drawn >= limit {
-			break
-		}
+		row := rowOf(one, names)
+		say(&row, one)
+		rows = append(rows, row)
 	}
 	return rows
 }
 
-// grow walks one job and everything under it, keeping the rows that answer and the ancestors they
-// hang from.
-func grow(
-	one *quaycrewv1.Job,
-	children map[string][]*quaycrewv1.Job,
-	names map[string]string,
-	matches func(*quaycrewv1.Job) bool,
-	moment func(*quaycrewv1.Job) time.Time,
-	say func(*jobRow, *quaycrewv1.Job),
-	depth int,
-	walked map[string]bool,
-) branch {
-	// A parent that names a child already walked would otherwise draw for ever. The store does not
-	// write one, and a page is a poor place to find out that it did.
-	if walked[one.GetId()] {
-		return branch{}
-	}
-	walked[one.GetId()] = true
-
-	grown := branch{}
-	for _, child := range children[one.GetId()] {
-		under := grow(child, children, names, matches, moment, say, depth+1, walked)
-		if under.found == 0 {
-			continue
-		}
-		grown.rows = append(grown.rows, under.rows...)
-		grown.found += under.found
-		if under.latest.After(grown.latest) {
-			grown.latest = under.latest
-		}
-	}
-
-	if matches(one) {
-		row := rowOf(one, names, depth)
-		say(&row, one)
-		grown.rows = append([]jobRow{row}, grown.rows...)
-		grown.found++
-		if when := moment(one); when.After(grown.latest) {
-			grown.latest = when
-		}
-	} else if grown.found > 0 {
-		// An ancestor of something that answered. It is drawn so the row below it has its work above
-		// it, and it carries nothing of its own, because it is not an answer to this question.
-		context := rowOf(one, names, depth)
-		context.Context = true
-		grown.rows = append([]jobRow{context}, grown.rows...)
-	}
-	return grown
-}
-
 // rowOf is what every block says about a job, before the block adds what it came for.
-func rowOf(one *quaycrewv1.Job, names map[string]string, depth int) jobRow {
+func rowOf(one *quaycrewv1.Job, names map[string]string) jobRow {
 	row := jobRow{
 		ID:    one.GetId(),
 		Short: display.ShortID(one.GetId()),
@@ -426,7 +333,6 @@ func rowOf(one *quaycrewv1.Job, names map[string]string, depth int) jobRow {
 		Title: one.GetTitle(),
 		Phase: phase(one),
 		Age:   display.Age(one.GetCreatedAt()),
-		Depth: depth,
 	}
 	if one.GetSession() != "" {
 		row.Session = display.ShortID(one.GetSession())

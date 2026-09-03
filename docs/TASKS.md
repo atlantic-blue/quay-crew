@@ -111,9 +111,10 @@ one word it would send that session's own identifier to the model as a message.
 keeps its name, and so does the `Dispatch` method on the control plane. Nothing about the wire
 contract moved.
 
-The console is its own surface and keeps its own words. Its history view is still called `tasks`,
-and typing `task` alone into its command bar switches to that view rather than printing the usage,
-because a view name wins there. `task list <session>` and anything longer is handed to the tool.
+The console is its own surface and keeps its own words. The view that lists what a session ran is
+called `exec`, and it still answers to `tasks`, `task` and `history`. Typing `task` alone into its
+command bar switches to that view rather than printing the usage, because a view name wins there.
+`task list <session>` and anything longer is handed to the tool.
 
 ## The path
 

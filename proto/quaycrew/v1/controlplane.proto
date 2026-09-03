@@ -486,6 +486,14 @@ message DispatchRequest {
   // without this the system is handed that name and drops it, which leaves a listing of running jobs
   // waiting for a description written after the work is over.
   string title = 8;
+  // execution is the run of a stage this task is, and empty for a task that runs the job itself. It
+  // is not a second job: an execution belongs to one job and to one of its stages, and the job above
+  // says which job.
+  //
+  // What reads it is the boundary. A run of the build stage may read every test and change none, so
+  // the system tells that session's runtime and the test gate refuses the write there and nowhere
+  // else. The stage of the run is what says so, rather than a flag copied onto a row.
+  string execution = 9;
 }
 message DispatchResponse {
   string id = 1;
@@ -1399,10 +1407,15 @@ message Job {
   bool ungated = 47;
 
   // What the system assigned, and the caller may not.
-  // parent is which job asked for this one, read from the credential the caller presented
-  // and never from the request. depth is zero for a root and the parent's depth plus one otherwise.
-  string parent = 15;
-  int32 depth = 16;
+  // cause is the job whose session declared this one, read from the credential the caller presented
+  // and never from the request. It is a plain reference and says nothing about where this job sits:
+  // a job belongs to its project, and the only thing that belongs to a job is its executions.
+  string cause = 72;
+  // run is the flow run this job is one step of, and empty on every job a run did not declare. A run
+  // reads its own steps by it. A run is not a job, so a step of a run is not a job under a job.
+  string run = 73;
+  reserved 15, 16;
+  reserved "parent", "depth";
   // version rises on every write to a declared field, so a status can be told current from stale.
   int32 version = 17;
 
@@ -1512,10 +1525,11 @@ message Job {
   // No flag beside it either. The record lands only when every vertical is green, and the job is
   // stopped for a person to accept it in the same write, so the record being there is the fact.
   string build = 67;
-  // building says this job builds against tests it did not write and may not change. The system sets
-  // it on a worker the build stage declares and on nothing else, and a session it is set on is refused
-  // a write to a test by the test gate.
-  bool building = 68;
+  // 68 was building, which said this job builds against tests it may not change, and 70 was branch,
+  // which said where its work lives. A job never carried either: both were only ever set on the
+  // workers a stage declared, and those are executions now, which say the stage they run and the
+  // branch their work went to.
+  reserved 68, 70;
   // accepted says a person looked at a picture of what this job built and said the value arrived. It
   // is the only road into done for a job whose verticals are built: the three checks the build stage
   // makes are the machine reading its own work, and the fourth is somebody looking at the thing.
@@ -1524,6 +1538,16 @@ message Job {
   // where each of them came from. What is not in there is the one word a person writes, and a build
   // somebody sent back carries the same record as a build nobody has answered yet.
   bool accepted = 69;
+  // running_executions is how many runs of this job's stages are still going, counted when the job is
+  // read rather than stored on it.
+  //
+  // It is what a person watching a fan out is looking straight at. A job whose stage fans out has no
+  // session of its own: it waits, and the work is in one session for each requirement. Without this
+  // number the row says the job has no session yet, which reads as nothing happening while five
+  // sessions build. The runs were job rows once, so a surface could count them in the listing it
+  // already had; they are not, so the system counts them here.
+  int32 running_executions = 71;
+
   // escalation is what this job does when it goes in circles, as it was declared: "ask", or
   // "role:<name>". Empty is asking.
   string escalation = 41;
@@ -1689,8 +1713,7 @@ message CreateJobRequest {
   // pull request against it.
   string repository = 15;
   // product is one sentence saying what a person does with what this job builds and what they get
-  // back. A job declared under another inherits its parent's, and stating a second one where the
-  // parent already carries one is refused rather than ignored.
+  // back. Every job states its own: nothing is carried down, because no job sits under another.
   string product = 16;
   // claim is the piece of work this job takes: an issue, a branch, or a named piece of work. The
   // declaration is refused where another job holds the same one, and the refusal names that job.
@@ -1707,11 +1730,10 @@ message CreateJobRequest {
   // request is what was asked for, in the words it was asked in. The system keeps it whole and never
   // rewrites it, and the brief is read against it at the write.
   string request = 20;
-  // id and parent are here to be refused rather than ignored. The system assigns the identifier, and
-  // the parent is read from the credential the caller presented: a caller that could set its own
-  // parent could set its own depth, and the depth limit would bound nothing.
+  // id is here to be refused rather than ignored: the system assigns the identifier.
   string id = 12;
-  string parent = 13;
+  reserved 13;
+  reserved "parent";
 }
 message CreateJobResponse {
   Job job = 1;
@@ -1745,10 +1767,11 @@ message ListJobsRequest {
   // project wins over workspace when both are set, being the narrower.
   string workspace = 1;
   string project = 2;
-  // parent narrows to the children of one job, and roots_only to jobs with no parent,
-  // which cannot be said with parent alone because empty means do not narrow.
-  string parent = 3;
-  bool roots_only = 4;
+  // run narrows to the steps of one flow run. A job nobody's run declared is in no run, so it is
+  // left out.
+  string run = 31;
+  reserved 3, 4;
+  reserved "parent", "roots_only";
   string phase = 5;
   // outcome narrows to jobs that ended on one word from the fixed set. It is the filter the phase
   // cannot be: two jobs are done and one of them could not do its work.
@@ -1769,6 +1792,69 @@ message ListJobsRequest {
 message ListJobsResponse {
   // Each job without its answer. Read one with GetJob to get the answer whole.
   repeated Job jobs = 1;
+}
+
+// An execution is one run of one stage of one job, and it is not a job.
+//
+// It holds what a run needs and nothing a person wrote. The title, the words the session is asked,
+// the mode and the repository all come off the job it belongs to at the moment of the dispatch, so a
+// second copy of any of them here could only disagree with the job.
+message Execution {
+  string id = 1;
+  // job is the job this run belongs to, and stage is which of that job's stages it runs. Every
+  // execution belongs to exactly one of each.
+  string job = 2;
+  string stage = 3;
+  // number is the requirement or the vertical this run is for, counting from one.
+  int32 number = 4;
+  // claim is the piece of work this run holds. A second live run claiming it is refused, so a stage
+  // ticked twice runs one session and not two.
+  string claim = 5;
+  string phase = 6;
+  string session = 7;
+  int32 attempts = 8;
+  string answer = 9;
+  string outcome = 10;
+  string reason = 11;
+  // branch is where this run's work lives, and pull_request is the pull request that work is open
+  // in. One requirement has one of each, for the whole of its life: the run that writes its tests
+  // cuts the branch and opens the pull request red, and the run that builds the same requirement
+  // turns it green on the same branch.
+  string branch = 12;
+  string pull_request = 13;
+  int64 spent_tokens = 14;
+  string trace_id = 15;
+  google.protobuf.Timestamp created_at = 16;
+  google.protobuf.Timestamp updated_at = 17;
+  google.protobuf.Timestamp started_at = 18;
+  google.protobuf.Timestamp finished_at = 19;
+}
+
+// ListExecutionsRequest narrows a listing of runs, oldest first. The zero value is every run the
+// system holds, which is what a listing of every job in the crew needs to draw each job's runs
+// beneath it.
+//
+// A run is still only ever read as one of the runs of one stage of one job. What this narrows by
+// says which job's runs to draw, never what a run is.
+message ListExecutionsRequest {
+  // job is the runs of one job, and stage one of that job's stages.
+  string job = 1;
+  string stage = 2;
+  // project is every run of every job in one project. job wins where both are set, being narrower.
+  string project = 3;
+}
+message ListExecutionsResponse {
+  repeated Execution executions = 1;
+}
+
+// StopExecutionRequest halts a run that has not ended, keeping the reason. It stops that run and
+// nothing else: the job it belongs to carries on, and its stage reads the run as one that ended.
+message StopExecutionRequest {
+  string id = 1;
+  string reason = 2;
+}
+message StopExecutionResponse {
+  Execution execution = 1;
 }
 
 // StopJobRequest halts a job that has not ended. The reason is kept, because a job that went quiet
@@ -1920,10 +2006,10 @@ message RefuseJobResponse {
 // steer looks exactly like an ordinary message and only the person typing it knows it is one.
 message Steer {
   string id = 1;
-  // job is the job the steer landed on, and root is the job at the top of that tree, which is what
-  // the count is against.
+  // job is the job the steer landed on, which is the job the count is against.
   string job = 2;
-  string root = 3;
+  reserved 3;
+  reserved "root";
   string workspace = 4;
   string project = 5;
   // text is what the operator had to say, in their own words.
@@ -1943,19 +2029,22 @@ message RecordSteerRequest {
 }
 message RecordSteerResponse {
   Steer steer = 1;
-  // root is the job at the top of the tree, carrying the count this steer just moved.
-  Job root = 2;
+  // job is the job the steer landed on, carrying the count this steer just moved.
+  Job job = 3;
+  reserved 2;
+  reserved "root";
 }
 
 // ListSteersRequest reads one job's marks back, in the order they were made.
 message ListSteersRequest {
-  // job is any job in the tree. The system reads the marks of the whole tree, because the score
-  // belongs to the job at the top rather than to whichever child was running at the time.
+  // job is the job whose marks to read. A steer belongs to the job it landed on and to nothing else.
   string job = 1;
 }
 message ListSteersResponse {
   repeated Steer steers = 1;
-  Job root = 2;
+  Job job = 3;
+  reserved 2;
+  reserved "root";
 }
 
 // WorkspaceLimits is the ceiling a workspace puts on the jobs its sessions declare.
@@ -1966,9 +2055,11 @@ message ListSteersResponse {
 // limit is the thing an operator would change.
 message WorkspaceLimits {
   string workspace = 1;
-  // max_depth is how deep the tree of jobs may go. Zero, the default, means no session in this
-  // workspace may declare a job at all: default deny, raised deliberately and per workspace.
-  int32 max_depth = 2;
+  // max_declared is how many jobs one session may declare. Zero, the default, means no session in
+  // this workspace may declare a job at all: default deny, raised deliberately and per workspace.
+  int32 max_declared = 12;
+  reserved 2;
+  reserved "max_depth";
   // max_running is how many jobs may run at once in this workspace. Zero is unset, and the
   // system ships it unset because no measurement has set it yet.
   int32 max_running = 3;
@@ -2159,6 +2250,12 @@ service ControlPlaneService {
   rpc GetJob(GetJobRequest) returns (GetJobResponse);
   rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
   rpc StopJob(StopJobRequest) returns (StopJobResponse);
+
+  // An execution is one run of one stage of one job. Nobody declares one, so there is nothing here
+  // that writes one: a stage of a job fans out and the system writes the runs. What a caller may do
+  // is read them, and stop one that has not ended.
+  rpc ListExecutions(ListExecutionsRequest) returns (ListExecutionsResponse);
+  rpc StopExecution(StopExecutionRequest) returns (StopExecutionResponse);
   // AskJob is a session putting a question to a person about the job it is running, and
   // AnswerJob is the person answering. Nothing else moves the job in between.
   rpc AskJob(AskJobRequest) returns (AskJobResponse);

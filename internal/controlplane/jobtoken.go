@@ -5,7 +5,9 @@ import (
 	"sync"
 	"time"
 
+	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/auth"
+	"github.com/atlantic-blue/quay-krewe/internal/job"
 	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
@@ -165,12 +167,18 @@ func (s *Server) RevokeJobCredentials(jobID, phase string) {
 // Grants is what the interceptor asks to recognise a job credential.
 func (s *Server) Grants() auth.Grants { return s.grants }
 
-// credentialFor is the token a task runs under, empty for a task that runs no job.
-func (s *Server) credentialFor(ctx context.Context, id string) string {
-	if id == "" {
+// credentialForTask is the token a task runs under, empty for a task that runs no job.
+//
+// A run of a stage gets none, and that is deliberate. A credential is what lets a session call the
+// system, and a run writes tests or builds a vertical: it declares nothing, asks nothing and settles
+// nothing, so there is nothing for it to call. It carried one before this only because a run was a
+// job, and that credential granted the verbs of no role, which refused everything anyway. What
+// changes is the sentence a session gets back, not what it may do.
+func (s *Server) credentialForTask(ctx context.Context, req *quaycrewv1.DispatchRequest) string {
+	if req.GetJob() == "" || req.GetExecution() != "" {
 		return ""
 	}
-	token, minted := s.jobCredential(ctx, id)
+	token, minted := s.jobCredential(ctx, req.GetJob())
 	if !minted {
 		return ""
 	}
@@ -190,23 +198,23 @@ func (s *Server) JobCredentialForTest(ctx context.Context, id string) (string, b
 // name is the whole of the contract between them.
 const buildingEnv = "KREWE_BUILDING"
 
-// buildingUnderTheBoundary says whether the job this task runs builds against tests it may not
-// change.
+// buildingUnderTheBoundary says whether the run this task is builds against tests it may not change.
 //
-// Read off the job row rather than worked out from the stage, because this is the dispatch: it knows
-// the job it was given and nothing about where that job came from. The build stage writes the field
-// on the workers it declares and on nothing else.
+// Read off the stage of the run this task is. A job never builds under the boundary: only a run of
+// the build stage does, and the run says which stage it runs, so nothing carries a flag saying the
+// same thing a second time.
 //
-// A job that cannot be read is not under the boundary. That is the safe answer for the system and the
-// unsafe one for the rule, and it is deliberate: a store that cannot answer would otherwise refuse
-// every write of every session, which stops the work rather than guarding it.
+// A task that is no run at all, and a run that cannot be read, are not under the boundary. That is
+// the safe answer for the system and the unsafe one for the rule, and it is deliberate: a store that
+// cannot answer would otherwise refuse every write of every session, which stops the work rather
+// than guarding it.
 func (s *Server) buildingUnderTheBoundary(ctx context.Context, id string) bool {
 	if id == "" {
 		return false
 	}
-	one, err := s.store.GetJob(ctx, id)
+	run, err := s.store.GetExecution(ctx, id)
 	if err != nil {
 		return false
 	}
-	return one.Building
+	return run.Stage == job.StageBuild
 }

@@ -11,7 +11,7 @@
   {{if .Rows}}
   <ul class="jobs">
     {{range .Rows}}
-    <li class="job depth-{{.Depth}}{{if .Context}} context{{end}}">
+    <li class="job">
       <p class="line">
         <span class="phase {{.Phase}}">{{.Phase}}</span>
         <span class="title">{{.Title}}</span>

@@ -41,54 +41,6 @@ func TestASentenceAtTheCeilingIsKept(t *testing.T) {
 	}
 }
 
-// A job under another carries the same sentence, which is what puts it in front of a session three
-// levels down without anybody typing it again.
-func TestAChildCarriesTheSentenceOfTheJobAboveIt(t *testing.T) {
-	carried, err := job.Inherited("paste a link and get the text back", "")
-	if err != nil {
-		t.Fatalf("a child that stated nothing was refused: %v", err)
-	}
-	if carried != "paste a link and get the text back" {
-		t.Fatalf("the child carries %q", carried)
-	}
-}
-
-// Saying the same sentence back is not a second product, so it is not a refusal.
-func TestAChildRepeatingTheSameSentenceIsKept(t *testing.T) {
-	carried, err := job.Inherited("paste a link and get the text back", "paste a link and get the text back")
-	if err != nil {
-		t.Fatalf("a child repeating the sentence was refused: %v", err)
-	}
-	if carried != "paste a link and get the text back" {
-		t.Fatalf("the child carries %q", carried)
-	}
-}
-
-// A tree with two products has none, and a field that is dropped in silence leaves the caller
-// believing the product moved.
-func TestAChildStatingADifferentSentenceIsRefused(t *testing.T) {
-	_, err := job.Inherited("paste a link and get the text back", "search the archive by video id")
-	if err == nil {
-		t.Fatal("a child stated a second product and it was accepted")
-	}
-	for _, phrase := range []string{"paste a link and get the text back", "the job at the top"} {
-		if !strings.Contains(err.Error(), phrase) {
-			t.Fatalf("the refusal is %q, want it to say %q", err, phrase)
-		}
-	}
-}
-
-// A tree that started without a sentence can still gain one, which is the road an answer of no takes.
-func TestUnderAParentWithNoSentenceTheChildsStands(t *testing.T) {
-	carried, err := job.Inherited("", "paste a link and get the text back")
-	if err != nil {
-		t.Fatalf("a child under a parent with no sentence was refused: %v", err)
-	}
-	if carried != "paste a link and get the text back" {
-		t.Fatalf("the child carries %q", carried)
-	}
-}
-
 // The point of the field. A session given the brief alone builds what the brief says, which is how a
 // faithful run delivers something nobody can use.
 func TestTheSessionIsAskedForTheSentenceAboveTheBrief(t *testing.T) {

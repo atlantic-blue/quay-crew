@@ -148,30 +148,6 @@ func TestTheTaskCarriesTheRequestAboveTheBrief(t *testing.T) {
 	}
 }
 
-// A tree carries one request. A child that says nothing carries its parent's, and a child that says
-// something else is refused rather than quietly dropped: a field dropped in silence leaves the caller
-// believing the request moved.
-func TestATreeCarriesOneRequest(t *testing.T) {
-	parent := "paste a youtube link and get the text back"
-	carried, err := job.InheritedRequest(parent, "")
-	if err != nil || carried != parent {
-		t.Errorf("a child that stated nothing carried %q, %v", carried, err)
-	}
-	if carried, err := job.InheritedRequest(parent, parent); err != nil || carried != parent {
-		t.Errorf("a child saying the same thing was refused: %q, %v", carried, err)
-	}
-	if carried, err := job.InheritedRequest("", "the child's own"); err != nil || carried != "the child's own" {
-		t.Errorf("under a parent with no request the child's did not stand: %q, %v", carried, err)
-	}
-	_, err = job.InheritedRequest(parent, "build me a dashboard instead")
-	if err == nil {
-		t.Fatal("a child stated a second request and it was accepted")
-	}
-	if !strings.Contains(err.Error(), parent) {
-		t.Errorf("the refusal does not name the request the tree already carries: %v", err)
-	}
-}
-
 // The ceiling is the brief's, not the title's. A request held to one line would make somebody shorten
 // what was said, which is the compression this exists to catch.
 func TestTheRequestIsHeldToTheBriefsCeiling(t *testing.T) {
