@@ -9,18 +9,18 @@ import (
 	"github.com/atlantic-blue/quay-krewe/internal/job"
 )
 
-// RecordSteer writes one steer and adds it to the count on each job it belongs to, under one lock,
+// RecordSteer writes one steer and adds it to the count on the job it landed on, under one lock,
 // which is what one transaction means here.
 //
-// The row and the counts go together deliberately. A mark with no count reads as a job nobody
+// The row and the count go together deliberately. A mark with no count reads as a job nobody
 // steered, and a count with no mark is a number nobody can check, and both are worse than either
 // half being missing.
-func (m *Memory) RecordSteer(_ context.Context, steer *job.Steer, counted []string) error {
+func (m *Memory) RecordSteer(_ context.Context, steer *job.Steer) error {
 	if steer == nil {
 		return errors.New("store: a steer is not nothing")
 	}
-	if steer.ID == "" || steer.Job == "" || steer.Root == "" {
-		return errors.New("store: a steer needs an id, the job it landed on, and the job at the top")
+	if steer.ID == "" || steer.Job == "" {
+		return errors.New("store: a steer needs an id and the job it landed on")
 	}
 
 	m.mu.Lock()
@@ -34,30 +34,26 @@ func (m *Memory) RecordSteer(_ context.Context, steer *job.Steer, counted []stri
 	if _, held := m.jobSteers[steer.ID]; held {
 		return nil
 	}
-	for _, id := range counted {
-		if _, held := m.jobs[id]; !held {
-			return ErrNotFound
-		}
+	if _, held := m.jobs[steer.Job]; !held {
+		return ErrNotFound
 	}
 	kept := *steer
 	if kept.OccurredAt.IsZero() {
 		kept.OccurredAt = time.Now().UTC()
 	}
 	m.jobSteers[kept.ID] = &kept
-	for _, id := range counted {
-		m.jobs[id].Steers++
-	}
+	m.jobs[steer.Job].Steers++
 	return nil
 }
 
-// ListSteers returns every steer under one job at the top of a tree, oldest first.
-func (m *Memory) ListSteers(_ context.Context, root string) ([]*job.Steer, error) {
+// ListSteers returns one job's steers, oldest first.
+func (m *Memory) ListSteers(_ context.Context, of string) ([]*job.Steer, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	listed := make([]*job.Steer, 0, len(m.jobSteers))
 	for _, held := range m.jobSteers {
-		if held.Root != root {
+		if held.Job != of {
 			continue
 		}
 		kept := *held

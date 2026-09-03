@@ -8866,10 +8866,13 @@ type Job struct {
 	// is gated, which is the direction a boundary has to default in.
 	Ungated bool `protobuf:"varint,47,opt,name=ungated,proto3" json:"ungated,omitempty"`
 	// What the system assigned, and the caller may not.
-	// parent is which job asked for this one, read from the credential the caller presented
-	// and never from the request. depth is zero for a root and the parent's depth plus one otherwise.
-	Parent string `protobuf:"bytes,15,opt,name=parent,proto3" json:"parent,omitempty"`
-	Depth  int32  `protobuf:"varint,16,opt,name=depth,proto3" json:"depth,omitempty"`
+	// cause is the job whose session declared this one, read from the credential the caller presented
+	// and never from the request. It is a plain reference and says nothing about where this job sits:
+	// a job belongs to its project, and the only thing that belongs to a job is its executions.
+	Cause string `protobuf:"bytes,72,opt,name=cause,proto3" json:"cause,omitempty"`
+	// run is the flow run this job is one step of, and empty on every job a run did not declare. A run
+	// reads its own steps by it. A run is not a job, so a step of a run is not a job under a job.
+	Run string `protobuf:"bytes,73,opt,name=run,proto3" json:"run,omitempty"`
 	// version rises on every write to a declared field, so a status can be told current from stale.
 	Version int32 `protobuf:"varint,17,opt,name=version,proto3" json:"version,omitempty"`
 	// What the controller writes, and nobody else.
@@ -9212,18 +9215,18 @@ func (x *Job) GetUngated() bool {
 	return false
 }
 
-func (x *Job) GetParent() string {
+func (x *Job) GetCause() string {
 	if x != nil {
-		return x.Parent
+		return x.Cause
 	}
 	return ""
 }
 
-func (x *Job) GetDepth() int32 {
+func (x *Job) GetRun() string {
 	if x != nil {
-		return x.Depth
+		return x.Run
 	}
-	return 0
+	return ""
 }
 
 func (x *Job) GetVersion() int32 {
@@ -9966,8 +9969,7 @@ type CreateJobRequest struct {
 	// pull request against it.
 	Repository string `protobuf:"bytes,15,opt,name=repository,proto3" json:"repository,omitempty"`
 	// product is one sentence saying what a person does with what this job builds and what they get
-	// back. A job declared under another inherits its parent's, and stating a second one where the
-	// parent already carries one is refused rather than ignored.
+	// back. Every job states its own: nothing is carried down, because no job sits under another.
 	Product string `protobuf:"bytes,16,opt,name=product,proto3" json:"product,omitempty"`
 	// claim is the piece of work this job takes: an issue, a branch, or a named piece of work. The
 	// declaration is refused where another job holds the same one, and the refusal names that job.
@@ -9984,11 +9986,8 @@ type CreateJobRequest struct {
 	// request is what was asked for, in the words it was asked in. The system keeps it whole and never
 	// rewrites it, and the brief is read against it at the write.
 	Request string `protobuf:"bytes,20,opt,name=request,proto3" json:"request,omitempty"`
-	// id and parent are here to be refused rather than ignored. The system assigns the identifier, and
-	// the parent is read from the credential the caller presented: a caller that could set its own
-	// parent could set its own depth, and the depth limit would bound nothing.
+	// id is here to be refused rather than ignored: the system assigns the identifier.
 	Id            string `protobuf:"bytes,12,opt,name=id,proto3" json:"id,omitempty"`
-	Parent        string `protobuf:"bytes,13,opt,name=parent,proto3" json:"parent,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -10152,13 +10151,6 @@ func (x *CreateJobRequest) GetRequest() string {
 func (x *CreateJobRequest) GetId() string {
 	if x != nil {
 		return x.Id
-	}
-	return ""
-}
-
-func (x *CreateJobRequest) GetParent() string {
-	if x != nil {
-		return x.Parent
 	}
 	return ""
 }
@@ -10331,11 +10323,10 @@ type ListJobsRequest struct {
 	// project wins over workspace when both are set, being the narrower.
 	Workspace string `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	Project   string `protobuf:"bytes,2,opt,name=project,proto3" json:"project,omitempty"`
-	// parent narrows to the children of one job, and roots_only to jobs with no parent,
-	// which cannot be said with parent alone because empty means do not narrow.
-	Parent    string `protobuf:"bytes,3,opt,name=parent,proto3" json:"parent,omitempty"`
-	RootsOnly bool   `protobuf:"varint,4,opt,name=roots_only,json=rootsOnly,proto3" json:"roots_only,omitempty"`
-	Phase     string `protobuf:"bytes,5,opt,name=phase,proto3" json:"phase,omitempty"`
+	// run narrows to the steps of one flow run. A job nobody's run declared is in no run, so it is
+	// left out.
+	Run   string `protobuf:"bytes,31,opt,name=run,proto3" json:"run,omitempty"`
+	Phase string `protobuf:"bytes,5,opt,name=phase,proto3" json:"phase,omitempty"`
 	// outcome narrows to jobs that ended on one word from the fixed set. It is the filter the phase
 	// cannot be: two jobs are done and one of them could not do its work.
 	Outcome string `protobuf:"bytes,10,opt,name=outcome,proto3" json:"outcome,omitempty"`
@@ -10399,18 +10390,11 @@ func (x *ListJobsRequest) GetProject() string {
 	return ""
 }
 
-func (x *ListJobsRequest) GetParent() string {
+func (x *ListJobsRequest) GetRun() string {
 	if x != nil {
-		return x.Parent
+		return x.Run
 	}
 	return ""
-}
-
-func (x *ListJobsRequest) GetRootsOnly() bool {
-	if x != nil {
-		return x.RootsOnly
-	}
-	return false
 }
 
 func (x *ListJobsRequest) GetPhase() string {
@@ -10702,13 +10686,19 @@ func (x *Execution) GetFinishedAt() *timestamppb.Timestamp {
 	return nil
 }
 
-// ListExecutionsRequest is the runs of one job, oldest first, and of one of its stages where it
-// names one. The job is required: a run is only ever read as one of the runs of one stage of one
-// job, which is the whole reason it is not a job.
+// ListExecutionsRequest narrows a listing of runs, oldest first. The zero value is every run the
+// system holds, which is what a listing of every job in the crew needs to draw each job's runs
+// beneath it.
+//
+// A run is still only ever read as one of the runs of one stage of one job. What this narrows by
+// says which job's runs to draw, never what a run is.
 type ListExecutionsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Job           string                 `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
-	Stage         string                 `protobuf:"bytes,2,opt,name=stage,proto3" json:"stage,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// job is the runs of one job, and stage one of that job's stages.
+	Job   string `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
+	Stage string `protobuf:"bytes,2,opt,name=stage,proto3" json:"stage,omitempty"`
+	// project is every run of every job in one project. job wins where both are set, being narrower.
+	Project       string `protobuf:"bytes,3,opt,name=project,proto3" json:"project,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -10753,6 +10743,13 @@ func (x *ListExecutionsRequest) GetJob() string {
 func (x *ListExecutionsRequest) GetStage() string {
 	if x != nil {
 		return x.Stage
+	}
+	return ""
+}
+
+func (x *ListExecutionsRequest) GetProject() string {
+	if x != nil {
+		return x.Project
 	}
 	return ""
 }
@@ -11848,10 +11845,8 @@ func (x *RefuseJobResponse) GetJob() *Job {
 type Steer struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	// job is the job the steer landed on, and root is the job at the top of that tree, which is what
-	// the count is against.
+	// job is the job the steer landed on, which is the job the count is against.
 	Job       string `protobuf:"bytes,2,opt,name=job,proto3" json:"job,omitempty"`
-	Root      string `protobuf:"bytes,3,opt,name=root,proto3" json:"root,omitempty"`
 	Workspace string `protobuf:"bytes,4,opt,name=workspace,proto3" json:"workspace,omitempty"`
 	Project   string `protobuf:"bytes,5,opt,name=project,proto3" json:"project,omitempty"`
 	// text is what the operator had to say, in their own words.
@@ -11901,13 +11896,6 @@ func (x *Steer) GetId() string {
 func (x *Steer) GetJob() string {
 	if x != nil {
 		return x.Job
-	}
-	return ""
-}
-
-func (x *Steer) GetRoot() string {
-	if x != nil {
-		return x.Root
 	}
 	return ""
 }
@@ -12001,8 +11989,8 @@ func (x *RecordSteerRequest) GetText() string {
 type RecordSteerResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Steer *Steer                 `protobuf:"bytes,1,opt,name=steer,proto3" json:"steer,omitempty"`
-	// root is the job at the top of the tree, carrying the count this steer just moved.
-	Root          *Job `protobuf:"bytes,2,opt,name=root,proto3" json:"root,omitempty"`
+	// job is the job the steer landed on, carrying the count this steer just moved.
+	Job           *Job `protobuf:"bytes,3,opt,name=job,proto3" json:"job,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -12044,9 +12032,9 @@ func (x *RecordSteerResponse) GetSteer() *Steer {
 	return nil
 }
 
-func (x *RecordSteerResponse) GetRoot() *Job {
+func (x *RecordSteerResponse) GetJob() *Job {
 	if x != nil {
-		return x.Root
+		return x.Job
 	}
 	return nil
 }
@@ -12054,8 +12042,7 @@ func (x *RecordSteerResponse) GetRoot() *Job {
 // ListSteersRequest reads one job's marks back, in the order they were made.
 type ListSteersRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// job is any job in the tree. The system reads the marks of the whole tree, because the score
-	// belongs to the job at the top rather than to whichever child was running at the time.
+	// job is the job whose marks to read. A steer belongs to the job it landed on and to nothing else.
 	Job           string `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -12101,7 +12088,7 @@ func (x *ListSteersRequest) GetJob() string {
 type ListSteersResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Steers        []*Steer               `protobuf:"bytes,1,rep,name=steers,proto3" json:"steers,omitempty"`
-	Root          *Job                   `protobuf:"bytes,2,opt,name=root,proto3" json:"root,omitempty"`
+	Job           *Job                   `protobuf:"bytes,3,opt,name=job,proto3" json:"job,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -12143,9 +12130,9 @@ func (x *ListSteersResponse) GetSteers() []*Steer {
 	return nil
 }
 
-func (x *ListSteersResponse) GetRoot() *Job {
+func (x *ListSteersResponse) GetJob() *Job {
 	if x != nil {
-		return x.Root
+		return x.Job
 	}
 	return nil
 }
@@ -12159,9 +12146,9 @@ func (x *ListSteersResponse) GetRoot() *Job {
 type WorkspaceLimits struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	Workspace string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
-	// max_depth is how deep the tree of jobs may go. Zero, the default, means no session in this
-	// workspace may declare a job at all: default deny, raised deliberately and per workspace.
-	MaxDepth int32 `protobuf:"varint,2,opt,name=max_depth,json=maxDepth,proto3" json:"max_depth,omitempty"`
+	// max_declared is how many jobs one session may declare. Zero, the default, means no session in
+	// this workspace may declare a job at all: default deny, raised deliberately and per workspace.
+	MaxDeclared int32 `protobuf:"varint,12,opt,name=max_declared,json=maxDeclared,proto3" json:"max_declared,omitempty"`
 	// max_running is how many jobs may run at once in this workspace. Zero is unset, and the
 	// system ships it unset because no measurement has set it yet.
 	MaxRunning int32 `protobuf:"varint,3,opt,name=max_running,json=maxRunning,proto3" json:"max_running,omitempty"`
@@ -12244,9 +12231,9 @@ func (x *WorkspaceLimits) GetWorkspace() string {
 	return ""
 }
 
-func (x *WorkspaceLimits) GetMaxDepth() int32 {
+func (x *WorkspaceLimits) GetMaxDeclared() int32 {
 	if x != nil {
-		return x.MaxDepth
+		return x.MaxDeclared
 	}
 	return 0
 }
@@ -13394,7 +13381,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
 	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xc9\x13\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"\xde\x13\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -13419,9 +13406,9 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\aproduct\x18$ \x01(\tR\aproduct\x12\x16\n" +
 	"\x06steers\x18% \x01(\x05R\x06steers\x12\x14\n" +
 	"\x05claim\x18( \x01(\tR\x05claim\x12\x18\n" +
-	"\aungated\x18/ \x01(\bR\aungated\x12\x16\n" +
-	"\x06parent\x18\x0f \x01(\tR\x06parent\x12\x14\n" +
-	"\x05depth\x18\x10 \x01(\x05R\x05depth\x12\x18\n" +
+	"\aungated\x18/ \x01(\bR\aungated\x12\x14\n" +
+	"\x05cause\x18H \x01(\tR\x05cause\x12\x10\n" +
+	"\x03run\x18I \x01(\tR\x03run\x12\x18\n" +
 	"\aversion\x18\x11 \x01(\x05R\aversion\x12\x14\n" +
 	"\x05phase\x18\x12 \x01(\tR\x05phase\x12\x18\n" +
 	"\asession\x18\x13 \x01(\tR\asession\x12\x1a\n" +
@@ -13478,7 +13465,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\traised_at\x18? \x01(\v2\x1a.google.protobuf.TimestampR\braisedAt\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\bD\x10EJ\x04\bF\x10G\"\xd1\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x0f\x10\x10J\x04\b\x10\x10\x11J\x04\bD\x10EJ\x04\bF\x10GR\x06parentR\x05depth\"\xd1\x01\n" +
 	"\n" +
 	"JobAttempt\x12\x12\n" +
 	"\x04task\x18\x01 \x01(\tR\x04task\x12\x10\n" +
@@ -13514,7 +13501,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x05tried\x18\x03 \x01(\tR\x05tried\x12\x18\n" +
 	"\asession\x18\x04 \x01(\tR\asession\x129\n" +
 	"\n" +
-	"written_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\twrittenAt\"\xa3\x05\n" +
+	"written_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\twrittenAt\"\x99\x05\n" +
 	"\x10CreateJobRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x14\n" +
@@ -13540,11 +13527,10 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"escalation\x12\x18\n" +
 	"\aungated\x18\x13 \x01(\bR\aungated\x12\x18\n" +
 	"\arequest\x18\x14 \x01(\tR\arequest\x12\x0e\n" +
-	"\x02id\x18\f \x01(\tR\x02id\x12\x16\n" +
-	"\x06parent\x18\r \x01(\tR\x06parent\x1a9\n" +
+	"\x02id\x18\f \x01(\tR\x02id\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x80\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\r\x10\x0eR\x06parent\"\x80\x01\n" +
 	"\x11CreateJobResponse\x12\"\n" +
 	"\x03job\x18\x01 \x01(\v2\x10.quaycrew.v1.JobR\x03job\x12-\n" +
 	"\bleft_out\x18\x02 \x03(\v2\x12.quaycrew.v1.SkillR\aleftOut\x12\x18\n" +
@@ -13552,13 +13538,11 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\rGetJobRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"4\n" +
 	"\x0eGetJobResponse\x12\"\n" +
-	"\x03job\x18\x01 \x01(\v2\x10.quaycrew.v1.JobR\x03job\"\xc7\x02\n" +
+	"\x03job\x18\x01 \x01(\v2\x10.quaycrew.v1.JobR\x03job\"\xc2\x02\n" +
 	"\x0fListJobsRequest\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x18\n" +
-	"\aproject\x18\x02 \x01(\tR\aproject\x12\x16\n" +
-	"\x06parent\x18\x03 \x01(\tR\x06parent\x12\x1d\n" +
-	"\n" +
-	"roots_only\x18\x04 \x01(\bR\trootsOnly\x12\x14\n" +
+	"\aproject\x18\x02 \x01(\tR\aproject\x12\x10\n" +
+	"\x03run\x18\x1f \x01(\tR\x03run\x12\x14\n" +
 	"\x05phase\x18\x05 \x01(\tR\x05phase\x12\x18\n" +
 	"\aoutcome\x18\n" +
 	" \x01(\tR\aoutcome\x12\x1b\n" +
@@ -13566,7 +13550,8 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\vlabel_value\x18\a \x01(\tR\n" +
 	"labelValue\x12A\n" +
 	"\x0efinished_since\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\rfinishedSince\x12\x14\n" +
-	"\x05limit\x18\t \x01(\x05R\x05limit\"8\n" +
+	"\x05limit\x18\t \x01(\x05R\x05limitJ\x04\b\x03\x10\x04J\x04\b\x04\x10\x05R\x06parentR\n" +
+	"roots_only\"8\n" +
 	"\x10ListJobsResponse\x12$\n" +
 	"\x04jobs\x18\x01 \x03(\v2\x10.quaycrew.v1.JobR\x04jobs\"\xee\x04\n" +
 	"\tExecution\x12\x0e\n" +
@@ -13593,10 +13578,11 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\n" +
 	"started_at\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12;\n" +
 	"\vfinished_at\x18\x13 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"finishedAt\"?\n" +
+	"finishedAt\"Y\n" +
 	"\x15ListExecutionsRequest\x12\x10\n" +
 	"\x03job\x18\x01 \x01(\tR\x03job\x12\x14\n" +
-	"\x05stage\x18\x02 \x01(\tR\x05stage\"P\n" +
+	"\x05stage\x18\x02 \x01(\tR\x05stage\x12\x18\n" +
+	"\aproject\x18\x03 \x01(\tR\aproject\"P\n" +
 	"\x16ListExecutionsResponse\x126\n" +
 	"\n" +
 	"executions\x18\x01 \x03(\v2\x16.quaycrew.v1.ExecutionR\n" +
@@ -13651,30 +13637,29 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\"7\n" +
 	"\x11RefuseJobResponse\x12\"\n" +
-	"\x03job\x18\x01 \x01(\v2\x10.quaycrew.v1.JobR\x03job\"\xc6\x01\n" +
+	"\x03job\x18\x01 \x01(\v2\x10.quaycrew.v1.JobR\x03job\"\xbe\x01\n" +
 	"\x05Steer\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
-	"\x03job\x18\x02 \x01(\tR\x03job\x12\x12\n" +
-	"\x04root\x18\x03 \x01(\tR\x04root\x12\x1c\n" +
+	"\x03job\x18\x02 \x01(\tR\x03job\x12\x1c\n" +
 	"\tworkspace\x18\x04 \x01(\tR\tworkspace\x12\x18\n" +
 	"\aproject\x18\x05 \x01(\tR\aproject\x12\x12\n" +
 	"\x04text\x18\x06 \x01(\tR\x04text\x12;\n" +
 	"\voccurred_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"occurredAt\":\n" +
+	"occurredAtJ\x04\b\x03\x10\x04R\x04root\":\n" +
 	"\x12RecordSteerRequest\x12\x10\n" +
 	"\x03job\x18\x01 \x01(\tR\x03job\x12\x12\n" +
-	"\x04text\x18\x02 \x01(\tR\x04text\"e\n" +
+	"\x04text\x18\x02 \x01(\tR\x04text\"o\n" +
 	"\x13RecordSteerResponse\x12(\n" +
-	"\x05steer\x18\x01 \x01(\v2\x12.quaycrew.v1.SteerR\x05steer\x12$\n" +
-	"\x04root\x18\x02 \x01(\v2\x10.quaycrew.v1.JobR\x04root\"%\n" +
+	"\x05steer\x18\x01 \x01(\v2\x12.quaycrew.v1.SteerR\x05steer\x12\"\n" +
+	"\x03job\x18\x03 \x01(\v2\x10.quaycrew.v1.JobR\x03jobJ\x04\b\x02\x10\x03R\x04root\"%\n" +
 	"\x11ListSteersRequest\x12\x10\n" +
-	"\x03job\x18\x01 \x01(\tR\x03job\"f\n" +
+	"\x03job\x18\x01 \x01(\tR\x03job\"p\n" +
 	"\x12ListSteersResponse\x12*\n" +
-	"\x06steers\x18\x01 \x03(\v2\x12.quaycrew.v1.SteerR\x06steers\x12$\n" +
-	"\x04root\x18\x02 \x01(\v2\x10.quaycrew.v1.JobR\x04root\"\xd4\x03\n" +
+	"\x06steers\x18\x01 \x03(\v2\x12.quaycrew.v1.SteerR\x06steers\x12\"\n" +
+	"\x03job\x18\x03 \x01(\v2\x10.quaycrew.v1.JobR\x03jobJ\x04\b\x02\x10\x03R\x04root\"\xeb\x03\n" +
 	"\x0fWorkspaceLimits\x12\x1c\n" +
-	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x1b\n" +
-	"\tmax_depth\x18\x02 \x01(\x05R\bmaxDepth\x12\x1f\n" +
+	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12!\n" +
+	"\fmax_declared\x18\f \x01(\x05R\vmaxDeclared\x12\x1f\n" +
 	"\vmax_running\x18\x03 \x01(\x05R\n" +
 	"maxRunning\x12#\n" +
 	"\rbudget_tokens\x18\x04 \x01(\x03R\fbudgetTokens\x12#\n" +
@@ -13685,7 +13670,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x19request_processor_percent\x18\t \x01(\x05R\x17requestProcessorPercent\x126\n" +
 	"\x17context_ceiling_percent\x18\n" +
 	" \x01(\x05R\x15contextCeilingPercent\x12'\n" +
-	"\x0fwaiting_seconds\x18\v \x01(\x05R\x0ewaitingSeconds\"\xaa\x02\n" +
+	"\x0fwaiting_seconds\x18\v \x01(\x05R\x0ewaitingSecondsJ\x04\b\x02\x10\x03R\tmax_depth\"\xaa\x02\n" +
 	"\aWaiting\x12\x10\n" +
 	"\x03job\x18\x01 \x01(\tR\x03job\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x18\n" +
@@ -14174,9 +14159,9 @@ var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
 	145, // 126: quaycrew.v1.RefuseJobResponse.job:type_name -> quaycrew.v1.Job
 	198, // 127: quaycrew.v1.Steer.occurred_at:type_name -> google.protobuf.Timestamp
 	179, // 128: quaycrew.v1.RecordSteerResponse.steer:type_name -> quaycrew.v1.Steer
-	145, // 129: quaycrew.v1.RecordSteerResponse.root:type_name -> quaycrew.v1.Job
+	145, // 129: quaycrew.v1.RecordSteerResponse.job:type_name -> quaycrew.v1.Job
 	179, // 130: quaycrew.v1.ListSteersResponse.steers:type_name -> quaycrew.v1.Steer
-	145, // 131: quaycrew.v1.ListSteersResponse.root:type_name -> quaycrew.v1.Job
+	145, // 131: quaycrew.v1.ListSteersResponse.job:type_name -> quaycrew.v1.Job
 	198, // 132: quaycrew.v1.Waiting.since:type_name -> google.protobuf.Timestamp
 	185, // 133: quaycrew.v1.GetWaitingResponse.waiting:type_name -> quaycrew.v1.Waiting
 	184, // 134: quaycrew.v1.GetWorkspaceLimitsResponse.limits:type_name -> quaycrew.v1.WorkspaceLimits

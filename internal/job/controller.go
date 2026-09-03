@@ -1838,7 +1838,7 @@ func (c *Controller) event(ctx context.Context, one *Job, kind, detail string) *
 	}
 	return &Event{
 		ID: newRowID(), Kind: kind, Job: one.ID, Workspace: one.Workspace, Project: one.Project,
-		Parent: one.Parent, Depth: one.Depth, Detail: detail, TraceID: one.TraceID,
+		Detail: detail, TraceID: one.TraceID,
 		OccurredAt: time.Now().UTC(),
 	}
 }

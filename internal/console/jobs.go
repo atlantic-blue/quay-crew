@@ -129,10 +129,21 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			if err != nil {
 				return nil, err
 			}
-			working := sessionsUnder(resp.GetJobs())
 			rows := make([]Row, 0, len(resp.GetJobs()))
 			for _, one := range resp.GetJobs() {
-				rows = append(rows, jobRow(one, working[one.GetId()]))
+				rows = append(rows, jobRow(one))
+			}
+			// And the runs of every stage of every one of them, each drawn under the job it belongs
+			// to. It is one call for the whole listing rather than one per job: a view drawing a
+			// hundred jobs must not make a hundred calls to say what is running under them. It is
+			// narrowed the same way the jobs above it are, so the two halves of the screen cannot
+			// disagree about which project is being read.
+			runs, err := client.ListExecutions(ctx, &quaycrewv1.ListExecutionsRequest{Project: project})
+			if err != nil {
+				return nil, err
+			}
+			for _, run := range runs.GetExecutions() {
+				rows = append(rows, executionRow(run))
 			}
 			return rows, nil
 		},
@@ -198,40 +209,17 @@ func onlyAnAskingJob(row Row) error {
 // as something missing, and this is a job waiting its turn rather than a job with a hole in it.
 const noSessionYet = "not yet"
 
-// sessionsUnder is how many sessions are working under each job.
-//
-// A job that fans out has no session of its own and is not idle: the build stage runs one session for
-// each vertical, all at once, and the row that declared them waits. The number comes off the row
-// rather than being counted here, because the runs of a stage are not jobs and are in no listing of
-// declared work: a view that counted the rows it holds would say nothing is happening while five
-// sessions build.
-//
-// The jobs under a job are counted too. A session running a job declares work under it, and a flow
-// run declares each of its steps under the job carrying the run, and both of those are sessions
-// working under this row.
-func sessionsUnder(jobs []*quaycrewv1.Job) map[string]int {
-	working := map[string]int{}
-	for _, one := range jobs {
-		if running := int(one.GetRunningExecutions()); running > 0 {
-			working[one.GetId()] += running
-		}
-		if one.GetParent() == "" || job.Terminal(one.GetPhase()) {
-			continue
-		}
-		working[one.GetParent()]++
-	}
-	return working
-}
-
 // jobRow is one job as a listing row.
 //
 // Parent is the session rather than the project, because the parent is what a drilled down view
 // scopes by, and what this view descends into is the session's tasks.
 //
-// working is how many sessions are running under this job, which is what the session cell says on a
-// row that has none of its own. A fan out of three reading "not yet" says nothing is happening while
-// three sessions build, and that is the row a person watching a build is looking straight at.
-func jobRow(one *quaycrewv1.Job, working int) Row {
+// A job that fans out has no session of its own and is not idle: the build stage runs one session for
+// each vertical, all at once, and the job waits. How many are running comes off the row, so a fan out
+// of three says three are working rather than "not yet", which is the row a person watching a build
+// is looking straight at.
+func jobRow(one *quaycrewv1.Job) Row {
+	working := int(one.GetRunningExecutions())
 	// The identifiers stay whole: they are what stopping and descending use. Only the cells shorten.
 	session := noSessionYet
 	if one.GetSession() != "" {
@@ -243,11 +231,7 @@ func jobRow(one *quaycrewv1.Job, working int) Row {
 	return Row{
 		ID:     one.GetId(),
 		Parent: one.GetSession(),
-		// The job this one is a part of, which is what keeps it off the listing until somebody opens
-		// that job. It is a second parent and not the one above: Parent is the session a row
-		// descends into, and these are two different questions about the same row.
-		Under: one.GetParent(),
-		Label: one.GetTitle(),
+		Label:  one.GetTitle(),
 		// A job is the one row a person reads by its title and types by its identifier, so the position
 		// line takes the short form the listing already prints.
 		Address: display.ShortID(one.GetId()),
@@ -339,4 +323,42 @@ func colourOfPhase(cell string) string {
 	default:
 		return ""
 	}
+}
+
+// executionRow is one run of one stage as a listing row, drawn under the job it belongs to.
+//
+// It is the only thing that belongs to a job, so it is the only thing this view folds. A run is not a
+// job: it states no title, it runs no stages and nobody declared it, so the cells a job fills with
+// what a person wrote say what the run is instead, which is the stage and the number it runs.
+func executionRow(run *quaycrewv1.Execution) Row {
+	session := noSessionYet
+	if run.GetSession() != "" {
+		session = display.ShortID(run.GetSession())
+	}
+	return Row{
+		ID:      run.GetId(),
+		Parent:  run.GetSession(),
+		Under:   run.GetJob(),
+		Label:   executionTitle(run),
+		Address: display.ShortID(run.GetId()),
+		State:   stateOfPhase(run.GetPhase()),
+		Cells: []string{
+			display.ShortID(run.GetId()),
+			run.GetPhase(),
+			run.GetStage(),
+			outcomeCell(run.GetOutcome()),
+			"",
+			executionTitle(run),
+			session,
+			fmt.Sprintf("%d", run.GetAttempts()),
+			display.Age(run.GetCreatedAt()),
+		},
+		Detail: executionTitle(run),
+	}
+}
+
+// executionTitle is what to call a run in a listing. Nobody wrote it a title, so it is the stage it
+// runs and the number it runs for, in the words the stage that made it uses.
+func executionTitle(run *quaycrewv1.Execution) string {
+	return job.RunCalled(run.GetStage(), int(run.GetNumber()))
 }

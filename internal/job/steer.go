@@ -30,13 +30,12 @@ const WhatASteerIs = "A steer is one moment the operator had to say something th
 
 // Steer is one steer as the system keeps it: what was said, when, and which job it landed on.
 //
-// Root is the job at the top of the tree, kept on the row rather than walked at read time. It is
-// what makes a whole job's steers one query, and it cannot go stale: a job's parent is set when it
-// is declared and never moves.
+// It belongs to that job and to nothing else. A job belongs to its project and nothing sits under
+// it, so there is no tree to carry the count up, and reading one job's steers is one query on the
+// job the operator was looking at when they made the mark.
 type Steer struct {
 	ID         string
 	Job        string
-	Root       string
 	Workspace  string
 	Project    string
 	Text       string

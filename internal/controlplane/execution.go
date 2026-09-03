@@ -20,20 +20,20 @@ import (
 // how it came to be listed beside the work a person declared; it is a table of its own now, and this
 // is the only road to it.
 
-// ListExecutions is the runs of one job, oldest first, and of one of its stages where the request
-// names one.
+// ListExecutions is the runs the request narrows to, oldest first: one job's, one stage of one job's,
+// one project's, or every run the system holds.
+//
+// A listing that narrows by nothing mirrors the jobs listing, because the caller is the same one: a
+// console drawing every job in the crew draws each job's runs beneath it, and one call for the whole
+// listing is what keeps that from being a call per row.
 func (s *Server) ListExecutions(ctx context.Context, req *quaycrewv1.ListExecutionsRequest) (
 	*quaycrewv1.ListExecutionsResponse, error) {
-	if req.GetJob() == "" {
-		return nil, status.Error(codes.InvalidArgument,
-			"which job: a run is one run of one stage of one job, so give the job krewe job list prints")
-	}
 	if stage := req.GetStage(); stage != "" && !job.StageBuilt(stage) {
 		return nil, status.Errorf(codes.InvalidArgument,
 			"%q is not a stage; use one of %s", stage, strings.Join(job.Stages, ", "))
 	}
 	runs, err := s.store.ListExecutions(ctx, job.ExecutionFilter{
-		Job: req.GetJob(), Stage: req.GetStage(),
+		Job: req.GetJob(), Stage: req.GetStage(), Project: req.GetProject(),
 	})
 	if err != nil {
 		return nil, storeError(err, "executions")

@@ -14,7 +14,7 @@ import (
 // jobColumns is the row every read of a job selects, in one place so a reader and a
 // listing cannot drift into scanning different things.
 const jobColumns = `id, workspace, project, title, brief, role, role_version, mode, expect_file,
-	expect_contains, after_jobs, deadline, budget_tokens, labels, requires, coalesce(parent, ''), depth, version,
+	expect_contains, after_jobs, deadline, budget_tokens, labels, requires, cause, run, version,
 	phase, session, attempts, answer, outcome, reason, question, told, resuming, spent_tokens, observed_version,
 	lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product, steers, claim,
 	escalation, looped_step, escalated_to, plan, plan_approved, ideation, ideation_answer,
@@ -108,7 +108,7 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 	}
 	if _, err := tx.Exec(ctx, `
 		insert into jobs (id, workspace, project, title, brief, role, role_version, mode, expect_file,
-			expect_contains, after_jobs, deadline, budget_tokens, labels, requires, parent, depth, version, phase,
+			expect_contains, after_jobs, deadline, budget_tokens, labels, requires, cause, run, version, phase,
 			session, attempts, answer, outcome, reason, question, told, spent_tokens, observed_version, started_at,
 			finished_at, lease_owner, lease_until, trace_id, parent_span_id, repository, pull_request, product,
 			resuming, claim, escalation, ungated, reviewed, tested, tests, build,
@@ -122,7 +122,7 @@ func insertJob(ctx context.Context, tx pgx.Tx, declared *job.Job) error {
 		declared.ID, declared.Workspace, declared.Project, declared.Title, declared.Brief,
 		declared.Role, declared.RoleVersion, declared.Mode, declared.ExpectFile, declared.ExpectContains,
 		afterOrEmpty(declared.After), declared.Deadline, declared.BudgetTokens, string(labels),
-		afterOrEmpty(declared.Requires), nullIfEmpty(declared.Parent), declared.Depth, declared.Version, declared.Phase,
+		afterOrEmpty(declared.Requires), declared.Cause, declared.Run, declared.Version, declared.Phase,
 		declared.Session, declared.Attempts, declared.Answer, declared.Outcome, declared.Reason, declared.Question,
 		declared.Told, declared.SpentTokens, declared.ObservedVersion, declared.StartedAt, declared.FinishedAt,
 		declared.LeaseOwner, declared.LeaseUntil, declared.TraceID, declared.ParentSpanID,
@@ -203,11 +203,8 @@ func (p *Postgres) ListJobs(ctx context.Context, filter job.Filter) ([]*job.Job,
 	case filter.Workspace != "":
 		add(` and workspace = $%d`, filter.Workspace)
 	}
-	switch {
-	case filter.Parent != "":
-		add(` and parent = $%d`, filter.Parent)
-	case filter.Root:
-		query += ` and parent is null`
+	if filter.Run != "" {
+		add(` and run = $%d`, filter.Run)
 	}
 	if filter.Phase != "" {
 		add(` and phase = $%d`, filter.Phase)
@@ -414,7 +411,7 @@ func (p *Postgres) ApproveJobPlan(ctx context.Context, id string, event *job.Eve
 // worked backwards.
 func (p *Postgres) ListJobEvents(ctx context.Context, id string) ([]*job.Event, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, kind, job, workspace, project, parent, depth, execution, detail, trace_id, occurred_at
+		select id, kind, job, workspace, project, execution, detail, trace_id, occurred_at
 		from job_events where job = $1 order by seq`, id)
 	if err != nil {
 		return nil, fmt.Errorf("list job events: %w", err)
@@ -425,8 +422,7 @@ func (p *Postgres) ListJobEvents(ctx context.Context, id string) ([]*job.Event, 
 	for rows.Next() {
 		var event job.Event
 		if err := rows.Scan(&event.ID, &event.Kind, &event.Job, &event.Workspace, &event.Project,
-			&event.Parent, &event.Depth, &event.Execution, &event.Detail, &event.TraceID,
-			&event.OccurredAt); err != nil {
+			&event.Execution, &event.Detail, &event.TraceID, &event.OccurredAt); err != nil {
 			return nil, fmt.Errorf("scan job event: %w", err)
 		}
 		events = append(events, &event)
@@ -447,13 +443,12 @@ func appendJobEvent(ctx context.Context, tx pgx.Tx, event *job.Event) error {
 		return errors.New("store: a job event needs an id and a kind")
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into job_events (id, kind, job, workspace, project, parent, depth, execution, detail,
+		insert into job_events (id, kind, job, workspace, project, execution, detail,
 			trace_id, occurred_at)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		on conflict (id) do nothing`,
 		event.ID, event.Kind, event.Job, event.Workspace, event.Project,
-		event.Parent, event.Depth, event.Execution, event.Detail, event.TraceID,
-		event.OccurredAt); err != nil {
+		event.Execution, event.Detail, event.TraceID, event.OccurredAt); err != nil {
 		return fmt.Errorf("append job event: %w", err)
 	}
 	return nil
@@ -471,7 +466,7 @@ func scanJob(row rowScanner) (*job.Job, error) {
 	var readAt *time.Time
 	if err := row.Scan(&found.ID, &found.Workspace, &found.Project, &found.Title, &found.Brief,
 		&found.Role, &found.RoleVersion, &found.Mode, &found.ExpectFile, &found.ExpectContains,
-		&found.After, &found.Deadline, &found.BudgetTokens, &labels, &found.Requires, &found.Parent, &found.Depth,
+		&found.After, &found.Deadline, &found.BudgetTokens, &labels, &found.Requires, &found.Cause, &found.Run,
 		&found.Version, &found.Phase, &found.Session, &found.Attempts, &found.Answer, &found.Outcome, &found.Reason,
 		&found.Question, &found.Told, &found.Resuming, &found.SpentTokens, &found.ObservedVersion,
 		&found.LeaseOwner, &found.LeaseUntil, &found.TraceID, &found.ParentSpanID,
@@ -530,24 +525,13 @@ func afterOrEmpty(after []string) []string {
 	return after
 }
 
-// nullIfEmpty keeps a root's parent null rather than an empty string, so the foreign key holds and
-// "job with no parent" is a query rather than a convention.
-func nullIfEmpty(value string) any {
-	if value == "" {
-		return nil
-	}
-	return value
-}
-
 // RunnableJob is the job a controller may start: pending with nothing it waits for, oldest
 // declared first.
 //
-// A job under a parent and a job in a role are both started. A role because the controller runs it as
-// that role, and a parent because a flow run declares every step under its own job, so a controller
-// that started roots only would leave every step of every automation pending forever. What is still
-// left out is job that waits for something, because nothing honours ordering yet. The tree budget is
-// enforced for none of these and for a root either, so nothing is honoured less here than anywhere
-// else.
+// Every pending job is started, whoever declared it: a job an operator wrote, a job a session
+// declared and a step of a flow run are all jobs, and a controller that read only some of them would
+// leave the rest pending forever. What is still left out is a job that waits for something, because
+// nothing honours ordering yet.
 func (p *Postgres) RunnableJob(ctx context.Context, limit int) ([]*job.Job, error) {
 	return p.jobMatching(ctx, `
 		where phase = $1 and cardinality(after_jobs) = 0
@@ -1105,4 +1089,14 @@ func (p *Postgres) SendJobBackToBuild(ctx context.Context, id string,
 			lease_owner = '', lease_until = null, updated_at = now(), asked_at = null, raised_at = null
 		where id = $1 and phase = $3 and build <> '' and accepted = false`,
 		job.PhasePending, job.PhasePending)
+}
+
+// JobsCausedBy is how many jobs the session running this one declared.
+func (p *Postgres) JobsCausedBy(ctx context.Context, cause string) (int, error) {
+	caused := 0
+	if err := p.pool.QueryRow(ctx,
+		`select count(*) from jobs where cause = $1`, cause).Scan(&caused); err != nil {
+		return 0, fmt.Errorf("jobs caused by: %w", err)
+	}
+	return caused, nil
 }

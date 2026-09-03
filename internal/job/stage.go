@@ -93,9 +93,8 @@ type Stage struct {
 // than the flattering one: nothing here pretends the work reached a stage nobody has written.
 //
 // A job that runs no stages says so, and says why. An errand states no sentence, so there is nothing
-// to write a plan from and nothing to hold it against, and it never enters this at all. A job
-// declared under another is one part of a plan a person already approved on the job above it, and
-// the stage of that work is that job's.
+// to write a plan from and nothing to hold it against, and it never enters this at all. A step of a
+// flow run follows the graph a person imported, which is the plan, so it runs no stages either.
 func StageOf(one *Job) Stage {
 	if one == nil {
 		return Stage{}
@@ -103,9 +102,8 @@ func StageOf(one *Job) Stage {
 	if one.Product == "" {
 		return Stage{Outside: "this job states no sentence, so it is an errand and runs no stages"}
 	}
-	if one.Parent != "" {
-		return Stage{Outside: "this job is one part of a plan approved on the job above it, " +
-			"so its stage is that job's"}
+	if one.Run != "" {
+		return Stage{Outside: "this job is one step of a flow run, and the graph is its plan"}
 	}
 	if WaitingForItsIdeation(one) {
 		return stageStanding(StageIdeation, "")
@@ -221,7 +219,7 @@ func (s Stage) Where() string {
 // second copy of the stage itself.
 func StageOfWire(one *quaycrewv1.Job) Stage {
 	return StageOf(&Job{
-		Product: one.GetProduct(), Parent: one.GetParent(),
+		Product: one.GetProduct(), Run: one.GetRun(),
 		IdeationAnswer: one.GetIdeationAnswer(),
 		Design:         one.GetDesign(), DesignAccepted: one.GetDesignAccepted(),
 		Tests: one.GetTests(), Build: one.GetBuild(), Accepted: one.GetAccepted(),

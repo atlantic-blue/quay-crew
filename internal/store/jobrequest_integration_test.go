@@ -6,12 +6,13 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/auth"
 	"github.com/atlantic-blue/quay-krewe/internal/job"
 	"github.com/atlantic-blue/quay-krewe/internal/role"
-	"google.golang.org/grpc/codes"
+	"github.com/atlantic-blue/quay-krewe/internal/store"
 	"google.golang.org/grpc/status"
 )
 
@@ -96,13 +97,14 @@ func TestABriefThatDropsWhatWasAskedForSaysSoThroughPostgres(t *testing.T) {
 	}
 }
 
-// A tree carries one request, and a session two levels down reads it without anybody typing it again.
-func TestEveryJobUnderOneCarriesItsRequestThroughPostgres(t *testing.T) {
+// A job a session declares states its own request, or none. Nothing is taken from the job whose
+// session declared it, because no job sits under another.
+func TestAJobASessionDeclaresStatesItsOwnRequestThroughPostgres(t *testing.T) {
 	s, kept := aSystemOnPostgres(t)
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 	if _, err := s.SetWorkspaceLimits(ctx, &quaycrewv1.SetWorkspaceLimitsRequest{
-		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDepth: 2},
+		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDeclared: 2},
 	}); err != nil {
 		t.Fatalf("SetWorkspaceLimits: %v", err)
 	}
@@ -115,36 +117,35 @@ func TestEveryJobUnderOneCarriesItsRequestThroughPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateJob: %v", err)
 	}
-	child := declaredUnder(t, s, kept, project, root.GetJob().GetId(), "write the fetcher")
-	grandchild := declaredUnder(t, s, kept, project, child, "write the renderer")
 
-	for _, id := range []string{child, grandchild} {
-		read, err := kept.GetJob(ctx, id)
-		if err != nil {
-			t.Fatalf("GetJob: %v", err)
-		}
-		if read.Request != asked {
-			t.Fatalf("job %s was asked for in the words %q, want %q", id, read.Request, asked)
-		}
+	// One its session declared, stating its own words, and one stating none.
+	own, _, err := s.PrepareJob(ctx, job.Placement{Cause: root.GetJob().GetId()}, job.Declaration{
+		Project: project, Title: "write the fetcher", Brief: "fetch the captions once and keep them",
+		Request: "build me a dashboard of the archive instead",
+	})
+	if err != nil {
+		t.Fatalf("PrepareJob: %v", err)
 	}
-	read, err := kept.GetJob(ctx, grandchild)
+	if err := kept.CreateJob(ctx, own, &job.Event{
+		ID: store.NewID(), Kind: job.EventDeclared, Job: own.ID,
+		Workspace: workspace, Project: project, Detail: own.Title, OccurredAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+
+	read, err := kept.GetJob(ctx, own.ID)
 	if err != nil {
 		t.Fatalf("GetJob: %v", err)
 	}
-	if task := job.Asked(read); !strings.Contains(task, asked) {
-		t.Fatalf("the session two levels down is asked %q, and it never sees the request", task)
+	if read.Request != "build me a dashboard of the archive instead" {
+		t.Fatalf("the job a session declared was asked for in the words %q", read.Request)
 	}
-
-	// A second request is refused rather than written, because a tree with two has none.
-	_, _, err = s.PrepareJob(ctx, root.GetJob().GetId(), job.Declaration{
-		Project: project, Title: "search the archive", Brief: "index every video by its identifier",
-		Request: "build me a dashboard of the archive instead",
-	})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("a child stating a second request was answered with %v", err)
+	if read.Cause != root.GetJob().GetId() {
+		t.Fatalf("the job a session declared says %q caused it", read.Cause)
 	}
-	if !strings.Contains(refusalOf(err), asked) {
-		t.Fatalf("the refusal does not name the request the tree carries: %v", err)
+	// And the session doing it is asked in those words, read off the row rather than off the call.
+	if task := job.Asked(read); !strings.Contains(task, "build me a dashboard of the archive instead") {
+		t.Fatalf("the session is asked %q, and it never sees the request its job states", task)
 	}
 }
 
@@ -155,12 +156,12 @@ func TestEveryJobUnderOneCarriesItsRequestThroughPostgres(t *testing.T) {
 // to word around. So the reading is made on the request a declaration stated, and this is the test
 // that says so: the same slice scores as drifted when the two texts are held against each other by
 // hand, and the system says nothing about it.
-func TestAChildIsNotMeasuredAgainstTheRequestItInherited(t *testing.T) {
+func TestAJobASessionDeclaresIsNotMeasuredAgainstAnotherJobsRequest(t *testing.T) {
 	s, kept := aSystemOnPostgres(t)
 	ctx := context.Background()
 	workspace, project := aProjectOnPostgres(t, s)
 	if _, err := s.SetWorkspaceLimits(ctx, &quaycrewv1.SetWorkspaceLimitsRequest{
-		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDepth: 2},
+		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDeclared: 2},
 	}); err != nil {
 		t.Fatalf("SetWorkspaceLimits: %v", err)
 	}
@@ -173,8 +174,8 @@ func TestAChildIsNotMeasuredAgainstTheRequestItInherited(t *testing.T) {
 		t.Fatalf("CreateJob: %v", err)
 	}
 
-	// The child is declared the way a session running the root declares one: through the same call,
-	// carrying that job's credential, so the parent is read from the credential and never the request.
+	// The second job is declared the way a session running the first declares one: through the same
+	// call, carrying that job's credential, so what caused it is read from the credential.
 	slice := "add a database index on the identifier column"
 	child, err := s.CreateJob(auth.WithGrant(ctx, auth.Grant{
 		Job: root.GetJob().GetId(), Project: project, Verbs: []string{role.VerbJobCreate},
@@ -189,14 +190,17 @@ func TestAChildIsNotMeasuredAgainstTheRequestItInherited(t *testing.T) {
 	if job.Drifted(asked, slice) == "" {
 		t.Fatal("this slice carries the request's words, so it proves nothing; pick another")
 	}
-	// And it carries the request all the same, because the session doing it still has to read what was
-	// asked for.
+	// And it states no request of its own, because nothing is carried down: a job a session declares
+	// says what was asked for in its own words, or says nothing.
 	read, err := kept.GetJob(ctx, child.GetJob().GetId())
 	if err != nil {
 		t.Fatalf("GetJob: %v", err)
 	}
-	if read.Request != asked {
-		t.Fatalf("the child was asked for in the words %q, want %q", read.Request, asked)
+	if read.Request != "" {
+		t.Fatalf("the job a session declared was asked for in the words %q, and it stated none", read.Request)
+	}
+	if read.Cause != root.GetJob().GetId() {
+		t.Fatalf("the job a session declared says %q caused it", read.Cause)
 	}
 }
 

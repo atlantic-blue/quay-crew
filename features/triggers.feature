@@ -45,7 +45,7 @@ Feature: A flow run starts because something happened
     When something happens and raises a trigger of "fix-red" carrying "url" as "https://ci.test/9"
     And the system ticks
     Then the run's own job is labelled with the trigger that caused it
-    And the run's steps hang under the run's own job
+    And the run's steps belong to the run
 
   # The failure this exists to stop: a trigger that does nothing and says nothing, which reads
   # exactly like a trigger nobody has got to yet.

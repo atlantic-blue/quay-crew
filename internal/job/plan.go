@@ -60,11 +60,11 @@ var accountLine = regexp.MustCompile(`^[ \t]*(?:step[ \t]+)?(\d+)[ \t]*[:.)]`)
 // argument the flow engine already makes for refusing a usable node with no sentence. Right against
 // what.
 //
-// A job declared under another is never planned. It is one part of a plan a person already approved,
-// and stopping at every job in a tree puts a person back in the loop for all of them, which is the
-// cost the whole system exists to remove.
+// A step of a flow run is never planned. The graph a person imported is its plan, approved once when
+// they imported it, and stopping at every node of a run puts a person back in the loop for all of
+// them, which is the cost the whole system exists to remove.
 func Planned(one *Job) bool {
-	return one != nil && one.Product != "" && one.Parent == ""
+	return one != nil && one.Product != "" && one.Run == ""
 }
 
 // WaitingForItsPlan says whether this job still owes a person a plan they approved.

@@ -29,18 +29,18 @@ func asJobCredential(ctx context.Context, jobID string, verbs ...string) context
 	return auth.WithGrant(ctx, auth.Grant{Job: jobID, Verbs: verbs})
 }
 
-// raiseDepth lets a workspace declare job down to a depth.
-func raiseDepth(t *testing.T, s *controlplane.Server, workspace string, depth int32) {
+// raiseDeclared lets one session in a workspace declare this many jobs.
+func raiseDeclared(t *testing.T, s *controlplane.Server, workspace string, many int32) {
 	t.Helper()
 	if _, err := s.SetWorkspaceLimits(context.Background(), &quaycrewv1.SetWorkspaceLimitsRequest{
-		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDepth: depth},
+		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDeclared: many},
 	}); err != nil {
 		t.Fatalf("SetWorkspaceLimits: %v", err)
 	}
 }
 
 // Default deny: a workspace nobody configured lets no session declare anything.
-func TestAWorkspaceStartsWithNoDepthAtAll(t *testing.T) {
+func TestAWorkspaceLetsNoSessionDeclareAnythingUntilSomebodyRaisesIt(t *testing.T) {
 	s := newServer(&model.FakeRunner{})
 	workspace, _ := newProject(t, s)
 
@@ -50,8 +50,8 @@ func TestAWorkspaceStartsWithNoDepthAtAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetWorkspaceLimits: %v", err)
 	}
-	if got := held.GetLimits().GetMaxDepth(); got != 0 {
-		t.Fatalf("a workspace nobody configured allows depth %d, want 0 so recursion is off until somebody turns it on", got)
+	if got := held.GetLimits().GetMaxDeclared(); got != 0 {
+		t.Fatalf("a workspace nobody configured lets a session declare %d jobs, want 0 until somebody raises it", got)
 	}
 	for _, unset := range []int64{int64(held.GetLimits().GetMaxRunning()), held.GetLimits().GetBudgetTokens(),
 		int64(held.GetLimits().GetLeaseSeconds())} {
@@ -61,28 +61,29 @@ func TestAWorkspaceStartsWithNoDepthAtAll(t *testing.T) {
 	}
 }
 
-// The operator declares a root, whatever the depth limit says: the ceiling is on what sessions
-// declare, not on what a person does.
-func TestTheOperatorDeclaresARootInAWorkspaceWithNoDepth(t *testing.T) {
+// The operator declares a job, whatever the ceiling says: the ceiling is on what a session declares,
+// not on what a person does. A job an operator declared is caused by nothing and belongs to no run.
+func TestTheOperatorDeclaresAJobInAWorkspaceWithNoCeiling(t *testing.T) {
 	s := newServer(&model.FakeRunner{})
 	_, project := newProject(t, s)
 
 	declared := declareJob(t, s, project, "read the electricity bill")
 
-	if declared.GetParent() != "" || declared.GetDepth() != 0 {
-		t.Fatalf("the operator's job is at depth %d under %q, want a root", declared.GetDepth(), declared.GetParent())
+	if declared.GetCause() != "" || declared.GetRun() != "" {
+		t.Fatalf("the operator's job says %q caused it and it is a step of run %q, want neither",
+			declared.GetCause(), declared.GetRun())
 	}
 }
 
-// The parent is read from the credential, so job a session declares hangs under the job that
-// session is running.
-func TestJobASessionDeclaresHangsUnderTheJobItIsRunning(t *testing.T) {
+// What caused a job is read from the credential, so a job a session declares records the job that
+// session is running. It is a job in its project, listed beside the one that caused it.
+func TestAJobASessionDeclaresRecordsWhatCausedItAndIsListedBesideIt(t *testing.T) {
 	s := newServer(&model.FakeRunner{})
 	workspace, project := newProject(t, s)
-	raiseDepth(t, s, workspace, 2)
-	parent := declareJob(t, s, project, "clear the backlog")
+	raiseDeclared(t, s, workspace, 2)
+	asked := declareJob(t, s, project, "clear the backlog")
 
-	child, err := s.CreateJob(asJobCredential(context.Background(), parent.GetId(), role.VerbJobCreate),
+	caused, err := s.CreateJob(asJobCredential(context.Background(), asked.GetId(), role.VerbJobCreate),
 		&quaycrewv1.CreateJobRequest{
 			Project: project, Title: "pull request 341", Brief: "review it",
 		})
@@ -90,34 +91,49 @@ func TestJobASessionDeclaresHangsUnderTheJobItIsRunning(t *testing.T) {
 		t.Fatalf("CreateJob: %v", err)
 	}
 
-	if child.GetJob().GetParent() != parent.GetId() {
-		t.Fatalf("the child hangs under %q, want the job the session is running", child.GetJob().GetParent())
+	if caused.GetJob().GetCause() != asked.GetId() {
+		t.Fatalf("the job says %q caused it, want the job the session is running", caused.GetJob().GetCause())
 	}
-	if child.GetJob().GetDepth() != 1 {
-		t.Fatalf("the child is at depth %d, want one deeper than its parent", child.GetJob().GetDepth())
+	if caused.GetJob().GetRun() != "" {
+		t.Fatalf("a job a session declared is a step of run %q, want none", caused.GetJob().GetRun())
+	}
+	// Beside it, not under it. Both rows are in the project's listing and neither is folded away.
+	listed, err := s.ListJobs(context.Background(), &quaycrewv1.ListJobsRequest{Project: project})
+	if err != nil {
+		t.Fatalf("ListJobs: %v", err)
+	}
+	held := map[string]bool{}
+	for _, one := range listed.GetJobs() {
+		held[one.GetId()] = true
+	}
+	if len(listed.GetJobs()) != 2 || !held[asked.GetId()] || !held[caused.GetJob().GetId()] {
+		t.Fatalf("the project lists %d jobs, want both the job that was asked for and the one it caused",
+			len(listed.GetJobs()))
 	}
 }
 
 // The refusal names the limit and the command that raises it, because a session that was refused has
 // to tell its operator what to change.
-func TestJobDeeperThanTheWorkspaceAllowsIsRefusedNamingTheLimit(t *testing.T) {
+func TestASessionPastItsCeilingIsRefusedNamingTheLimit(t *testing.T) {
 	s := newServer(&model.FakeRunner{})
 	workspace, project := newProject(t, s)
-	raiseDepth(t, s, workspace, 1)
-	root := declareJob(t, s, project, "clear the backlog")
-	child, err := s.CreateJob(asJobCredential(context.Background(), root.GetId(), role.VerbJobCreate),
-		&quaycrewv1.CreateJobRequest{Project: project, Title: "pull request 341", Brief: "review it"})
-	if err != nil {
-		t.Fatalf("CreateJob at depth 1: %v", err)
+	raiseDeclared(t, s, workspace, 1)
+	asked := declareJob(t, s, project, "clear the backlog")
+	as := asJobCredential(context.Background(), asked.GetId(), role.VerbJobCreate)
+	if _, err := s.CreateJob(as, &quaycrewv1.CreateJobRequest{
+		Project: project, Title: "pull request 341", Brief: "review it",
+	}); err != nil {
+		t.Fatalf("the first job this session declared: %v", err)
 	}
 
-	_, err = s.CreateJob(asJobCredential(context.Background(), child.GetJob().GetId(), role.VerbJobCreate),
-		&quaycrewv1.CreateJobRequest{Project: project, Title: "write a test", Brief: "write it"})
+	_, err := s.CreateJob(as, &quaycrewv1.CreateJobRequest{
+		Project: project, Title: "write a test", Brief: "write it",
+	})
 
 	if status.Code(err) != codes.PermissionDenied {
-		t.Fatalf("job below the limit answered %v, want PermissionDenied", status.Code(err))
+		t.Fatalf("a second job from a session allowed one answered %v, want PermissionDenied", status.Code(err))
 	}
-	for _, want := range []string{"depth 2", "no deeper than 1", "krewe limits"} {
+	for _, want := range []string{"declare 1 jobs", "declared 1 already", "krewe limits"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("the refusal says %q, want it to say %q", err, want)
 		}
@@ -134,18 +150,18 @@ func TestJobDeeperThanTheWorkspaceAllowsIsRefusedNamingTheLimit(t *testing.T) {
 
 // A session in a workspace nobody raised may declare nothing at all, which is what default deny
 // means when a session meets it.
-func TestASessionInAWorkspaceWithNoDepthDeclaresNothing(t *testing.T) {
+func TestASessionInAWorkspaceWithNoCeilingDeclaresNothing(t *testing.T) {
 	s := newServer(&model.FakeRunner{})
 	_, project := newProject(t, s)
-	root := declareJob(t, s, project, "clear the backlog")
+	asked := declareJob(t, s, project, "clear the backlog")
 
-	_, err := s.CreateJob(asJobCredential(context.Background(), root.GetId(), role.VerbJobCreate),
+	_, err := s.CreateJob(asJobCredential(context.Background(), asked.GetId(), role.VerbJobCreate),
 		&quaycrewv1.CreateJobRequest{Project: project, Title: "pull request 341", Brief: "review it"})
 
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("a session in a workspace nobody raised answered %v, want PermissionDenied", status.Code(err))
 	}
-	if !strings.Contains(err.Error(), "no deeper than 0") {
+	if !strings.Contains(err.Error(), "declare 0 jobs") {
 		t.Fatalf("the refusal says %q, want it to name the limit", err)
 	}
 }
@@ -156,7 +172,7 @@ func TestALimitBelowZeroIsRefused(t *testing.T) {
 	workspace, _ := newProject(t, s)
 
 	_, err := s.SetWorkspaceLimits(context.Background(), &quaycrewv1.SetWorkspaceLimitsRequest{
-		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDepth: -1},
+		Limits: &quaycrewv1.WorkspaceLimits{Workspace: workspace, MaxDeclared: -1},
 	})
 
 	if status.Code(err) != codes.InvalidArgument {
@@ -184,13 +200,13 @@ func TestTheCeilingIsWrittenWholeAndReadBack(t *testing.T) {
 
 	written, err := s.SetWorkspaceLimits(context.Background(), &quaycrewv1.SetWorkspaceLimitsRequest{
 		Limits: &quaycrewv1.WorkspaceLimits{
-			Workspace: workspace, MaxDepth: 2, MaxRunning: 4, BudgetTokens: 5000, LeaseSeconds: 90,
+			Workspace: workspace, MaxDeclared: 2, MaxRunning: 4, BudgetTokens: 5000, LeaseSeconds: 90,
 		},
 	})
 	if err != nil {
 		t.Fatalf("SetWorkspaceLimits: %v", err)
 	}
-	if written.GetLimits().GetMaxDepth() != 2 || written.GetLimits().GetMaxRunning() != 4 ||
+	if written.GetLimits().GetMaxDeclared() != 2 || written.GetLimits().GetMaxRunning() != 4 ||
 		written.GetLimits().GetBudgetTokens() != 5000 || written.GetLimits().GetLeaseSeconds() != 90 {
 		t.Fatalf("the ceiling reads back as %+v", written.GetLimits())
 	}

@@ -80,6 +80,7 @@ const (
 	flagPhase          = "--phase"
 	flagOutcome        = "--outcome"
 	flagRoots          = "--roots"
+	flagRun            = "--run"
 )
 
 // runJobCreate declares a job.
@@ -91,11 +92,13 @@ func runJobCreate(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	if len(rest) > 1 {
 		return fmt.Errorf("usage: krewe job create [<workspace>/<project>] %s \"...\" %s \"...\"", flagTitle, flagBrief)
 	}
-	// The parent is refused here rather than sent, in the words the system refuses it with, because a
-	// caller that could set its own parent could set its own depth.
-	if values.first(flagParent) != "" {
-		return fmt.Errorf("%s is not yours to set: the parent comes from the credential the caller presented, "+
-			"so a job you declare is a root and a job a session declares is its child", flagParent)
+	// The flag that used to put a job under another one. It is refused by name rather than ignored,
+	// because it is still in scripts and in people's fingers, and a flag that is quietly dropped
+	// leaves the caller believing it took effect.
+	if values.has(flagParent) {
+		return fmt.Errorf("%s is gone: a job cannot be under another job. Declare it without one. "+
+			"What a session declares records the job whose session declared it as its cause, and that "+
+			"is the system's to write", flagParent)
 	}
 	typed := ""
 	if len(rest) == 1 {
@@ -175,17 +178,14 @@ func sayTheBriefDrifted(out io.Writer, drifted string) {
 	fmt.Fprintln(out, drifted)
 }
 
-// sayNoSentence tells an operator declaring the job at the top of a tree that nothing says what a
-// person does with what it builds.
+// sayNoSentence tells an operator declaring a job that nothing says what a person does with what it
+// builds.
 //
 // It says rather than refuses, the way the missing skills above do. The system cannot write the
-// sentence, and a tree of jobs that runs an errand needs none, so refusing here would stop work over
-// a line the caller may have had no use for.
-//
-// Only for a root, and only from the tool. A job a session declares carries its parent's, so a
-// session is never asked for a sentence somebody already wrote.
+// sentence, and a job that runs an errand needs none, so refusing here would stop work over a line
+// the caller may have had no use for.
 func sayNoSentence(out io.Writer, declared *quaycrewv1.Job) {
-	if declared.GetProduct() != "" || declared.GetParent() != "" {
+	if declared.GetProduct() != "" {
 		return
 	}
 	fmt.Fprintf(out, "nothing on this job says what a person does with what it builds and what they get back, "+
@@ -269,8 +269,12 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	// The word that reads every project. Without it a listing narrows to where the operator stands
 	// and says nothing about having done so, which is how nine jobs one address away go unseen.
 	where := systemWide("jobs")
+	if values.has(flagRoots) {
+		return fmt.Errorf("%s is gone: no job is under another one, so every job is a row of this "+
+			"listing. Run krewe job list without it", flagRoots)
+	}
 	request := &quaycrewv1.ListJobsRequest{
-		Parent: values.first(flagParent), RootsOnly: values.has(flagRoots), Phase: values.first(flagPhase),
+		Run: values.first(flagRun), Phase: values.first(flagPhase),
 		Outcome: values.first(flagOutcome),
 	}
 	if !readsTheSystem(typed) {
@@ -318,13 +322,13 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 			holding = one.GetReason()
 		}
 		if where.where == "" {
-			fmt.Fprintf(out, "%-10s %-24s %-2d %-8s %-9s %-9s %s%s\n", display.ShortID(one.GetId()),
-				addresses[one.GetProject()], one.GetDepth(), phaseOf(one), job.StageOfWire(one).Says(),
+			fmt.Fprintf(out, "%-10s %-24s %-8s %-9s %-9s %s%s\n", display.ShortID(one.GetId()),
+				addresses[one.GetProject()], phaseOf(one), job.StageOfWire(one).Says(),
 				outcomeOf(one), claimColumn(one, claiming), truncateLine(one.GetTitle()))
 			continue
 		}
-		fmt.Fprintf(out, "%-10s %-2d %-8s %-9s %-9s %s%s\n",
-			display.ShortID(one.GetId()), one.GetDepth(), phaseOf(one), job.StageOfWire(one).Says(),
+		fmt.Fprintf(out, "%-10s %-8s %-9s %-9s %s%s\n",
+			display.ShortID(one.GetId()), phaseOf(one), job.StageOfWire(one).Says(),
 			outcomeOf(one), claimColumn(one, claiming),
 			truncateLine(one.GetTitle()))
 	}
@@ -423,8 +427,10 @@ func runJobShow(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	if one.GetRole() != "" {
 		fmt.Fprintf(out, ", as %s version %d", one.GetRole(), one.GetRoleVersion())
 	}
-	if one.GetDepth() > 0 {
-		fmt.Fprintf(out, ", at depth %d under %s", one.GetDepth(), display.ShortID(one.GetParent()))
+	if one.GetRun() != "" {
+		fmt.Fprintf(out, ", step of run %s", display.ShortID(one.GetRun()))
+	} else if one.GetCause() != "" {
+		fmt.Fprintf(out, ", declared by the session running %s", display.ShortID(one.GetCause()))
 	}
 	if one.GetSpentTokens() > 0 {
 		fmt.Fprintf(out, ", %d tokens", one.GetSpentTokens())
@@ -1076,9 +1082,10 @@ func jobFlagsTaken() map[string]bool {
 		flagTitle, flagBrief, flagRole, flagMode, flagExpectFile, flagExpectContains, flagRepository,
 		flagProduct, flagRequest, flagClaim, flagEscalate, flagNoGate,
 		flagAfter, flagDeadline, flagBudgetTokens, flagLabel, flagRequires, flagPhase, flagOutcome,
+		flagRun,
+		// Both taken so each is refused by the sentence that names what to type instead, rather than
+		// by the tool's general refusal of flags, which would say only that the flag is unknown.
 		flagRoots,
-		// Taken so it can be refused with the sentence that says where a parent comes from,
-		// rather than with the tool's general refusal of flags.
 		flagParent,
 	} {
 		taken[name] = true

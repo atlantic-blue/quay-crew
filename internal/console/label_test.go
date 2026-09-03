@@ -130,7 +130,7 @@ func TestTheLineSaysWhatAnEmptyOneDoesOnThisKey(t *testing.T) {
 		}),
 	}}
 	answering := newTestModel(t, Jobs(client))
-	answering, _ = update(t, answering, rowsFor(answering, jobRow(client.jobs[0], 0)))
+	answering, _ = update(t, answering, rowsFor(answering, jobRow(client.jobs[0])))
 	answering, _ = update(t, answering, runes("a"))
 
 	drawn := answering.View()

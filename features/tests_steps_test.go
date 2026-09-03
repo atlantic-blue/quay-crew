@@ -434,7 +434,7 @@ func theQuestionSays(ctx context.Context, phrase string) error {
 // the system cannot say two different things about one row.
 func jobAsKept(one *quaycrewv1.Job) *job.Job {
 	return &job.Job{
-		ID: one.GetId(), Product: one.GetProduct(), Parent: one.GetParent(),
+		ID: one.GetId(), Product: one.GetProduct(), Run: one.GetRun(),
 		Repository:     one.GetRepository(),
 		IdeationAnswer: one.GetIdeationAnswer(),
 		Design:         one.GetDesign(), DesignAccepted: one.GetDesignAccepted(),

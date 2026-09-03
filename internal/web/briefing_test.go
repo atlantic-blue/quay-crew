@@ -197,40 +197,24 @@ func TestAProducedJobThatNamedNoAddressSaysSo(t *testing.T) {
 	}
 }
 
-// TestAChildIsDrawnUnderTheJobItBelongsTo is the tree from section 12 of the orchestration design. A
-// child that asked a question is not a loose row: the work it belongs to is above it, dimmed, because
-// the parent answers no question of its own.
-func TestAChildIsDrawnUnderTheJobItBelongsTo(t *testing.T) {
-	root := aJob("ship the briefing", job.PhaseRunning)
-	root.Id = "1111111111111111111111aa"
-	child := aJob("choose what the page leaves out", job.PhaseAsking)
-	child.Id = "2222222222222222222222bb"
-	child.Parent = root.GetId()
+// TestEveryJobThatAnswersIsARowOfItsOwn. A job belongs to its project and nothing sits under it, so
+// there is nothing to indent and nothing drawn only to carry a row below it. Every row on the page
+// answers the question the block asks.
+func TestEveryJobThatAnswersIsARowOfItsOwn(t *testing.T) {
+	asking := aJob("choose what the page leaves out", job.PhaseAsking)
+	asking.Id = "2222222222222222222222bb"
+	quiet := aJob("ship the briefing", job.PhaseRunning)
+	quiet.Id = "1111111111111111111111aa"
 
-	rows := blockOf(t, []*quaycrewv1.Job{root, child}, "waiting").Rows
-	if len(rows) != 2 {
-		t.Fatalf("the waiting block drew %d rows, want the child under its root:\n%+v", len(rows), rows)
+	rows := blockOf(t, []*quaycrewv1.Job{quiet, asking}, "waiting").Rows
+	if len(rows) != 1 {
+		t.Fatalf("the waiting block drew %d rows, want the one job that is waiting:\n%+v", len(rows), rows)
 	}
-	if rows[0].Title != root.GetTitle() || !rows[0].Context || rows[0].Depth != 0 {
-		t.Errorf("the first row is %+v, want the root drawn as context at depth 0", rows[0])
+	if rows[0].Title != asking.GetTitle() {
+		t.Errorf("the row is %q, want the job that asked", rows[0].Title)
 	}
-	if rows[0].Question != "" {
-		t.Errorf("the root carries %q, and it asked nothing", rows[0].Question)
-	}
-	if rows[1].Title != child.GetTitle() || rows[1].Context || rows[1].Depth != 1 {
-		t.Errorf("the second row is %+v, want the child at depth 1", rows[1])
-	}
-}
-
-// TestAJobWhoseParentIsNotInTheListingIsStillDrawn. A row that answers the question must never
-// disappear into a gap, so a child with nothing above it is drawn as a root of its own.
-func TestAJobWhoseParentIsNotInTheListingIsStillDrawn(t *testing.T) {
-	orphan := aJob("choose what the page leaves out", job.PhaseAsking)
-	orphan.Parent = "a-job-this-listing-does-not-hold"
-
-	rows := blockOf(t, []*quaycrewv1.Job{orphan}, "waiting").Rows
-	if len(rows) != 1 || rows[0].Depth != 0 {
-		t.Fatalf("a job whose parent is missing is drawn as %+v, want one row at depth 0", rows)
+	if strings.Contains(rows[0].Title, quiet.GetTitle()) {
+		t.Errorf("the row is %q, and the job that is running answers no question this block asks", rows[0].Title)
 	}
 }
 
@@ -320,26 +304,27 @@ func finishedAgo(one *quaycrewv1.Job, ago time.Duration) *quaycrewv1.Job {
 	return one
 }
 
-// TestOneBigTreeIsDrawnWholeRatherThanCutToNothing is the cap's edge. Half a tree is worse than a
-// long one: the rows left would hang off parents whose other children silently went, and a block that
-// cut every branch it had would draw nothing at all while saying there were thirteen.
-func TestOneBigTreeIsDrawnWholeRatherThanCutToNothing(t *testing.T) {
-	root := aJob("ship the briefing", job.PhaseDone)
-	root.Id = "1111111111111111111111aa"
-	jobs := []*quaycrewv1.Job{finishedAgo(root, time.Minute)}
+// TestTheCapKeepsTheNewestAndSaysWhatItLeftOut. A page that shows everything shows nothing, and a
+// page that quietly cuts is worse: the line under the block says how many rows there are and where
+// the rest is.
+func TestTheCapKeepsTheNewestAndSaysWhatItLeftOut(t *testing.T) {
+	jobs := make([]*quaycrewv1.Job, 0, landedAtMost+2)
 	for index := range landedAtMost + 2 {
-		child := finishedAgo(aJob("a slice of it", job.PhaseDone), time.Duration(index+2)*time.Minute)
-		child.Id = "222222222222222222222" + string(rune('a'+index)) + "bb"
-		child.Parent = root.GetId()
-		jobs = append(jobs, child)
+		one := finishedAgo(aJob("a slice of it", job.PhaseDone), time.Duration(index+1)*time.Minute)
+		one.Id = "222222222222222222222" + string(rune('a'+index)) + "bb"
+		jobs = append(jobs, one)
 	}
 
 	drawn := blockOf(t, jobs, "produced")
-	if len(drawn.Rows) != len(jobs) {
-		t.Errorf("the produced block drew %d rows out of one tree of %d", len(drawn.Rows), len(jobs))
+	if len(drawn.Rows) != landedAtMost {
+		t.Errorf("the produced block drew %d rows of %d, want the cap", len(drawn.Rows), len(jobs))
 	}
-	if drawn.More != "" {
-		t.Errorf("the block says %q, and it left nothing out", drawn.More)
+	// The newest first, so what a decision is made on is at the top.
+	if drawn.Rows[0].ID != jobs[0].GetId() {
+		t.Errorf("the block opens with %q, want the newest", drawn.Rows[0].ID)
+	}
+	if drawn.More == "" {
+		t.Error("the block cut two rows and says nothing about it")
 	}
 }
 

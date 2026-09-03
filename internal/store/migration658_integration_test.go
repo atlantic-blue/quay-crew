@@ -35,9 +35,23 @@ func TestTheRunsOfAStageSurviveBecomingExecutions(t *testing.T) {
 		`alter table jobs add column building boolean not null default false`,
 		`alter table jobs add column branch text not null default ''`,
 		`delete from schema_migrations where version = '0058_executions'`,
+		`delete from schema_migrations where version = '0059_a_job_is_not_under_a_job'`,
 	} {
 		if _, err := pool.Exec(ctx, statement); err != nil {
 			t.Fatalf("put the schema back to what it was: %s: %v", statement, err)
+		}
+	}
+
+	// And back past the change after it, because a run that was a job hung off a parent, and the
+	// column that carried it is gone.
+	for _, statement := range []string{
+		`alter table jobs add column parent text references jobs (id)`,
+		`alter table jobs add column depth int not null default 0`,
+		`alter table job_events add column parent text not null default ''`,
+		`alter table job_events add column depth int not null default 0`,
+	} {
+		if _, err := pool.Exec(ctx, statement); err != nil {
+			t.Fatalf("put the parent back: %s: %v", statement, err)
 		}
 	}
 

@@ -446,9 +446,7 @@ func matchesJob(held *job.Job, filter job.Filter) bool {
 		return false
 	case filter.Project == "" && filter.Workspace != "" && held.Workspace != filter.Workspace:
 		return false
-	case filter.Parent != "" && held.Parent != filter.Parent:
-		return false
-	case filter.Parent == "" && filter.Root && held.Parent != "":
+	case filter.Run != "" && held.Run != filter.Run:
 		return false
 	case filter.Phase != "" && held.Phase != filter.Phase:
 		return false
@@ -1088,4 +1086,17 @@ func (m *Memory) AskAboutJobBuild(_ context.Context, id, question string,
 	}
 	kept := cloneJob(*found)
 	return &kept, nil
+}
+
+// JobsCausedBy is how many jobs the session running this one declared.
+func (m *Memory) JobsCausedBy(_ context.Context, cause string) (int, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	caused := 0
+	for _, held := range m.jobs {
+		if held.Cause == cause {
+			caused++
+		}
+	}
+	return caused, nil
 }

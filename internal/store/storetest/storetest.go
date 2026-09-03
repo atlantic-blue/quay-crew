@@ -1629,7 +1629,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("CreateFlowRun: %v", err)
 		}
 
-		// The run knows where it sits in the tree, off the row rather than out of a process.
+		// The run knows which job carries it, off the row rather than out of a process.
 		read, err := s.FlowRunCarrier(ctx, run.ID)
 		if err != nil {
 			t.Fatalf("FlowRunCarrier: %v", err)
@@ -1646,12 +1646,12 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("the run's own job has %d records (%v), want %d", len(history), err, len(records))
 		}
 
-		// One movement: the run goes to a dispatch node, the step is written down under it, and the
-		// run's own job is moved to say it is out with something.
+		// One movement: the run goes to a dispatch node, the step is written down as a step of the
+		// run, and the job carrying the run is moved to say it is out with something.
 		step := &job.Job{
 			ID: "step-fix", Workspace: workspace, Project: project,
 			Title: "fix-red step fix", Brief: "fix the build",
-			Parent: carrier.ID, Depth: carrier.Depth + 1, Version: 1, Phase: job.PhasePending,
+			Run: run.ID, Version: 1, Phase: job.PhasePending,
 			Labels: map[string]string{"flow.run": run.ID, "flow.node": "fix"},
 		}
 		run.Node, run.Status, run.Attempts = "fix", flow.StatusWorking, map[string]int{"fix": 1}
@@ -1670,8 +1670,19 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if err != nil {
 			t.Fatalf("the step was not written with the movement: %v", err)
 		}
-		if written.Parent != carrier.ID || written.Depth != carrier.Depth+1 {
-			t.Fatalf("the step hangs under %q at depth %d, want under the run one deeper", written.Parent, written.Depth)
+		if written.Run != run.ID {
+			t.Fatalf("the step belongs to run %q, want the run that declared it", written.Run)
+		}
+		if written.Cause != "" {
+			t.Fatalf("the step says %q caused it: a step belongs to its run and to nothing else", written.Cause)
+		}
+		// And the run reads its own steps, while the job carrying it lists none.
+		steps, err := s.ListJobs(ctx, job.Filter{Run: run.ID})
+		if err != nil || len(steps) != 1 || steps[0].ID != step.ID {
+			t.Fatalf("the run reads back %d steps (%v), want its one step", len(steps), err)
+		}
+		if carried, _ := s.ListJobs(ctx, job.Filter{Run: carrier.ID}); len(carried) != 0 {
+			t.Fatalf("the job carrying the run lists %d steps of its own", len(carried))
 		}
 
 		// Nothing to carry on yet: the step has not ended.

@@ -95,8 +95,11 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if found.Phase != job.PhasePending {
 			t.Fatalf("the job opens in phase %q, want pending", found.Phase)
 		}
-		if found.Parent != "" || found.Depth != 0 {
-			t.Fatalf("the job has parent %q at depth %d, want a root", found.Parent, found.Depth)
+		// A job belongs to its project and to nothing else. Nothing caused this one and no run
+		// declared it, so both references are empty, and neither is a place a job could sit.
+		if found.Cause != "" || found.Run != "" {
+			t.Fatalf("the job says it was caused by %q and is a step of run %q, want neither",
+				found.Cause, found.Run)
 		}
 		if found.CreatedAt.IsZero() || found.UpdatedAt.IsZero() {
 			t.Fatal("the job does not carry when it was declared")
@@ -248,13 +251,15 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("CreateProject: %v", err)
 		}
 
-		root := declaredJob(t, s, workspace, project, "the root")
-		child := &job.Job{
-			ID: store.NewID(), Workspace: workspace, Project: project, Title: "the child",
-			Brief: "under the root", Parent: root, Depth: 1, Version: 1, Phase: job.PhasePending,
+		root := declaredJob(t, s, workspace, project, "the operator's job")
+		// A job a session declared. It is a job in this project like any other, and what it records
+		// is the job whose session declared it, which no listing narrows by.
+		caused := &job.Job{
+			ID: store.NewID(), Workspace: workspace, Project: project, Title: "what a session declared",
+			Brief: "caused by the job above", Cause: root, Version: 1, Phase: job.PhasePending,
 			Labels: map[string]string{"owner": "house"},
 		}
-		if err := s.CreateJob(ctx, child, declaredEvent(child)); err != nil {
+		if err := s.CreateJob(ctx, caused, declaredEvent(caused)); err != nil {
 			t.Fatalf("CreateJob: %v", err)
 		}
 		elsewhere := declaredJob(t, s, workspace, other.GetId(), "somewhere else")
@@ -263,24 +268,26 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if err != nil {
 			t.Fatalf("ListJob: %v", err)
 		}
+		// Both of them, side by side. A job a session declared stands in the listing of its project
+		// beside the job that caused it, because neither is under the other.
 		if len(listed) != 2 {
 			t.Fatalf("the project holds %d jobs, want 2", len(listed))
 		}
-		if listed[0].ID != child.ID {
+		if listed[0].ID != caused.ID {
 			t.Fatalf("the listing opens with %s, want the newest first", listed[0].Title)
+		}
+		if listed[1].ID != root {
+			t.Fatalf("the second row is %s, want the job that caused the first", listed[1].Title)
+		}
+		if listed[0].Cause != root {
+			t.Fatalf("the job a session declared says %q caused it, want %q", listed[0].Cause, root)
 		}
 
 		if listed, _ = s.ListJobs(ctx, job.Filter{Workspace: workspace}); len(listed) != 3 {
 			t.Fatalf("the workspace holds %d jobs, want 3 including %s", len(listed), elsewhere)
 		}
-		if listed, _ = s.ListJobs(ctx, job.Filter{Project: project, Parent: root}); len(listed) != 1 || listed[0].ID != child.ID {
-			t.Fatalf("the children of the root are %d, want the one child", len(listed))
-		}
-		if listed, _ = s.ListJobs(ctx, job.Filter{Project: project, Root: true}); len(listed) != 1 || listed[0].ID != root {
-			t.Fatalf("the roots of the project are %d, want the one root", len(listed))
-		}
-		if listed, _ = s.ListJobs(ctx, job.Filter{Project: project, LabelKey: "owner", LabelValue: "house"}); len(listed) != 1 || listed[0].ID != child.ID {
-			t.Fatalf("the job labelled owner=house is %d rows, want the child", len(listed))
+		if listed, _ = s.ListJobs(ctx, job.Filter{Project: project, LabelKey: "owner", LabelValue: "house"}); len(listed) != 1 || listed[0].ID != caused.ID {
+			t.Fatalf("the job labelled owner=house is %d rows, want the one a session declared", len(listed))
 		}
 		if listed, _ = s.ListJobs(ctx, job.Filter{Project: project, LabelKey: "owner", LabelValue: "somebody else"}); len(listed) != 0 {
 			t.Fatalf("a label value nothing carries matched %d rows", len(listed))
@@ -289,8 +296,8 @@ func runJobConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if _, err := s.StopJob(ctx, root, "not yet", stoppedEvent(root, workspace, project, "not yet")); err != nil {
 			t.Fatalf("StopJob: %v", err)
 		}
-		if listed, _ = s.ListJobs(ctx, job.Filter{Project: project, Phase: job.PhasePending}); len(listed) != 1 || listed[0].ID != child.ID {
-			t.Fatalf("the pending job is %d rows, want the child alone", len(listed))
+		if listed, _ = s.ListJobs(ctx, job.Filter{Project: project, Phase: job.PhasePending}); len(listed) != 1 || listed[0].ID != caused.ID {
+			t.Fatalf("the pending job is %d rows, want the one a session declared alone", len(listed))
 		}
 	})
 
@@ -671,8 +678,8 @@ func landedWith(t *testing.T, s store.Store, workspace, project, title, outcome 
 func declaredEvent(declared *job.Job) *job.Event {
 	return &job.Event{
 		ID: store.NewID(), Kind: job.EventDeclared, Job: declared.ID,
-		Workspace: declared.Workspace, Project: declared.Project, Parent: declared.Parent,
-		Depth: declared.Depth, Detail: declared.Title, OccurredAt: time.Now().UTC(),
+		Workspace: declared.Workspace, Project: declared.Project,
+		Detail: declared.Title, OccurredAt: time.Now().UTC(),
 	}
 }
 
@@ -700,13 +707,13 @@ func runJobControllerConformance(t *testing.T, newDataset func(t *testing.T) Ope
 		waiting := jobShaped(t, s, workspace, project, "waits for the root", func(w *job.Job) {
 			w.After = []string{root}
 		})
-		// Job in a role is offered, because the controller runs it as that role. The two left out
-		// are ordering and depth, which are each a later slice.
+		// Job in a role is offered, because the controller runs it as that role. What is left out is
+		// ordering, which is a later slice.
 		inRole := jobShaped(t, s, workspace, project, "runs as a role", func(w *job.Job) {
 			w.Role, w.RoleVersion = "backlog-clearer", 1
 		})
-		child := jobShaped(t, s, workspace, project, "under the root", func(w *job.Job) {
-			w.Parent, w.Depth = root, 1
+		caused := jobShaped(t, s, workspace, project, "what a session declared", func(w *job.Job) {
+			w.Cause = root
 		})
 		stopped := declaredJob(t, s, workspace, project, "stopped by a person")
 		if _, err := s.StopJob(ctx, stopped, "not yet", stoppedEvent(stopped, workspace, project, "not yet")); err != nil {
@@ -724,8 +731,8 @@ func runJobControllerConformance(t *testing.T, newDataset func(t *testing.T) Ope
 		for _, one := range runnable {
 			offered[one.ID] = true
 		}
-		if len(runnable) != 3 || !offered[root] || !offered[inRole] || !offered[child] {
-			t.Fatalf("the runnable job is %v, want the root, the role and the child", titlesOf(runnable))
+		if len(runnable) != 3 || !offered[root] || !offered[inRole] || !offered[caused] {
+			t.Fatalf("the runnable job is %v, want the operator's, the role and the one a session declared", titlesOf(runnable))
 		}
 		if offered[waiting] {
 			t.Errorf("job that waits for something else was offered to a controller that cannot order it")
@@ -1654,8 +1661,8 @@ func runWorkspaceLimitsConformance(t *testing.T, newDataset func(t *testing.T) O
 		if err != nil {
 			t.Fatalf("WorkspaceLimits: %v", err)
 		}
-		if limits.MaxDepth != 0 {
-			t.Fatalf("a workspace nobody configured allows depth %d, want 0", limits.MaxDepth)
+		if limits.MaxDeclared != 0 {
+			t.Fatalf("a workspace nobody configured allows depth %d, want 0", limits.MaxDeclared)
 		}
 		if limits.MaxRunning != 0 || limits.BudgetTokens != 0 || limits.LeaseSeconds != 0 {
 			t.Fatalf("a workspace nobody configured carries %+v, want every limit unset", limits)
@@ -1741,12 +1748,12 @@ func runWorkspaceLimitsConformance(t *testing.T, newDataset func(t *testing.T) O
 		workspace, _ := aProject(t, s)
 
 		written, err := s.SetWorkspaceLimits(ctx, job.Limits{
-			Workspace: workspace, MaxDepth: 2, MaxRunning: 4, BudgetTokens: 5000, LeaseSeconds: 90,
+			Workspace: workspace, MaxDeclared: 2, MaxRunning: 4, BudgetTokens: 5000, LeaseSeconds: 90,
 		})
 		if err != nil {
 			t.Fatalf("SetWorkspaceLimits: %v", err)
 		}
-		if written.MaxDepth != 2 || written.MaxRunning != 4 || written.BudgetTokens != 5000 ||
+		if written.MaxDeclared != 2 || written.MaxRunning != 4 || written.BudgetTokens != 5000 ||
 			written.LeaseSeconds != 90 {
 			t.Fatalf("the ceiling was written as %+v", written)
 		}
@@ -1756,7 +1763,7 @@ func runWorkspaceLimitsConformance(t *testing.T, newDataset func(t *testing.T) O
 		if err != nil {
 			t.Fatalf("WorkspaceLimits: %v", err)
 		}
-		if read.MaxDepth != 2 || read.MaxRunning != 4 || read.BudgetTokens != 5000 || read.LeaseSeconds != 90 {
+		if read.MaxDeclared != 2 || read.MaxRunning != 4 || read.BudgetTokens != 5000 || read.LeaseSeconds != 90 {
 			t.Fatalf("the ceiling reads back as %+v", read)
 		}
 	})
@@ -1766,16 +1773,16 @@ func runWorkspaceLimitsConformance(t *testing.T, newDataset func(t *testing.T) O
 		ctx := context.Background()
 		workspace, _ := aProject(t, s)
 
-		if _, err := s.SetWorkspaceLimits(ctx, job.Limits{Workspace: workspace, MaxDepth: 3, MaxRunning: 9}); err != nil {
+		if _, err := s.SetWorkspaceLimits(ctx, job.Limits{Workspace: workspace, MaxDeclared: 3, MaxRunning: 9}); err != nil {
 			t.Fatalf("SetWorkspaceLimits: %v", err)
 		}
-		written, err := s.SetWorkspaceLimits(ctx, job.Limits{Workspace: workspace, MaxDepth: 1})
+		written, err := s.SetWorkspaceLimits(ctx, job.Limits{Workspace: workspace, MaxDeclared: 1})
 		if err != nil {
 			t.Fatalf("SetWorkspaceLimits: %v", err)
 		}
 
-		if written.MaxDepth != 1 {
-			t.Fatalf("the depth is %d, want the one just written", written.MaxDepth)
+		if written.MaxDeclared != 1 {
+			t.Fatalf("the depth is %d, want the one just written", written.MaxDeclared)
 		}
 		if written.MaxRunning != 0 {
 			t.Fatalf("the concurrency is %d, and the whole row is written, so it should be back to unset",
@@ -1792,7 +1799,7 @@ func runWorkspaceLimitsConformance(t *testing.T, newDataset func(t *testing.T) O
 			t.Fatalf("CreateWorkspace: %v", err)
 		}
 
-		if _, err := s.SetWorkspaceLimits(ctx, job.Limits{Workspace: workspace, MaxDepth: 2}); err != nil {
+		if _, err := s.SetWorkspaceLimits(ctx, job.Limits{Workspace: workspace, MaxDeclared: 2}); err != nil {
 			t.Fatalf("SetWorkspaceLimits: %v", err)
 		}
 
@@ -1800,8 +1807,8 @@ func runWorkspaceLimitsConformance(t *testing.T, newDataset func(t *testing.T) O
 		if err != nil {
 			t.Fatalf("WorkspaceLimits: %v", err)
 		}
-		if theirs.MaxDepth != 0 {
-			t.Fatalf("the other workspace allows depth %d, and nobody raised it", theirs.MaxDepth)
+		if theirs.MaxDeclared != 0 {
+			t.Fatalf("the other workspace allows depth %d, and nobody raised it", theirs.MaxDeclared)
 		}
 	})
 

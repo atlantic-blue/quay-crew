@@ -51,6 +51,13 @@ func (t *treeClient) ListJobs(_ context.Context, req *quaycrewv1.ListJobsRequest
 	return &quaycrewv1.ListJobsResponse{Jobs: matched}, nil
 }
 
+// ListExecutions is the runs of a project's jobs, which the jobs view reads to draw each job's runs
+// beneath it. This tree holds none, and none is an answer.
+func (t *treeClient) ListExecutions(_ context.Context, _ *quaycrewv1.ListExecutionsRequest, _ ...grpc.CallOption) (
+	*quaycrewv1.ListExecutionsResponse, error) {
+	return &quaycrewv1.ListExecutionsResponse{}, nil
+}
+
 func (t *treeClient) ListSessions(_ context.Context, req *quaycrewv1.ListSessionsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListSessionsResponse, error) {
 	matched := make([]*quaycrewv1.Session, 0, len(t.sessions))
 	for _, session := range t.sessions {

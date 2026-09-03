@@ -409,6 +409,10 @@ type Store interface {
 	// ListJob returns what matches, newest first and without answers, because a listing of a hundred
 	// answers is a listing nobody can read. A caller that wants an answer asks for one job.
 	ListJobs(ctx context.Context, filter job.Filter) ([]*job.Job, error)
+	// JobsCausedBy is how many jobs the session running this one declared. It is the count the
+	// workspace's ceiling on declaring is held against, and it is a count rather than a listing on
+	// purpose: what caused a job says how the row came about and never what it contains.
+	JobsCausedBy(ctx context.Context, cause string) (int, error)
 	// JobHistory returns every job declared inside a window, as digests, newest first.
 	//
 	// Every job and not a page of them: the caller adds them up and then cuts them down, so the
@@ -631,14 +635,13 @@ type Store interface {
 	// said. Neither is a movement of the job: the job ended when it ended, and what happened to the
 	// work afterwards happened on the forge.
 	job.PullRequestStore
-	// RecordSteer writes one steer and adds it to the count on each job in counted, in one
-	// transaction. Counted is the job it landed on and every job above it, so the count on the job at
-	// the top is the score of the whole tree. The row and the counts are written together because a
-	// score that disagrees with the marks under it is a score nobody can defend.
-	RecordSteer(ctx context.Context, steer *job.Steer, counted []string) error
-	// ListSteers returns every steer under one job at the top of a tree, oldest first, which is the
-	// order they were made in and the order the report reads.
-	ListSteers(ctx context.Context, root string) ([]*job.Steer, error)
+	// RecordSteer writes one steer and adds it to the count on the job it landed on, in one
+	// transaction. The row and the count are written together because a score that disagrees with the
+	// marks under it is a score nobody can defend.
+	RecordSteer(ctx context.Context, steer *job.Steer) error
+	// ListSteers returns one job's steers, oldest first, which is the order they were made in and the
+	// order the report reads.
+	ListSteers(ctx context.Context, of string) ([]*job.Steer, error)
 	// WorkspaceLimits is what a workspace lets its sessions declare, and SetWorkspaceLimits writes
 	// it. A workspace with no row takes the defaults, which grant nothing: default deny, so a system
 	// nobody configured refuses rather than allows.
