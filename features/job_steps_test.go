@@ -306,6 +306,15 @@ func initializeJobSteps(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+	// A brief and a claim over their guide reach the job whole. The read is against the row rather
+	// than against the reply the write returned, because a field kept short in the store reads back
+	// long once and then never again.
+	sc.Step(`^the job reads back a brief of (\d+) bytes$`, func(ctx context.Context, bytes int) error {
+		return theJobReadsBack(ctx, "brief", bytes, func(one *quaycrewv1.Job) string { return one.GetBrief() })
+	})
+	sc.Step(`^the job reads back a claim of (\d+) bytes$`, func(ctx context.Context, bytes int) error {
+		return theJobReadsBack(ctx, "claim", bytes, func(one *quaycrewv1.Job) string { return one.GetClaim() })
+	})
 	sc.Step(`^the system refuses it and says a title is needed$`, theRefusalSays("title"))
 	sc.Step(`^the system refuses it and says the ceiling is (\d+)$`, func(ctx context.Context, ceiling int) error {
 		return theRefusalSays(fmt.Sprintf("%d", ceiling))(ctx)
@@ -689,4 +698,21 @@ func initializeJobMaterialSteps(sc *godog.ScenarioContext) {
 		}
 		return fmt.Errorf("the job requires %v, want %q among them", one.GetRequires(), material)
 	})
+}
+
+// theJobReadsBack is one field of the last declared job, read from the system rather than from what
+// the write returned, and measured against the length it was written at.
+func theJobReadsBack(ctx context.Context, field string, bytes int, of func(*quaycrewv1.Job) string) error {
+	declared, err := lastJob(ctx)
+	if err != nil {
+		return err
+	}
+	read, err := worldFrom(ctx).client.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: declared.GetId()})
+	if err != nil {
+		return err
+	}
+	if got := len(of(read.GetJob())); got != bytes {
+		return fmt.Errorf("the %s reads back as %d bytes and it was written as %d", field, got, bytes)
+	}
+	return nil
 }

@@ -103,16 +103,21 @@ func TestJobWithNoBriefIsRefused(t *testing.T) {
 	}
 }
 
-func TestABriefOverTheCeilingIsRefused(t *testing.T) {
+// A brief over the guide is accepted, where it used to be refused at the declaration.
+//
+// The number stays as a guide to what a reader takes in. It refuses nothing, because work that is
+// correct must never be thrown away for its length.
+func TestABriefOverTheGuideIsAcceptedAndKept(t *testing.T) {
 	d := declared()
 	d.Brief = strings.Repeat("b", job.BriefLimit+1)
 
-	err := d.Validate()
-	if err == nil {
-		t.Fatal("a brief of 16385 bytes was accepted")
+	if err := d.Validate(); err != nil {
+		t.Fatalf("a brief of %d bytes was refused: %v", job.BriefLimit+1, err)
 	}
-	if !strings.Contains(err.Error(), "16385") || !strings.Contains(err.Error(), "16384") {
-		t.Fatalf("the refusal says %q, want it to say the length and the ceiling", err)
+
+	kept := d.Tidied()
+	if len(kept.Brief) != job.BriefLimit+1 {
+		t.Fatalf("the brief is kept as %d bytes and it was written as %d", len(kept.Brief), job.BriefLimit+1)
 	}
 }
 

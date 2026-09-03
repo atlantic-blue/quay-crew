@@ -29,9 +29,11 @@ const (
 	// record refused is a job stopped over the length of the thing it needed answered. The surfaces
 	// that draw a question in one line cut it there and say so.
 	QuestionLimit = 4096
-	// TellingLimit is how long an answer may be. It reaches the session as a task, so it is held to
-	// the same ceiling a brief is: it is read by a model, and the reason a brief has a ceiling is
-	// that a brief nobody reads to the end is a brief nobody follows.
+	// TellingLimit is how long an answer is expected to be. It reaches the session as a task, so the
+	// guide is the brief's.
+	//
+	// It refuses nothing. An answer past it is accepted and kept word for word: a person who writes
+	// three paragraphs to settle a decision must not be told to write two.
 	TellingLimit = BriefLimit
 )
 
@@ -49,16 +51,14 @@ func TidyQuestion(question string) (string, error) {
 }
 
 // TidyTelling is an answer as the system keeps it, and the refusal where it could not be kept.
+//
+// Silence is the only refusal left. An answer is what unblocks a session, so length is the last
+// thing that may stand between a person writing one and a job carrying on.
 func TidyTelling(answer string) (string, error) {
 	tidy := strings.TrimSpace(answer)
-	switch {
-	case tidy == "":
+	if tidy == "" {
 		return "", fmt.Errorf("an answer needs words: the session is waiting to be told what to do, " +
 			"and an empty answer would start it again with nothing new")
-	case len(tidy) > TellingLimit:
-		return "", fmt.Errorf("this answer is %d bytes and an answer may be %d: it is sent to the session "+
-			"as its next task, so it is held to the ceiling a brief is held to",
-			len(tidy), TellingLimit)
 	}
 	return tidy, nil
 }

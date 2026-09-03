@@ -23,11 +23,11 @@ This pull request carries the list. The code for each marking ships in the verti
 ## The caps that become a warning
 
 - `TellingLimit` in `internal/job/asking.go`, 16384 bytes: warning. It is an answer a person types
-  for a session.
+  for a session. The reader no longer measures an answer against it.
 - `HandoffLimit` in `internal/job/ceiling.go`, 4096 bytes: warning. It is each half of a handoff to
   a fresh session.
 - `ClaimLimit` in `internal/job/claim.go`, 200 bytes: warning. It is a job's hold on a piece of work
-  in the world.
+  in the world. The declaration no longer measures a claim against it.
 - `DesignLimit` in `internal/job/design.go`, 3000 bytes: warning. It is the whole list of verticals
   as one question.
 - `DesignLineLimit` in `internal/job/design.go`, 200 bytes: warning. It is one vertical on one line.
@@ -51,11 +51,12 @@ This pull request carries the list. The code for each marking ships in the verti
 - `ProductLimit` in `internal/job/job.go`, 200 bytes: warning. It is the one sentence a job serves.
 - `TitleLimit` in `internal/job/job.go`, 200 bytes: warning. It is the guide almost every one line
   field in this system takes.
-- `PlanStepLimit` in `internal/job/plan.go`, 200 bytes: warning. It is one step of a plan.
+- `PlanStepLimit` in `internal/job/plan.go`, 200 bytes: warning. It is one step of a plan. The
+  reader no longer measures a step against it.
 - `PlanSteps` in `internal/job/plan.go`, 7 steps: warning. An eighth step is a plan a person reads,
   not a job the system stops.
 - `RequestLimit` in `internal/job/request.go`, 16384 bytes: warning. It is what a person asked for,
-  in the words they asked in.
+  in the words they asked in. The declaration no longer measures it.
 - `StepLimit` in `internal/job/resume.go`, 200 bytes: warning. It is one step a job records.
 - `StepCount` in `internal/job/resume.go`, 40 steps: warning. A job that records a forty first step
   says where it got to.

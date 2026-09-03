@@ -25,9 +25,11 @@ import (
 // stated as an outcome could have caught it.
 
 const (
-	// RequestLimit is how long a request may be. It is the brief's ceiling rather than the title's,
-	// which every other one line field takes, because a ceiling that makes somebody shorten what was
-	// said is the compression this whole file exists to catch.
+	// RequestLimit is how long a request is expected to be. It is the brief's guide rather than the
+	// title's, which every other one line field takes.
+	//
+	// It refuses nothing, and this is the field where refusing would be worst: a ceiling that makes
+	// somebody shorten what was said is the compression this whole file exists to catch.
 	RequestLimit = BriefLimit
 	// DriftThreshold is how much of a request a brief has to carry before the system says nothing.
 	//

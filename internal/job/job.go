@@ -50,8 +50,11 @@ const (
 	// TitleLimit is how long a title may be. It is the line a listing shows, and it is the ceiling a
 	// role's summary already has.
 	TitleLimit = role.SummaryLimit
-	// BriefLimit is how long a brief may be. A brief nobody reads to the end is a brief nobody
-	// follows.
+	// BriefLimit is how long a brief is expected to be. A brief nobody reads to the end is a brief
+	// nobody follows, so the number stands as a guide.
+	//
+	// It refuses nothing. A brief past it is accepted and kept word for word, because work that is
+	// correct must never be thrown away for its length.
 	BriefLimit = role.BriefLimit
 	// LabelCount is how many labels a job may carry.
 	LabelCount = 16
@@ -532,17 +535,10 @@ func (d Declaration) Validate() error {
 			"put the detail in the brief", len(tidy.Title), TitleLimit)
 	case tidy.Brief == "":
 		return fmt.Errorf("job needs a brief, which is what the session is asked to do: say what has to happen")
-	case len(tidy.Brief) > BriefLimit:
-		return fmt.Errorf("the brief is %d bytes and the ceiling is %d, because a brief nobody reads to the end "+
-			"is a brief nobody follows: split it into more than one job", len(tidy.Brief), BriefLimit)
 	case len(tidy.Product) > ProductLimit:
 		return fmt.Errorf("the sentence is %d bytes and the ceiling is %d, because it is one sentence a person "+
 			"would say: write what somebody does and what they get back, and put the rest in the brief",
 			len(tidy.Product), ProductLimit)
-	case len(tidy.Request) > RequestLimit:
-		return fmt.Errorf("the request is %d bytes and the ceiling is %d, which is the brief's: it is what was "+
-			"asked for in the words it was asked in, so declare the job in more than one piece rather than "+
-			"shortening what somebody said", len(tidy.Request), RequestLimit)
 	case tidy.BudgetTokens < 0:
 		return fmt.Errorf("the budget is %d tokens and a budget cannot be below zero: leave it at zero to draw "+
 			"from the parent, or give a number of tokens", tidy.BudgetTokens)
@@ -557,9 +553,6 @@ func (d Declaration) Validate() error {
 		return err
 	}
 	if err := tidy.validateModeReachesTheRepository(); err != nil {
-		return err
-	}
-	if err := usableClaim(tidy.Claim); err != nil {
 		return err
 	}
 	if _, err := ReadRoute(tidy.Escalation); err != nil {
