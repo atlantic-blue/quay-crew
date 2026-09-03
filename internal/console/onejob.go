@@ -61,8 +61,10 @@ func OneJob(client quaycrewv1.ControlPlaneServiceClient) Resource {
 // once somebody answered. The words are the ones `krewe job show` prints, so the console and the
 // command line cannot say two different things about one job.
 //
-// Both stay on the screen after the answer. An answer on its own says nothing, and a question on its
-// own leaves a reader looking for the decision.
+// Both stay on the line after the answer. An answer on its own says nothing, and a question on its
+// own leaves a reader looking for the decision. The answer is written first because the line is cut
+// at the right edge of the window: a person who has just typed an answer is looking for it, and a
+// long question would push it off a narrow screen.
 func askingLine(client quaycrewv1.ControlPlaneServiceClient) Summariser {
 	return func(ctx context.Context, id string) (string, State) {
 		if id == "" {
@@ -82,7 +84,7 @@ func askedAndTold(one *quaycrewv1.Job) (string, State) {
 	case asked != "" && one.GetPhase() == job.PhaseAsking:
 		return "asking: " + asked, StateBusy
 	case asked != "" && told != "":
-		return "asked: " + asked + "   told: " + told, StateReady
+		return "told: " + told + "   asked: " + asked, StateReady
 	case told != "":
 		return "told: " + told, StateReady
 	case asked != "":

@@ -6,7 +6,9 @@ fanned out into.
 The line above the columns is what the job is waiting to be told, in the words `krewe job show` uses:
 `asking: which meter, the one in the hall or the one outside?`. Press `a`, type the answer, press
 enter. The system is told, the view stays where it is, and the line above the columns reads
-`asked: ... told: the hall meter`.
+`told: the hall meter   asked: which meter, the one in the hall or the one outside?`. What was told
+is written first, because the line is cut at the right edge of the window and a person who has just
+answered is looking for their answer.
 
 `a` is the key the jobs listing already answers with, so there is one letter to learn rather than
 two. It answers the job the view is open on rather than the line under the cursor, because the lines

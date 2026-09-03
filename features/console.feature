@@ -531,6 +531,19 @@ Feature: The operator sees the system from the console
     Then the system keeps "the key value store, it bills nothing at rest" as what the person wrote
     And the console shows that job is no longer asking
 
+  # The other place a person answers from, and the one they are looking at while they read the
+  # question: the job's own view. It is the same letter, because a second letter for the same thing
+  # is a letter somebody has to learn. The lines on that view are the work running under the job, so
+  # the answer belongs to the job rather than to the line under the cursor, and the person is left on
+  # the job they opened rather than back on the listing.
+  Scenario: A job is answered on its own view, and the person stays on the job
+    Given a job titled "choose where the transcripts are stored" whose session is still working
+    And the session running that job asked its question
+    When the operator opens that job in the console
+    And the operator answers it there with "the key value store, it bills nothing at rest"
+    Then the system keeps "the key value store, it bills nothing at rest" as what the person wrote
+    And the console still shows that job, saying it was told "the key value store, it bills nothing at rest"
+
   # The word for the view that lists what a session ran changed, and fingers did not. Each spelling
   # that opened it opens it now, because a word that quietly stopped working is how an operator
   # learns to distrust the rest of the command bar.

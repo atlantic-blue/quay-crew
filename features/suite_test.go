@@ -847,6 +847,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeConsoleJobsSteps(sc)
 	initializeConsoleViewSteps(sc)
 	initializeConsoleAnswerSteps(sc)
+	initializeConsoleJobViewSteps(sc)
 	initializeConsolePartsSteps(sc)
 	initializeKeysSteps(sc)
 	initializeWebSteps(sc)
