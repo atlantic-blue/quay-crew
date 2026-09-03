@@ -72,13 +72,21 @@ func TestAPlanLongerThanTheCeilingIsRefused(t *testing.T) {
 	}
 }
 
-func TestAStepLongerThanTheCeilingIsRefused(t *testing.T) {
-	_, err := job.ReadPlan("Step 1: " + strings.Repeat("a", job.PlanStepLimit+1))
-	if err == nil {
-		t.Fatal("a step over the ceiling was accepted")
+// A step longer than the guide is read, where it used to make the whole plan unreadable.
+//
+// This is the one that cost a job rather than a field. A step over the number made the reply
+// unreadable, the system asked for the plan again, and a second long reply stopped the job.
+func TestAStepLongerThanTheGuideIsReadAndKeptWhole(t *testing.T) {
+	step := strings.Repeat("a", job.PlanStepLimit+1)
+	steps, err := job.ReadPlan("Step 1: " + step)
+	if err != nil {
+		t.Fatalf("a step of %d bytes was refused: %v", len(step), err)
 	}
-	if !strings.Contains(err.Error(), "step 1") {
-		t.Fatalf("the refusal does not name the step: %v", err)
+	if len(steps) != 1 {
+		t.Fatalf("the plan reads back as %d steps", len(steps))
+	}
+	if steps[0].Text != step {
+		t.Fatalf("the step reads back as %d bytes and it was written as %d", len(steps[0].Text), len(step))
 	}
 }
 

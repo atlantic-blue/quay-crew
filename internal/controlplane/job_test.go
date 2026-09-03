@@ -166,12 +166,6 @@ func TestEveryRuleOfADeclarationIsRefusedWithASentence(t *testing.T) {
 			says:    []string{"brief"},
 		},
 		{
-			name: "a brief over the ceiling",
-			request: &quaycrewv1.CreateJobRequest{
-				Project: project, Title: "read the bill", Brief: strings.Repeat("b", job.BriefLimit+1)},
-			says: []string{"16385", "16384"},
-		},
-		{
 			name: "a mode that is not a mode",
 			request: &quaycrewv1.CreateJobRequest{
 				Project: project, Title: "read the bill", Brief: "open it", Mode: "yolo"},

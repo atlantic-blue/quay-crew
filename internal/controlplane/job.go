@@ -429,7 +429,7 @@ func asJob(from *job.Job) *quaycrewv1.Job {
 		Cause: from.Cause, Run: from.Run, Version: int32(from.Version),
 		Phase: from.Phase, Session: from.Session, Attempts: int32(from.Attempts),
 		Answer: from.Answer, Outcome: from.Outcome,
-		Reason: from.Reason, Question: from.Question, Resuming: from.Resuming,
+		Reason: from.Reason, Question: from.Question, Told: from.Told, Resuming: from.Resuming,
 		Escalation: from.Escalation, LoopedStep: int32(from.LoopedStep), EscalatedTo: from.EscalatedTo,
 		Attempted:   asJobAttempts(from.Attempted),
 		Steps:       asJobSteps(from.Steps),

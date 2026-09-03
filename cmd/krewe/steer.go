@@ -126,7 +126,7 @@ func runSteers(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 	// kept needing a person.
 	for _, one := range listed.GetSteers() {
 		fmt.Fprintf(out, "%s  %-10s %s\n", one.GetOccurredAt().AsTime().Local().Format(time.RFC3339),
-			display.ShortID(one.GetJob()), one.GetText())
+			display.ShortID(one.GetJob()), job.SteerLine(one.GetText()))
 	}
 	if len(listed.GetSteers()) == 0 {
 		fmt.Fprintln(out, "nobody steered this job")
