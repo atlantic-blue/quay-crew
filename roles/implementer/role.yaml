@@ -1,8 +1,0 @@
-name: implementer
-version: 1
-summary: writes the code that makes failing tests pass, and never edits a test file
-model: sonnet
-receives:
-  - job
-  - context
-  - skills

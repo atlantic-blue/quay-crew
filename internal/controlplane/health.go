@@ -9,7 +9,6 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/display"
-	"github.com/atlantic-blue/quay-krewe/internal/messaging"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
@@ -19,6 +18,9 @@ import (
 // healthStream is where a health probe writes its record. It is a stream of the system rather than of
 // a workspace, because the question is about the system and no workspace owns it.
 const healthStream = "health"
+
+// healthWait is what one health probe is given before it reports the component down.
+const healthWait = 5 * time.Second
 
 // healthWorkspace namespaces that stream. A workspace of this name would share the topic, which
 // costs nothing: the record carries no workspace and nothing consumes it.
@@ -147,13 +149,13 @@ func (s *Server) LastHealth() HealthReading {
 // ProbeHealth writes where a dispatch writes, keeps what it found, and returns it. The health check
 // calls it, and so does a test that cannot wait for a timer.
 func (s *Server) ProbeHealth(ctx context.Context) HealthReading {
-	// The export budget rather than the start budget: a write a dispatch would wait a minute for is
-	// still one a health check must not wait a minute for, because whoever asked re-asks.
-	ctx, giveUp := context.WithTimeout(ctx, s.exportWait)
+	// Short on purpose: a read a dispatch would wait a minute for is still one a health check must
+	// not wait a minute for, because whoever asked re-asks.
+	ctx, giveUp := context.WithTimeout(ctx, healthWait)
 	defer giveUp()
 
 	reading := HealthReading{
-		Components: []ComponentHealth{s.probeStore(ctx), s.probeEvents(ctx)},
+		Components: []ComponentHealth{s.probeStore(ctx)},
 		TakenAt:    time.Now(),
 	}
 	s.healthMu.Lock()
@@ -198,39 +200,4 @@ func (s *Server) probeStore(ctx context.Context) ComponentHealth {
 		}
 	}
 	return ComponentHealth{Name: display.HealthStore, State: display.HealthServing}
-}
-
-// probeEvents puts a record on the event log, which is the second.
-//
-// A system with no log configured is not serving and not down: it is a system whose tasks are recorded
-// nowhere, and it says that. The redpanda that died on 29 August 2026 was configured and answering
-// nothing, and the two must not read alike.
-func (s *Server) probeEvents(ctx context.Context) ComponentHealth {
-	if !s.hasEventLog() {
-		return ComponentHealth{Name: display.HealthEvents, State: display.HealthNotConfigured}
-	}
-	topic, err := messaging.Topic(healthWorkspace, healthStream)
-	if err != nil {
-		return ComponentHealth{
-			Name:   display.HealthEvents,
-			State:  display.HealthDown,
-			Detail: fmt.Sprintf("the health stream has no topic: %v", err),
-		}
-	}
-	if err := s.export(ctx, "", topic, []byte(quaycrewv1.ControlPlaneService_ServiceDesc.ServiceName)); err != nil {
-		return ComponentHealth{
-			Name:   display.HealthEvents,
-			State:  display.HealthDown,
-			Detail: fmt.Sprintf("the event log did not take a record: %v", err),
-		}
-	}
-	return ComponentHealth{Name: display.HealthEvents, State: display.HealthServing}
-}
-
-// hasEventLog says whether anything is connected to the log. A system configured with none is given a
-// log that discards, so every write to it succeeds, and a probe that read that as an answer would
-// report a system recording nothing as a system in good health.
-func (s *Server) hasEventLog() bool {
-	_, discards := s.events.(messaging.Discard)
-	return !discards
 }

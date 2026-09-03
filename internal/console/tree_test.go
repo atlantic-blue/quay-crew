@@ -8,21 +8,19 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-krewe/internal/job"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// treeClient answers every call the four levels make, so a scenario can walk the whole tree against
-// one system rather than four doubles that cannot disagree with each other.
+// treeClient answers every call the three levels make, so a scenario can walk the whole tree against
+// one system rather than three doubles that cannot disagree with each other.
 type treeClient struct {
 	quaycrewv1.ControlPlaneServiceClient
 
 	workspaces []*quaycrewv1.Workspace
 	projects   []*quaycrewv1.Project
-	jobs       []*quaycrewv1.Job
 	sessions   []*quaycrewv1.Session
 	tasks      []*quaycrewv1.Task
 }
@@ -39,23 +37,6 @@ func (t *treeClient) ListProjects(_ context.Context, req *quaycrewv1.ListProject
 		}
 	}
 	return &quaycrewv1.ListProjectsResponse{Projects: matched}, nil
-}
-
-func (t *treeClient) ListJobs(_ context.Context, req *quaycrewv1.ListJobsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListJobsResponse, error) {
-	matched := make([]*quaycrewv1.Job, 0, len(t.jobs))
-	for _, one := range t.jobs {
-		if req.GetProject() == "" || one.GetProject() == req.GetProject() {
-			matched = append(matched, one)
-		}
-	}
-	return &quaycrewv1.ListJobsResponse{Jobs: matched}, nil
-}
-
-// ListExecutions is the runs of a project's jobs, which the jobs view reads to draw each job's runs
-// beneath it. This tree holds none, and none is an answer.
-func (t *treeClient) ListExecutions(_ context.Context, _ *quaycrewv1.ListExecutionsRequest, _ ...grpc.CallOption) (
-	*quaycrewv1.ListExecutionsResponse, error) {
-	return &quaycrewv1.ListExecutionsResponse{}, nil
 }
 
 func (t *treeClient) ListSessions(_ context.Context, req *quaycrewv1.ListSessionsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListSessionsResponse, error) {
@@ -82,8 +63,8 @@ func (t *treeClient) AttachSession(context.Context, *quaycrewv1.AttachSessionReq
 	return &quaycrewv1.AttachSessionResponse{Sandbox: "krewe-s1", Argv: []string{"claude", "--resume", "c1"}}, nil
 }
 
-// aSystemWithOneOfEverything is one workspace holding one project holding one job that ran one task,
-// which is the shortest path from the top of the tree to the bottom of it.
+// aSystemWithOneOfEverything is one workspace holding one project holding one session that ran one
+// task, which is the shortest path from the top of the tree to the bottom of it.
 func aSystemWithOneOfEverything() *treeClient {
 	made := timestamppb.New(time.Now().Add(-90 * time.Second))
 	return &treeClient{
@@ -92,15 +73,9 @@ func aSystemWithOneOfEverything() *treeClient {
 			Id: "2222222222222222bbbbbbbb", Workspace: "1111111111111111aaaaaaaa",
 			Name: "house-bills", CreatedAt: made,
 		}},
-		jobs: []*quaycrewv1.Job{{
-			Id: "3333333333333333cccccccc", Workspace: "1111111111111111aaaaaaaa",
-			Project: "2222222222222222bbbbbbbb", Title: "read the electricity bill",
-			Role: "backlog-clearer", Phase: job.PhaseRunning, Session: "4444444444444444dddddddd",
-			CreatedAt: made,
-		}},
 		sessions: []*quaycrewv1.Session{{
 			Id: "4444444444444444dddddddd", Workspace: "1111111111111111aaaaaaaa",
-			Project: "2222222222222222bbbbbbbb", Status: "idle",
+			Project: "2222222222222222bbbbbbbb", Label: "bills", Status: "idle",
 		}},
 		tasks: []*quaycrewv1.Task{{
 			Id: "5555555555555555eeeeeeee", Session: "4444444444444444dddddddd",
@@ -175,10 +150,10 @@ func screenDoesNotSay(t *testing.T, model Model, unwanted string) {
 	}
 }
 
-// The whole shape in one scenario: in at the top, down all four levels, and back up all four. Each
+// The whole shape in one scenario: in at the top, down all three levels, and back up all three. Each
 // step asserts the screen the operator is left looking at, after the listing has landed, rather than
 // the command the key produced.
-func TestTheConsoleOpensAtTheTopAndGoesDownFourLevelsAndBackUp(t *testing.T) {
+func TestTheConsoleOpensAtTheTopAndGoesDownThreeLevelsAndBackUp(t *testing.T) {
 	client := aSystemWithOneOfEverything()
 	model := openedOnTheTree(t, client)
 
@@ -195,34 +170,17 @@ func TestTheConsoleOpensAtTheTopAndGoesDownFourLevelsAndBackUp(t *testing.T) {
 	}
 	screenSays(t, model, "house-bills", "acme")
 
-	// Level three. Jobs, not sessions: a job is what a person declares.
+	// Level three. The sessions of the project, which is where the conversations are.
 	model = walk(t, model, enter())
-	if model.active.Name != "jobs" {
-		t.Fatalf("enter on a project opens %q, want its jobs", model.active.Name)
+	if model.active.Name != "sessions" {
+		t.Fatalf("enter on a project opens %q, want its sessions", model.active.Name)
 	}
-	screenSays(t, model, "read the electricity bill", job.PhaseRunning)
+	screenSays(t, model, "bills")
 
-	// Level four. The running work: what the job's session was asked, and what came back.
-	model = walk(t, model, enter())
-	if model.active.Name != "exec" {
-		t.Fatalf("enter on a job opens %q, want the work running under it", model.active.Name)
-	}
-	if model.parent != "4444444444444444dddddddd" {
-		t.Fatalf("the running work is scoped to %q, want the job's session", model.parent)
-	}
-	screenSays(t, model, "read the electricity bill", "it is due on the 14th")
-
-	// And back up, one key at a time, all four.
-	model = walk(t, model, escape())
-	if model.active.Name != "jobs" {
-		t.Fatalf("escape from the running work lands on %q, want the jobs it came from", model.active.Name)
-	}
-	screenSays(t, model, "read the electricity bill")
-	screenDoesNotSay(t, model, "it is due on the 14th")
-
+	// And back up, one key at a time, all three.
 	model = walk(t, model, escape())
 	if model.active.Name != "projects" {
-		t.Fatalf("escape from jobs lands on %q, want the projects it came from", model.active.Name)
+		t.Fatalf("escape from sessions lands on %q, want the projects it came from", model.active.Name)
 	}
 	screenSays(t, model, "house-bills")
 
@@ -250,9 +208,8 @@ func TestTheWayBackWorksFromTheDeepestLevelAfterAnythingElseHappened(t *testing.
 		OccurredAt: timestamppb.New(time.Now()),
 	})
 	model := openedOnTheTree(t, client)
-	for range 3 {
-		model = walk(t, model, enter())
-	}
+	model = walk(t, walk(t, model, enter()), enter())
+	model = walk(t, model, runes("t"))
 	// Move, then refresh, then come back.
 	model = walk(t, model, runes("j"))
 	model = walk(t, model, runes("r"))
@@ -260,10 +217,10 @@ func TestTheWayBackWorksFromTheDeepestLevelAfterAnythingElseHappened(t *testing.
 
 	model = walk(t, model, escape())
 
-	if model.active.Name != "jobs" {
-		t.Fatalf("escape landed on %q, want the jobs level", model.active.Name)
+	if model.active.Name != "sessions" {
+		t.Fatalf("escape landed on %q, want the sessions level", model.active.Name)
 	}
-	screenSays(t, model, "read the electricity bill")
+	screenSays(t, model, "bills")
 }
 
 // A workspace with no projects in it. Nothing to drill into is a state a new system is in on its
@@ -283,93 +240,20 @@ func TestAWorkspaceWithNoProjectsSaysSoRatherThanFailing(t *testing.T) {
 	screenSays(t, model, "nothing here")
 }
 
-func TestAProjectWithNoJobsSaysSoRatherThanFailing(t *testing.T) {
+func TestAProjectWithNoSessionsSaysSoRatherThanFailing(t *testing.T) {
 	client := aSystemWithOneOfEverything()
-	client.jobs = nil
+	client.sessions = nil
 
 	model := openedOnTheTree(t, client)
 	model = walk(t, walk(t, model, enter()), enter())
 
-	if model.active.Name != "jobs" {
-		t.Fatalf("enter on a project with no jobs opened %q, want its jobs", model.active.Name)
+	if model.active.Name != "sessions" {
+		t.Fatalf("enter on a project with no sessions opened %q, want its sessions", model.active.Name)
 	}
 	if model.err != nil {
-		t.Fatalf("a project with no jobs reported %v, and having no jobs is not a fault", model.err)
+		t.Fatalf("a project with no sessions reported %v, and having none is not a fault", model.err)
 	}
 	screenSays(t, model, "nothing here")
-}
-
-// A job that has not reached a session is the normal state of a pending job. Enter has to refuse and
-// say why, rather than opening a level that promises work and lists none.
-func TestAJobWithNoSessionYetRefusesTheLastLevelAndSaysWhy(t *testing.T) {
-	client := aSystemWithOneOfEverything()
-	client.jobs[0].Phase, client.jobs[0].Session = job.PhasePending, ""
-
-	model := openedOnTheTree(t, client)
-	model = walk(t, walk(t, walk(t, model, enter()), enter()), enter())
-
-	if model.active.Name != "jobs" {
-		t.Fatalf("enter on a job with no session opened %q, want to stay on the jobs level", model.active.Name)
-	}
-	if model.err == nil {
-		t.Fatal("enter did nothing and said nothing, which reads as a console that stopped answering")
-	}
-	screenSays(t, model, job.PhasePending)
-}
-
-// The deepest level is where a person watches something happen, so the keys that reach the machine
-// live there. Both act on the session the level is scoped to, and enter acts on the row.
-func TestTheRunningWorkOpensTheConversationAndAShell(t *testing.T) {
-	client := aSystemWithOneOfEverything()
-	work := Exec(client)
-
-	open, found := actionNamed(work, "Open")
-	if !found {
-		t.Fatal("the running work has no key that opens the conversation")
-	}
-	// The way off enter. Enter reads the task now, and the conversation kept the key it already
-	// answered to, so an operator who reached for it still lands on the conversation.
-	if !open.Bound("a") || !open.OnScope {
-		t.Fatalf("Open answers to %v and OnScope=%v, want a acting on the session", open.Keys(), open.OnScope)
-	}
-	if open.Bound("enter") {
-		t.Fatal("enter still opens the conversation, so the row under the cursor has no key of its own")
-	}
-	shell, found := actionNamed(work, "Shell")
-	if !found {
-		t.Fatal("the running work has no key that opens a shell, so shelling in has nowhere to live")
-	}
-	if !shell.Bound("s") || !shell.OnScope {
-		t.Fatalf("Shell answers to %v and OnScope=%v, want s acting on the session", shell.Keys(), shell.OnScope)
-	}
-}
-
-// The case a row could never answer: a job whose session has produced no task yet lists nothing, and
-// that is exactly the job somebody is watching. The keys have to reach the session anyway.
-func TestShellingInWorksOnAJobWhoseSessionHasAnsweredNothingYet(t *testing.T) {
-	client := aSystemWithOneOfEverything()
-	client.tasks = nil
-
-	model := openedOnTheTree(t, client)
-	model = walk(t, walk(t, walk(t, model, enter()), enter()), enter())
-	if len(model.Listed()) != 0 {
-		t.Fatalf("the running work lists %d rows, want none, which is the case this is about", len(model.Listed()))
-	}
-
-	var handed []string
-	model = model.WithTerminal(func(command *exec.Cmd, done func(error) tea.Msg) tea.Cmd {
-		handed = command.Args
-		return func() tea.Msg { return done(nil) }
-	})
-	model = walk(t, model, runes("s"))
-
-	if model.err != nil {
-		t.Fatalf("shelling in refused: %v", model.err)
-	}
-	line := strings.Join(handed, " ")
-	if !strings.Contains(line, "4444444444444444dddddddd") {
-		t.Fatalf("the shell command is %q, want the job's session in it", line)
-	}
 }
 
 // A task is a paragraph, and the panel is about a hundred characters wide. A line left whole is a
@@ -382,8 +266,7 @@ func TestALongAskIsReadWholeRatherThanCutAtTheBorder(t *testing.T) {
 	client.tasks[0].Prompt = ask
 
 	model := openedOnTheTree(t, client)
-	model = walk(t, walk(t, walk(t, model, enter()), enter()), enter())
-	model = walk(t, model, enter())
+	model = walk(t, walk(t, walk(t, model, enter()), enter()), runes("t"))
 
 	// Every word of it, in the order it was written, across however many rows the panel needed.
 	if drawn := drawnText(model); !strings.Contains(drawn, ask) {
@@ -439,7 +322,7 @@ func TestEnterOnATaskOpensTheTaskUnderTheCursor(t *testing.T) {
 	})
 
 	model := openedOnTheTree(t, client)
-	model = walk(t, walk(t, walk(t, model, enter()), enter()), enter())
+	model = walk(t, walk(t, walk(t, model, enter()), enter()), runes("t"))
 	if len(model.Listed()) != 2 {
 		t.Fatalf("the running work lists %d rows, want the two tasks this is about", len(model.Listed()))
 	}
@@ -464,7 +347,7 @@ func TestEnterOnATaskOpensTheTaskUnderTheCursor(t *testing.T) {
 func TestEnterOnATaskOpensNoShell(t *testing.T) {
 	client := aSystemWithOneOfEverything()
 	model := openedOnTheTree(t, client)
-	model = walk(t, walk(t, walk(t, model, enter()), enter()), enter())
+	model = walk(t, walk(t, walk(t, model, enter()), enter()), runes("t"))
 
 	var handed []string
 	model = model.WithTerminal(func(command *exec.Cmd, done func(error) tea.Msg) tea.Cmd {
@@ -489,7 +372,7 @@ func TestTheConversationIsStillReachableWhenNoTaskHasAnswered(t *testing.T) {
 	client.tasks = nil
 
 	model := openedOnTheTree(t, client)
-	model = walk(t, walk(t, walk(t, model, enter()), enter()), enter())
+	model = walk(t, walk(t, walk(t, model, enter()), enter()), runes("t"))
 	if len(model.Listed()) != 0 {
 		t.Fatalf("the running work lists %d rows, want none, which is the case this is about", len(model.Listed()))
 	}
@@ -510,9 +393,8 @@ func TestTheConversationIsStillReachableWhenNoTaskHasAnswered(t *testing.T) {
 	}
 }
 
-// The way off the old destination. Enter on a project used to open its sessions and now opens its
-// jobs, so the sessions of one project keep a key of their own rather than becoming a command bar
-// round trip.
+// The key that was the way to a project's conversations while enter went elsewhere. Enter reaches
+// them again, and the key is kept because it is in fingers.
 func TestAProjectStillReachesItsSessionsInOneKey(t *testing.T) {
 	client := aSystemWithOneOfEverything()
 	model := walk(t, openedOnTheTree(t, client), enter())
@@ -558,9 +440,9 @@ func TestFilterNarrowsEveryLevelOfTheTree(t *testing.T) {
 	client.projects = append(client.projects, &quaycrewv1.Project{
 		Id: "7777777777777777aaaaaaaa", Workspace: "1111111111111111aaaaaaaa", Name: "gardening",
 	})
-	client.jobs = append(client.jobs, &quaycrewv1.Job{
+	client.sessions = append(client.sessions, &quaycrewv1.Session{
 		Id: "8888888888888888bbbbbbbb", Workspace: "1111111111111111aaaaaaaa",
-		Project: "2222222222222222bbbbbbbb", Title: "mow the lawn", Phase: job.PhaseDone,
+		Project: "2222222222222222bbbbbbbb", Label: "mow lawn", Status: "idle",
 	})
 	model := walk(t, openedOnTheTree(t, client), enter())
 
@@ -583,15 +465,15 @@ func TestFilterNarrowsEveryLevelOfTheTree(t *testing.T) {
 	}
 	model = walk(t, model, runes("j"))
 	model = walk(t, model, enter())
-	if model.active.Name != "jobs" {
-		t.Fatalf("after clearing the filter, enter opened %q, want jobs", model.active.Name)
+	if model.active.Name != "sessions" {
+		t.Fatalf("after clearing the filter, enter opened %q, want sessions", model.active.Name)
 	}
 	model, _ = update(t, model, runes("/"))
 	model = typeAll(t, model, "lawn")
 	if len(model.Listed()) != 1 {
-		t.Fatalf("filtering the jobs level left %d rows, want the one that matched", len(model.Listed()))
+		t.Fatalf("filtering the sessions level left %d rows, want the one that matched", len(model.Listed()))
 	}
-	screenSays(t, model, "mow the lawn")
+	screenSays(t, model, "mow lawn")
 }
 
 // A window too narrow for the widest row still draws every level, and never draws a line wider than
@@ -602,7 +484,7 @@ func TestEveryLevelFitsAWindowTooNarrowForItsWidestRow(t *testing.T) {
 	model.width, model.height = 40, 20
 	model = settle(t, model, listCmd(model.active, model.parent))
 
-	for _, level := range []string{"workspaces", "projects", "jobs", "exec"} {
+	for _, level := range []string{"workspaces", "projects", "sessions"} {
 		if model.active.Name != level {
 			t.Fatalf("the walk is on %q, want %q", model.active.Name, level)
 		}
@@ -611,7 +493,7 @@ func TestEveryLevelFitsAWindowTooNarrowForItsWidestRow(t *testing.T) {
 				t.Fatalf("on %s a line is %d wide in a window of %d: %q", level, width, model.width, line)
 			}
 		}
-		if level != "exec" {
+		if level != "sessions" {
 			model = walk(t, model, enter())
 		}
 	}

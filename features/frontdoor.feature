@@ -43,24 +43,13 @@ Feature: The front door says what the system is and how to start it
     When a reader opens the front door
     Then the quick start is one command to a running system
 
-  Scenario: The picture of a job is where it sends a reader for it
-    When a reader opens the front door
-    Then the document it names for the job carries a picture of one, through the controller, the lease, the session and the role
-
-  # A word a reader meets for the first time inside a command is a word they guess at. The eleven are
-  # the whole of what the system holds, so the list is exact: the twelfth resource is defined here in
+  # A word a reader meets for the first time inside a command is a word they guess at. The eight are
+  # the whole of what the system holds, so the list is exact: the ninth resource is defined here in
   # the change that adds it, or a reader finds it in the help text and has to work out what it is.
   Scenario: It defines every resource the system keeps
     When a reader opens the front door
-    Then it defines the eleven resources, in order, and says which of them are not resources
+    Then it defines the eight resources, in order
 
   Scenario: Everything in it can be copied back out
     When a reader opens the front door
     Then it holds no blockquote, no table and no dash used as punctuation
-
-  # A reader's first question is not what a job is. It is how a job differs from the task they already
-  # know how to send. The front door used to answer it and now points at the document that does, so
-  # what is held is that a reader is still sent somewhere that gives them the answer.
-  Scenario: It sends a reader somewhere that says how a task and a job differ
-    When a reader opens the front door
-    Then the document it names for the words tells a task and a job apart

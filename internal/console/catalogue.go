@@ -18,48 +18,6 @@ import (
 // to ask it yet: these views are opened by name rather than descended into, so nothing hands them a
 // workspace to scope by.
 
-// Roles lists what a job can be run as: the name, the model that role uses, and the material it is
-// given.
-func Roles(client quaycrewv1.ControlPlaneServiceClient) Resource {
-	return Resource{
-		Name:    "roles",
-		Aliases: []string{"role"},
-		Columns: []Column{
-			{Title: "role", Width: 22, Colour: colourOfName},
-			{Title: "version", Width: 7, Colour: dim},
-			{Title: "reaches", Width: 11, Colour: dim},
-			// Which model the work is done on. It gives way first: most of a listing is one model,
-			// and by then the summary is worth more than the column is.
-			{Title: "model", Width: 14, Give: 1, Colour: dim},
-			{Title: "summary", Width: 0},
-		},
-		SortBy: 0,
-		List: func(ctx context.Context, _ string) ([]Row, error) {
-			resp, err := client.ListRoles(ctx, &quaycrewv1.ListRolesRequest{})
-			if err != nil {
-				return nil, err
-			}
-			rows := make([]Row, 0, len(resp.GetRoles()))
-			for _, one := range resp.GetRoles() {
-				rows = append(rows, Row{
-					ID:    one.GetName(),
-					Label: one.GetName(),
-					State: StateReady,
-					Cells: []string{
-						one.GetName(),
-						versionCell(one.GetVersion()),
-						reachCell(one.GetSystem()),
-						one.GetModel(),
-						oneLine(one.GetSummary()),
-					},
-					Detail: one.GetSummary(),
-				})
-			}
-			return rows, nil
-		},
-	}
-}
-
 // Skills lists what a session is given to work with: the name, whether every workspace has it, the
 // commands it needs in the sandbox, and what it is for.
 func Skills(client quaycrewv1.ControlPlaneServiceClient) Resource {

@@ -5,7 +5,7 @@ Feature: A change carries a scenario and a changelog entry, or says why not
   written out as scenarios in `features/`". Both were promises to a reader, and nothing asked whether
   a change kept them.
 
-  One change shipped 200 lines of new behaviour, a rule that refuses a whole class of job brief, with
+  One change shipped 200 lines of new behaviour, a rule that refuses a whole class of task, with
   no scenario and no changelog entry. Every check was green. Nothing was wrong with the checks: they
   were never asked the question. The promise held for as long as whoever opened the pull request
   remembered it, which is not a gate.
@@ -25,36 +25,36 @@ Feature: A change carries a scenario and a changelog entry, or says why not
   proved here is what continuous integration runs.
 
   Scenario: A change that keeps both promises is let through
-    Given a change that edits "internal/job/waiting.go"
+    Given a change that edits "internal/session/waiting.go"
     And it writes "changelog.d/486-a-check-reads-the-diff.md"
     And it writes "features/promises.feature"
     When the check reads the change
     Then it lets the change through
 
   Scenario: Behaviour with no changelog entry is refused, and told what to write
-    Given a change that edits "internal/job/waiting.go"
+    Given a change that edits "internal/session/waiting.go"
     And it writes "features/promises.feature"
     When the check reads the change
-    Then the check refuses, naming "internal/job/waiting.go"
+    Then the check refuses, naming "internal/session/waiting.go"
     And it says the change carries no "changelog entry"
     And it prints the line that would say why there is none
 
   Scenario: Behaviour with no scenario is refused
-    Given a change that edits "internal/job/waiting.go"
+    Given a change that edits "internal/session/waiting.go"
     And it writes "changelog.d/486-a-check-reads-the-diff.md"
     When the check reads the change
     Then the check refuses
     And it says the change carries no "scenario"
 
   Scenario: A stated reason stands in for the scenario
-    Given a change that edits "internal/job/waiting.go"
+    Given a change that edits "internal/session/waiting.go"
     And it writes "changelog.d/486-a-check-reads-the-diff.md"
     And the pull request body says "No scenario: the behaviour is unchanged, this moves it between packages"
     When the check reads the change
     Then it lets the change through
 
   Scenario: One word after the colon is silence with a colon in front
-    Given a change that edits "internal/job/waiting.go"
+    Given a change that edits "internal/session/waiting.go"
     And it writes "changelog.d/486-a-check-reads-the-diff.md"
     And the pull request body says "No scenario: none"
     When the check reads the change
@@ -67,12 +67,12 @@ Feature: A change carries a scenario and a changelog entry, or says why not
     Then it lets the change through
 
   Scenario: A change to a test alone is not behaviour
-    Given a change that edits "internal/job/waiting_test.go"
+    Given a change that edits "internal/session/waiting_test.go"
     When the check reads the change
     Then it lets the change through
 
   Scenario: Deleting the last scenario is not carrying one
-    Given a change that edits "internal/job/waiting.go"
+    Given a change that edits "internal/session/waiting.go"
     And it writes "changelog.d/486-a-check-reads-the-diff.md"
     And it deletes "features/promises.feature"
     When the check reads the change
@@ -80,13 +80,13 @@ Feature: A change carries a scenario and a changelog entry, or says why not
     And it says the change carries no "scenario"
 
   Scenario: A range that holds nothing is refused, because an empty diff keeps every promise
-    Given a change that edits "internal/job/waiting.go"
+    Given a change that edits "internal/session/waiting.go"
     When the check reads a range that holds nothing
     Then the check refuses
     And it says it read no files at all
 
   Scenario: An entry written into the shared file is told where an entry goes now
-    Given a change that edits "internal/job/waiting.go"
+    Given a change that edits "internal/session/waiting.go"
     And it writes "features/promises.feature"
     And it also edits "CHANGELOG.md"
     When the check reads the change
@@ -95,7 +95,7 @@ Feature: A change carries a scenario and a changelog entry, or says why not
     And it says an entry is its own file now
 
   Scenario: A reason shown as an example does not stand in for anything
-    Given a change that edits "internal/job/waiting.go"
+    Given a change that edits "internal/session/waiting.go"
     And it writes "changelog.d/486-a-check-reads-the-diff.md"
     And the pull request body shows the reason as a fenced example
     When the check reads the change

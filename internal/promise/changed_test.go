@@ -87,19 +87,19 @@ func found(files []File, path string) string {
 
 func TestChangedReadsWhatABranchDid(t *testing.T) {
 	r := newRepository(t)
-	r.write("internal/job/waiting.go", "what was there before\n")
-	r.write("features/job.feature", "Feature: jobs\n")
+	r.write("internal/session/waiting.go", "what was there before\n")
+	r.write("features/session.feature", "Feature: sessions\n")
 	r.write("docs/a note with spaces.md", "quoted in every form but -z\n")
-	r.write("internal/job/gone.go", "about to be deleted\n")
-	r.write("internal/job/old.go", "about to be renamed\n")
+	r.write("internal/session/gone.go", "about to be deleted\n")
+	r.write("internal/session/old.go", "about to be renamed\n")
 	r.commit("what the change starts from")
 
 	r.git("switch", "-q", "-c", "change")
-	r.write("internal/job/waiting.go", "what was there before\nand what the change did\n")
+	r.write("internal/session/waiting.go", "what was there before\nand what the change did\n")
 	r.write("changelog.d/486-a-check.md", "**A check reads the diff.**\n")
 	r.write("docs/a note with spaces.md", "quoted in every form but -z\nand edited\n")
-	r.remove("internal/job/gone.go")
-	r.git("mv", "internal/job/old.go", "internal/job/new.go")
+	r.remove("internal/session/gone.go")
+	r.git("mv", "internal/session/old.go", "internal/session/new.go")
 	r.commit("the change")
 
 	files, err := Changed(r.dir, "main", "HEAD")
@@ -111,12 +111,12 @@ func TestChangedReadsWhatABranchDid(t *testing.T) {
 		t.Fatalf("read %d files, want 6: %+v", len(files), files)
 	}
 	for path, want := range map[string]string{
-		"internal/job/waiting.go":    string(Modified),
-		"changelog.d/486-a-check.md": string(Added),
-		"docs/a note with spaces.md": string(Modified),
-		"internal/job/gone.go":       string(Deleted),
-		"internal/job/old.go":        string(Deleted),
-		"internal/job/new.go":        string(Added),
+		"internal/session/waiting.go": string(Modified),
+		"changelog.d/486-a-check.md":  string(Added),
+		"docs/a note with spaces.md":  string(Modified),
+		"internal/session/gone.go":    string(Deleted),
+		"internal/session/old.go":     string(Deleted),
+		"internal/session/new.go":     string(Added),
 	} {
 		if got := found(files, path); got != want {
 			t.Errorf("%s came back %s, want %s", path, got, want)
@@ -137,21 +137,21 @@ func TestTheWholeCheckOverARealBranch(t *testing.T) {
 	}{
 		{
 			name:   "behaviour with both promises kept",
-			change: []string{"internal/job/waiting.go", "changelog.d/486-a-check.md", "features/promises.feature"},
+			change: []string{"internal/session/waiting.go", "changelog.d/486-a-check.md", "features/promises.feature"},
 		},
 		{
 			name:   "behaviour with neither",
-			change: []string{"internal/job/waiting.go"},
+			change: []string{"internal/session/waiting.go"},
 			want:   []string{ChangelogEntry, Scenario},
 		},
 		{
 			name:   "a stated reason stands in for the scenario",
-			change: []string{"internal/job/waiting.go", "changelog.d/486-a-check.md"},
+			change: []string{"internal/session/waiting.go", "changelog.d/486-a-check.md"},
 			body:   "No scenario: the behaviour is unchanged, this moves it between packages",
 		},
 		{
 			name:    "the change that only deletes the last scenario",
-			change:  []string{"internal/job/waiting.go", "changelog.d/486-a-check.md"},
+			change:  []string{"internal/session/waiting.go", "changelog.d/486-a-check.md"},
 			deletes: []string{"features/promises.feature"},
 			want:    []string{Scenario},
 		},
@@ -218,7 +218,7 @@ func TestWhatTheBaseDidWhileTheChangeWasOpenIsNotTheChange(t *testing.T) {
 	r.commit("what the change starts from")
 
 	r.git("switch", "-q", "-c", "change")
-	r.write("internal/job/waiting.go", "what the change did\n")
+	r.write("internal/session/waiting.go", "what the change did\n")
 	r.write("changelog.d/486-a-check.md", "**A check reads the diff.**\n")
 	r.write("features/promises.feature", "Feature: promises\n")
 	r.commit("the change")

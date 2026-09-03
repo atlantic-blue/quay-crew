@@ -1,7 +1,7 @@
 // Package skill reads the skills an operator has written, from files.
 //
 // A skill is a capability a session can be given: a brief the model reads, the binaries it needs, the
-// secrets it names, and its own setup. The design is in docs/SKILLS.md. Files are the authoring and
+// secrets it names, and its own setup. Files are the authoring and
 // sharing format, which is what makes a skill code somebody can review, version and hand to another
 // system, and this package is the part that reads them.
 //

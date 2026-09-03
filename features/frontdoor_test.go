@@ -19,8 +19,7 @@ import (
 // exist are all questions with an answer somewhere else in this repository.
 //
 // It is held to a shape as well as to its claims. It ran to 253 lines of feature list, principles,
-// stack, roadmap and prior art, all of it already written down in docs/ and in features/, and none
-// of it read. So the sections are an exact list rather than a minimum, and there is a line limit
+// stack, roadmap and prior art, all of it already written down in features/, and none of it read. So the sections are an exact list rather than a minimum, and there is a line limit
 // underneath that.
 //
 // What none of this checks is whether a sentence is true. A bullet claiming a capability the system
@@ -33,10 +32,6 @@ const theFrontDoor = "../README.md"
 // theMakefile is the other file the front door makes claims about.
 const theFrontDoorsMakefile = "../Makefile"
 
-// theJobDocumentLink is where the picture of one job lives, and it is one of the
-// documents the front door points at. The picture used to be in the front door itself.
-const theJobDocumentLink = "docs/ORCHESTRATION.md"
-
 // theFrontDoorsSections is every section the front door carries, in order. It answers what the system
 // is before the first one, then those, and stops.
 //
@@ -44,10 +39,10 @@ const theJobDocumentLink = "docs/ORCHESTRATION.md"
 // version of the same sprawl: every section that made the old one unreadable was added one at a
 // time, each of them defensible on its own.
 //
-// "The words" is the fourth, added when declared intent was renamed to a job. The confusion it
-// answers cost real time twice, and a reader hits it before the first command rather than after, so
-// it sits above the quick start. It is a list somebody scans for one entry, not prose read top to
-// bottom, which is why it can be long and the sections below it still cannot.
+// "The words" is first. The confusion it answers cost real time twice, and a reader hits it before
+// the first command rather than after, so it sits above the quick start. It is a list somebody scans
+// for one entry, not prose read top to bottom, which is why it can be long and the sections below it
+// still cannot.
 var theFrontDoorsSections = []string{"The words", "Quick start", "Where to read next", "License"}
 
 // theFewestWordsThatSayWhatItIs. The lead is the answer to "what is this", and it sits before any
@@ -57,10 +52,9 @@ const theFewestWordsThatSayWhatItIs = 40
 // theLongestFrontDoorWorthReading, in lines. The one this replaced was 253, and the reason it was
 // rewritten is that nobody reached the bottom of it.
 //
-// It moved from 80 to 120 once, for the eleven resources: one short paragraph each is 38 lines, and
-// the reason for a ceiling at all is unchanged. What that ceiling now buys is the room for the
-// vocabulary and nothing else, so the next section that wants space has to take it from a section
-// already here.
+// It moved from 80 to 120 once, for the resources: one short paragraph each, and the reason for a
+// ceiling at all is unchanged. What that ceiling buys is the room for the vocabulary and nothing
+// else, so the next section that wants space has to take it from a section already here.
 const theLongestFrontDoorWorthReading = 120
 
 // codeIn returns everything the front door marks as something to type: every inline code span, and
@@ -205,7 +199,7 @@ func frontDoor(t *testing.T) string {
 // TestTheFrontDoorHoldsThreeThingsAndNoOthers.
 //
 // What the system is, how to start it, and where to read next. The forty item feature list, the
-// principles, the stack, the roadmap and the prior art all say something already said in docs/ or in
+// principles, the stack, the roadmap and the prior art all say something already said in
 // features/, and every one of them made the file longer than the reader it was written for.
 func TestTheFrontDoorHoldsThreeThingsAndNoOthers(t *testing.T) {
 	for _, wrong := range theShapeOf(frontDoor(t)) {
@@ -299,18 +293,6 @@ func TestEveryDocumentTheFrontDoorPointsAtExists(t *testing.T) {
 		if _, err := os.Stat(filepath.Join("..", link)); err != nil {
 			t.Errorf("the front door points a reader at %s, which is not there: %v", link, err)
 		}
-	}
-}
-
-// TestThePictureOfAJobIsWhereTheFrontDoorSendsAReader.
-//
-// Job as a record the system keeps is the shape of the product, and it is the thing a paragraph
-// explains worst. The picture used to be in the front door, which is one of the reasons the front
-// door was long. It moved to the document that already held the long version, so what is held now is
-// that a reader is still sent somewhere that has it.
-func TestThePictureOfAJobIsWhereTheFrontDoorSendsAReader(t *testing.T) {
-	for _, wrong := range thePictureOfAJob(frontDoor(t)) {
-		t.Error(wrong)
 	}
 }
 
@@ -413,7 +395,7 @@ func theShapeOf(text string) []string {
 	if held := headingsIn(text); !slices.Equal(held, theFrontDoorsSections) {
 		wrong = append(wrong, fmt.Sprintf("the front door holds the sections %v, and it holds %v and "+
 			"nothing else: what the system is, the words for what it holds, how to start it, and where to read next. Everything a "+
-			"new section would say belongs in docs/ or in features/", held, theFrontDoorsSections))
+			"new section would say belongs in features/", held, theFrontDoorsSections))
 	}
 	return wrong
 }
@@ -436,55 +418,6 @@ func diagramsIn(text string) []string {
 		diagrams = append(diagrams, rest[:closed])
 		rest = rest[closed:]
 	}
-}
-
-// thePictureOfAJob returns everything wrong with the picture the front door sends a reader
-// to, or nothing.
-//
-// The picture is required to be a flowchart, to follow a job through the controller, the
-// lease, the session and the role, and to have every label quoted, which is what stops a parenthesis
-// or a slash breaking the parse where nobody renders it.
-func thePictureOfAJob(frontDoor string) []string {
-	if !slices.Contains(linkedFiles(frontDoor), theJobDocumentLink) {
-		return []string{fmt.Sprintf("the front door sends nobody to %s, so the picture of a piece of "+
-			"job is nowhere a reader is pointed", theJobDocumentLink)}
-	}
-
-	body, err := os.ReadFile(filepath.Join("..", theJobDocumentLink))
-	if err != nil {
-		return []string{fmt.Sprintf("reading %s: %v", theJobDocumentLink, err)}
-	}
-
-	through := []string{"controller", "lease", "session", "role"}
-	picture := ""
-	for _, diagram := range diagramsIn(string(body)) {
-		if !strings.Contains(diagram, "flowchart") {
-			continue
-		}
-		follows := true
-		for _, one := range through {
-			if !strings.Contains(strings.ToLower(diagram), one) {
-				follows = false
-				break
-			}
-		}
-		if follows {
-			picture = diagram
-			break
-		}
-	}
-	if picture == "" {
-		return []string{fmt.Sprintf("%s holds no flowchart following a job through the %s, "+
-			"so the picture the front door gave up carrying is not there either",
-			theJobDocumentLink, strings.Join(through, ", the "))}
-	}
-
-	var wrong []string
-	for _, label := range regexp.MustCompile(`[\[{(]+([^"\[\]{}()]*[(/:][^"\[\]{}()]*)[\]})]+`).FindAllStringSubmatch(picture, -1) {
-		wrong = append(wrong, fmt.Sprintf("the picture has an unquoted label %q, which does not parse",
-			strings.TrimSpace(label[1])))
-	}
-	return wrong
 }
 
 // unreusableMarkdownIn returns every line carrying a construct a reader cannot copy back out. A
@@ -516,107 +449,20 @@ func unreusableMarkdownIn(text string) []string {
 	return found
 }
 
-// theWordsDocumentLink is the document that tells a task and a job apart, and it is one of
-// the documents the front door points at. The section used to be in the front door itself.
-const theWordsDocumentLink = "docs/TASKS.md"
-
-// theSectionThatTellsThemApart is the heading under which a task and a job are defined
-// against each other. It is named here rather than searched for, because a rule that accepted any
-// section would pass on the two words landing in unrelated paragraphs.
-const theSectionThatTellsThemApart = "## Two things you can ask for"
-
-// whatATaskAndAJobAre returns that section of the document that holds it.
-func whatATaskAndAJobAre() (string, error) {
-	body, err := os.ReadFile(filepath.Join("..", theWordsDocumentLink))
-	if err != nil {
-		return "", fmt.Errorf("reading %s: %w", theWordsDocumentLink, err)
-	}
-	return sectionOf(string(body), theSectionThatTellsThemApart)
-}
-
-// theDifferenceBetweenATaskAndAJob returns everything wrong with where a reader is sent for
-// it, or nothing.
-//
-// A reader who has sent a task asks how a job is different before they ask what job is. That answer
-// was in the front door, which is one of the reasons the front door was long. It moved to the
-// document that names the words that get used for each other, so what is held now is that a reader
-// is still sent somewhere that gives it, and that it is the first thing that document says.
-//
-// Two of the rules it was held to in the front door are gone with it, and deliberately: it may carry
-// a diagram now, and it is not capped at four paragraphs. Both were a budget on the front door
-// rather than a rule about the answer.
-func theDifferenceBetweenATaskAndAJob(frontDoor string) []string {
-	if !slices.Contains(linkedFiles(frontDoor), theWordsDocumentLink) {
-		return []string{fmt.Sprintf("the front door sends nobody to %s, so a reader is never told "+
-			"which of the two things they can ask for they want", theWordsDocumentLink)}
-	}
-
-	said, err := whatATaskAndAJobAre()
-	if err != nil {
-		return []string{fmt.Sprintf("%v, so a reader is never told which of the two they want", err)}
-	}
-
-	var wrong []string
-	for _, both := range []string{"a task", "a job"} {
-		if !strings.Contains(strings.ToLower(said), both) {
-			wrong = append(wrong, fmt.Sprintf("it never names %q, so a reader has only one of the two "+
-				"things they can ask for", both))
-		}
-	}
-	// A definition has to open a paragraph. Anywhere in the section is too weak: "a job is
-	// not a second kind of task" is a sentence about the pair rather than a definition of either, and
-	// it satisfied a substring check while the definition beside it had been rewritten away.
-	opens := map[string]bool{}
-	for _, block := range strings.Split(strings.TrimSpace(said), "\n\n") {
-		for _, defined := range []string{"a task is", "a job is"} {
-			if strings.HasPrefix(strings.ToLower(strings.TrimSpace(block)), defined) {
-				opens[defined] = true
-			}
-		}
-	}
-	for _, defined := range []string{"a task is", "a job is"} {
-		if !opens[defined] {
-			wrong = append(wrong, fmt.Sprintf("no paragraph of it opens by saying what %s, so it names "+
-				"the two without telling anybody which they want:\n%s",
-				strings.TrimSuffix(defined, " is"), said))
-		}
-	}
-
-	// It has to be the first thing the document says. An answer underneath the thing it explains is
-	// an answer nobody reaches, which is why it sat above the long section on jobs in the front door.
-	body, err := os.ReadFile(filepath.Join("..", theWordsDocumentLink))
-	if err != nil {
-		return append(wrong, fmt.Sprintf("reading %s: %v", theWordsDocumentLink, err))
-	}
-	if first := headingsIn(string(body)); len(first) == 0 || "## "+first[0] != theSectionThatTellsThemApart {
-		wrong = append(wrong, fmt.Sprintf("%s opens on %v rather than on %q, so a reader meets the "+
-			"answer to their second question before the answer to their first",
-			theWordsDocumentLink, first, theSectionThatTellsThemApart))
-	}
-	return wrong
-}
-
-// TestTheDifferenceBetweenATaskAndAJobIsWhereTheFrontDoorSendsAReader.
-func TestTheDifferenceBetweenATaskAndAJobIsWhereTheFrontDoorSendsAReader(t *testing.T) {
-	for _, wrong := range theDifferenceBetweenATaskAndAJob(frontDoor(t)) {
-		t.Error(wrong)
-	}
-}
-
 // theResourcesTheSystemKeeps is every resource the front door has to define, in the order it defines
 // them. Each one is a heading in bold at the start of its paragraph.
 //
 // It is a list here rather than something read out of the code, and that is the weaker choice made
-// deliberately: nothing in the system enumerates its own resources. The console registers ten views
-// and neither jobs nor flows is among them, and the store's interface is methods rather than a set,
-// so anything derived would be a different list dressed up as this one. What this holds is that the
-// front door and this list agree, and a twelfth resource lands here in the same change that adds it.
+// deliberately: nothing in the system enumerates its own resources. The console's views and the
+// store's interface are both a different shape from this, so anything derived would be a different
+// list dressed up as this one. What this holds is that the front door and this list agree, and a
+// ninth resource lands here in the same change that adds it.
 //
 // Exact rather than a minimum, for the same reason the section list is: a front door that defines
-// the eleven and then eight more is the sprawl this file exists to stop.
+// the eight and then eight more is the sprawl this file exists to stop.
 var theResourcesTheSystemKeeps = []string{
-	"Workspaces", "Projects", "Jobs", "Sessions", "Tasks", "Flows",
-	"Roles", "Skills", "Hooks", "Secrets", "Context",
+	"Workspaces", "Projects", "Sessions", "Tasks",
+	"Skills", "Hooks", "Secrets", "Context",
 }
 
 // theVocabulary is the section of the front door that defines them.
@@ -658,19 +504,11 @@ func theWordsFor(frontDoor string) []string {
 			"then what runs, then what shapes it", inOrder, theResourcesTheSystemKeeps))
 	}
 
-	// The limits are the one thing in there that is not a resource, and saying so is the point of
-	// naming them: a reader who takes a limit for a resource goes looking for a command to list them.
-	if !strings.Contains(said, "limits") {
-		wrong = append(wrong, "it never names the limits, so nothing says which of these a reader can "+
-			"list and which is a setting on a workspace")
-	}
-	// And the borrowed word, with the place it is not borrowed. A session that a reader takes for a
-	// Pod is a session they expect to be replaceable.
-	for _, both := range []string{"Kubernetes Job", "not a Pod"} {
-		if !strings.Contains(said, both) {
-			wrong = append(wrong, fmt.Sprintf("it never says %q, so the obvious question about the "+
-				"vocabulary is left for the reader to ask somewhere else", both))
-		}
+	// The borrowed word, with the place it is not borrowed. A session that a reader takes for a Pod is
+	// a session they expect to be replaceable.
+	if !strings.Contains(said, "not a Pod") {
+		wrong = append(wrong, "it never says a session is not a Pod, so the obvious question about the "+
+			"vocabulary is left for the reader to ask somewhere else")
 	}
 	return wrong
 }
@@ -678,7 +516,7 @@ func theWordsFor(frontDoor string) []string {
 // TestTheFrontDoorDefinesEveryResourceTheSystemKeeps.
 //
 // The vocabulary cost real time twice before it was written down. A reader who does not know what a
-// job is cannot tell it from the task they already know how to send.
+// session is cannot tell it from the task they send to it.
 func TestTheFrontDoorDefinesEveryResourceTheSystemKeeps(t *testing.T) {
 	for _, wrong := range theWordsFor(frontDoor(t)) {
 		t.Error(wrong)

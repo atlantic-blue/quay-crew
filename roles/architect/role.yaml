@@ -1,8 +1,0 @@
-name: architect
-version: 1
-summary: writes the typed contracts and the dependency graph a build order comes from, and writes no implementation code
-model: opus
-receives:
-  - job
-  - context
-  - skills

@@ -147,27 +147,6 @@ func initializeAuthSteps(sc *godog.ScenarioContext) {
 		})
 	})
 
-	sc.Step(`^the driver asks to import a role$`, func(ctx context.Context) error {
-		return asDriver(ctx, func(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) error {
-			_, err := client.ImportRole(ctx, &quaycrewv1.ImportRoleRequest{})
-			return err
-		})
-	})
-
-	sc.Step(`^the driver asks to attach a role$`, func(ctx context.Context) error {
-		return asDriver(ctx, func(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) error {
-			_, err := client.AttachRole(ctx, &quaycrewv1.AttachRoleRequest{Workspace: "any", Name: "any"})
-			return err
-		})
-	})
-
-	sc.Step(`^the driver asks to detach a role$`, func(ctx context.Context) error {
-		return asDriver(ctx, func(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) error {
-			_, err := client.DetachRole(ctx, &quaycrewv1.DetachRoleRequest{Workspace: "any", Name: "any"})
-			return err
-		})
-	})
-
 	sc.Step(`^the driver asks to change a session's permission mode$`, func(ctx context.Context) error {
 		return asDriver(ctx, func(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) error {
 			_, err := client.SetSessionPermissionMode(ctx, &quaycrewv1.SetSessionPermissionModeRequest{

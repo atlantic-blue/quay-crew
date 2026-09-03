@@ -39,20 +39,6 @@ Feature: The system refuses a caller it cannot recognise
     When the driver asks to detach a skill
     Then the driver is refused, told the call is the operator's to make
 
-  # A role carries a brief, a model and the material a session receives, so a session that could
-  # import or attach one could write itself a way of working nobody approved.
-  Scenario: the driver cannot import a role
-    When the driver asks to import a role
-    Then the driver is refused, told the call is the operator's to make
-
-  Scenario: the driver cannot attach a role
-    When the driver asks to attach a role
-    Then the driver is refused, told the call is the operator's to make
-
-  Scenario: the driver cannot detach a role
-    When the driver asks to detach a role
-    Then the driver is refused, told the call is the operator's to make
-
   Scenario: the driver cannot loosen a session's permission mode
     When the driver asks to change a session's permission mode
     Then the driver is refused, told the call is the operator's to make

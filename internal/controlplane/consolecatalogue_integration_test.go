@@ -11,13 +11,12 @@ import (
 	"github.com/atlantic-blue/quay-krewe/internal/console"
 	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
 	"github.com/atlantic-blue/quay-krewe/internal/model"
-	"github.com/atlantic-blue/quay-krewe/internal/role"
 	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 	"github.com/atlantic-blue/quay-krewe/internal/secrets"
 	"github.com/atlantic-blue/quay-krewe/internal/skill"
 )
 
-// The console's three listings of what the system holds, over a real Postgres, the real control plane
+// The console's two listings of what the system holds, over a real Postgres, the real control plane
 // and the real gRPC interface.
 //
 // The table tests in internal/console build these rows from a double, which answers whatever the case
@@ -34,10 +33,9 @@ func TestTheConsoleListsWhatTheSystemActuallyHolds(t *testing.T) {
 	})
 	client := servedOver(t, server)
 
-	importRoleNamed(t, ctx, client, "releaser")
 	importSkillNamed(t, ctx, client, "github")
 	importHookNamed(t, ctx, client, "merge-gate")
-	// One of the three is given to every workspace, and the other two wait for an attachment. That
+	// One of the two is given to every workspace, and the other waits for an attachment. That
 	// difference is the one thing these rows say that a name and a version cannot.
 	if _, err := client.AttachSkill(ctx, &quaycrewv1.AttachSkillRequest{Scope: "system", Name: "github"}); err != nil {
 		t.Fatalf("AttachSkill: %v", err)
@@ -52,7 +50,6 @@ func TestTheConsoleListsWhatTheSystemActuallyHolds(t *testing.T) {
 		name string
 		held string
 	}{
-		{"roles", "releaser"},
 		{"skills", "github"},
 		{"hooks", "merge-gate"},
 	} {
@@ -88,7 +85,7 @@ func TestTheConsoleListsWhatTheSystemActuallyHolds(t *testing.T) {
 	}
 
 	// The reach cell, which is the only thing here the control plane decides rather than the import:
-	// the skill was attached to the system, and the role and the hook were not.
+	// the skill was attached to the system, and the hook was not.
 	skills, _ := registry.Get("skills")
 	skillRows, err := skills.List(ctx, "")
 	if err != nil {
@@ -98,14 +95,14 @@ func TestTheConsoleListsWhatTheSystemActuallyHolds(t *testing.T) {
 	if got := github.Cells[cellAt(t, skills, "reaches")]; got != "everywhere" {
 		t.Fatalf("a skill the system holds reads %q, want everywhere", got)
 	}
-	roles, _ := registry.Get("roles")
-	roleRows, err := roles.List(ctx, "")
+	hooks, _ := registry.Get("hooks")
+	hookRows, err := hooks.List(ctx, "")
 	if err != nil {
-		t.Fatalf("listing roles: %v", err)
+		t.Fatalf("listing hooks: %v", err)
 	}
-	releaser, _ := rowFor(roleRows, "releaser")
-	if got := releaser.Cells[cellAt(t, roles, "reaches")]; got != "on attach" {
-		t.Fatalf("a role nobody attached reads %q, want on attach", got)
+	gate, _ := rowFor(hookRows, "merge-gate")
+	if got := gate.Cells[cellAt(t, hooks, "reaches")]; got != "on attach" {
+		t.Fatalf("a hook nobody attached reads %q, want on attach", got)
 	}
 
 	// The reason a skill is held and not given is not on this listing, and the console says nothing
@@ -130,17 +127,6 @@ func TestTheConsoleListsWhatTheSystemActuallyHolds(t *testing.T) {
 			t.Fatalf("the system's own hooks listing says %q is left out, so the console could say why after all",
 				one.GetName())
 		}
-	}
-}
-
-func importRoleNamed(t *testing.T, ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, name string) {
-	t.Helper()
-	manifest := "name: " + name + "\nversion: 1\nsummary: Ships the work a job finished.\nmodel: opus\nreceives:\n  - job\n"
-	if _, err := client.ImportRole(ctx, &quaycrewv1.ImportRoleRequest{Files: []*quaycrewv1.RoleFile{
-		{Path: role.ManifestFile, Body: []byte(manifest)},
-		{Path: role.BriefFile, Body: []byte("Open the pull request and stop.\n")},
-	}}); err != nil {
-		t.Fatalf("ImportRole: %v", err)
 	}
 }
 

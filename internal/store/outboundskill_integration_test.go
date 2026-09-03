@@ -4,20 +4,14 @@ package store_test
 
 import (
 	"context"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
-	"github.com/atlantic-blue/quay-krewe/internal/job"
-	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
-	"github.com/atlantic-blue/quay-krewe/internal/secrets"
 	"github.com/atlantic-blue/quay-krewe/internal/skill"
-	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
 // The rule about calling something outside this process, followed from the directory this build ships
@@ -25,63 +19,25 @@ import (
 //
 // The unit tier reads skills/outbound off disk and holds the words to the rule. What only this tier
 // reaches is the crossing, and the crossing is the whole delivery: seeding writes the brief into rows,
-// attaching it to the system decides which sessions get it, a job reads it back out, writes it
+// attaching it to the system decides which sessions get it, a session reads it back out, writes it
 // into the workspace's directory and mounts it. A brief that is truncated in a column, a skill the
 // seed imports and never attaches, or a mount pointing at a file nobody wrote all look identical to
 // the unit tier and all leave the session with no rule.
 //
 // The workspace here sets no secret and attaches nothing, which is the workspace an operator has on
 // their first day, and is the whole of "without being told to".
-
-// aFreshSystemSeededFromDisk is the control plane a first run gets: a real database holding nothing,
-// and the skills this build ships offered to it the way the image offers them.
-//
-// It is given no skills directory of its own, deliberately. A system in a container has none, so a
-// skill that reached a session only that way would reach nobody in production.
-func aFreshSystemSeededFromDisk(t *testing.T) (*controlplane.Server, *sandbox.FakeProvider, string) {
-	t.Helper()
-	truncate(t)
-	kept, err := store.NewPostgres(context.Background(), databaseURL)
-	if err != nil {
-		t.Fatalf("open postgres: %v", err)
-	}
-	t.Cleanup(kept.Close)
-	dir := t.TempDir()
-	boxes := &sandbox.FakeProvider{}
-	s := controlplane.NewServer(controlplane.Config{
-		Store: kept, Runner: &model.FakeRunner{Reply: "done"}, Provider: boxes,
-		Secrets: secrets.NewMemory(), Storage: sandbox.Storage{Dir: dir, Host: dir},
-		SandboxImage: "quaycrew-sandbox:test",
-	})
-	s.Seed(context.Background(), "../../skills", slog.New(slog.DiscardHandler))
-	return s, boxes, dir
-}
-
-// TestAJobOnAFreshSystemIsGivenTheOutboundRule is the acceptance criterion as a test: the job that is
-// about to write a call to another service is offered the rule in its sandbox, and nobody attached
-// anything.
-//
-// It goes through a declared job rather than a dispatch because that is the shape the criterion is
-// written in, and because a job runs as a role: what a role receives is a second gate the dispatch
-// path never crosses.
-func TestAJobOnAFreshSystemIsGivenTheOutboundRule(t *testing.T) {
+func TestASessionOnAFreshSystemIsGivenTheOutboundRule(t *testing.T) {
 	s, boxes, _ := aFreshSystemSeededFromDisk(t)
 	ctx := context.Background()
-	workspace, project := aProjectOnPostgres(t, s)
-	importRoleOnPostgres(t, s, workspace, "implementer", 1, "job", "context", "skills")
+	_, project := aProjectOnPostgres(t, s)
 
-	declared, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
-		Project: project, Title: "read the captions", Brief: "fetch the watch page and read the title out of it",
-		Role: "implementer",
+	sent, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+		Project: project, Text: "fetch the watch page and read the title out of it",
 	})
 	if err != nil {
-		t.Fatalf("CreateJob: %v", err)
+		t.Fatalf("Dispatch: %v", err)
 	}
-	done := waitForJob(t, s, declared.GetJob().GetId(), job.PhaseDone)
-	session := done.GetSession()
-	if session == "" {
-		t.Fatal("the job ran in no session, so there is no container to read")
-	}
+	session := sent.GetId()
 
 	listed, err := s.ListSkills(ctx, &quaycrewv1.ListSkillsRequest{Session: session})
 	if err != nil {

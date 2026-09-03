@@ -9,7 +9,6 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
 	"github.com/atlantic-blue/quay-krewe/internal/display"
-	"github.com/atlantic-blue/quay-krewe/internal/messaging"
 	"github.com/atlantic-blue/quay-krewe/internal/store"
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
@@ -48,17 +47,6 @@ func TestASystemWhoseStoreTakesNoWriteIsNotServing(t *testing.T) {
 	}
 	if answer.GetStatus() != grpc_health_v1.HealthCheckResponse_NOT_SERVING {
 		t.Fatalf("a system whose store takes no write answered %s", answer.GetStatus())
-	}
-}
-
-func TestASystemWhoseEventLogNeverAnswersIsNotServing(t *testing.T) {
-	health := controlplane.NewHealth(waitingSystem(controlplane.Config{Events: stalledLog{}}))
-	answer, err := health.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{})
-	if err != nil {
-		t.Fatalf("Check: %v", err)
-	}
-	if answer.GetStatus() != grpc_health_v1.HealthCheckResponse_NOT_SERVING {
-		t.Fatalf("a system whose event log never answers answered %s", answer.GetStatus())
 	}
 }
 
@@ -104,10 +92,7 @@ func stateOf(reading controlplane.HealthReading, name string) (string, string) {
 // TestTheReadingNamesTheStoreThatTookNoWrite. A verdict on its own is what the system already had, and
 // it went to a container's log where nobody reading a console would find it.
 func TestTheReadingNamesTheStoreThatTookNoWrite(t *testing.T) {
-	server := waitingSystem(controlplane.Config{
-		Store:  stalledStore{Store: store.NewMemory()},
-		Events: messaging.NewMemory(),
-	})
+	server := waitingSystem(controlplane.Config{Store: stalledStore{Store: store.NewMemory()}})
 	reading := server.ProbeHealth(context.Background())
 
 	state, detail := stateOf(reading, display.HealthStore)
@@ -117,47 +102,14 @@ func TestTheReadingNamesTheStoreThatTookNoWrite(t *testing.T) {
 	if !strings.Contains(detail, "the store did not take a write") {
 		t.Fatalf("the reading says %q, and it does not say what did not land", detail)
 	}
-	// The log answered, and a reading that failed one part must not condemn the other.
-	if state, _ := stateOf(reading, display.HealthEvents); state != display.HealthServing {
-		t.Fatalf("the event log answered and reads %q", state)
-	}
 }
 
-// TestTheReadingNamesTheEventLogThatNeverAnswered is issue 445 as a reading: the broker was gone for
-// sixteen hours and every view of the system was drawn from configuration, which had not changed.
-func TestTheReadingNamesTheEventLogThatNeverAnswered(t *testing.T) {
-	server := waitingSystem(controlplane.Config{Events: stalledLog{}})
-	reading := server.ProbeHealth(context.Background())
-
-	state, detail := stateOf(reading, display.HealthEvents)
-	if state != display.HealthDown {
-		t.Fatalf("an event log that never answers reads %q", state)
-	}
-	if !strings.Contains(detail, "the event log did not take a record") {
-		t.Fatalf("the reading says %q, and it does not name the write that did not land", detail)
-	}
-	if state, _ := stateOf(reading, display.HealthStore); state != display.HealthServing {
-		t.Fatalf("the store took the write and reads %q", state)
-	}
-}
-
-// TestASystemWithNoEventLogSaysSoRatherThanReadingAsServing. A system configured with none writes to a
-// log that discards, so the write succeeds. Reading that as health is the failure this whole reading
-// exists to stop, one step earlier: a system recording nothing, drawn as a system recording everything.
-func TestASystemWithNoEventLogSaysSoRatherThanReadingAsServing(t *testing.T) {
-	server := waitingSystem(controlplane.Config{})
-	state, _ := stateOf(server.ProbeHealth(context.Background()), display.HealthEvents)
-	if state != display.HealthNotConfigured {
-		t.Fatalf("a system with nothing connected to its log reads %q", state)
-	}
-}
-
-// TestAskingHowTheSystemIsDoesNotProbeIt. The view that reads this draws on a timer, and the part that
-// is down is the part that takes the export budget to say so. A call that probed would hand the
-// operator a console that hangs for as long as the broker stays dead.
+// TestAskingHowTheSystemIsDoesNotProbeIt. The view that reads this draws on a timer, and a part that is
+// down is the part that takes the whole budget to say so. A call that probed would hand the operator a
+// console that hangs for as long as that part stays dead.
 func TestAskingHowTheSystemIsDoesNotProbeIt(t *testing.T) {
 	counting := &countingStore{Store: store.NewMemory()}
-	server := waitingSystem(controlplane.Config{Store: counting, Events: messaging.NewMemory()})
+	server := waitingSystem(controlplane.Config{Store: counting})
 	ctx := context.Background()
 
 	server.ProbeHealth(ctx)
@@ -175,7 +127,7 @@ func TestAskingHowTheSystemIsDoesNotProbeIt(t *testing.T) {
 // TestASystemAnswersHowItIsWithWhatItLastFound, over the wire, so the console reads a probe rather than
 // configuration.
 func TestASystemAnswersHowItIsWithWhatItLastFound(t *testing.T) {
-	server := waitingSystem(controlplane.Config{Events: stalledLog{}})
+	server := waitingSystem(controlplane.Config{Store: stalledStore{Store: store.NewMemory()}})
 	ctx := context.Background()
 	server.ProbeHealth(ctx)
 
@@ -190,11 +142,8 @@ func TestASystemAnswersHowItIsWithWhatItLastFound(t *testing.T) {
 	for _, component := range answer.GetComponents() {
 		states[component.GetName()] = component.GetState()
 	}
-	if states[display.HealthEvents] != display.HealthDown {
-		t.Fatalf("the system says its dead event log is %q", states[display.HealthEvents])
-	}
-	if states[display.HealthStore] != display.HealthServing {
-		t.Fatalf("the system says its working store is %q", states[display.HealthStore])
+	if states[display.HealthStore] != display.HealthDown {
+		t.Fatalf("the system says its stalled store is %q", states[display.HealthStore])
 	}
 }
 

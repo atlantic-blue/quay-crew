@@ -57,8 +57,6 @@ func (m Model) routeKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m.updateWizardKey(msg)
 	case modeReading:
 		return m.updateReadingKey(msg)
-	case modeJob:
-		return m.updateJobRecordKey(msg)
 	case modeHelp:
 		// Moving scrolls it, because it is taller than a short window. Any other key closes it, and
 		// nothing in here acts on anything, so there is nothing to get wrong.

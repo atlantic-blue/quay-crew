@@ -11,8 +11,6 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/deploy"
-	"github.com/atlantic-blue/quay-krewe/internal/flow"
-	"github.com/atlantic-blue/quay-krewe/internal/job"
 	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -52,25 +50,6 @@ type Memory struct {
 	hooks         map[string]ImportedHook
 	hooksAttached map[string]map[string]int
 	systemHooks   map[string]int
-	// roles is every revision of every role the system holds, and rolesAttached and systemRoles are the
-	// same two attachment levels once more.
-	roles           map[string]ImportedRole
-	rolesAttached   map[string]map[string]int
-	systemRoles     map[string]int
-	flowGraphs      map[string]map[int]string
-	flowRuns        map[string]*flow.Run
-	flowTransitions map[string][]flow.RecordedTransition
-	flowDispatches  map[string]bool
-	flowSchedules   map[string]*schedule
-	// flowRunJob is the job that carries each run, and flowRunStep is the job
-	// its current step is out with. They are the two columns the Postgres store keeps on the run row,
-	// held here as maps because a flow.Run carries neither: the reducer has no business knowing where
-	// a run sits in the job tree.
-	flowRunJob  map[string]string
-	flowRunStep map[string]string
-	// triggers is the pending trigger queue: something that happened, waiting to start a run. Its
-	// own map for the reason it is its own table, which the migration says.
-	triggers map[string]*flow.Trigger
 	// tasks is a session's history, oldest first, and taskSeen is what makes writing the
 	// same record twice harmless.
 	tasks    []*quaycrewv1.Task
@@ -79,35 +58,6 @@ type Memory struct {
 	// taskSeen does for tasks.
 	sessionEvents []*quaycrewv1.SessionEvent
 	eventSeen     map[string]bool
-	// jobs is the declared intent the system holds, and jobEvents is what happened to each of
-	// them, keyed by the event identifier so writing one twice leaves one.
-	jobs      map[string]*job.Job
-	jobEvents map[string]*job.Event
-	// jobSteps is what each job's session said it finished, in the order it finished it. Beside the
-	// jobs rather than on the row, which is the table the Postgres store keeps, so a listing here
-	// carries what a listing there carries.
-	jobSteps map[string][]job.Step
-	// jobHandoffs is what each job's sessions wrote down when they stopped taking work at the context
-	// ceiling, in the order they wrote them. Beside the jobs for the reason the steps are, so this
-	// store and the Postgres one carry the same thing on one job.
-	jobHandoffs map[string][]job.Handoff
-	// jobQuestions is what each reading of a plan could not settle, keyed by the job the rows sit on.
-	// Beside the jobs for the reason the steps are, so this store and the Postgres one carry the same
-	// thing on one job.
-	jobQuestions map[string][]job.Question
-	// jobAttempts is what each attempt at each job said, in the order the attempts were made, beside
-	// the jobs for the same reason the steps are.
-	jobAttempts map[string][]job.Attempt
-	// jobSteers is every moment the operator had to say something a job should have known, keyed by
-	// the steer identifier.
-	jobSteers map[string]*job.Steer
-	// executions is every run of every stage of every job, keyed by the run's own identifier. A table
-	// of its own, beside the jobs and never among them: nobody declares a run, so a listing of
-	// declared work must never carry one.
-	executions map[string]*job.Execution
-	// limits is what each workspace lets its sessions declare. A workspace with no entry takes the
-	// defaults, which grant nothing.
-	limits map[string]job.Limits
 }
 
 var _ Store = (*Memory)(nil)
@@ -298,7 +248,6 @@ func (m *Memory) FindOrCreateSession(_ context.Context, project, session string,
 		Handle:         session,
 		Status:         "idle",
 		PermissionMode: model.PermissionModeBornIn(born.Mode),
-		Role:           born.Role,
 		Title:          born.Title,
 		CreatedAt:      now,
 		UpdatedAt:      now,
@@ -430,29 +379,14 @@ func (m *Memory) ReclaimedSessions(_ context.Context, limit int) ([]*quaycrewv1.
 // the read lock.
 func (m *Memory) settled(statuses []string, limit int,
 	oldest func(*quaycrewv1.Session) time.Time) []*quaycrewv1.Session {
-	// The sessions job is still holding open, gathered once rather than scanned per session.
-	held := map[string]bool{}
-	for _, one := range m.jobs {
-		if one.Session != "" && !job.Terminal(one.Phase) {
-			held[one.Session] = true
-		}
-	}
-	// And the sessions a run of a stage is holding open. A run is not a job, so it names its session
-	// nowhere in the loop above, and a system reading only that loop would take the container back
-	// from underneath a session that is writing a requirement's tests.
-	for _, one := range m.executions {
-		if one.Session != "" && !job.Terminal(one.Phase) {
-			held[one.Session] = true
-		}
-	}
 	wanted := map[string]bool{}
 	for _, status := range statuses {
 		wanted[status] = true
 	}
 
 	out := make([]*quaycrewv1.Session, 0, len(m.sessions))
-	for id, session := range m.sessions {
-		if session.GetArchivedAt() != nil || !wanted[session.GetStatus()] || held[id] {
+	for _, session := range m.sessions {
+		if session.GetArchivedAt() != nil || !wanted[session.GetStatus()] {
 			continue
 		}
 		out = append(out, clone(session))

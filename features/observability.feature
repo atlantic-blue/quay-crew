@@ -19,12 +19,6 @@ Feature: A call can be followed after it happened
     When a caller presents no token
     Then the system records a span named "quaycrew.v1.ControlPlaneService/ListWorkspaces"
 
-  Scenario: A log line written while a call runs carries that call's correlation id
-    Given an event log that refuses what it is given
-    When the operator dispatches "remember the number" to the project
-    Then the system says the task could not be exported
-    And that line carries the correlation id of the call it happened under
-
   Scenario: A line written before any call arrived carries no correlation id
     When the system logs on its way up
     Then that line names the service and carries no correlation id

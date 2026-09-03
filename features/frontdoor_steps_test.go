@@ -30,7 +30,6 @@ func frontDoorFrom(ctx context.Context) *frontDoorWorld {
 }
 
 func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
-	initializeFrontDoorDifferenceSteps(sc)
 
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		return context.WithValue(ctx, frontDoorKey{}, &frontDoorWorld{}), nil
@@ -60,7 +59,7 @@ func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^it defines the eleven resources, in order, and says which of them are not resources$`, func(ctx context.Context) error {
+	sc.Step(`^it defines the eight resources, in order$`, func(ctx context.Context) error {
 		if wrong := theWordsFor(frontDoorFrom(ctx).body); len(wrong) > 0 {
 			return fmt.Errorf("%s", strings.Join(wrong, "\n"))
 		}
@@ -141,13 +140,6 @@ func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the document it names for the job carries a picture of one, through the controller, the lease, the session and the role$`, func(ctx context.Context) error {
-		if wrong := thePictureOfAJob(frontDoorFrom(ctx).body); len(wrong) > 0 {
-			return fmt.Errorf("%s", strings.Join(wrong, "\n"))
-		}
-		return nil
-	})
-
 	sc.Step(`^it holds no blockquote, no table and no dash used as punctuation$`, func(ctx context.Context) error {
 		if found := unreusableMarkdownIn(frontDoorFrom(ctx).body); len(found) > 0 {
 			return fmt.Errorf("a reader cannot copy this back out:\n%s", strings.Join(found, "\n"))
@@ -158,15 +150,3 @@ func initializeFrontDoorSteps(sc *godog.ScenarioContext) {
 
 // The steps below are registered from initializeFrontDoorSteps, and are kept here rather than inside
 // it so the rule they hold up reads on its own.
-
-// initializeFrontDoorDifferenceSteps holds the front door to sending a reader somewhere that answers
-// the question they ask first: not what a job is, but how it differs from the task they
-// already know how to send. The answer itself lives in the document, not in the front door.
-func initializeFrontDoorDifferenceSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^the document it names for the words tells a task and a job apart$`, func(ctx context.Context) error {
-		if wrong := theDifferenceBetweenATaskAndAJob(frontDoorFrom(ctx).body); len(wrong) > 0 {
-			return fmt.Errorf("%s", strings.Join(wrong, "\n"))
-		}
-		return nil
-	})
-}

@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -81,60 +80,6 @@ func TokenAt(path string) (string, error) {
 // operator's token is refused nothing here.
 type Deny func(fullMethod string, request any) error
 
-// Grant is what a job credential carries: the job it is bound to, where that job lives,
-// what it may call, and when it stops working.
-//
-// It is minted per job rather than per session, so a credential that leaks out of a
-// sandbox grants only what that one job could do, and only until it ends. That is strictly
-// less than the driver's token grants.
-type Grant struct {
-	// Job is the job this credential is bound to. It is the parent of anything the caller
-	// declares, which is what keeps a caller from naming its own parent and escaping the depth count.
-	Job       string
-	Workspace string
-	Project   string
-	// Verbs are what the job's role declared it may call. Empty may call nothing.
-	Verbs []string
-	// ExpiresAt is when the credential stops working on its own. Zero never expires, which is what a
-	// test wants and what a system should not have.
-	//
-	// It is the backstop rather than the control. What normally ends a credential is Ended below: a
-	// job that is over is a better reason to refuse a session than a clock nobody watches, and a
-	// credential handed to a sandbox at dispatch is never refreshed.
-	ExpiresAt time.Time
-	// Ended is the phase the job this credential belongs to finished in, and it is empty while that
-	// job runs. The system writes it when it takes the credential back.
-	Ended string
-}
-
-// May says whether this grant holds a verb.
-func (g Grant) May(verb string) bool {
-	if verb == "" {
-		return false
-	}
-	for _, held := range g.Verbs {
-		if held == verb {
-			return true
-		}
-	}
-	return false
-}
-
-// expired says whether a grant has run out.
-func (g Grant) expired(now time.Time) bool {
-	return !g.ExpiresAt.IsZero() && !g.ExpiresAt.After(now)
-}
-
-// Grants is what recognises a job token. The system holds the minted ones; this package only asks.
-type Grants interface {
-	Grant(token string) (Grant, bool)
-}
-
-// JobDeny is the policy over what a job may call. It sees the method, the request and the
-// grant, and returns the refusal or nil. A nil policy refuses a job caller everything, because a
-// credential nobody judges is a credential that grants everything.
-type JobDeny func(fullMethod string, request any, grant Grant) error
-
 // Policy is who the system recognises, and what each of them may do.
 type Policy struct {
 	// Token is the operator's own, and it is refused nothing.
@@ -142,30 +87,6 @@ type Policy struct {
 	// DriverToken is the driver's, judged by Denied.
 	DriverToken string
 	Denied      Deny
-	// Grants recognises a job credential, and DeniedToJob judges it.
-	Grants      Grants
-	DeniedToJob JobDeny
-	// Now is the clock a credential's life is read against. Nil is the real one.
-	//
-	// A test hands its own. What is worth proving about a credential is what a session still holds
-	// half an hour into its job, and a test that waits half an hour to prove it is a test nobody
-	// runs.
-	Now func() time.Time
-}
-
-// grantKey is how a recognised grant travels to the handler.
-type grantKey struct{}
-
-// WithGrant puts a grant on a context, which is how a handler learns which job is calling.
-func WithGrant(ctx context.Context, grant Grant) context.Context {
-	return context.WithValue(ctx, grantKey{}, grant)
-}
-
-// GrantFrom reads the grant a call carried. A call from the operator or the driver carries none, and
-// that is how a handler tells an operator's call from a session's.
-func GrantFrom(ctx context.Context) (Grant, bool) {
-	grant, carried := ctx.Value(grantKey{}).(Grant)
-	return grant, carried
 }
 
 // ServerOptions returns the interceptors that refuse every call not carrying one of the system's
@@ -177,44 +98,26 @@ func ServerOptions(policy Policy) []grpc.ServerOption {
 	return []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(func(ctx context.Context, req any, info *grpc.UnaryServerInfo,
 			handler grpc.UnaryHandler) (any, error) {
-			who, grant, err := policy.recognise(ctx)
+			who, err := policy.recognise(ctx)
 			if err != nil {
 				return nil, err
 			}
-			switch who {
-			case callerDriver:
-				if policy.Denied != nil {
-					if err := policy.Denied(info.FullMethod, req); err != nil {
-						return nil, err
-					}
-				}
-			case callerJob:
-				if err := policy.judgeJob(info.FullMethod, req, grant); err != nil {
+			if who == callerDriver && policy.Denied != nil {
+				if err := policy.Denied(info.FullMethod, req); err != nil {
 					return nil, err
 				}
-				// The grant travels with the call, so the handler reads which job is
-				// calling rather than being told by whoever called it.
-				ctx = WithGrant(ctx, grant)
 			}
 			return handler(ctx, req)
 		}),
 		grpc.ChainStreamInterceptor(func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo,
 			handler grpc.StreamHandler) error {
-			who, grant, err := policy.recognise(stream.Context())
+			who, err := policy.recognise(stream.Context())
 			if err != nil {
 				return err
 			}
-			// A stream carries no single request to judge, so a caller that is not the operator is
-			// judged on the method alone.
-			switch who {
-			case callerDriver:
-				if policy.Denied != nil {
-					if err := policy.Denied(info.FullMethod, nil); err != nil {
-						return err
-					}
-				}
-			case callerJob:
-				if err := policy.judgeJob(info.FullMethod, nil, grant); err != nil {
+			// A stream carries no single request to judge, so a driver is judged on the method alone.
+			if who == callerDriver && policy.Denied != nil {
+				if err := policy.Denied(info.FullMethod, nil); err != nil {
 					return err
 				}
 			}
@@ -223,83 +126,36 @@ func ServerOptions(policy Policy) []grpc.ServerOption {
 	}
 }
 
-// judgeJob puts a job credential through the policy written for it. No policy refuses everything:
-// a credential nobody judges is a credential that grants everything.
-func (p Policy) judgeJob(fullMethod string, request any, grant Grant) error {
-	if p.DeniedToJob == nil {
-		return status.Error(codes.PermissionDenied,
-			"this system judges no job credential, so a job may call nothing")
-	}
-	return p.DeniedToJob(fullMethod, request, grant)
-}
-
 // caller is who a recognised token says is calling.
 type caller int
 
 const (
 	callerOperator caller = iota
 	callerDriver
-	callerJob
 )
 
 // recognise says who a call is from by the token it carries, or why it is refused.
 //
-// The operator first, then the driver, then the job credentials the system has minted. A system holding
-// no token of its own recognises nobody, because a guard that fails open is the one thing this
-// package exists to prevent.
-func (p Policy) recognise(ctx context.Context) (caller, Grant, error) {
+// The operator first, then the driver. A system holding no token of its own recognises nobody, because
+// a guard that fails open is the one thing this package exists to prevent.
+func (p Policy) recognise(ctx context.Context) (caller, error) {
 	if p.Token == "" && p.DriverToken == "" {
-		return 0, Grant{}, status.Error(codes.Unauthenticated,
+		return 0, status.Error(codes.Unauthenticated,
 			"this system holds no token, so it cannot recognise any caller: restart the control plane with a data directory and one is minted")
 	}
 	presented := presentedToken(ctx)
 	if presented == "" {
-		return 0, Grant{}, status.Error(codes.Unauthenticated,
+		return 0, status.Error(codes.Unauthenticated,
 			"this call carries no system token, so the system cannot tell who is calling: krewe reads "+
 				TokenEnv+", or system.token in the system's data directory")
 	}
 	if p.Token != "" && subtle.ConstantTimeCompare([]byte(presented), []byte(p.Token)) == 1 {
-		return callerOperator, Grant{}, nil
+		return callerOperator, nil
 	}
 	if p.DriverToken != "" && subtle.ConstantTimeCompare([]byte(presented), []byte(p.DriverToken)) == 1 {
-		return callerDriver, Grant{}, nil
+		return callerDriver, nil
 	}
-	if p.Grants != nil {
-		if grant, minted := p.Grants.Grant(presented); minted {
-			return p.judgeCredential(grant)
-		}
-	}
-	return 0, Grant{}, status.Error(codes.Unauthenticated, "the token this call carries is not this system's")
-}
-
-// judgeCredential answers with the job a live credential names, or with why one this system minted no
-// longer works.
-//
-// Each refusal names its own cause. A credential that had run out used to fall through to the
-// refusal a forged token gets, and a session told the token is not this system's reads that as holding
-// a bad credential and stops calling. That is what a root job did for twenty eight of its twenty
-// nine minutes, in issue 449.
-func (p Policy) judgeCredential(grant Grant) (caller, Grant, error) {
-	if grant.Ended != "" {
-		return 0, Grant{}, status.Errorf(codes.Unauthenticated,
-			"the system took this credential back when job %s ended, and that job is %s: a credential lasts "+
-				"as long as the job it was minted for", grant.Job, grant.Ended)
-	}
-	if now := p.now(); grant.expired(now) {
-		return 0, Grant{}, status.Errorf(codes.Unauthenticated,
-			"the credential this call carries ran out at %s and it is now %s: it was minted for job %s, "+
-				"and nothing refreshes a credential inside a sandbox",
-			grant.ExpiresAt.UTC().Format(time.RFC3339), now.UTC().Format(time.RFC3339), grant.Job)
-	}
-	return callerJob, grant, nil
-}
-
-// now is the clock this policy reads a credential's life against.
-func (p Policy) now() time.Time {
-	if p.Now != nil {
-		return p.Now()
-	}
-	return time.Now()
+	return 0, status.Error(codes.Unauthenticated, "the token this call carries is not this system's")
 }
 
 // presentedToken reads the token a call carries, or nothing when it carries none.

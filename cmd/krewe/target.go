@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 )
@@ -125,4 +126,55 @@ func deploysTo(target *quaycrewv1.DeployTarget) string {
 		return ""
 	}
 	return "  " + target.GetAccount() + "/" + target.GetRegion()
+}
+
+// given is the flag values one invocation carried, by name. A flag may be written more than once, so
+// each name holds the values in the order they were given.
+type given map[string][]string
+
+func (g given) has(name string) bool { return len(g[name]) > 0 }
+
+// first is the value a flag was given, trimmed, and empty where it was not given at all.
+func (g given) first(name string) string {
+	if len(g[name]) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(g[name][0])
+}
+
+// valuelessFlags are the flags that are a word on their own. Each says which of two things a
+// command does rather than carrying a value, so the word after one belongs to the command.
+var valuelessFlags = map[string]bool{
+	flagClear: true,
+}
+
+// readFlags separates the values from the words. This tool takes no flags anywhere else, so the
+// parsing is here rather than in a package: `--name value` and `--name=value`, and a flag with no
+// value is refused by name rather than swallowing the word after it.
+func readFlags(args []string) (given, []string, error) {
+	values, rest := given{}, []string{}
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if !strings.HasPrefix(arg, "--") {
+			rest = append(rest, arg)
+			continue
+		}
+		name, value, joined := strings.Cut(arg, "=")
+		if joined {
+			values[name] = append(values[name], value)
+			continue
+		}
+		// The flags that carry no value. Everything else takes the word after it, and a flag at the
+		// end of the line with nothing after it is a value the caller thinks they gave.
+		if valuelessFlags[name] {
+			values[name] = append(values[name], "")
+			continue
+		}
+		if i+1 >= len(args) {
+			return nil, nil, fmt.Errorf("%s was given nothing: write %s <value>", name, name)
+		}
+		i++
+		values[name] = append(values[name], args[i])
+	}
+	return values, rest, nil
 }

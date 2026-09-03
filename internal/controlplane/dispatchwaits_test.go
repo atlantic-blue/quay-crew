@@ -10,7 +10,6 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
-	"github.com/atlantic-blue/quay-krewe/internal/messaging"
 	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 	"github.com/atlantic-blue/quay-krewe/internal/secrets"
@@ -20,20 +19,6 @@ import (
 // testWait is what these tests give a budget that is measured in a minute in production. Long enough
 // that a loaded machine does not trip it, short enough that watching one run out is not a wait.
 const testWait = 300 * time.Millisecond
-
-// stalledLog takes a record and never answers, which is the broker that held a whole system's
-// dispatches inside the call: the connection was accepted and nothing came back.
-type stalledLog struct{}
-
-func (stalledLog) Publish(ctx context.Context, _ string, _, _ []byte) error {
-	<-ctx.Done()
-	return ctx.Err()
-}
-func (stalledLog) Consume(context.Context, string, []string, messaging.Handler) error { return nil }
-func (stalledLog) ConsumePattern(context.Context, string, string, messaging.Handler) error {
-	return nil
-}
-func (stalledLog) Close() {}
 
 // waitingSystem is a control plane with short budgets, so a test can watch one run out.
 func waitingSystem(cfg controlplane.Config) *controlplane.Server {
@@ -49,48 +34,12 @@ func waitingSystem(cfg controlplane.Config) *controlplane.Server {
 	if cfg.Secrets == nil {
 		cfg.Secrets = secrets.NewMemory()
 	}
-	cfg.StartWait, cfg.ExportWait = testWait, testWait
+	cfg.StartWait = testWait
 	return controlplane.NewServer(cfg)
 }
 
-// A dispatch used to stop inside the export of the record that says the session was created. The
-// context there is deliberately detached from the caller's, so nothing was left to end the wait: the
-// row was written, no task was recorded, no container was made, and the caller stayed in the call.
-func TestADispatchIsNotHeldByAnEventLogThatNeverAnswers(t *testing.T) {
-	server := waitingSystem(controlplane.Config{Events: stalledLog{}})
-	_, project := newProject(t, server)
-
-	answered := make(chan error, 1)
-	go func() {
-		_, err := server.Dispatch(context.Background(), &quaycrewv1.DispatchRequest{
-			Project: project, Text: "reply with the word ready", Detach: true,
-		})
-		answered <- err
-	}()
-
-	select {
-	case err := <-answered:
-		if err != nil {
-			t.Fatalf("the dispatch was refused over an export that is only a copy: %v", err)
-		}
-	case <-time.After(20 * testWait):
-		t.Fatal("the dispatch never came back, so the event log is still holding the caller")
-	}
-
-	waiting, giveUp := context.WithTimeout(context.Background(), 20*testWait)
-	defer giveUp()
-	server.WaitForTasks(waiting)
-	if waiting.Err() != nil {
-		t.Fatal("the task never landed")
-	}
-	session := oneSession(t, server)
-	if session.GetStatus() != controlplane.StatusIdle {
-		t.Fatalf("the session reads %q, want idle: the task ran whatever the broker did", session.GetStatus())
-	}
-}
-
-// A sandbox that never starts is the other half: the dispatch has to end, and it has to say which
-// wait it gave up on, because "the dispatch failed" sends the reader to the whole path.
+// A sandbox that never starts: the dispatch has to end, and it has to say which wait it gave up on,
+// because "the dispatch failed" sends the reader to the whole path.
 func TestASandboxThatNeverStartsFailsTheTaskByName(t *testing.T) {
 	provider := &sandbox.FakeProvider{Hold: make(chan struct{})}
 	server := waitingSystem(controlplane.Config{Provider: provider})

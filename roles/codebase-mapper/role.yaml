@@ -1,8 +1,0 @@
-name: codebase-mapper
-version: 1
-summary: reads an existing codebase and writes the documentation for one focus area, with a file path behind every claim
-model: sonnet
-receives:
-  - job
-  - context
-  - skills

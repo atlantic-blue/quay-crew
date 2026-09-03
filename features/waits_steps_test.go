@@ -7,7 +7,6 @@ import (
 	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
-	"github.com/atlantic-blue/quay-krewe/internal/messaging"
 	"github.com/atlantic-blue/quay-krewe/internal/store"
 	"github.com/cucumber/godog"
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -16,25 +15,6 @@ import (
 // scenarioWait is what a scenario about a budget running out gives the system. The measured budget is
 // a minute, and a suite that waits a minute to watch one is a suite nobody runs.
 const scenarioWait = 200 * time.Millisecond
-
-// stallingEventLog takes a record and never answers, which is a broker that accepts the connection
-// and says nothing after it. It is a different fault from one that refuses: a refusal comes back.
-type stallingEventLog struct{}
-
-func (stallingEventLog) Publish(ctx context.Context, _ string, _, _ []byte) error {
-	<-ctx.Done()
-	return ctx.Err()
-}
-
-func (stallingEventLog) Consume(context.Context, string, []string, messaging.Handler) error {
-	return nil
-}
-
-func (stallingEventLog) ConsumePattern(context.Context, string, string, messaging.Handler) error {
-	return nil
-}
-
-func (stallingEventLog) Close() {}
 
 // stallingStore reads the way the real one does and never takes a write, which is the shape of the
 // system this is all about: every listing answered and nothing started.
@@ -53,21 +33,14 @@ func initializeWaitsSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^a sandbox that never starts$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		w.provider.Hold = make(chan struct{})
-		w.startWait, w.exportWait = scenarioWait, scenarioWait
-		return w.restart()
-	})
-
-	sc.Step(`^an event log that never answers$`, func(ctx context.Context) error {
-		w := worldFrom(ctx)
-		w.eventsStall = true
-		w.startWait, w.exportWait = scenarioWait, scenarioWait
+		w.startWait = scenarioWait
 		return w.restart()
 	})
 
 	sc.Step(`^a store that never takes a write$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		w.storeStalls = true
-		w.startWait, w.exportWait = scenarioWait, scenarioWait
+		w.startWait = scenarioWait
 		return w.restart()
 	})
 

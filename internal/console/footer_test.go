@@ -25,7 +25,7 @@ func withBuild(model Model) Model {
 }
 
 // The address a person could type, at each level of the walk down. It is not the breadcrumb: the
-// breadcrumb reads a job by its title and this addresses it by the identifier the listing prints.
+// breadcrumb reads a session by its name and this addresses it by the identifier the listing prints.
 func TestTheFooterSaysTheAddressAtEveryLevel(t *testing.T) {
 	model := withBuild(openedOnTheTree(t, aSystemWithOneOfEverything()))
 
@@ -40,8 +40,7 @@ func TestTheFooterSaysTheAddressAtEveryLevel(t *testing.T) {
 		address string
 	}{
 		{"projects", "acme"},
-		{"jobs", "acme/house-bills"},
-		{"exec", "acme/house-bills/33333333"},
+		{"sessions", "acme/house-bills"},
 	} {
 		model = walk(t, model, enter())
 		if got := model.Position(); got != want.address {
@@ -59,14 +58,14 @@ func TestTheFooterSaysTheAddressAtEveryLevel(t *testing.T) {
 // come all the way home, and the row has to follow it every step.
 func TestTheFooterFollowsTheWayBackFromTheDeepestLevel(t *testing.T) {
 	model := withBuild(openedOnTheTree(t, aSystemWithOneOfEverything()))
-	for range 3 {
+	for range 2 {
 		model = walk(t, model, enter())
 	}
-	if got := model.Position(); got != "acme/house-bills/33333333" {
-		t.Fatalf("the walk down did not reach the running work, it reached %q", got)
+	if got := model.Position(); got != "acme/house-bills" {
+		t.Fatalf("the walk down did not reach the conversations, it reached %q", got)
 	}
 
-	for _, want := range []string{"acme/house-bills", "acme", ""} {
+	for _, want := range []string{"acme", ""} {
 		model = walk(t, model, escape())
 		if got := model.Position(); got != want {
 			t.Fatalf("escape left the address at %q, want %q", got, want)
@@ -86,7 +85,7 @@ func TestTheFooterFollowsTheWayBackFromTheDeepestLevel(t *testing.T) {
 // leave untested: a console can go down four levels and say nothing about coming back.
 func TestEveryLevelBelowTheTopSaysHowToLeave(t *testing.T) {
 	model := withBuild(openedOnTheTree(t, aSystemWithOneOfEverything()))
-	for _, level := range []string{"projects", "jobs", "exec"} {
+	for _, level := range []string{"projects", "sessions"} {
 		model = walk(t, model, enter())
 		if row := footerOf(model); !strings.Contains(row, "esc to go back") {
 			t.Fatalf("the %s level does not say how to leave:\n%s", level, row)
@@ -238,7 +237,7 @@ func TestTheAddressSurvivesABarOpeningOverTheFooter(t *testing.T) {
 	model = walk(t, model, enter())
 
 	model.mode, model.input = modeFilter, "elec"
-	screenSays(t, model, "jobs(house-bills)")
+	screenSays(t, model, "sessions(house-bills)")
 	if row := footerOf(model); !strings.HasPrefix(strings.TrimSpace(stripped(row)), "/elec") {
 		t.Fatalf("the filter bar does not own the footer row:\n%s", row)
 	}
@@ -258,24 +257,4 @@ func stripped(line string) string {
 		out.WriteByte(line[at])
 	}
 	return out.String()
-}
-
-// A job with no session yet cannot be descended into, and the footer must not claim the level it
-// refused to open.
-func TestTheFooterDoesNotAddressALevelTheConsoleRefusedToOpen(t *testing.T) {
-	client := aSystemWithOneOfEverything()
-	client.jobs[0].Session = ""
-	model := withBuild(openedOnTheTree(t, client))
-
-	model = walk(t, model, enter())
-	model = walk(t, model, enter())
-	before := model.Position()
-	model = walk(t, model, enter())
-
-	if got := model.Position(); got != before {
-		t.Fatalf("the address moved to %q on a job with no session, from %q", got, before)
-	}
-	if row := footerOf(model); !strings.Contains(row, before) {
-		t.Fatalf("the footer does not still say %q:\n%s", before, row)
-	}
 }

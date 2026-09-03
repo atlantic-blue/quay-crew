@@ -292,11 +292,11 @@ func (p *Postgres) FindOrCreateSession(ctx context.Context, project, session str
 	// racing for one handle would both find nothing and both call it a creation, and the session
 	// would be announced twice.
 	tag, err := p.pool.Exec(ctx, `
-		insert into sessions (id, workspace, project, handle, status, permission_mode, role, title)
-		values ($1, $2, $3, $4, 'idle', $5, $6, $7)
+		insert into sessions (id, workspace, project, handle, status, permission_mode, title)
+		values ($1, $2, $3, $4, 'idle', $5, $6)
 		on conflict (project, handle) do nothing`,
 		NewID(), owner.GetWorkspace(), project, session, model.PermissionModeBornIn(born.Mode),
-		born.Role, born.Title)
+		born.Title)
 	if err != nil {
 		return nil, false, fmt.Errorf("create session: %w", err)
 	}
@@ -340,7 +340,7 @@ func (p *Postgres) GetSession(ctx context.Context, id string) (*quaycrewv1.Sessi
 // session that scans in three places and fails in the fourth.
 const sessionColumns = `id, workspace, project, handle, status, model_session_id, created_at, ` +
 	`updated_at, archived_at, reclaimed_at, permission_mode, driver, label, description, ` +
-	`described_at_task, role, title`
+	`described_at_task, title`
 
 // ListSessions returns sessions, filtered to one project when set, else to one workspace when set,
 // last moved first: see sortByLastMoved for the order and why it is that one.
@@ -426,13 +426,7 @@ func (p *Postgres) ReclaimSession(ctx context.Context, id string) error {
 func (p *Postgres) IdleSandboxes(ctx context.Context, limit int) ([]*quaycrewv1.Session, error) {
 	return p.settled(ctx, `
 		  and s.status = any($1)
-		  and not exists (
-		      select 1 from jobs w where w.session = s.id and not (w.phase = any($2))
-		  )
-		  and not exists (
-		      select 1 from executions x where x.session = s.id and not (x.phase = any($2))
-		  )
-		order by s.updated_at, s.id`, limit, holdingStatuses(), terminalPhases())
+		order by s.updated_at, s.id`, limit, holdingStatuses())
 }
 
 // ReclaimedSessions is the sessions whose container has already gone, longest reclaimed first.
@@ -443,13 +437,7 @@ func (p *Postgres) IdleSandboxes(ctx context.Context, limit int) ([]*quaycrewv1.
 func (p *Postgres) ReclaimedSessions(ctx context.Context, limit int) ([]*quaycrewv1.Session, error) {
 	return p.settled(ctx, `
 		  and s.status = $1
-		  and not exists (
-		      select 1 from jobs w where w.session = s.id and not (w.phase = any($2))
-		  )
-		  and not exists (
-		      select 1 from executions x where x.session = s.id and not (x.phase = any($2))
-		  )
-		order by s.reclaimed_at nulls first, s.id`, limit, StatusReclaimed, terminalPhases())
+		order by s.reclaimed_at nulls first, s.id`, limit, StatusReclaimed)
 }
 
 // settled runs one of the two queries above. Both read the same rows through the same index and
@@ -656,12 +644,12 @@ func scanSession(rows pgx.Rows) (*quaycrewv1.Session, error) {
 		archivedAt, reclaimedAt                                *time.Time
 		permissionMode                                         string
 		driver                                                 bool
-		label, description, roleName, title                    string
+		label, description, title                              string
 		describedAtTask                                        int32
 	)
 	if err := rows.Scan(&id, &workspace, &project, &handle, &status, &modelSessionID,
 		&createdAt, &updatedAt, &archivedAt, &reclaimedAt, &permissionMode, &driver, &label,
-		&description, &describedAtTask, &roleName, &title); err != nil {
+		&description, &describedAtTask, &title); err != nil {
 		return nil, fmt.Errorf("scan session: %w", err)
 	}
 	session := &quaycrewv1.Session{
@@ -678,7 +666,6 @@ func scanSession(rows pgx.Rows) (*quaycrewv1.Session, error) {
 		Label:           label,
 		Description:     description,
 		DescribedAtTask: describedAtTask,
-		Role:            roleName,
 		Title:           title,
 	}
 	if archivedAt != nil {

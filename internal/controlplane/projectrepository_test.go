@@ -7,7 +7,6 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
-	"github.com/atlantic-blue/quay-krewe/internal/job"
 	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -117,56 +116,6 @@ func TestTheRepositoryOfAProjectTheSystemDoesNotHoldIsNotFound(t *testing.T) {
 	})
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("a repository on a project that does not exist was refused with %v, want not found", err)
-	}
-}
-
-// The point of the record. A job declared with no repository of its own works in the project's, so
-// the session doing it is told where to push without anybody passing the address again.
-func TestAJobWorksInTheProjectsRepository(t *testing.T) {
-	s := newServer(&model.FakeRunner{})
-	_, project := newProject(t, s)
-	record(t, s, project, "atlantic-blue/transcript", "public")
-
-	// In the mode that reaches the network, because a job that works in a repository needs one.
-	declared := declareJobIn(t, s, project, "read the electricity bill", "dangerous")
-
-	if declared.GetRepository() != "atlantic-blue/transcript" {
-		t.Fatalf("the job works in %q, want the project's atlantic-blue/transcript", declared.GetRepository())
-	}
-	// And the session doing it is told, which is the whole point: the line the system puts in front of
-	// a session is what stops work that nobody can read.
-	asked := job.Asked(&job.Job{Brief: "open the bill", Repository: declared.GetRepository()})
-	if !strings.Contains(asked, "atlantic-blue/transcript") || !strings.Contains(asked, "pull request") {
-		t.Errorf("the session doing it is asked %q, want it to name the repository and the pull request", asked)
-	}
-}
-
-// A job that names its own repository keeps it. A project's is where the work lands by default, not
-// a ceiling on where a job may work.
-func TestAJobThatNamesItsOwnRepositoryKeepsIt(t *testing.T) {
-	s := newServer(&model.FakeRunner{})
-	_, project := newProject(t, s)
-	record(t, s, project, "atlantic-blue/transcript", "public")
-
-	created, err := s.CreateJob(context.Background(), &quaycrewv1.CreateJobRequest{
-		Project: project, Title: "fix the listing", Brief: "make the listing sort by the clock it shows",
-		Repository: "atlantic-blue/quay-crew", Mode: "dangerous",
-	})
-	if err != nil {
-		t.Fatalf("CreateJob: %v", err)
-	}
-	if got := created.GetJob().GetRepository(); got != "atlantic-blue/quay-crew" {
-		t.Fatalf("the job works in %q, want the atlantic-blue/quay-crew it named", got)
-	}
-}
-
-// A project with no repository leaves a job as it was, which is every job declared before today.
-func TestAJobInAProjectWithNoRepositoryClaimsNothing(t *testing.T) {
-	s := newServer(&model.FakeRunner{})
-	_, project := newProject(t, s)
-
-	if got := declareJob(t, s, project, "read the electricity bill").GetRepository(); got != "" {
-		t.Fatalf("the job works in %q, and the project it is in works nowhere", got)
 	}
 }
 
