@@ -208,11 +208,16 @@ func (m Model) ViewName() string {
 // are the same words for a workspace and a project, and different ones for a job: the trail carries
 // its title and an address takes its identifier.
 func (m Model) Position() string {
-	typed := make([]string, 0, len(m.stack))
+	typed := make([]string, 0, len(m.stack)+1)
 	for _, entry := range m.stack {
 		if entry.typed != "" {
 			typed = append(typed, entry.typed)
 		}
+	}
+	// A row read on its own is a place as much as a level is: a person reading a job stands at that
+	// job, and the address they would type for it is the listing's with the job on the end.
+	if m.mode == modeScreen && m.screenAt != "" {
+		typed = append(typed, m.screenAt)
 	}
 	return strings.Join(typed, "/")
 }
@@ -593,7 +598,10 @@ func (m Model) footer() string {
 	case modeReading:
 		return faint.Render("   any key closes, j and k scroll")
 	case modeScreen:
-		return faint.Render("   any key closes, j and k read on")
+		// The position, because reading a job is standing at it. The way out and the way on go in the
+		// breadcrumb beside it rather than in place of it: a person who cannot see where they are has
+		// to guess.
+		return m.positionRow()
 	case modeBrowse:
 		return m.positionRow()
 	default:
@@ -720,8 +728,11 @@ func (m Model) breadcrumb() string {
 		line += faint.Render(where) + " "
 	}
 	line += chip.Render("<" + m.active.Name + ">")
-	if len(m.stack) > 0 {
+	if len(m.stack) > 0 || m.mode == modeScreen {
 		line += faint.Render("   esc to go back")
+	}
+	if m.mode == modeScreen {
+		line += faint.Render("   j and k read on")
 	}
 	// What has been typed and not yet acted on: a count, or the first g of gg. The console holds
 	// those keys waiting for the rest of the sequence, and holding a keypress while showing nothing

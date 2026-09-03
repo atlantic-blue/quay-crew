@@ -382,6 +382,19 @@ func (m Model) perform(action Action, row Row) (Model, tea.Cmd) {
 		// is a redraw rather than a call.
 		return m.fold(row), nil
 	}
+	// Reading the row comes before descending from it, and only for a row the listing built a screen
+	// for. A part of a job carries none: it is a run of a stage rather than a job, so the same key
+	// goes down into what that run did.
+	if action.Opens != nil && row.Screen != nil {
+		screen, err := action.Opens(row)
+		if err != nil {
+			// Held, because reading a row is something a person asked for: the refresh on the next
+			// tick would otherwise blank the reason before it was ever read.
+			m.err, m.held = err, true
+			return m, nil
+		}
+		return m.showScreen(screen, row), nil
+	}
 	if action.Descend != "" {
 		return m.descendInto(action.Descend, row)
 	}
@@ -389,9 +402,6 @@ func (m Model) perform(action Action, row Row) (Model, tea.Cmd) {
 		if next, cmd, opened := m.openConversationFor(row); opened {
 			return next, cmd
 		}
-	}
-	if action.Opens != nil {
-		return m, openCmd(action, row)
 	}
 	if action.Reads != nil {
 		return m.showReading(m.active.One()+" "+row.Typed(), action.Reads(row)), nil

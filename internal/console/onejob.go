@@ -1,9 +1,7 @@
 package console
 
 import (
-	"context"
 	"fmt"
-	"time"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/display"
@@ -33,25 +31,14 @@ type Screen struct {
 	Prose []string
 }
 
-// screenMsg is a screen that was fetched, or the reason there is none.
-type screenMsg struct {
-	screen Screen
-	err    error
-}
-
-// openCmd fetches what a key opens. It is a command rather than a call because the screen is read
-// from the system: what a row holds is a summary, and what a person opens is the whole thing.
-func openCmd(action Action, row Row) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		screen, err := action.Opens(ctx, row)
-		if err != nil {
-			return screenMsg{err: err}
-		}
-		return screenMsg{screen: screen}
-	}
+// showScreen puts one row on the screen in place of the listing it was opened from.
+//
+// The address is the row's, because a person reading a job stands at that job: the footer says
+// acme/house-bills/33333333 while they read it, and escape takes them back up to the listing. A
+// screen a person cannot address is a screen they cannot tell somebody else how to reach.
+func (m Model) showScreen(screen Screen, row Row) Model {
+	m.mode, m.screen, m.screenTop, m.screenAt, m.err = modeScreen, screen, 0, row.Typed(), nil
+	return m
 }
 
 // updateScreenKey scrolls the prose and closes on anything else, which is how the panel over the
@@ -68,7 +55,7 @@ func (m Model) updateScreenKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 	case "pgdown", "ctrl+f":
 		m.screenTop += m.proseHeight()
 	default:
-		m.mode, m.screenTop, m.screen, m.err = modeBrowse, 0, Screen{}, nil
+		m.mode, m.screenTop, m.screen, m.screenAt, m.err = modeBrowse, 0, Screen{}, "", nil
 		return m, nil
 	}
 	if most := len(m.proseLines()) - m.proseHeight(); m.screenTop > most {

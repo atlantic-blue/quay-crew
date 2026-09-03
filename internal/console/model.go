@@ -277,6 +277,9 @@ type Model struct {
 	// where it is while they read.
 	screen    Screen
 	screenTop int
+	// screenAt is what a person would type for the row they are reading, which the position row adds
+	// to the address of the listing it was opened from. Empty is a console reading nothing.
+	screenAt string
 	// helpTop is how far the help panel is scrolled. Everything the header used to carry is in there,
 	// so on a short window it is taller than the room it has.
 	helpTop int
@@ -469,15 +472,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.applyResumed(msg)
 	case waitingMsg:
 		return m.applyWaiting(msg)
-	case screenMsg:
-		// Held, because reading one row is something the operator asked for: the refresh on the next
-		// tick would otherwise blank the reason before it was ever read.
-		if msg.err != nil {
-			m.err, m.held = msg.err, true
-			return m, nil
-		}
-		m.mode, m.screen, m.screenTop, m.err = modeScreen, msg.screen, 0, nil
-		return m, nil
 	case infoMsg:
 		m.info = msg.info
 		return m, nil

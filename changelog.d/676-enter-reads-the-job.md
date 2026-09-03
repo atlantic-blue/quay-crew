@@ -13,7 +13,9 @@ the lines that say which sessions are working are the first thing a body of pros
 bottom.
 
 What the job did keeps a key of its own. `t` opens the tasks of its session, which is where enter
-used to go, and it is the same key the sessions view already opens a history under. A run of a stage
-drawn under its job says so and names `t` rather than doing nothing.
+used to go, and it is the same key the sessions view already opens a history under. A part of a job
+is a run of a stage rather than a job, so enter on one still opens what that run did.
+
+The screen is built where the listing is read, so opening a job costs no call to the system.
 
 The scenarios are in [internal/console/onejob_test.go](internal/console/onejob_test.go).

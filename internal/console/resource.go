@@ -60,6 +60,12 @@ type Row struct {
 	// and a project are addressed by the name in the listing, and a job by the shortened identifier
 	// beside its title, so a job is the one row where the two differ. Empty falls back to the name.
 	Address string
+	// Screen is this row read on its own, for a view where a key opens the row rather than
+	// descending from it. It is built where the row is built, because the listing already read
+	// everything the screen says: a second call for what is on the row would make opening a job cost a
+	// round trip, and it could answer something the row beside it disagrees with. Nil is a row nothing
+	// opens.
+	Screen *Screen
 	// Under is the row this one belongs beneath, by identifier, for a listing where some rows are
 	// parts of others. A job that fans out is the case: five parts of one plan and the job somebody
 	// declared read as six unrelated rows, and the one a person asked for is the one at the bottom.
@@ -173,9 +179,9 @@ type Action struct {
 	Reads func(row Row) string
 	// Opens is the row read on its own, in place of the listing, for a row a person points at to find
 	// out what it is. A job is the case: it states a sentence, it stands in one of four stages and
-	// sessions work on it, and a row of cells can hold none of that. It is fetched rather than built
-	// from the row, because what a listing holds is a summary of what a person opens.
-	Opens func(ctx context.Context, row Row) (Screen, error)
+	// sessions work on it, and a row of cells can hold none of that. It answers off the row rather than
+	// calling for it, so a refusal for a row there is nothing to read about is all it decides.
+	Opens func(row Row) (Screen, error)
 	// Folds says this key opens and closes the rows drawn under the selected one, rather than doing
 	// anything to the system. It is the way onto a part: the listing holds the work a person
 	// declared, and this is how the parts of one job are read without the other jobs losing theirs.

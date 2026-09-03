@@ -72,34 +72,16 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 				// stands in were only at the command line.
 				Key:   "enter",
 				Label: "Read",
-				Opens: func(ctx context.Context, row Row) (Screen, error) {
+				Opens: func(row Row) (Screen, error) {
 					if row.ID == "" {
 						return Screen{}, fmt.Errorf("no job selected")
 					}
-					// A run of a stage is drawn in this listing under the job that declared it, and it
-					// is not a job: it states no sentence and runs no stages. It says which key reads
-					// what it did rather than doing nothing.
-					if row.Under != "" {
-						return Screen{}, fmt.Errorf("%s is a run of a stage rather than a job, so there is "+
-							"nothing to read about it here: press t for what its session did",
-							display.ShortID(row.ID))
-					}
-					got, err := client.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: row.ID})
-					if err != nil {
-						return Screen{}, err
-					}
-					// And the sessions working on it. A job that fanned out runs one for each vertical
-					// and holds none of its own, so a screen reading the row alone says nobody is
-					// working on the job somebody is watching. A call that fails costs the sessions
-					// rather than the reading: what a person came for is the job.
-					var running []*quaycrewv1.Execution
-					if runs, err := client.ListExecutions(ctx, &quaycrewv1.ListExecutionsRequest{
-						Job: row.ID,
-					}); err == nil {
-						running = runs.GetExecutions()
-					}
-					return oneJob(got.GetJob(), running), nil
+					return *row.Screen, nil
 				},
+				// A part of a job is a run of one of its stages rather than a job: it states no
+				// sentence and stands in no stage, so the listing builds it no screen and the same key
+				// goes down into what that run did.
+				Descend: "exec",
 			},
 			{
 				// What the job did, rather than the row it runs in. A job's session is one row and a
@@ -173,18 +155,28 @@ func Jobs(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			if err != nil {
 				return nil, err
 			}
-			rows := make([]Row, 0, len(resp.GetJobs()))
-			for _, one := range resp.GetJobs() {
-				rows = append(rows, jobRow(one))
-			}
-			// And the runs of every stage of every one of them, each drawn under the job it belongs
-			// to. It is one call for the whole listing rather than one per job: a view drawing a
-			// hundred jobs must not make a hundred calls to say what is running under them. It is
-			// narrowed the same way the jobs above it are, so the two halves of the screen cannot
-			// disagree about which project is being read.
+			// The runs of every stage of every job, each drawn under the job it belongs to. It is one
+			// call for the whole listing rather than one per job: a view drawing a hundred jobs must
+			// not make a hundred calls to say what is running under them. It is narrowed the same way
+			// the jobs above it are, so the two halves of the screen cannot disagree about which
+			// project is being read.
 			runs, err := client.ListExecutions(ctx, &quaycrewv1.ListExecutionsRequest{Project: project})
 			if err != nil {
 				return nil, err
+			}
+			under := make(map[string][]*quaycrewv1.Execution, len(runs.GetExecutions()))
+			for _, run := range runs.GetExecutions() {
+				under[run.GetJob()] = append(under[run.GetJob()], run)
+			}
+			rows := make([]Row, 0, len(resp.GetJobs())+len(runs.GetExecutions()))
+			for _, one := range resp.GetJobs() {
+				row := jobRow(one)
+				// What the row says when a person opens it, built here because everything it says was
+				// read by the two calls above. A job that fanned out holds no session of its own and
+				// runs one for each vertical, so the runs are read beside the job rather than after it.
+				screen := oneJob(one, under[one.GetId()])
+				row.Screen = &screen
+				rows = append(rows, row)
 			}
 			for _, run := range runs.GetExecutions() {
 				rows = append(rows, executionRow(run))
