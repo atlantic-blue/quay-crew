@@ -161,7 +161,7 @@ var removedCommands = map[string]string{
 		"once with krewe skill import skills/git, attach it with krewe skill attach <workspace> git, " +
 		"and ask the session to clone what it works on. To say which repository a project's work " +
 		"lands in: krewe project repository <owner>/<name>",
-	"header": "the header is gone. Which build this is and the way to help are on the console.s own\n" +
+	"header": "the header is gone. Which build this is and the way to help are on the console's own\n" +
 		"footer row now, on the right of the line that says where you are standing. What is running is\n" +
 		"the listing\n\n  krewe sessions",
 	"panel": "the panel is gone. `krewe` on its own opens the console, full width, and nothing beside\n" +

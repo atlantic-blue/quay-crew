@@ -18,7 +18,7 @@ func TestTheHeaderWordIsRefusedAndNamesTheFooter(t *testing.T) {
 		t.Fatal("krewe header was accepted, and there is no header any more")
 	}
 	said := err.Error()
-	for _, want := range []string{"footer", "krewe room"} {
+	for _, want := range []string{"footer", "krewe sessions"} {
 		if !strings.Contains(said, want) {
 			t.Errorf("the refusal does not name %q: %s", want, said)
 		}
