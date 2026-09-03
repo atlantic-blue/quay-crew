@@ -147,6 +147,9 @@ func (m Model) updateBrowseKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 		// Enter descends where there is somewhere to descend to, and otherwise does whatever this
 		// view has bound to it. On a list of conversations that is opening the one under the cursor,
 		// which is the obvious meaning of the key and the reason it used to do nothing at all.
+		if next, cmd, opened := m.open(); opened {
+			return next, cmd
+		}
 		if m.active.DrillTo != "" {
 			return m.drill()
 		}
@@ -469,6 +472,28 @@ func runCmd(action Action, row Row) tea.Cmd {
 		}
 		return actionDoneMsg{}
 	}
+}
+
+// open reads the row under the cursor, for a view where what a person pointed at is the thing they
+// want rather than a level under it. A job is the case: the row is nine cells and what the job holds
+// is a page.
+func (m Model) open() (Model, tea.Cmd, bool) {
+	if m.active.Opens == nil {
+		return m, nil, false
+	}
+	row, hasRow := m.selectedRowValue()
+	if !hasRow {
+		return m, nil, false
+	}
+	// The system the console is connected to is handed over, rather than the one the view lists
+	// through, because this reads one row again rather than the listing.
+	cmd := m.active.Opens(m.client, row)
+	if cmd == nil {
+		// A row this view does not open, on a view that opens most of them: a part of a job is a run
+		// rather than a job, so enter goes down into it the way it always did.
+		return m, nil, false
+	}
+	return m, cmd, true
 }
 
 // drill descends into the selected row's child resource, remembering where to come back to.
