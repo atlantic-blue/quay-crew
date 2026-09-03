@@ -44,7 +44,7 @@ func JobSessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 				return nil, fmt.Errorf(
 					"open the sessions of a job from the jobs listing: there are none to read without a job")
 			}
-			held, err := client.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: one})
+			held, err := jobInTheListing(ctx, client, one)
 			if err != nil {
 				return nil, err
 			}
@@ -55,8 +55,8 @@ func JobSessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 				return nil, err
 			}
 			rows := make([]Row, 0, len(runs.GetExecutions())+1)
-			if held.GetJob().GetSession() != "" {
-				rows = append(rows, jobOwnSessionRow(held.GetJob()))
+			if held.GetSession() != "" {
+				rows = append(rows, jobOwnSessionRow(held))
 			}
 			for _, run := range runs.GetExecutions() {
 				rows = append(rows, runSessionRow(run))
@@ -64,6 +64,26 @@ func JobSessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			return rows, nil
 		},
 	}
+}
+
+// jobInTheListing is the job this view is opened on, found in the jobs the control plane lists.
+//
+// The one thing read off the job here is the conversation the job itself runs in, which is one of the
+// six lines a fanned out job draws. It comes from the listing so this view asks for what the listing
+// above it already asks for, and a job that has since gone says so by name rather than drawing its
+// runs under a job that is not there.
+func jobInTheListing(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, one string) (
+	*quaycrewv1.Job, error) {
+	listed, err := client.ListJobs(ctx, &quaycrewv1.ListJobsRequest{})
+	if err != nil {
+		return nil, err
+	}
+	for _, held := range listed.GetJobs() {
+		if held.GetId() == one {
+			return held, nil
+		}
+	}
+	return nil, fmt.Errorf("the system holds no job %s, so nothing is running under it", display.ShortID(one))
 }
 
 // theJobItself is what the doing cell says on the job's own conversation. It is the one line here
