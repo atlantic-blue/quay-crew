@@ -112,3 +112,44 @@ func TestJobListSaysWhyTheSystemStoppedAJob(t *testing.T) {
 		t.Errorf("the row reads %q, want the opening of the reason the system wrote", row)
 	}
 }
+
+// Nobody types a reason for most stops. The system writes its own words for those, and the row has
+// to carry them too: a stopped row with an empty cell sends a person to krewe job show, which is the
+// command this requirement removes.
+func TestAStoppedJobNobodyGaveAReasonForStillSaysWhyOnTheRow(t *testing.T) {
+	client := aSystemToJobIn(t)
+	id := declaredHere(t, client, "read the electricity bill")
+	mustRun(t, client, "job", "stop", id)
+
+	row := theRowStartingWith(t, mustRun(t, client, "job", "list"), id)
+
+	// What krewe job show gives for this job, read first, so the row is held to the words a person
+	// would have opened the job to read rather than to a phrase this test invented.
+	shown := mustRun(t, client, "job", "show", id)
+	if !strings.Contains(shown, "stopped by the operator") {
+		t.Fatalf("krewe job show says %q, want the words the system wrote when nobody typed any", shown)
+	}
+	if !strings.Contains(row, "stopped by the operator") {
+		t.Errorf("the row reads %q, want the words krewe job show gives", row)
+	}
+}
+
+// The listing a person runs when they want the stopped work. It is the same rows narrowed, so the
+// reason is on each of them, and a person who narrowed to stopped jobs to find out what happened
+// still opens nothing.
+func TestTheListingNarrowedToStoppedJobsSaysWhyEachOneStopped(t *testing.T) {
+	client := aSystemToJobIn(t)
+	electricity := declaredHere(t, client, "read the electricity bill")
+	water := declaredHere(t, client, "pay the water bill")
+	mustRun(t, client, "job", "stop", electricity, "not due yet")
+	mustRun(t, client, "job", "stop", water, "paid twice")
+
+	narrowed := mustRun(t, client, "job", "list", "--phase", job.PhaseStopped)
+
+	if row := theRowStartingWith(t, narrowed, electricity); !strings.Contains(row, "not due yet") {
+		t.Errorf("the narrowed row reads %q, want it to say why that job stopped", row)
+	}
+	if row := theRowStartingWith(t, narrowed, water); !strings.Contains(row, "paid twice") {
+		t.Errorf("the narrowed row reads %q, want it to say why that job stopped", row)
+	}
+}
