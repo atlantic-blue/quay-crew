@@ -81,16 +81,16 @@ func TestTheSamePieceOfWorkWrittenTwoWaysIsOneClaim(t *testing.T) {
 	}
 }
 
-func TestAClaimLongerThanATitleIsRefused(t *testing.T) {
-	err := job.Declaration{
-		Title: "read the electricity bill", Brief: "open it",
-		Claim: strings.Repeat("c", job.ClaimLimit+1),
-	}.Validate()
-	if err == nil {
-		t.Fatal("a claim of any length was accepted, and a claim is one line naming a piece of work")
-	}
-	if !strings.Contains(err.Error(), "200") {
-		t.Errorf("the refusal is %q, and it does not say the ceiling", err)
+// A claim longer than a title is accepted, where it used to lose the whole declaration.
+//
+// The guide stays: a claim is one line naming a piece of work, and a surface that draws it in a
+// column cuts it there. Nothing refuses it.
+func TestAClaimLongerThanATitleIsAccepted(t *testing.T) {
+	claim := strings.Repeat("c", job.ClaimLimit+1)
+	if err := (job.Declaration{
+		Title: "read the electricity bill", Brief: "open it", Claim: claim,
+	}).Validate(); err != nil {
+		t.Fatalf("a claim of %d bytes was refused: %v", len(claim), err)
 	}
 }
 

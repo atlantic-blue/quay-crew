@@ -61,10 +61,10 @@ Feature: A job claims the piece of work it is doing
     When the caller declares a job titled "pay the electricity bill"
     Then the job is declared
 
-  Scenario: A claim longer than a title is refused
+  Scenario: A claim longer than a title is kept word for word
     When the caller declares a job with a claim of 201 bytes
-    Then the system refuses it and says the ceiling is 200
-    And no job was written
+    Then the job is declared
+    And the job reads back a claim of 201 bytes
 
   # The listing is where somebody looks before starting. A claim nobody can see is a record of
   # intent nobody reads.

@@ -24,10 +24,36 @@ func TestASteerWithNoWordsIsRefused(t *testing.T) {
 	}
 }
 
-func TestASteerLongerThanALineIsRefused(t *testing.T) {
-	err := job.Steered(strings.Repeat("x", job.SteerLimit+1))
-	if err == nil {
-		t.Fatalf("a steer of %d bytes was accepted, and a report prints one line each", job.SteerLimit+1)
+// A steer longer than a line is taken, and cut only where the listing draws it.
+//
+// A steer is made in the moment. The command refused one over 200 bytes, so the operator who had
+// most to say was the one the system would not hear, and the mark was lost with the words.
+func TestASteerLongerThanALineIsTakenAndCutOnlyWhereItIsDrawn(t *testing.T) {
+	said := "the workspace has no secrets, " + strings.Repeat("and the run needs one to read the store, ", 20)
+	if err := job.Steered(said); err != nil {
+		t.Fatalf("a steer of %d bytes was refused: %v", len(said), err)
+	}
+	if kept := job.TidySteer(said); kept != strings.TrimSpace(said) {
+		t.Fatalf("the steer is kept as %d bytes and it was typed as %d", len(kept), len(said))
+	}
+
+	drawn := job.SteerLine(job.TidySteer(said))
+	if len(drawn) > job.SteerLimit {
+		t.Fatalf("the listing draws %d bytes on a line held to %d: %q", len(drawn), job.SteerLimit, drawn)
+	}
+	if !strings.Contains(drawn, "the workspace has no secrets") {
+		t.Fatalf("the cut took the start of what the operator said: %q", drawn)
+	}
+	if !strings.Contains(drawn, "krewe job show") {
+		t.Fatalf("the cut does not say where the rest is: %q", drawn)
+	}
+}
+
+// A steer that fits is drawn as it was typed, with no mark on it.
+func TestASteerThatFitsIsDrawnWhole(t *testing.T) {
+	said := "the workspace has no secrets"
+	if drawn := job.SteerLine(said); drawn != said {
+		t.Fatalf("a steer that fits is drawn as %q", drawn)
 	}
 }
 

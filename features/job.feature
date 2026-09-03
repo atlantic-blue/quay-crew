@@ -47,9 +47,12 @@ Feature: A job is a record the system keeps
     When the caller declares a job with a title of 201 bytes
     Then the system refuses it and says the ceiling is 200
 
-  Scenario: A brief of 16385 bytes is refused
+  # A brief over the guide reaches the job whole. The number is what a reader takes in, and work that
+  # is correct is never thrown away for its length.
+  Scenario: A brief of 16385 bytes is kept word for word
     When the caller declares a job with a brief of 16385 bytes
-    Then the system refuses it and says the ceiling is 16384
+    Then the job is declared
+    And the job reads back a brief of 16385 bytes
 
   Scenario: Job naming a role the workspace does not hold is refused
     When the caller declares a job in the role "backlog-clearer"

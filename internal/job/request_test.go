@@ -148,26 +148,25 @@ func TestTheTaskCarriesTheRequestAboveTheBrief(t *testing.T) {
 	}
 }
 
-// The ceiling is the brief's, not the title's. A request held to one line would make somebody shorten
-// what was said, which is the compression this exists to catch.
-func TestTheRequestIsHeldToTheBriefsCeiling(t *testing.T) {
+// The request carries the same guide as the brief, and neither refuses anything.
+//
+// A ceiling on the request asked somebody to shorten what another person said, which is the one
+// thing it exists not to do. The two numbers are still one number, because they measure the same
+// kind of text.
+func TestTheRequestCarriesTheBriefsGuideAndRefusesNothing(t *testing.T) {
 	declaration := job.Declaration{
 		Workspace: "acme", Project: "acme/one", Title: "one", Brief: "do it",
-		Request: strings.Repeat("a", job.RequestLimit),
+		Request: strings.Repeat("a", job.RequestLimit+1),
 	}
 	if err := declaration.Validate(); err != nil {
-		t.Fatalf("a request at the ceiling was refused: %v", err)
+		t.Fatalf("a request of %d bytes was refused: %v", job.RequestLimit+1, err)
 	}
-	declaration.Request = strings.Repeat("a", job.RequestLimit+1)
-	err := declaration.Validate()
-	if err == nil {
-		t.Fatal("a request over the ceiling was declared")
-	}
-	if !strings.Contains(err.Error(), "asked for in the words it was asked in") {
-		t.Errorf("the refusal does not say why the ceiling is the brief's: %v", err)
+	if kept := declaration.Tidied(); len(kept.Request) != job.RequestLimit+1 {
+		t.Fatalf("the request is kept as %d bytes and it was written as %d",
+			len(kept.Request), job.RequestLimit+1)
 	}
 	if job.RequestLimit != job.BriefLimit {
-		t.Errorf("the request ceiling is %d and the brief's is %d; they are one ceiling",
+		t.Errorf("the request guide is %d and the brief's is %d; they are one guide",
 			job.RequestLimit, job.BriefLimit)
 	}
 }

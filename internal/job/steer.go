@@ -17,8 +17,13 @@ import (
 // it knows it is one, which is why the mark is theirs to make and why it has to be one word: a mark
 // that takes a form to fill in does not get made in the moment.
 
-// SteerLimit is how long the text of a steer may be. It is the title's ceiling, because a report
-// prints one line for each one and what belongs underneath a line belongs in the issue it opens.
+// SteerLimit is how long the text of a steer is expected to be. It is the title's guide, because a
+// report prints one line for each one and what belongs underneath a line belongs in the issue it
+// opens.
+//
+// It refuses nothing. A steer is made in the moment, with a hand already on the keyboard, so a
+// refusal for length is the system arguing with somebody who is telling it that it went wrong. The
+// listing cuts what it draws and says so.
 const SteerLimit = TitleLimit
 
 // WhatASteerIs is the definition, and it ships with the tool because a count is worth nothing when
@@ -50,18 +55,23 @@ func TidySteer(text string) string { return TidySentence(text) }
 // Held at the write, while the person who typed it is looking. A blank line in a report a month
 // later has nobody to ask what it was.
 func Steered(text string) error {
-	tidy := TidySteer(text)
-	switch {
-	case tidy == "":
+	if TidySteer(text) == "" {
 		return fmt.Errorf("a steer carries what you had to say, so say what you had to say: " +
 			"krewe steer \"the workspace has no secrets\"")
-	case len(tidy) > SteerLimit:
-		return fmt.Errorf("the steer is %d bytes and the ceiling is %d, because a report prints one line "+
-			"for each one: say it in a sentence and put the detail in the issue it opens",
-			len(tidy), SteerLimit)
-	default:
-		return nil
 	}
+	return nil
+}
+
+// SteerLine is one steer as a listing draws it, cut to the guide and marked where it was cut.
+//
+// The record keeps every word. This line is beside a time and an identifier in a terminal, so a
+// steer that ran over several lines would push the ones under it off a short screen. The mark says
+// the text goes on, because a line that stops without a mark reads as the whole thing.
+func SteerLine(text string) string {
+	if len(text) <= SteerLimit {
+		return text
+	}
+	return holdTo(text, SteerLimit)
 }
 
 // Compared is how this job's count reads against the one before it, which is the question the count

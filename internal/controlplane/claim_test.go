@@ -130,17 +130,29 @@ func TestAJobReadsBackWhatItClaims(t *testing.T) {
 	}
 }
 
-// A claim longer than a title is refused while the caller is looking, the way every other shape rule
-// on a declaration is.
-func TestAClaimLongerThanATitleIsRefusedAtTheWrite(t *testing.T) {
+// A claim longer than a title is taken at the write, and it reads back word for word.
+//
+// The write refused it, so an operator who named a piece of work in a long sentence lost the job as
+// well as the claim. The number is a guide now, and the surfaces that draw a claim in a column cut
+// it there.
+func TestAClaimLongerThanATitleIsKeptAtTheWrite(t *testing.T) {
 	s := newServer(&model.FakeRunner{})
 	_, project := newProject(t, s)
+	ctx := context.Background()
+	claim := "atlantic-blue/quay-krewe#540 " + strings.Repeat("and the piece of work beside it, ", 20)
 
-	refusal := refusalOf(t, s, &quaycrewv1.CreateJobRequest{
-		Project: project, Title: "build the claim", Brief: "build it",
-		Claim: strings.Repeat("c", job.ClaimLimit+1),
+	declared, err := s.CreateJob(ctx, &quaycrewv1.CreateJobRequest{
+		Project: project, Title: "build the claim", Brief: "build it", Claim: claim,
 	})
-	if status.Code(refusal) != codes.InvalidArgument {
-		t.Errorf("the refusal is %s, want %s", status.Code(refusal), codes.InvalidArgument)
+	if err != nil {
+		t.Fatalf("a claim of %d bytes was refused at the write: %v", len(claim), err)
+	}
+	read, err := s.GetJob(ctx, &quaycrewv1.GetJobRequest{Id: declared.GetJob().GetId()})
+	if err != nil {
+		t.Fatalf("GetJob: %v", err)
+	}
+	if got := read.GetJob().GetClaim(); got != job.TidyClaim(claim) {
+		t.Fatalf("the claim reads back as %d bytes and it was written as %d: %q",
+			len(got), len(job.TidyClaim(claim)), got)
 	}
 }

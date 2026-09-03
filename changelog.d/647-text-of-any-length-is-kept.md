@@ -20,3 +20,9 @@ the job. A long step is now read, kept, and put on the row a person approves.
 `krewe job show` reads the answer back too. The row kept what a person answered, and the tool printed
 it. The wire between the two dropped it. The `Job` message carries a `told` field and nothing filled
 it in, so an answer of any length read back as nothing at all.
+
+The steer goes with them. `krewe steer "..."` refused anything over 200 bytes, so the operator with
+most to say was the one the system would not hear, and the mark was lost with the words.
+`SteerLimit` in [internal/job/steer.go](internal/job/steer.go) is a guide now. The record keeps every
+word. The report draws one line for each steer, so it cuts there and says which command prints the
+whole of it.

@@ -167,3 +167,32 @@ func TestAnIdentifierWithNothingSaidIsRefused(t *testing.T) {
 		t.Fatalf("the job counts something after a refused steer: %q", report)
 	}
 }
+
+// A long steer is taken by the command and drawn cut in the report.
+//
+// The command refused a steer over 200 bytes, so the operator who had most to say was the one the
+// system would not hear. The report is a line each beside a time, so the words are cut where they
+// are drawn and the line says which command prints all of them.
+func TestALongSteerIsTakenAndTheReportSaysItWasCut(t *testing.T) {
+	client := aSystemToJobIn(t)
+	id := declaredHere(t, client, "build the transcripts page")
+	said := "the workspace has no secrets, " + strings.Repeat("and the run needs one to read the store, ", 20)
+
+	mustRun(t, client, "steer", said)
+	report := mustRun(t, client, "steers", id)
+
+	if !strings.Contains(report, "the workspace has no secrets") {
+		t.Fatalf("the report lost the start of what the operator said: %q", report)
+	}
+	if !strings.Contains(report, "krewe job show") {
+		t.Fatalf("the report does not say where the whole steer is: %q", report)
+	}
+	for _, line := range strings.Split(report, "\n") {
+		if len(line) > 300 {
+			t.Fatalf("the report draws a line of %d bytes: %q", len(line), line)
+		}
+	}
+	if !strings.Contains(report, "1 steer") {
+		t.Fatalf("the report does not count the steer: %q", report)
+	}
+}
