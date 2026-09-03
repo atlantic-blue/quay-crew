@@ -283,6 +283,24 @@ Feature: A job is a record the system keeps
     Then the system refuses it and says the job already ended
     And the reason on the job is still "the bill is not due yet"
 
+  # The reason a job stopped shares its line with the title, so the row draws it in a column of its
+  # own width. The record keeps the whole of it.
+  Scenario: A stop reason too long for its column is cut on the row, and whole in the record
+    Given the system listens on an address the tool can dial
+    And a job titled "read the electricity bill"
+    When the caller stops the first job saying a reason longer than the column
+    And the caller lists the jobs through the tool
+    Then the row draws the reason cut to the column, and marks the cut
+    And krewe job show prints the whole reason
+
+  Scenario: A stop reason with a line break in it is drawn as one row
+    Given the system listens on an address the tool can dial
+    And a job titled "read the electricity bill"
+    And a job titled "pay the water bill"
+    When the caller stops the first job saying a reason with a line break in it
+    And the caller lists the jobs through the tool
+    Then the listing draws one row for each job, with both halves of the reason on one of them
+
   Scenario: Job nobody has is refused by name
     When the caller asks for a job that does not exist
     Then the control plane refuses it as not found
