@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/display"
@@ -384,11 +385,7 @@ func reasonColumn(one *quaycrewv1.Job, saying bool) string {
 	if !saying {
 		return ""
 	}
-	why := []rune(whyItEnded(one))
-	if len(why) > reasonWidth {
-		why = append(why[:reasonWidth-1], '…')
-	}
-	return fmt.Sprintf("%-*s ", reasonWidth, string(why))
+	return fmt.Sprintf("%-*s ", reasonWidth, cutToColumn(whyItEnded(one), reasonWidth))
 }
 
 // reasonWidth is how wide the reason column is. It holds a short sentence about what happened, which
@@ -401,16 +398,21 @@ func claimColumn(one *quaycrewv1.Job, claiming bool) string {
 	if !claiming {
 		return ""
 	}
-	claim := one.GetClaim()
-	if len(claim) > claimWidth {
-		claim = claim[:claimWidth-1] + "…"
-	}
-	return fmt.Sprintf("%-*s ", claimWidth, claim)
+	return fmt.Sprintf("%-*s ", claimWidth, cutToColumn(one.GetClaim(), claimWidth))
 }
 
 // claimWidth is how wide the claim column is. It holds an owner, a name and an issue number, which is
 // what most claims are, and cuts anything longer rather than pushing the title off the line.
 const claimWidth = 28
+
+// cutToColumn is a text at the width a column draws it in, with the last character saying the text
+// goes on. Both columns of this listing cut the same way, so a person learns the mark once.
+func cutToColumn(text string, width int) string {
+	if utf8.RuneCountInString(text) <= width {
+		return text
+	}
+	return string([]rune(text)[:width-1]) + "…"
+}
 
 // phaseOf is the word the listing carries. A pending job the system is holding back reads "held"
 // rather than "pending": both are waiting, and only one of them is waiting for a machine.
