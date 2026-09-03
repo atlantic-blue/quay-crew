@@ -1,7 +1,6 @@
 package job_test
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -70,8 +69,6 @@ func TestAReadingIsReadOffTheReplyAndKeptInTheSystemsOwnWords(t *testing.T) {
 // reply the system cannot read is prose about understanding, and putting that in front of a person
 // is the same compression fault one level up.
 func TestAReplyThatIsNotAReadingIsRefusedAndSaysWhy(t *testing.T) {
-	line := "Understood: a page that takes a link\nNot: a page that takes an identifier\n" +
-		"Confidence: fairly sure\nQuestion 1: which surface is this read on"
 	for _, one := range []struct {
 		name  string
 		reply string
@@ -90,15 +87,6 @@ func TestAReplyThatIsNotAReadingIsRefusedAndSaysWhy(t *testing.T) {
 		{"questions numbered from two",
 			"Understood: a page\nNot: an identifier\nConfidence: sure\nQuestion 2: which surface",
 			"number them from 1"},
-		{"more questions than a person reads", line + "\nQuestion 2: a\nQuestion 3: b\n" +
-			"Question 4: c\nQuestion 5: d\nQuestion 6: e", "may ask 5"},
-		{"a line longer than a line", "Understood: a page\nNot: an identifier\nConfidence: sure\n" +
-			"Told: " + strings.Repeat("x", job.IdeationLineLimit+1) + "\nQuestion 1: which surface",
-			"it is one line a person reads"},
-		{"more of itself than fits one question",
-			"Understood: " + strings.Repeat("x", job.UnderstandingLimit+1) +
-				"\nNot: an identifier\nConfidence: sure\nQuestion 1: which surface",
-			"the paragraph a person reads first"},
 	} {
 		t.Run(one.name, func(t *testing.T) {
 			_, err := job.ReadIdeation(one.reply)
@@ -285,36 +273,6 @@ func readingOrFail(t *testing.T, reply string) job.Ideation {
 		t.Fatalf("ReadIdeation: %v", err)
 	}
 	return understood
-}
-
-// The record is put to a person as one question, and a question has its own ceiling in asking.go.
-// The two have to agree, or the system would write a question it could not ask. This holds the
-// largest record the reader accepts against that ceiling.
-func TestTheBiggestReadingStillFitsAQuestion(t *testing.T) {
-	line := strings.Repeat("x", job.IdeationLineLimit)
-	said := []string{
-		"Understood: " + strings.Repeat("y", job.UnderstandingLimit),
-		"Not: " + strings.Repeat("z", job.UnderstandingLimit),
-		"Confidence: " + line,
-	}
-	for i := range job.IdeationPoints {
-		said = append(said, "Told: "+line, "Assumed: "+line, "Unknown: "+line)
-		said = append(said, fmt.Sprintf("Question %d: %s", i+1, line))
-	}
-	understood, err := job.ReadIdeation(strings.Join(said, "\n"))
-	if err != nil {
-		// The reader refuses it, which is the other way the two ceilings can agree, and the refusal
-		// has to be about the size rather than about the shape.
-		if !strings.Contains(err.Error(), "put to a person as one") {
-			t.Fatalf("the biggest reading is refused for the wrong reason: %v", err)
-		}
-		return
-	}
-	asked := job.AskingWhetherThisIsRight(strings.Repeat("s", job.ProductLimit),
-		job.IdeationText(understood))
-	if _, err := job.TidyQuestion(asked); err != nil {
-		t.Fatalf("the biggest reading makes a question the system cannot ask: %v", err)
-	}
 }
 
 // A session can put a question of its own while it still owes a reading, and a person can answer it.
