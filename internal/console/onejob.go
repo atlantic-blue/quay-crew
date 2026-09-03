@@ -84,10 +84,7 @@ func (m Model) updateScreenKey(msg tea.KeyMsg) (Model, tea.Cmd) {
 // what gives way on a short window, because the lines above it are the ones a person is watching.
 func (m Model) screenBody() []string {
 	height := m.bodyHeight() + 1
-	stay := make([]string, 0, len(m.screen.Stay))
-	for _, line := range m.screen.Stay {
-		stay = append(stay, wrapTo(line, m.innerWidth())...)
-	}
+	stay := m.stayLines()
 	// One row of prose at the least. A window too short for both is a window where what is left is
 	// the block that stays, cut from the bottom.
 	if len(stay) > height-1 {
@@ -116,12 +113,18 @@ func (m Model) screenBody() []string {
 
 // proseLines is the reading broken to the width of the panel. A sentence is prose and a terminal is
 // not that wide, so a line left whole is a line cut at the border, which takes the end of it away.
-func (m Model) proseLines() []string {
-	lines := make([]string, 0, len(m.screen.Prose))
-	for _, line := range m.screen.Prose {
-		lines = append(lines, wrapTo(line, m.innerWidth())...)
+func (m Model) proseLines() []string { return m.wrapped(m.screen.Prose) }
+
+// stayLines is the block that holds its place, broken to the same width.
+func (m Model) stayLines() []string { return m.wrapped(m.screen.Stay) }
+
+// wrapped breaks lines to the room inside the panel.
+func (m Model) wrapped(lines []string) []string {
+	broken := make([]string, 0, len(lines))
+	for _, line := range lines {
+		broken = append(broken, wrapTo(line, m.innerWidth())...)
 	}
-	return lines
+	return broken
 }
 
 // proseHeight is how many rows the prose has once the block that stays has taken what it needs.
@@ -131,14 +134,6 @@ func (m Model) proseHeight() int {
 		return 1
 	}
 	return height
-}
-
-func (m Model) stayLines() []string {
-	lines := make([]string, 0, len(m.screen.Stay))
-	for _, line := range m.screen.Stay {
-		lines = append(lines, wrapTo(line, m.innerWidth())...)
-	}
-	return lines
 }
 
 // oneJob is a job read on its own: what it is, where it stands, what works on it, and the sentence
