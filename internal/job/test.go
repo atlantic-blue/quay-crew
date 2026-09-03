@@ -122,7 +122,7 @@ func WriteFailingTests(one *Job, wanted Requirement) string {
 	if branch := BranchFor(one, wanted); branch != "" {
 		said = append(said, CutTheBranch(branch), AnOpenRedPullRequest(branch))
 	}
-	said = append(said, theShapeOfATestReport(wanted))
+	said = append(said, theShapeOfATestReport)
 	return strings.Join(said, "\n\n")
 }
 
@@ -131,17 +131,18 @@ func WriteFailingTests(one *Job, wanted Requirement) string {
 // It asks for the run rather than for a description of it. A suite that finds nothing to execute
 // reports success just the same, so how many tests ran is the number that says whether anything
 // happened at all, and the failures are what say the tests assert something nothing has built yet.
-func theShapeOfATestReport(wanted Requirement) string {
-	return fmt.Sprintf("Run the suite the way the repository runs it, and answer in these lines as "+
-		"well as your outcome:\n\n"+
-		"Requirement: %d\n"+
-		"Ran: how many tests the run executed, as a number\n"+
-		"Failing 1: the name of a test you wrote that fails now\n"+
-		"Failing 2: the name of the next one\n\n"+
-		"Every test you write must fail, because nothing implements this yet. A run that executed "+
-		"nothing is a failure of this task rather than a pass, and a test that passes before anything "+
-		"is built asserts nothing.", wanted.Number)
-}
+//
+// It does not ask which requirement the run is for. The row holds that number, because the stage
+// wrote it when it made the run, so the only thing a worker can do with the question is repeat the
+// answer or get it wrong.
+const theShapeOfATestReport = "Run the suite the way the repository runs it, and answer in these " +
+	"lines as well as your outcome:\n\n" +
+	"Ran: how many tests the run executed, as a number\n" +
+	"Failing 1: the name of a test you wrote that fails now\n" +
+	"Failing 2: the name of the next one\n\n" +
+	"Every test you write must fail, because nothing implements this yet. A run that executed " +
+	"nothing is a failure of this task rather than a pass, and a test that passes before anything " +
+	"is built asserts nothing."
 
 // reportLine is the shape a report is read back in: the requirement it was written for, how many
 // tests the run executed, and each test that fails now.
@@ -150,21 +151,38 @@ func theShapeOfATestReport(wanted Requirement) string {
 // then what the worker meant to say, rather than a sentence that happened to hold the word.
 var reportLine = regexp.MustCompile(`(?im)^[ \t]*(requirement|ran|failing|fails)[ \t]*(\d*)[ \t]*[:.][ \t]*(.+?)[ \t]*$`)
 
-// TestReport is what one worker answers with: which requirement it wrote for, how many tests its run
-// executed, and the tests that fail now.
+// TestReport is what one worker answers with, under the requirement the row says that worker holds:
+// how many tests its run executed, and the tests that fail now.
 type TestReport struct {
+	// Requirement is read off the run, and never off the reply. The stage wrote that number when it
+	// made the run, so the reply can only agree with it or disagree with it, and a report filed under
+	// a number a worker typed would leave one requirement covered twice and another not at all.
 	Requirement int
 	Ran         int
 	Failing     []string
+	// Named is the requirement the reply itself named, where it named one at all, and zero where it
+	// named none. It is here to be compared with the row and never to stand in for it: a reply naming
+	// another requirement is a fault worth saying out loud, and it is not a source of truth.
+	Named int
 }
 
-// ReadTestReport is the report a reply carries, and the refusal where it carries none.
+// NamedAnotherRequirement says the reply named a requirement that is not the one the row holds.
+func (r TestReport) NamedAnotherRequirement() bool {
+	return r.Named != 0 && r.Named != r.Requirement
+}
+
+// ReadTestReport is the report a reply carries for the requirement the row holds, and the refusal
+// where it carries none.
 //
 // The refusals are the whole point of the stage. A run that executed nothing and a run where
 // everything passed both read as success everywhere else in this system, and both mean the tests
 // prove nothing about the requirement they were written for.
-func ReadTestReport(reply string) (TestReport, error) {
-	report := TestReport{}
+//
+// The requirement is the caller's, off the run. Nothing about it is refused here: a worker that left
+// the number out answered the question it was asked, and a worker that named another requirement is
+// read as holding the one the row says it holds.
+func ReadTestReport(reply string, requirement int) (TestReport, error) {
+	report := TestReport{Requirement: requirement}
 	ran, said := "", false
 	for _, found := range reportLine.FindAllStringSubmatch(reply, -1) {
 		text := TidySentence(found[3])
@@ -173,18 +191,18 @@ func ReadTestReport(reply string) (TestReport, error) {
 		}
 		switch strings.ToLower(found[1]) {
 		case "requirement":
-			// Either shape it can arrive in: the number after the word, as the ask asks for it, or the
-			// number the requirement itself is written under. The first readable one stands, the way the
-			// first line under a number stands in a list: a reply naming two requirements wrote for one of
-			// them and mentioned the other.
-			if report.Requirement != 0 {
+			// Either shape it can arrive in: the number after the word, or the number the requirement
+			// itself is written under, which is how the ask states it. The first readable one stands, the
+			// way the first line under a number stands in a list: a reply naming two requirements wrote
+			// for one of them and mentioned the other.
+			if report.Named != 0 {
 				continue
 			}
 			if number, err := strconv.Atoi(found[2]); err == nil {
-				report.Requirement = number
+				report.Named = number
 				continue
 			}
-			report.Requirement, _ = strconv.Atoi(strings.Fields(text)[0])
+			report.Named, _ = strconv.Atoi(strings.Fields(text)[0])
 		case "ran":
 			if !said {
 				ran, said = strings.Fields(text)[0], true
@@ -193,19 +211,16 @@ func ReadTestReport(reply string) (TestReport, error) {
 			report.Failing = append(report.Failing, text)
 		}
 	}
-	if report.Requirement == 0 {
-		return TestReport{}, fmt.Errorf("this reply does not say which requirement it wrote the tests "+
-			"for: write a line %q with the number of the requirement you were given", "Requirement: 2")
-	}
 	if !said {
 		return TestReport{}, fmt.Errorf("this reply does not say how many tests the run executed: run "+
 			"the suite and write a line %q. A run that finds nothing to execute reports success just "+
-			"the same, so the count is what says the tests ran at all", "Ran: 12")
+			"the same, so the count is what says the tests ran at all",
+			"Ran: how many tests the run executed")
 	}
 	count, err := strconv.Atoi(ran)
 	if err != nil {
 		return TestReport{}, fmt.Errorf("%q is not a number of tests: write %q with the count the run "+
-			"printed", ran, "Ran: 12")
+			"printed", ran, "Ran: how many tests the run executed")
 	}
 	report.Ran = count
 	if err := report.red(); err != nil {
@@ -282,6 +297,14 @@ func TestsText(one *Job, wanted []Requirement, reports map[int]TestReport) strin
 		lines = append(lines, fmt.Sprintf("Ran %d: %d", requirement.Number, report.Ran))
 		for _, failing := range report.Failing {
 			lines = append(lines, fmt.Sprintf("Fails %d: %s", requirement.Number, failing))
+		}
+		// A reply that named another requirement, said out loud where a person reads the record. The
+		// tests still belong to the requirement the row holds, and this line is why: somebody looking
+		// at these test names later can see that the worker's own words disagreed with its row.
+		if report.NamedAnotherRequirement() {
+			lines = append(lines, fmt.Sprintf("Fault %d: the run holding this requirement named "+
+				"requirement %d in its report, and the row it ran under says %d",
+				requirement.Number, report.Named, requirement.Number))
 		}
 	}
 	return strings.Join(lines, "\n")
@@ -376,10 +399,10 @@ func TestExecutions(one *Job, wanted []Requirement) []*Execution {
 // The newest worker is the one read. A requirement whose first worker died has a second, and what
 // the stage stands on is the run that happened last.
 //
-// A worker is read as holding the requirement its claim says it holds, rather than the number it
-// wrote in its answer. The two disagreeing is a worker that wrote for somebody else's requirement,
-// and it is refused: a report filed under the wrong number would leave one requirement covered twice
-// and another not at all.
+// A worker is read as holding the requirement its own row says it holds, rather than the number it
+// wrote in its answer. The row is where the stage wrote that number, so it is what the report is
+// filed under, and a reply that names another requirement is said out loud in the record as a fault
+// rather than believed.
 func ReportFrom(one *Job, runs []*Execution, requirement Requirement) (TestReport, string) {
 	if len(runs) == 0 {
 		return TestReport{}, fmt.Sprintf("requirement %d, %q: nothing has written its tests",
@@ -401,14 +424,13 @@ func ReportFrom(one *Job, runs []*Execution, requirement Requirement) (TestRepor
 			"them. Nothing can build against them", requirement.Number, requirement.Text,
 			one.Repository)
 	}
-	report, err := ReadTestReport(worker.Answer)
+	// The number off the run, which is the row this stage wrote when it made the run. The list is
+	// what the record is gathered under and the row is what the worker held, so a run whose number is
+	// not the one asked about is not this requirement's run at all.
+	report, err := ReadTestReport(worker.Answer, worker.Number)
 	if err != nil {
 		return TestReport{}, fmt.Sprintf("requirement %d, %q: %s",
 			requirement.Number, requirement.Text, oneLine(err.Error()))
-	}
-	if report.Requirement != requirement.Number {
-		return TestReport{}, fmt.Sprintf("requirement %d, %q: the run holding it reported on "+
-			"requirement %d instead", requirement.Number, requirement.Text, report.Requirement)
 	}
 	return report, ""
 }
@@ -454,6 +476,11 @@ func (c *Controller) writeTheTests(ctx context.Context, one *Job) {
 			continue
 		}
 		report, why := ReportFrom(one, theirs, requirement)
+		if report.NamedAnotherRequirement() {
+			c.logger.WarnContext(ctx, "a run reported on a requirement it does not hold, and the row it "+
+				"ran under is what its tests are filed under",
+				"job", one.ID, "requirement", requirement.Number, "named", report.Named)
+		}
 		// A report is the worker's word about its own run, and the branch is the thing anybody else can
 		// read. So the tests have to be on it before the report counts: the delivery is asked for here,
 		// once the worker has finished and while its container is still there, because that is where

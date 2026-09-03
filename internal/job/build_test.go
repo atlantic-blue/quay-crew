@@ -178,7 +178,7 @@ func TestARunThatBuiltNothingIsNotAPass(t *testing.T) {
 		{
 			name:  "a reply that says nothing about a run",
 			reply: "I built it and it works",
-			says:  "does not say which vertical",
+			says:  "does not say how many tests the run executed",
 		},
 		{
 			name:  "a reply that names no passing test",
@@ -188,7 +188,7 @@ func TestARunThatBuiltNothingIsNotAPass(t *testing.T) {
 	}
 	for _, one := range sad {
 		t.Run(one.name, func(t *testing.T) {
-			_, err := job.ReadBuildReport(one.reply)
+			_, err := job.ReadBuildReport(one.reply, 1)
 			if err == nil {
 				t.Fatalf("%q was read as a build", one.reply)
 			}
@@ -211,7 +211,7 @@ func TestAReportMustNameTheTestsThatWereFailing(t *testing.T) {
 
 	reports := map[int]job.BuildReport{}
 	for _, vertical := range wanted {
-		report, err := job.ReadBuildReport(aBuildReport(vertical.Number, theFailures[vertical.Number]))
+		report, err := job.ReadBuildReport(aBuildReport(vertical.Number, theFailures[vertical.Number]), vertical.Number)
 		if err != nil {
 			t.Fatalf("ReadBuildReport: %v", err)
 		}
@@ -223,7 +223,7 @@ func TestAReportMustNameTheTestsThatWereFailing(t *testing.T) {
 
 	// The same run, naming a test nobody was waiting on. It is refused by the name of the one that is
 	// missing, so a person reads which test is unaccounted for.
-	elsewhere, err := job.ReadBuildReport(aBuildReport(2, "TestSomethingElseEntirely"))
+	elsewhere, err := job.ReadBuildReport(aBuildReport(2, "TestSomethingElseEntirely"), 2)
 	if err != nil {
 		t.Fatalf("ReadBuildReport: %v", err)
 	}
@@ -240,7 +240,7 @@ func TestTheStageIsNotDoneUntilEveryVerticalIsGreen(t *testing.T) {
 	one := buildingJob()
 	wanted := job.RequirementsOf(one)
 	failing := job.FailuresOn(one.Tests)
-	only, err := job.ReadBuildReport(aBuildReport(1, theFailures[1]))
+	only, err := job.ReadBuildReport(aBuildReport(1, theFailures[1]), 1)
 	if err != nil {
 		t.Fatalf("ReadBuildReport: %v", err)
 	}
@@ -259,20 +259,46 @@ func TestTheStageIsNotDoneUntilEveryVerticalIsGreen(t *testing.T) {
 	}
 }
 
-// A run is read as holding the vertical its claim says it holds. The two disagreeing would leave
-// one vertical covered twice and another not at all.
-func TestARunThatReportedOnSomebodyElsesVerticalIsRefused(t *testing.T) {
+// A run is read as holding the vertical its own row says it holds. A reply that names another one is
+// a fault a person reads in the record, and it does not move the work to that other vertical.
+func TestAReplyNamingAnotherVerticalIsAFaultAndNotASourceOfTruth(t *testing.T) {
 	one := buildingJob()
 	wanted := job.RequirementsOf(one)
 	run := job.BuildExecutions(one, wanted[1:], nil)[0]
-	run.Phase, run.Answer = job.PhaseDone, aBuildReport(1, theFailures[1])
-
-	_, why := job.BuiltBy([]*job.Execution{run}, wanted[1], job.FailuresOn(one.Tests)[2])
-	if why == "" {
-		t.Fatal("a run that reported on vertical 1 was read as building vertical 2")
+	if run.Number != 2 {
+		t.Fatalf("the run of the second vertical carries number %d", run.Number)
 	}
-	if !strings.Contains(why, "reported on vertical 1 instead") {
-		t.Fatalf("the refusal is %q", why)
+	// The work of vertical 2, under a line that says vertical 1. The tests it names as passing are
+	// vertical 2's, which is the evidence that this is vertical 2's run.
+	run.Phase, run.Answer = job.PhaseDone, aBuildReport(1, theFailures[2])
+
+	report, why := job.BuiltBy([]*job.Execution{run}, wanted[1], job.FailuresOn(one.Tests)[2])
+	if why != "" {
+		t.Fatalf("a run whose reply named another vertical is refused: %s", why)
+	}
+	if report.Vertical != 2 {
+		t.Fatalf("the report is filed under vertical %d, and the row it ran under says 2", report.Vertical)
+	}
+	if report.Named != 1 || !report.NamedAnotherVertical() {
+		t.Fatalf("the report reads %+v, want it to hold the vertical the reply named as a fault", report)
+	}
+
+	// And what a person reads: the record keeps this work under vertical 2, and says out loud that the
+	// run's own words disagreed with its row.
+	kept := job.BuiltText(wanted[1:], map[int]job.BuildReport{2: report})
+	for _, line := range []string{
+		"Vertical 2: " + wanted[1].Text,
+		"Passes 2: " + theFailures[2],
+		"Fault 2: the run holding this vertical named vertical 1 in its report, and the row it ran " +
+			"under says 2",
+	} {
+		if !strings.Contains(kept, line) {
+			t.Fatalf("the record is %q, want it to carry %q", kept, line)
+		}
+	}
+	if verticals, passing := job.BuiltOn(kept); verticals != 1 || passing != 1 {
+		t.Fatalf("the record reads as %d verticals and %d passing tests, and the fault is neither",
+			verticals, passing)
 	}
 }
 
@@ -283,7 +309,7 @@ func TestTheRecordNamesTheVerticalEachFileCameFrom(t *testing.T) {
 	wanted := job.RequirementsOf(one)
 	reports := map[int]job.BuildReport{}
 	for _, vertical := range wanted {
-		report, err := job.ReadBuildReport(aBuildReport(vertical.Number, theFailures[vertical.Number]))
+		report, err := job.ReadBuildReport(aBuildReport(vertical.Number, theFailures[vertical.Number]), vertical.Number)
 		if err != nil {
 			t.Fatalf("ReadBuildReport: %v", err)
 		}
@@ -315,12 +341,19 @@ func TestTheDoubleAnswersABuildReportTheSystemCanRead(t *testing.T) {
 	wanted := job.RequirementsOf(one)
 	asked := job.BuildTheVertical(one, wanted[1], job.FailuresOn(one.Tests)[2], job.Opened{})
 
-	report, err := job.ReadBuildReport(model.FakeBuildReport(asked))
+	// The ask does not ask which vertical the run is for, so the double states none, and the number
+	// comes off the run. A double that stated one would prove the reading of a line the stage no
+	// longer asks any worker to write.
+	answered := model.FakeBuildReport(asked)
+	if strings.Contains(answered, "\nVertical:") {
+		t.Fatalf("the double names its vertical on a report line, which nothing asks for:\n%s", answered)
+	}
+	report, err := job.ReadBuildReport(answered, 2)
 	if err != nil {
 		t.Fatalf("the double's answer is not a report: %v", err)
 	}
-	if report.Vertical != 2 {
-		t.Fatalf("the double reported on vertical %d, and the run holds 2", report.Vertical)
+	if report.Vertical != 2 || report.Named != 0 {
+		t.Fatalf("the report is filed under vertical %d and names %d", report.Vertical, report.Named)
 	}
 	// It names the test it was told fails, because the stage refuses a report that does not.
 	if _, why := job.BuiltBy([]*job.Execution{{Phase: job.PhaseDone,

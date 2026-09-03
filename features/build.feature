@@ -83,6 +83,26 @@ Feature: The failing tests become an implementation, and nothing that builds can
     Then the job is asking, and the row carries nothing built
     And the question says the test was already passing
 
+  # The number is on the row, the same as in the stage before this one. Asking the worker for it buys
+  # nothing and costs a report, and a reply that names another vertical is said out loud as a fault
+  # rather than believed: the work belongs to the vertical the row holds.
+  Scenario: A builder is asked for its run and never for the number its row holds
+    Given a job whose plan a person approved and whose suite is red for 2 verticals
+    When the controller ticks
+    Then no builder is asked which vertical it holds
+    When every worker answers with its run
+    And the controller ticks again
+    Then the row carries what was built for every vertical
+
+  Scenario: A builder that names another vertical is recorded as a fault
+    Given a job whose plan a person approved and whose suite is red for 2 verticals
+    And the builder for vertical 2 will answer naming vertical 1
+    When the controller ticks
+    And every worker answers with its run
+    And the controller ticks again
+    Then the row carries what was built for every vertical
+    And the row says the run holding vertical 2 named vertical 1
+
   Scenario: A vertical whose worker died stops the job for a person
     Given a job whose plan a person approved and whose suite is red for 2 verticals
     When the controller ticks

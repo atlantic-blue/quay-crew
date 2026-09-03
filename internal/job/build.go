@@ -117,10 +117,12 @@ func BuildTheVertical(one *Job, wanted Requirement, failing []string, opened Ope
 // its own says nothing: a suite that finds nothing to execute reports success just the same, and a
 // test that was already passing before anything was built passes after it too. What the files say is
 // the difference between a build and a claim of one.
+//
+// It does not ask which vertical the run is for, for the reason the test stage does not ask which
+// requirement: the row holds that number, and a worker asked to repeat it can only get it wrong.
 func theShapeOfABuildReport(wanted Requirement) string {
 	return fmt.Sprintf("Run the suite the way the repository runs it, and answer in these lines as "+
 		"well as your outcome:\n\n"+
-		"Vertical: %d\n"+
 		"Ran: how many tests the run executed, as a number\n"+
 		"Red: how many tests still fail, as a number\n"+
 		"Passing 1: the name of a test of yours that failed before and passes now\n"+
@@ -131,7 +133,7 @@ func theShapeOfABuildReport(wanted Requirement) string {
 		"Taken: what was running, the command behind it, and what has to be up to get it again\n\n"+
 		"A run that executed nothing is a failure of this task rather than a pass. A green run that "+
 		"changed no file means the test was already passing, which builds nothing.\n\n%s",
-		wanted.Number, theEvidenceLines(wanted.Evidence), ShowItWorking(wanted))
+		theEvidenceLines(wanted.Evidence), ShowItWorking(wanted))
 }
 
 // buildLine is the shape a report is read back in: the vertical it was built for, what the run did,
@@ -144,14 +146,21 @@ var buildLine = regexp.MustCompile(
 	`(?im)^[ \t]*(vertical|ran|red|passing|passes|changed|picture|recording|steps?|taken)[ \t]*(\d*)` +
 		`[ \t]*[:.][ \t]*(.+?)[ \t]*$`)
 
-// BuildReport is what one worker answers with: which vertical it built, what its run did, the tests
-// that pass now, the files it changed to make them, and the picture of the vertical running.
+// BuildReport is what one worker answers with, under the vertical the row says that worker holds:
+// what its run did, the tests that pass now, the files it changed to make them, and the picture of
+// the vertical running.
 type BuildReport struct {
+	// Vertical is read off the run, and never off the reply, for the reason a test report's
+	// requirement is: the stage wrote that number when it made the run, so the reply can only agree
+	// with it or disagree with it.
 	Vertical int
-	Ran      int
-	Red      int
-	Passing  []string
-	Changed  []string
+	// Named is the vertical the reply itself named, where it named one at all, and zero where it named
+	// none. It is compared with the row and never used in place of it.
+	Named   int
+	Ran     int
+	Red     int
+	Passing []string
+	Changed []string
 	// Picture is the name of a picture or a recording of this vertical running, in the workspace's
 	// shared folder, Steps are what a person runs or presses to see it themselves, and Taken is the
 	// label saying where any of it came from and what it takes to get it again. They are what a person
@@ -182,13 +191,23 @@ func (r BuildReport) Evidence() Evidence {
 	}
 }
 
-// ReadBuildReport is the report a reply carries, and the refusal where it carries none.
+// NamedAnotherVertical says the reply named a vertical that is not the one the row holds.
+func (r BuildReport) NamedAnotherVertical() bool {
+	return r.Named != 0 && r.Named != r.Vertical
+}
+
+// ReadBuildReport is the report a reply carries for the vertical the row holds, and the refusal where
+// it carries none.
 //
 // The refusals are the whole point of the stage. A run that executed nothing, a run that is still red,
 // and a green run that changed nothing all read as success everywhere else in this system, and none of
 // them says the vertical was built.
-func ReadBuildReport(reply string) (BuildReport, error) {
-	report := BuildReport{}
+//
+// The vertical is the caller's, off the run. Nothing about it is refused here: a worker that left the
+// number out answered the question it was asked, and a worker that named another vertical is read as
+// holding the one the row says it holds.
+func ReadBuildReport(reply string, vertical int) (BuildReport, error) {
+	report := BuildReport{Vertical: vertical}
 	ran, red, saidRan, saidRed := "", "", false, false
 	for _, found := range buildLine.FindAllStringSubmatch(reply, -1) {
 		text := TidySentence(found[3])
@@ -197,17 +216,17 @@ func ReadBuildReport(reply string) (BuildReport, error) {
 		}
 		switch strings.ToLower(found[1]) {
 		case "vertical":
-			// Either shape it can arrive in: the number after the word, as the ask asks for it, or the
-			// number the vertical itself is written under. The first readable one stands, the way the first
-			// line under a number stands in a list.
-			if report.Vertical != 0 {
+			// Either shape it can arrive in: the number after the word, or the number the vertical itself
+			// is written under, which is how the ask states it. The first readable one stands, the way the
+			// first line under a number stands in a list.
+			if report.Named != 0 {
 				continue
 			}
 			if number, err := strconv.Atoi(found[2]); err == nil {
-				report.Vertical = number
+				report.Named = number
 				continue
 			}
-			report.Vertical, _ = strconv.Atoi(strings.Fields(text)[0])
+			report.Named, _ = strconv.Atoi(strings.Fields(text)[0])
 		case "ran":
 			if !saidRan {
 				ran, saidRan = strings.Fields(text)[0], true
@@ -242,28 +261,25 @@ func ReadBuildReport(reply string) (BuildReport, error) {
 			report.Changed = append(report.Changed, text)
 		}
 	}
-	if report.Vertical == 0 {
-		return BuildReport{}, fmt.Errorf("this reply does not say which vertical it built: write a "+
-			"line %q with the number of the vertical you were given", "Vertical: 2")
-	}
 	if !saidRan {
 		return BuildReport{}, fmt.Errorf("this reply does not say how many tests the run executed: run "+
 			"the suite and write a line %q. A run that finds nothing to execute reports success just the "+
-			"same, so the count is what says the tests ran at all", "Ran: 14")
+			"same, so the count is what says the tests ran at all",
+			"Ran: how many tests the run executed")
 	}
 	count, err := strconv.Atoi(ran)
 	if err != nil {
 		return BuildReport{}, fmt.Errorf("%q is not a number of tests: write %q with the count the run "+
-			"printed", ran, "Ran: 14")
+			"printed", ran, "Ran: how many tests the run executed")
 	}
 	report.Ran = count
 	if !saidRed {
 		return BuildReport{}, fmt.Errorf("this reply does not say how many tests still fail: write a "+
-			"line %q with the count the run printed", "Red: 0")
+			"line %q with the count the run printed", "Red: how many tests still fail")
 	}
 	if report.Red, err = strconv.Atoi(red); err != nil {
 		return BuildReport{}, fmt.Errorf("%q is not a number of failing tests: write %q with the count "+
-			"the run printed", red, "Red: 0")
+			"the run printed", red, "Red: how many tests still fail")
 	}
 	if err := report.green(); err != nil {
 		return BuildReport{}, err
@@ -420,6 +436,13 @@ func BuiltText(wanted []Requirement, reports map[int]BuildReport) string {
 			lines = append(lines, fmt.Sprintf("Picture %d: %s", one.Number, shown.File))
 		}
 		lines = append(lines, fmt.Sprintf("Taken %d: %s", one.Number, shown.Taken))
+		// A reply that named another vertical, said out loud where a person reads the record, for the
+		// reason the test record says it: the work belongs to the vertical the row holds, and a reader
+		// of these files later can see that the worker's own words disagreed with its row.
+		if report.NamedAnotherVertical() {
+			lines = append(lines, fmt.Sprintf("Fault %d: the run holding this vertical named vertical %d "+
+				"in its report, and the row it ran under says %d", one.Number, report.Named, one.Number))
+		}
 	}
 	return strings.Join(lines, "\n")
 }
@@ -555,6 +578,11 @@ func (c *Controller) buildIt(ctx context.Context, one *Job) {
 			continue
 		}
 		report, why := BuiltBy(theirs, vertical, failing[vertical.Number])
+		if report.NamedAnotherVertical() {
+			c.logger.WarnContext(ctx, "a run reported on a vertical it does not hold, and the row it ran "+
+				"under is what its work is filed under",
+				"job", one.ID, "vertical", vertical.Number, "named", report.Named)
+		}
 		// A vertical whose worker answered before a person sent the work back is not built, however
 		// well that answer reads. The report was read once already and the picture in it is what they
 		// looked at, so reading it again would put the same picture in front of them and call it an
@@ -634,10 +662,10 @@ func (c *Controller) openedFor(ctx context.Context, one *Job, wanted []Requireme
 // The newest worker is the one read. A vertical whose first worker died has a second, and what the
 // stage stands on is the run that happened last.
 //
-// A worker is read as holding the vertical its claim says it holds, rather than the number it wrote in
-// its answer. The two disagreeing is a worker that reported on somebody else's vertical, and it is
-// refused: a report filed under the wrong number would leave one vertical covered twice and another
-// not at all.
+// A worker is read as holding the vertical its own row says it holds, rather than the number it wrote
+// in its answer. The row is where the stage wrote that number, so it is what the report is filed
+// under, and a reply that names another vertical is said out loud in the record as a fault rather
+// than believed.
 func BuiltBy(runs []*Execution, vertical Requirement, failing []string) (BuildReport, string) {
 	if len(runs) == 0 {
 		return BuildReport{}, fmt.Sprintf("vertical %d, %q: nothing has built it",
@@ -648,14 +676,11 @@ func BuiltBy(runs []*Execution, vertical Requirement, failing []string) (BuildRe
 		return BuildReport{}, fmt.Sprintf("vertical %d, %q: the run holding it %s and said nothing, %s",
 			vertical.Number, vertical.Text, worker.Phase, oneLine(worker.Reason))
 	}
-	report, err := ReadBuildReport(worker.Answer)
+	// The number off the run, which is the row this stage wrote when it made the run.
+	report, err := ReadBuildReport(worker.Answer, worker.Number)
 	if err != nil {
 		return BuildReport{}, fmt.Sprintf("vertical %d, %q: %s",
 			vertical.Number, vertical.Text, oneLine(err.Error()))
-	}
-	if report.Vertical != vertical.Number {
-		return BuildReport{}, fmt.Sprintf("vertical %d, %q: the run holding it reported on "+
-			"vertical %d instead", vertical.Number, vertical.Text, report.Vertical)
 	}
 	// Early, and again at the close of the stage. A worker that answered with the wrong kind is asked
 	// again while it still has a session, rather than at the end when every other vertical is green.

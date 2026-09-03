@@ -127,6 +127,66 @@ func initializeBuildStageSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// One builder of the fan out, keyed on the vertical it is given, so the others answer the way
+	// every builder does. It names the tests its own vertical was waiting on, which is what makes it
+	// that vertical's run whatever number its own words carry.
+	sc.Step(`^the builder for vertical (\d+) will answer naming vertical (\d+)$`,
+		func(ctx context.Context, holds, names int) error {
+			mine, err := theRequirement(ctx, holds)
+			if err != nil {
+				return err
+			}
+			worldFrom(ctx).runner.willAnswer(mine.Text, fmt.Sprintf("I built it.\n\nVertical: %d\n"+
+				"Ran: 14\nRed: 0\nPassing 1: TestRequirement%dFailsUntilSomethingBuildsIt\n"+
+				"Changed 1: internal/transcript/page.go\nPicture: page.png\n"+
+				"Taken: the page at http://localhost:3000, drawn with krewe render while the server was "+
+				"up\n\nOutcome: proved", names, holds))
+			return nil
+		})
+
+	// The question the stage stopped asking, for the reason the test stage stopped asking it.
+	sc.Step(`^no builder is asked which vertical it holds$`, func(ctx context.Context) error {
+		runs, err := theBuilders(ctx)
+		if err != nil {
+			return err
+		}
+		if len(runs) == 0 {
+			return fmt.Errorf("nothing is building, so nothing was asked anything")
+		}
+		for _, run := range runs {
+			asked, err := whatTheSessionWasAsked(ctx, run.GetSession())
+			if err != nil {
+				return err
+			}
+			for _, said := range []string{"Vertical:", "the number of the vertical"} {
+				if strings.Contains(asked, said) {
+					return fmt.Errorf("the builder of number %d is asked for %q, which its row already "+
+						"holds:\n%s", run.GetNumber(), said, asked)
+				}
+			}
+			if !strings.Contains(asked, "Ran: how many tests the run executed") {
+				return fmt.Errorf("the builder of number %d is not asked for its run:\n%s",
+					run.GetNumber(), asked)
+			}
+		}
+		return nil
+	})
+
+	// The fault on the row a person reads the build back off. The work stays under the vertical the
+	// row holds, and the record says the run's own words disagreed with it.
+	sc.Step(`^the row says the run holding vertical (\d+) named vertical (\d+)$`,
+		func(ctx context.Context, holds, named int) error {
+			one, err := readJob(ctx, 0)
+			if err != nil {
+				return err
+			}
+			said := fmt.Sprintf("Fault %d: the run holding this vertical named vertical %d", holds, named)
+			if !strings.Contains(one.GetBuild(), said) {
+				return fmt.Errorf("the record does not say %q:\n%s", said, one.GetBuild())
+			}
+			return nil
+		})
+
 	sc.Step(`^a worker is building each vertical, and the job itself has no session$`,
 		func(ctx context.Context) error {
 			one, err := readJob(ctx, 0)

@@ -24,10 +24,13 @@ import (
 // Each ends with an outcome, because every task asks for one and a worker that states none stops for
 // that instead, which would be a scenario about the outcome line rather than about the suite.
 const (
-	aRunThatExecutedNothing = "I wrote the tests.\n\nRequirement: 1\nRan: 0\nFailing 1: TestNothingRan" +
+	aRunThatExecutedNothing = "I wrote the tests.\n\nRan: 0\nFailing 1: TestNothingRan" +
 		"\n\nOutcome: proved"
-	aRunWhereEverythingPassed = "I wrote the tests and they all pass.\n\nRequirement: 1\nRan: 4" +
-		"\n\nOutcome: proved"
+	aRunWhereEverythingPassed = "I wrote the tests and they all pass.\n\nRan: 4\n\nOutcome: proved"
+	// aRunNamingAnotherRequirement is the report of a worker whose own words disagree with its row. The
+	// row is what the record stands on, and the disagreement is said out loud rather than believed.
+	aRunNamingAnotherRequirement = "I wrote the tests.\n\nRequirement: 2\nRan: 12\n" +
+		"Failing 1: TestTheOtherOneFailsUntilItIsBuilt\n\nOutcome: proved"
 )
 
 func initializeTestStageSteps(sc *godog.ScenarioContext) {
@@ -96,6 +99,81 @@ func initializeTestStageSteps(sc *godog.ScenarioContext) {
 		worldFrom(ctx).runner.willAnswer(job.TheTestAsk, aRunWhereEverythingPassed)
 		return nil
 	})
+
+	// One worker of the fan out, keyed on the requirement it is given, so the other workers answer
+	// the way every worker does.
+	sc.Step(`^the worker for requirement (\d+) will answer naming requirement (\d+)$`,
+		func(ctx context.Context, holds, names int) error {
+			mine, err := theRequirement(ctx, holds)
+			if err != nil {
+				return err
+			}
+			worldFrom(ctx).runner.willAnswer(mine.Text,
+				strings.Replace(aRunNamingAnotherRequirement, "Requirement: 2",
+					fmt.Sprintf("Requirement: %d", names), 1))
+			return nil
+		})
+
+	// The question the stage stopped asking. The row holds that number, so a worker asked for it can
+	// only repeat it or get it wrong, and getting it wrong used to cost the whole stage.
+	sc.Step(`^no worker is asked which requirement it holds$`, func(ctx context.Context) error {
+		runs, err := theWorkers(ctx)
+		if err != nil {
+			return err
+		}
+		if len(runs) == 0 {
+			return fmt.Errorf("no worker is writing tests, so nothing was asked anything")
+		}
+		for _, run := range runs {
+			asked, err := whatTheSessionWasAsked(ctx, run.GetSession())
+			if err != nil {
+				return err
+			}
+			for _, said := range []string{"Requirement:", "the number of the requirement"} {
+				if strings.Contains(asked, said) {
+					return fmt.Errorf("the worker of number %d is asked for %q, which its row already "+
+						"holds:\n%s", run.GetNumber(), said, asked)
+				}
+			}
+			if !strings.Contains(asked, "Ran: how many tests the run executed") {
+				return fmt.Errorf("the worker of number %d is not asked for its run:\n%s",
+					run.GetNumber(), asked)
+			}
+		}
+		return nil
+	})
+
+	// And what the workers really answered, because a double that named its requirement would prove
+	// the reading of a line no worker is asked to write.
+	sc.Step(`^no worker named a requirement in its report$`, func(ctx context.Context) error {
+		runs, err := theWorkers(ctx)
+		if err != nil {
+			return err
+		}
+		for _, run := range runs {
+			if strings.Contains(run.GetAnswer(), "\nRequirement:") {
+				return fmt.Errorf("the worker of number %d named its requirement:\n%s",
+					run.GetNumber(), run.GetAnswer())
+			}
+		}
+		return nil
+	})
+
+	// The fault, at the surface a person reads it on. The tests stay under the requirement the row
+	// holds, and the record says the run's own words disagreed with that row.
+	sc.Step(`^the reading says the run holding requirement (\d+) named requirement (\d+)$`,
+		func(ctx context.Context, holds, named int) error {
+			out := toolFrom(ctx).stdout
+			said := fmt.Sprintf("Fault %d: the run holding this requirement named requirement %d",
+				holds, named)
+			if !strings.Contains(out, said) {
+				return fmt.Errorf("the reading does not say %q:\n%s", said, out)
+			}
+			if strings.Contains(out, fmt.Sprintf("Fails %d: TestTheOtherOneFailsUntilItIsBuilt", named)) {
+				return fmt.Errorf("the reading filed this run's tests under requirement %d:\n%s", named, out)
+			}
+			return nil
+		})
 
 	sc.Step(`^a worker is writing the tests for each requirement, and the job itself has no session$`,
 		func(ctx context.Context) error {
@@ -363,6 +441,20 @@ func initializeTestStageSteps(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+}
+
+// theRequirement is one requirement of this job's accepted list, by its number.
+func theRequirement(ctx context.Context, number int) (job.Requirement, error) {
+	one, err := readJob(ctx, 0)
+	if err != nil {
+		return job.Requirement{}, err
+	}
+	for _, requirement := range job.RequirementsOf(jobAsKept(one)) {
+		if requirement.Number == number {
+			return requirement, nil
+		}
+	}
+	return job.Requirement{}, fmt.Errorf("this job has no requirement %d", number)
 }
 
 // theWorkers is every run this job's test stage made, read as the runs of that stage.

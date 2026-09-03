@@ -396,7 +396,7 @@ func TestABuildReportIsReadInTheKindItAnsweredWith(t *testing.T) {
 	}
 	for _, one := range held {
 		t.Run(one.name, func(t *testing.T) {
-			report, err := job.ReadBuildReport(aReportOf(1, one.evidence))
+			report, err := job.ReadBuildReport(aReportOf(1, one.evidence), 1)
 			if err != nil {
 				t.Fatalf("ReadBuildReport: %v", err)
 			}
@@ -432,7 +432,7 @@ func TestTheRecordKeepsEachKindUnderItsVertical(t *testing.T) {
 		"Steps 1: run krewe job list, and the job is on the listing\n" +
 			"Steps 2: press r, and the listing comes back with the row there",
 	} {
-		report, err := job.ReadBuildReport(aReportOf(at+1, evidence))
+		report, err := job.ReadBuildReport(aReportOf(at+1, evidence), at+1)
 		if err != nil {
 			t.Fatalf("vertical %d: %v", at+1, err)
 		}
@@ -471,7 +471,7 @@ func TestTheStageDoesNotCloseOnTheWrongKind(t *testing.T) {
 		{Number: 1, Text: "a person checks the refusal", Shown: "it is refused", Evidence: job.KindSteps},
 	}
 	failing := map[int][]string{1: {"TestItFails"}}
-	report, err := job.ReadBuildReport(aReportOf(1, "Picture: home.png"))
+	report, err := job.ReadBuildReport(aReportOf(1, "Picture: home.png"), 1)
 	if err != nil {
 		t.Fatalf("ReadBuildReport: %v", err)
 	}
@@ -548,7 +548,7 @@ func TestThePersonIsAskedInTheShapeOfEachKind(t *testing.T) {
 		"Steps 1: run krewe job list, and the job is on the listing\n" +
 			"Steps 2: press r, and the listing comes back with the row there",
 	} {
-		report, err := job.ReadBuildReport(aReportOf(at+1, evidence))
+		report, err := job.ReadBuildReport(aReportOf(at+1, evidence), at+1)
 		if err != nil {
 			t.Fatalf("vertical %d: %v", at+1, err)
 		}
