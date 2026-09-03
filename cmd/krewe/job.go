@@ -318,9 +318,9 @@ func runJobList(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	// read before somebody starts work a job already has, and a column of blanks on every listing is a
 	// column nobody reads by the second week.
 	claiming := anythingClaimed(resp.GetJobs())
-	// The same rule for the reason a job stopped: the column arrives with the first row that has one,
-	// and it goes away again with them.
-	saying := anythingSaidWhy(resp.GetJobs())
+	// The same rule for why a row ended. Most listings hold no stopped row and no failed row, and on
+	// those the reason column is not there at all.
+	saying := anythingSaysWhy(resp.GetJobs())
 	for _, one := range resp.GetJobs() {
 		if holding == "" && heldForRoom(one) {
 			holding = one.GetReason()
@@ -356,6 +356,42 @@ func anythingClaimed(jobs []*quaycrewv1.Job) bool {
 	return false
 }
 
+// anythingSaysWhy says whether any row in a listing ended with words on it.
+func anythingSaysWhy(jobs []*quaycrewv1.Job) bool {
+	for _, one := range jobs {
+		if whyItEnded(one) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// whyItEnded is why a job stopped or failed, and nothing for a job that did neither.
+//
+// A pending job the system holds back carries a reason as well. That reason is one fact about the
+// machine rather than one fact per row, so the listing says it once underneath and the cell of a
+// held row in this column stays empty.
+func whyItEnded(one *quaycrewv1.Job) string {
+	switch one.GetPhase() {
+	case job.PhaseStopped, job.PhaseFailed:
+		return strings.Join(strings.Fields(one.GetReason()), " ")
+	}
+	return ""
+}
+
+// reasonColumn is why a row ended, in a column, and nothing at all where no row in the listing
+// stopped or failed.
+func reasonColumn(one *quaycrewv1.Job, saying bool) string {
+	if !saying {
+		return ""
+	}
+	return fmt.Sprintf("%-*s ", reasonWidth, cutToColumn(whyItEnded(one), reasonWidth))
+}
+
+// reasonWidth is how wide the reason column is. It holds a short sentence about what happened, which
+// is what most reasons are, and cuts anything longer rather than pushing the title off the line.
+const reasonWidth = 40
+
 // claimColumn is the piece of work a row claims, in a column, and nothing at all where no row in the
 // listing claims anything.
 func claimColumn(one *quaycrewv1.Job, claiming bool) string {
@@ -368,45 +404,6 @@ func claimColumn(one *quaycrewv1.Job, claiming bool) string {
 // claimWidth is how wide the claim column is. It holds an owner, a name and an issue number, which is
 // what most claims are, and cuts anything longer rather than pushing the title off the line.
 const claimWidth = 28
-
-// anythingSaidWhy says whether any row in a listing carries a reason a person reads on the row.
-func anythingSaidWhy(jobs []*quaycrewv1.Job) bool {
-	for _, one := range jobs {
-		if reasonOnRow(one) != "" {
-			return true
-		}
-	}
-	return false
-}
-
-// reasonColumn is why a job stopped, in a column, and nothing at all where no row in the listing
-// says why.
-func reasonColumn(one *quaycrewv1.Job, saying bool) string {
-	if !saying {
-		return ""
-	}
-	return fmt.Sprintf("%-*s ", reasonWidth, cutToColumn(asOneLine(reasonOnRow(one)), reasonWidth))
-}
-
-// reasonOnRow is the reason a row draws, which is why a job stopped or what it failed on. A pending
-// job the machine is holding back carries one too, and that one stays off the row: it is one fact
-// about the machine, said once under the listing, rather than one fact per row.
-func reasonOnRow(one *quaycrewv1.Job) string {
-	if heldForRoom(one) {
-		return ""
-	}
-	return one.GetReason()
-}
-
-// reasonWidth is how wide the reason column is. A reason is free text somebody types, so it shares
-// the line with the title and cuts rather than pushing the title off the terminal.
-const reasonWidth = 40
-
-// asOneLine is a text as one line, because a row is one line and a line break in a field draws a
-// second row that reads as a job with no identifier and no title.
-func asOneLine(text string) string {
-	return strings.Join(strings.Fields(text), " ")
-}
 
 // cutToColumn is a text at the width a column draws it in, with the last character saying the text
 // goes on. Both columns of this listing cut the same way, so a person learns the mark once.
