@@ -885,6 +885,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeDirectorySteps(sc)
 	initializeVersionSteps(sc)
 	initializeJobSteps(sc)
+	initializeStopReasonSteps(sc)
 	initializeJobMaterialSteps(sc)
 	initializeClaimSteps(sc)
 	initializeRequestSteps(sc)
