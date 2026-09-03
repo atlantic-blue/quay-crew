@@ -31,7 +31,7 @@ func initializeDegradedSteps(sc *godog.ScenarioContext) {
 	// A verdict with no reason is what the container health check already had, and nobody could act
 	// on it.
 	sc.Step(`^standard error says which write did not land$`, func(ctx context.Context) error {
-		return says("standard error", toolFrom(ctx).stderr, "did not take a record")
+		return says("standard error", toolFrom(ctx).stderr, "did not take a write")
 	})
 
 	sc.Step(`^standard output carries the answer and nothing about the system being down$`,
