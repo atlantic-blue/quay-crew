@@ -28,13 +28,6 @@ const (
 // where it is.
 const SkillsScope = "skills"
 
-// RoleScope is the mark a session's role brief is written under.
-//
-// A section like the skills index and deliberately not a level of context: it is rendered from the
-// role the session runs as, so reading it back would store the system's own rendering as though a
-// person had typed it, and the next exec would render it again underneath itself.
-const RoleScope = "role"
-
 // Section is one level's contribution to a memory file.
 type Section struct {
 	// Scope names the level, for example "system".

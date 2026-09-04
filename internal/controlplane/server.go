@@ -510,7 +510,6 @@ func (s *Server) syncContextExcept(ctx context.Context, session *quaycrewv1.Sess
 	if len(dirs) != 2 {
 		return
 	}
-	// A session running as a role is never read back into the system's memory.
 	for at, levels := range contextFiles(session) {
 		// Read back first. Something inside the sandbox writing into its own memory has learned
 		// something, and overwriting that on the next exec would make the system's memory strictly
@@ -524,7 +523,7 @@ func (s *Server) syncContextExcept(ctx context.Context, session *quaycrewv1.Sess
 		// file's read back has to know the mark too. It goes first, never last: the last scope is where
 		// unmarked text belongs, and a note an agent appends is a note, not an index.
 		scopes := make([]string, 0, len(levels)+1)
-		scopes = append(scopes, sandbox.SkillsScope, sandbox.RoleScope)
+		scopes = append(scopes, sandbox.SkillsScope)
 		for _, level := range levels {
 			scopes = append(scopes, string(level.scope))
 		}
@@ -582,22 +581,9 @@ func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session)
 	if len(dirs) != 2 {
 		return
 	}
-	brief := ""
 	for at, levels := range contextFiles(session) {
-		sections := make([]sandbox.Section, 0, len(levels)+2)
-		// Who the session is, first, because everything under it is read in that light. It goes in
-		// the outer file beside the workspace's context, which is the file every session reads
-		// first, and it is rendered every exec and never read back.
-		if at == outerFile && brief != "" {
-			sections = append(sections, sandbox.Section{Scope: sandbox.RoleScope, Body: brief})
-		}
-		// A role that does not receive context is given none of it: the levels are not rendered, so
-		// the file holds the brief and whatever the session itself wrote, and nothing else.
-		told := levels
-		if false {
-			told = nil
-		}
-		for _, level := range told {
+		sections := make([]sandbox.Section, 0, len(levels)+1)
+		for _, level := range levels {
 			body, err := s.store.GetContext(ctx, level.scope, level.owner)
 			if err != nil {
 				continue

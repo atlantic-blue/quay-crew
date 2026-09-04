@@ -69,10 +69,6 @@ type Config struct {
 	// It is a request and not a limit. Nothing here stops a sandbox taking more than it asked for
 	// when the machine is idle, which is what a limit does, and that is issue 477.
 	Request capacity.Request
-	// Role is the role the session runs as, empty for a session that runs as nobody in particular. It
-	// decides where the session's conversation is kept, because a role that must not see the code must
-	// not be able to read the transcript of the session that wrote it.
-	Role string
 }
 
 // Provider mints a Sandbox per session.

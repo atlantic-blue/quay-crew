@@ -181,34 +181,6 @@ func TestHasConversationFindsWhatTheModelKeeps(t *testing.T) {
 	}
 }
 
-// A session running as a role keeps its own conversation store, so the transcript is not where a
-// workspace's are. Reading the workspace's store for it would say every one of its conversations was
-// unopened, and every exec it ever ran would be told to start the conversation again.
-func TestHasConversationReadsTheStoreARoleKeepsItsOwn(t *testing.T) {
-	dir := t.TempDir()
-	storage := sandbox.Storage{Dir: dir, Host: dir}
-
-	const conversation = "9a1e7d3b-2c4f-4b8a-9d6e-1f0a3b5c7d9e"
-	cfg := sandbox.Config{ID: "sess1", Workspace: "ws1", Project: "prj1", Role: "reviewer"}
-	// Where a role session's conversation store is, which is the same layout Prepare mounts from.
-	kept := filepath.Join(dir, "workspaces", cfg.Workspace, "projects", cfg.Project,
-		"sessions", cfg.ID, "claude", "projects", "-home-agent-workspace")
-	if err := os.MkdirAll(kept, 0o777); err != nil {
-		t.Fatalf("seeding the conversation store: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(kept, conversation+".jsonl"), []byte("{}\n"), 0o666); err != nil {
-		t.Fatalf("writing the conversation: %v", err)
-	}
-
-	if !storage.HasConversation(cfg, conversation) {
-		t.Fatal("the role's own conversation was not found where the role keeps it")
-	}
-	plain := sandbox.Config{ID: "sess1", Workspace: "ws1", Project: "prj1"}
-	if storage.HasConversation(plain, conversation) {
-		t.Fatal("the role's conversation was found in the workspace's store, which does not hold it")
-	}
-}
-
 // TestHasConversationSaysNoWhenItCannotTell: a system that keeps nothing on the host has nowhere to
 // look. Saying no starts the conversation under the name the system gave it, which is the answer that
 // leaves the name true; saying yes would resume a name nothing has written.
