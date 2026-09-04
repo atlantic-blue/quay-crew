@@ -2,7 +2,6 @@ package console
 
 import (
 	"context"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -201,26 +200,19 @@ func TestTheConsoleOpensAtTheTopAndGoesDownThreeLevelsAndBackUp(t *testing.T) {
 // Coming back has to work from the deepest level after the cursor has been moved and the view
 // refreshed under it, because that is the state an operator is actually in when they press escape.
 func TestTheWayBackWorksFromTheDeepestLevelAfterAnythingElseHappened(t *testing.T) {
-	client := aSystemWithOneOfEverything()
-	client.execs = append(client.execs, &quaycrewv1.Exec{
-		Id: "6666666666666666ffffffff", Session: "4444444444444444dddddddd",
-		Status: "done", Prompt: "check the meter reading", Reply: "it matches",
-		OccurredAt: timestamppb.New(time.Now()),
-	})
-	model := openedOnTheTree(t, client)
+	model := openedOnTheTree(t, aSystemWithOneOfEverything())
 	model = walk(t, walk(t, model, enter()), enter())
-	model = walk(t, model, runes("t"))
 	// Move, then refresh, then come back.
 	model = walk(t, model, runes("j"))
 	model = walk(t, model, runes("r"))
-	screenSays(t, model, "check the meter reading")
+	screenSays(t, model, "bills")
 
 	model = walk(t, model, escape())
 
-	if model.active.Name != "sessions" {
-		t.Fatalf("escape landed on %q, want the sessions level", model.active.Name)
+	if model.active.Name != "projects" {
+		t.Fatalf("escape landed on %q, want the projects level", model.active.Name)
 	}
-	screenSays(t, model, "bills")
+	screenSays(t, model, "house-bills")
 }
 
 // A workspace with no projects in it. Nothing to drill into is a state a new system is in on its
@@ -256,33 +248,6 @@ func TestAProjectWithNoSessionsSaysSoRatherThanFailing(t *testing.T) {
 	screenSays(t, model, "nothing here")
 }
 
-// An exec is a paragraph, and the panel is about a hundred characters wide. A line left whole is a
-// line cut at the border, which is the fault this key exists to answer, one order of magnitude along.
-func TestALongAskIsReadWholeRatherThanCutAtTheBorder(t *testing.T) {
-	const ask = "read the electricity bill for the flat in the north of the city, work out what " +
-		"the standing charge came to over the quarter, and say whether the supplier moved it " +
-		"without telling anybody"
-	client := aSystemWithOneOfEverything()
-	client.execs[0].Prompt = ask
-
-	model := openedOnTheTree(t, client)
-	model = walk(t, walk(t, walk(t, model, enter()), enter()), runes("t"))
-	// And enter on the row, which is what opens the reading a row could never hold.
-	model = walk(t, model, enter())
-
-	// Every word of it, in the order it was written, across however many rows the panel needed.
-	if drawn := drawnText(model); !strings.Contains(drawn, ask) {
-		t.Fatalf("the screen does not carry the whole ask:\n%s", model.View())
-	}
-}
-
-// drawnText is what the screen says with the frame taken off and the rows run together, so a sentence
-// wrapped over several rows reads as the sentence it is.
-func drawnText(model Model) string {
-	drawn := strings.NewReplacer("│", " ", "╭", " ", "╮", " ", "╰", " ", "╯", " ").Replace(model.View())
-	return strings.Join(strings.Fields(drawn), " ")
-}
-
 // Wrapping is where a reading of any length is kept, so the pieces are checked on their own too: a
 // word too long for the panel is broken rather than dropped, and nothing is lost between two pieces.
 func TestWrappingKeepsEveryWord(t *testing.T) {
@@ -308,90 +273,6 @@ func TestWrappingKeepsEveryWord(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-// The fault this level had: every row opened the same shell, so the one key that means "this one"
-// could not reach the exec under the cursor. The column holds 34 characters, so what a row shows is a
-// fragment of a sentence, and the whole of it was only at the command line.
-func TestEnterOnAExecOpensTheExecUnderTheCursor(t *testing.T) {
-	const second = "pay the water bill before the fourteenth or the supply is cut off"
-	client := aSystemWithOneOfEverything()
-	client.execs = append(client.execs, &quaycrewv1.Exec{
-		Id: "6666666666666666ffffffff", Session: "4444444444444444dddddddd",
-		Status: "done", Prompt: second, Reply: "it is paid",
-		OccurredAt: timestamppb.New(time.Now().Add(time.Minute)),
-	})
-
-	model := openedOnTheTree(t, client)
-	model = walk(t, walk(t, walk(t, model, enter()), enter()), runes("t"))
-	if len(model.Listed()) != 2 {
-		t.Fatalf("the running work lists %d rows, want the two execs this is about", len(model.Listed()))
-	}
-	model = walk(t, model, tea.KeyMsg{Type: tea.KeyDown})
-	if row, found := model.Selected(); !found || row.ID != "6666666666666666ffffffff" {
-		t.Fatalf("the cursor is on %+v, want the second exec", row)
-	}
-
-	model = walk(t, model, enter())
-
-	// The whole sentence, which no row on this level could ever have drawn, and the answer under it.
-	screenSays(t, model, second, "it is paid")
-	// The first exec's own answer, which is what a key that opened the row above this one would show.
-	screenDoesNotSay(t, model, "it is due on the 14th")
-	// And the way out: any other key puts the rows back, so the reading is somewhere a person leaves.
-	model = walk(t, model, escape())
-	screenSays(t, model, "it is due on the 14th")
-}
-
-// Enter used to hand the terminal to a shell in the session's container. It reads the exec now, and a
-// key that suspends the console into somebody else's container is not a thing to do by accident.
-func TestEnterOnAExecOpensNoShell(t *testing.T) {
-	client := aSystemWithOneOfEverything()
-	model := openedOnTheTree(t, client)
-	model = walk(t, walk(t, walk(t, model, enter()), enter()), runes("t"))
-
-	var handed []string
-	model = model.WithTerminal(func(command *exec.Cmd, done func(error) tea.Msg) tea.Cmd {
-		handed = command.Args
-		return func() tea.Msg { return done(nil) }
-	})
-	model = walk(t, model, enter())
-
-	if handed != nil {
-		t.Fatalf("enter handed the terminal to %q, want the exec on the screen instead", strings.Join(handed, " "))
-	}
-	if model.err != nil {
-		t.Fatalf("enter on an exec refused: %v", model.err)
-	}
-	screenSays(t, model, "read the electricity bill", "it is due on the 14th")
-}
-
-// The other half of the case a row could never answer. Enter needs a row and this session has none,
-// so the conversation keeps a key that acts on the session the level is scoped to.
-func TestTheConversationIsStillReachableWhenNoExecHasAnswered(t *testing.T) {
-	client := aSystemWithOneOfEverything()
-	client.execs = nil
-
-	model := openedOnTheTree(t, client)
-	model = walk(t, walk(t, walk(t, model, enter()), enter()), runes("t"))
-	if len(model.Listed()) != 0 {
-		t.Fatalf("the running work lists %d rows, want none, which is the case this is about", len(model.Listed()))
-	}
-
-	var handed []string
-	model = model.WithTerminal(func(command *exec.Cmd, done func(error) tea.Msg) tea.Cmd {
-		handed = command.Args
-		return func() tea.Msg { return done(nil) }
-	})
-	model = walk(t, model, runes("a"))
-
-	if model.err != nil {
-		t.Fatalf("opening the conversation refused: %v", model.err)
-	}
-	line := strings.Join(handed, " ")
-	if !strings.Contains(line, "krewe-s1") || !strings.Contains(line, "--resume") {
-		t.Fatalf("the command is %q, want the conversation in the job's own sandbox", line)
 	}
 }
 

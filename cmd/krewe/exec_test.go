@@ -147,11 +147,11 @@ func TestAExecOutlivesTheCommandThatStartedIt(t *testing.T) {
 
 // The three words this one replaced, each refused by name and each naming what to type.
 //
-// This is the way off, and it is the half that gets skipped: ask, dispatch and execs are in fingers,
-// in scripts and in notes, and every test written for a replacement passes while the old form does
-// something quietly wrong. A silent alias would keep two spellings alive for one thing, and an
-// unknown command reads as the tool being broken.
-func TestTheThreeWordsOneWordReplacedAreRefusedByName(t *testing.T) {
+// This is the way off, and it is the half that gets skipped: ask, dispatch, tasks and task are in
+// fingers, in scripts and in notes, and every test written for a replacement passes while the old
+// form does something quietly wrong. A silent alias would keep two spellings alive for one thing, and
+// an unknown command reads as the tool being broken.
+func TestEveryWordOneWordReplacedIsRefusedByName(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
@@ -162,11 +162,13 @@ func TestTheThreeWordsOneWordReplacedAreRefusedByName(t *testing.T) {
 	}{
 		{[]string{"ask", "when is the electricity bill due"}, `krewe exec [<address>] "..."`},
 		{[]string{"dispatch", "read the repository"}, `krewe exec --dispatch [<address>] "..."`},
-		{[]string{"execs", "3db6b81e"}, "krewe exec list <session>"},
+		{[]string{"tasks", "3db6b81e"}, "krewe exec list <session>"},
+		{[]string{"task", "when is the electricity bill due"}, `krewe exec [<address>] "..."`},
 		// With nothing after them too, because that is how a person checks what a word does.
 		{[]string{"ask"}, `krewe exec [<address>] "..."`},
 		{[]string{"dispatch"}, `krewe exec --dispatch [<address>] "..."`},
-		{[]string{"execs"}, "krewe exec list <session>"},
+		{[]string{"tasks"}, "krewe exec list <session>"},
+		{[]string{"task"}, `krewe exec [<address>] "..."`},
 	} {
 		err := refused(t, client, testCase.typed...)
 		if !strings.Contains(err.Error(), testCase.names) {
