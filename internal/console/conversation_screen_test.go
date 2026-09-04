@@ -45,7 +45,7 @@ func TestTheConsoleFindsTheConversationItOpened(t *testing.T) {
 	}
 }
 
-// aWindowOfOurOwn starts a multiplexer under a temporary directory, so the server these tests drive
+// aWindowOfOurOwn starts a multiplexer under a directory of its own, so the server these tests drive
 // is not the one the operator is sitting in, and answers with the pane the console would be in.
 func aWindowOfOurOwn(t *testing.T) string {
 	t.Helper()
@@ -57,7 +57,12 @@ func aWindowOfOurOwn(t *testing.T) string {
 		}
 		t.Skip("tmux is not installed on this machine")
 	}
-	t.Setenv("TMUX_TMPDIR", t.TempDir())
+	// TMUX names the server a client is already inside, and tmux reads it before it reads
+	// TMUX_TMPDIR. Left set, the directory below does nothing, every command here reaches the
+	// server the operator is sitting in, and the cleanup ends it along with every window under it.
+	t.Setenv("TMUX", "")
+	t.Setenv("TMUX_PANE", "")
+	t.Setenv("TMUX_TMPDIR", aShortDirectory(t))
 	if out, err := exec.Command("tmux", "new-session", "-d", "-s", "screen", "-n", "panel",
 		"-x", "120", "-y", "20", "sleep 300").CombinedOutput(); err != nil {
 		t.Fatalf("starting a terminal: %v: %s", err, out)
@@ -71,3 +76,16 @@ func aWindowOfOurOwn(t *testing.T) string {
 }
 
 var _ tea.Msg = conversationMsg{}
+
+// aShortDirectory is a temporary directory with a short name. A socket path has about 100 characters
+// on this platform, and a directory named after the test that made it spends most of them before
+// tmux adds its own two segments, so the server refuses to start with a name too long.
+func aShortDirectory(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "kc")
+	if err != nil {
+		t.Fatalf("making a directory for the terminal: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
+}
