@@ -6,8 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 	"github.com/cucumber/godog"
 )
 
@@ -233,4 +235,141 @@ func setDesign(ctx context.Context, body, writtenBy string) error {
 	}
 	d.design, d.warnings = resp.GetDesign(), resp.GetWarnings()
 	return nil
+}
+
+// The steps about what reaches the session: the summary in its memory file, and the design itself in
+// its working directory.
+
+// designFileAt is where the design body sits in a session's working directory, as this process sees
+// it on the host.
+func designFileAt(ctx context.Context) (string, error) {
+	dir, err := sessionWorkingDir(ctx)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, ".krewe", "design.md"), nil
+}
+
+// designSectionOf is what sits under the design mark in the session's memory file, and false when
+// there is no such section.
+func designSectionOf(ctx context.Context) (string, bool, error) {
+	body, err := sessionMemory(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	found := sandbox.Decompose(body, []string{sandbox.DesignScope, "project", "session"})
+	section, said := found[sandbox.DesignScope]
+	return section, said, nil
+}
+
+func initializeDesignRenderSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^the project's design is "([^"]*)"$`, func(ctx context.Context, body string) error {
+		return setDesign(ctx, unescape(body), "")
+	})
+
+	sc.Step(`^the project's brief is (\d+) characters$`, func(ctx context.Context, length int) error {
+		return setBrief(ctx, strings.Repeat("b", length))
+	})
+
+	sc.Step(`^the session's design file reads "([^"]*)"$`, func(ctx context.Context, want string) error {
+		at, err := designFileAt(ctx)
+		if err != nil {
+			return err
+		}
+		body, err := os.ReadFile(at)
+		if err != nil {
+			return fmt.Errorf("the session has no design at %s: %w", at, err)
+		}
+		if string(body) != unescape(want) {
+			return fmt.Errorf("the design file reads %q, want %q", body, unescape(want))
+		}
+		return nil
+	})
+
+	sc.Step(`^the session has no design file$`, func(ctx context.Context) error {
+		at, err := designFileAt(ctx)
+		if err != nil {
+			return err
+		}
+		body, err := os.ReadFile(at)
+		if err == nil {
+			return fmt.Errorf("the session has a design at %s saying %q, and the store holds none", at, body)
+		}
+		if !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	})
+
+	sc.Step(`^the session's memory file does not carry "([^"]*)"$`, func(ctx context.Context, unwanted string) error {
+		body, err := sessionMemory(ctx)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(body, unwanted) {
+			return fmt.Errorf("the session's memory file carries %q, and it should not: %q", unwanted, body)
+		}
+		return nil
+	})
+
+	sc.Step(`^the session's memory file carries no design section$`, func(ctx context.Context) error {
+		_, said, err := designSectionOf(ctx)
+		if err != nil {
+			return err
+		}
+		if said {
+			return fmt.Errorf("a project with no design put a design section in the memory file anyway")
+		}
+		return nil
+	})
+
+	sc.Step(`^the design section is under (\d+) characters$`, func(ctx context.Context, cap int) error {
+		section, said, err := designSectionOf(ctx)
+		if err != nil {
+			return err
+		}
+		if !said {
+			return fmt.Errorf("there is no design section to measure")
+		}
+		if got := utf8.RuneCountInString(section); got >= cap {
+			return fmt.Errorf("the design section is %d characters, want under %d: %q", got, cap, section)
+		}
+		return nil
+	})
+
+	// Counted rather than read, because the failure this guards against is the section appearing a
+	// second time underneath itself, which a check for the text passes.
+	sc.Step(`^the memory file carries one design section$`, func(ctx context.Context) error {
+		body, err := sessionMemory(ctx)
+		if err != nil {
+			return err
+		}
+		if got := strings.Count(body, "This project is "); got != 1 {
+			return fmt.Errorf("the memory file names the project %d times, want 1: %q", got, body)
+		}
+		return nil
+	})
+
+	// The section is rendered state. Swept into the session's own context it would be stored as
+	// though a person typed it, and rendered again underneath itself on every exec after that.
+	sc.Step(`^the session's context does not carry the design section$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		current, err := w.lastExec()
+		if err != nil {
+			return err
+		}
+		resp, err := w.client.ListContexts(ctx, &quaycrewv1.ListContextsRequest{Project: w.projectID})
+		if err != nil {
+			return err
+		}
+		for _, dir := range resp.GetDirs() {
+			if dir.GetScope() != "session" && dir.GetOwner() != current.sessionID {
+				continue
+			}
+			if strings.Contains(dir.GetBody(), "This project is ") {
+				return fmt.Errorf("the %s level was taught the design section: %q", dir.GetScope(), dir.GetBody())
+			}
+		}
+		return nil
+	})
 }

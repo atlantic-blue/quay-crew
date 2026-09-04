@@ -28,6 +28,16 @@ const (
 // where it is.
 const SkillsScope = "skills"
 
+// DesignScope is the mark the project's design summary is written under.
+//
+// A section like the skills index and deliberately not a level of context: it is rendered from what
+// the project's design row holds, so reading it back would store the system's own rendering as
+// though a person had typed it, and the next exec would render it again underneath itself.
+//
+// It has to be named wherever a memory file is read back, for the reason SkillsScope gives: text
+// under a mark the build does not know is swept into the innermost level rather than left alone.
+const DesignScope = "design"
+
 // Section is one level's contribution to a memory file.
 type Section struct {
 	// Scope names the level, for example "system".
