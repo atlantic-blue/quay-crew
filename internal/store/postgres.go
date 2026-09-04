@@ -618,6 +618,99 @@ func (p *Postgres) SetContext(ctx context.Context, scope ContextScope, owner, bo
 	return nil
 }
 
+// designColumns is what every design read selects, in the order scanDesign reads them. The two are
+// written next to each other because a column added to one and not the other reads as a zero rather
+// than as a failure.
+const designColumns = `project, brief, body, written_by, updated_at`
+
+// scanDesign reads one design row.
+func scanDesign(row pgx.Row) (*quaycrewv1.Design, error) {
+	var (
+		project, brief, body, writtenBy string
+		updatedAt                       time.Time
+	)
+	if err := row.Scan(&project, &brief, &body, &writtenBy, &updatedAt); err != nil {
+		return nil, err
+	}
+	return &quaycrewv1.Design{
+		Project:   project,
+		Brief:     brief,
+		Body:      body,
+		WrittenBy: writtenBy,
+		UpdatedAt: timestamppb.New(updatedAt),
+	}, nil
+}
+
+// projectExists says whether the project is there to hang a design on. Every design call asks first,
+// because an insert against a missing project fails on the foreign key with a message about a
+// constraint, and the caller needs to be told the project is not there.
+//
+// It asks the same question GetProject asks, join and both conditions. A project here is deleted by
+// a stamp rather than by removing the row, so the foreign key cascade never fires for one, and a
+// check that only looked for the row would keep answering for a project nobody can reach.
+func (p *Postgres) projectExists(ctx context.Context, project string) error {
+	var one int
+	err := p.pool.QueryRow(ctx, `
+		select 1 from projects p join workspaces w on w.id = p.workspace
+		where p.id = $1 and p.deleted_at is null and w.deleted_at is null`, project).Scan(&one)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("read project: %w", err)
+	}
+	return nil
+}
+
+// GetDesign returns the project's design. A project with no design row is the normal state and
+// answers with a Design carrying only its identifier.
+func (p *Postgres) GetDesign(ctx context.Context, project string) (*quaycrewv1.Design, error) {
+	if err := p.projectExists(ctx, project); err != nil {
+		return nil, err
+	}
+	design, err := scanDesign(p.pool.QueryRow(ctx,
+		`select `+designColumns+` from project_designs where project = $1`, project))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return &quaycrewv1.Design{Project: project}, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get design: %w", err)
+	}
+	return design, nil
+}
+
+// SetProjectBrief records what a project is for. It leaves the body and its writer alone: a brief
+// says nothing about what was designed.
+func (p *Postgres) SetProjectBrief(ctx context.Context, project, brief string) (*quaycrewv1.Design, error) {
+	if err := p.projectExists(ctx, project); err != nil {
+		return nil, err
+	}
+	design, err := scanDesign(p.pool.QueryRow(ctx, `
+		insert into project_designs (project, brief) values ($1, $2)
+		on conflict (project) do update set brief = excluded.brief, updated_at = now()
+		returning `+designColumns, project, brief))
+	if err != nil {
+		return nil, fmt.Errorf("set brief: %w", err)
+	}
+	return design, nil
+}
+
+// SetProjectDesign records the design document whole, and who wrote it. It leaves the brief alone.
+func (p *Postgres) SetProjectDesign(ctx context.Context, project, body, writtenBy string) (*quaycrewv1.Design, error) {
+	if err := p.projectExists(ctx, project); err != nil {
+		return nil, err
+	}
+	design, err := scanDesign(p.pool.QueryRow(ctx, `
+		insert into project_designs (project, body, written_by) values ($1, $2, $3)
+		on conflict (project) do update set
+			body = excluded.body, written_by = excluded.written_by, updated_at = now()
+		returning `+designColumns, project, body, writtenBy))
+	if err != nil {
+		return nil, fmt.Errorf("set design: %w", err)
+	}
+	return design, nil
+}
+
 // sessionBy reads the single session matching a where clause.
 func (p *Postgres) sessionBy(ctx context.Context, where string, args ...any) (*quaycrewv1.Session, error) {
 	rows, err := p.pool.Query(ctx, `

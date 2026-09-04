@@ -1723,6 +1723,168 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 
 	runHookConformance(t, newDataset)
 	runSessionLifecycleConformance(t, newDataset)
+	runDesignConformance(t, newDataset)
+}
+
+// runDesignConformance holds both stores to the same answers about what a project is for and what
+// was designed for it.
+func runDesignConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
+	t.Helper()
+
+	t.Run("a project with no design answers with its identifier and nothing else", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		design, err := s.GetDesign(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("GetDesign on a project with no design: %v", err)
+		}
+		if design.GetProject() != project.GetId() {
+			t.Fatalf("the design names project %q, want %q", design.GetProject(), project.GetId())
+		}
+		if design.GetBrief() != "" || design.GetBody() != "" || design.GetWrittenBy() != "" {
+			t.Fatalf("a project nobody designed answered brief %q, body %q, written by %q",
+				design.GetBrief(), design.GetBody(), design.GetWrittenBy())
+		}
+		if design.GetApproved() {
+			t.Error("a project nobody designed answered approved")
+		}
+	})
+
+	t.Run("a design is read back for a project that does not exist as not found", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+
+		if _, err := s.GetDesign(ctx, "no-such-project"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("GetDesign on a missing project answered %v, want ErrNotFound", err)
+		}
+		if _, err := s.SetProjectBrief(ctx, "no-such-project", "anything"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("SetProjectBrief on a missing project answered %v, want ErrNotFound", err)
+		}
+		if _, err := s.SetProjectDesign(ctx, "no-such-project", "anything", ""); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("SetProjectDesign on a missing project answered %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("a brief is written, read back and cleared", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		written, err := s.SetProjectBrief(ctx, project.GetId(), "pay the water bill first")
+		if err != nil {
+			t.Fatalf("SetProjectBrief: %v", err)
+		}
+		if written.GetBrief() != "pay the water bill first" {
+			t.Fatalf("the write answered brief %q", written.GetBrief())
+		}
+		if written.GetUpdatedAt() == nil {
+			t.Fatal("the write answered no updated_at, so nothing says when the brief was set")
+		}
+
+		read, err := s.GetDesign(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("GetDesign: %v", err)
+		}
+		if read.GetBrief() != "pay the water bill first" {
+			t.Fatalf("the brief reads back as %q", read.GetBrief())
+		}
+
+		// An empty brief is a value, not an absence: clearing one is the only way back.
+		cleared, err := s.SetProjectBrief(ctx, project.GetId(), "")
+		if err != nil {
+			t.Fatalf("clearing the brief: %v", err)
+		}
+		if cleared.GetBrief() != "" {
+			t.Fatalf("the cleared brief reads %q, want empty", cleared.GetBrief())
+		}
+	})
+
+	// A design body is the largest text in the system, and a body read short is a body read wrong.
+	t.Run("a design body is kept whole, line breaks and all", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		body := "# The design\n\nOne paragraph.\n\n- a point\n- another point\n\n\tan indented line\n"
+		if _, err := s.SetProjectDesign(ctx, project.GetId(), body, "sess-1"); err != nil {
+			t.Fatalf("SetProjectDesign: %v", err)
+		}
+		read, err := s.GetDesign(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("GetDesign: %v", err)
+		}
+		if read.GetBody() != body {
+			t.Fatalf("the body reads back as %q, want %q", read.GetBody(), body)
+		}
+		if read.GetWrittenBy() != "sess-1" {
+			t.Fatalf("the design says it was written by %q, want sess-1", read.GetWrittenBy())
+		}
+	})
+
+	// The operator writes a design too, and then nobody wrote it. Empty is what the caller sent, so
+	// the store keeps it rather than treating it as a field nobody filled in.
+	t.Run("a design written by the operator records nobody", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		if _, err := s.SetProjectDesign(ctx, project.GetId(), "the body", "sess-1"); err != nil {
+			t.Fatalf("SetProjectDesign as a session: %v", err)
+		}
+		written, err := s.SetProjectDesign(ctx, project.GetId(), "the body again", "")
+		if err != nil {
+			t.Fatalf("SetProjectDesign as the operator: %v", err)
+		}
+		if written.GetWrittenBy() != "" {
+			t.Fatalf("the design still says it was written by %q, want nobody", written.GetWrittenBy())
+		}
+	})
+
+	// The two are separate statements about a project. Writing one over the other is the shape that
+	// loses a brief nobody meant to touch.
+	t.Run("a brief and a body do not overwrite each other", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		if _, err := s.SetProjectBrief(ctx, project.GetId(), "pay the water bill first"); err != nil {
+			t.Fatalf("SetProjectBrief: %v", err)
+		}
+		afterBody, err := s.SetProjectDesign(ctx, project.GetId(), "the whole design", "")
+		if err != nil {
+			t.Fatalf("SetProjectDesign: %v", err)
+		}
+		if afterBody.GetBrief() != "pay the water bill first" {
+			t.Fatalf("writing the body left the brief as %q", afterBody.GetBrief())
+		}
+		afterBrief, err := s.SetProjectBrief(ctx, project.GetId(), "and the electricity bill")
+		if err != nil {
+			t.Fatalf("SetProjectBrief again: %v", err)
+		}
+		if afterBrief.GetBody() != "the whole design" {
+			t.Fatalf("writing the brief left the body as %q", afterBrief.GetBody())
+		}
+	})
+
+	// The design row hangs off the project, so deleting the project takes it. Postgres does this with
+	// the cascade and the in memory store has to agree, or a deleted project would keep answering.
+	t.Run("deleting a project takes its design with it", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		if _, err := s.SetProjectDesign(ctx, project.GetId(), "the whole design", ""); err != nil {
+			t.Fatalf("SetProjectDesign: %v", err)
+		}
+		if err := s.DeleteProject(ctx, project.GetId()); err != nil {
+			t.Fatalf("DeleteProject: %v", err)
+		}
+		if _, err := s.GetDesign(ctx, project.GetId()); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("a deleted project answered %v for its design, want ErrNotFound", err)
+		}
+	})
 }
 
 // aSkill is a skill to put in the store, whole enough that the round trip is worth asserting on: two

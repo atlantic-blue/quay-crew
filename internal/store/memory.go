@@ -35,6 +35,9 @@ type Memory struct {
 	skillsBorn map[string]string
 	// contexts is what the model should be told, keyed by scope and owner.
 	contexts map[string]string
+	// designs is what each project is for and what was designed for it, keyed by project. A project
+	// with no entry has no design, which is the normal state.
+	designs map[string]*quaycrewv1.Design
 	// repositories are the repositories each workspace works in, in the order they were added.
 	// skills is every revision the system holds, keyed by name and version, and attached is which
 	// version of which skill each workspace pinned.
@@ -541,6 +544,63 @@ func (m *Memory) SetContext(_ context.Context, scope ContextScope, owner, body s
 }
 
 func contextKey(scope ContextScope, owner string) string { return string(scope) + "/" + owner }
+
+// GetDesign returns the project's design. A project with no design answers with a Design carrying
+// only its identifier, which is the normal state and not an error.
+func (m *Memory) GetDesign(_ context.Context, project string) (*quaycrewv1.Design, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, err := m.getProjectLocked(project); err != nil {
+		return nil, err
+	}
+	held, ok := m.designs[project]
+	if !ok {
+		return &quaycrewv1.Design{Project: project}, nil
+	}
+	return copyDesign(held), nil
+}
+
+// SetProjectBrief records what a project is for, leaving the body and its writer alone.
+func (m *Memory) SetProjectBrief(_ context.Context, project, brief string) (*quaycrewv1.Design, error) {
+	return m.writeDesign(project, func(design *quaycrewv1.Design) {
+		design.Brief = brief
+	})
+}
+
+// SetProjectDesign records the design document whole and who wrote it, leaving the brief alone.
+func (m *Memory) SetProjectDesign(_ context.Context, project, body, writtenBy string) (*quaycrewv1.Design, error) {
+	return m.writeDesign(project, func(design *quaycrewv1.Design) {
+		design.Body = body
+		design.WrittenBy = writtenBy
+	})
+}
+
+// writeDesign creates the row on first use, applies the change, and moves updated_at. Every design
+// write goes through it so no caller can move one stamp and forget the other.
+func (m *Memory) writeDesign(project string, change func(*quaycrewv1.Design)) (*quaycrewv1.Design, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, err := m.getProjectLocked(project); err != nil {
+		return nil, err
+	}
+	if m.designs == nil {
+		m.designs = make(map[string]*quaycrewv1.Design)
+	}
+	held, ok := m.designs[project]
+	if !ok {
+		held = &quaycrewv1.Design{Project: project}
+		m.designs[project] = held
+	}
+	change(held)
+	held.UpdatedAt = timestamppb.New(time.Now().UTC())
+	return copyDesign(held), nil
+}
+
+// copyDesign hands the caller its own message. The map holds a pointer, and a caller that edited what
+// it was given would be editing the store.
+func copyDesign(design *quaycrewv1.Design) *quaycrewv1.Design {
+	return proto.Clone(design).(*quaycrewv1.Design)
+}
 
 // ImportSkill takes a skill into the system, refusing a version that already exists carrying something
 // different.
