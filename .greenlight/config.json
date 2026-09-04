@@ -1,0 +1,48 @@
+{
+  "version": "1.0.0",
+  "mode": "interactive",
+  "model_profile": "quality",
+  "model_overrides": {},
+  "profiles": {
+    "quality": {
+      "architect": "opus", "designer": "opus", "test_writer": "opus",
+      "implementer": "opus", "security": "opus", "debugger": "opus",
+      "verifier": "opus", "codebase_mapper": "opus",
+      "assessor": "opus", "wrapper": "opus"
+    },
+    "balanced": {
+      "architect": "opus", "designer": "opus", "test_writer": "sonnet",
+      "implementer": "sonnet", "security": "sonnet", "debugger": "sonnet",
+      "verifier": "sonnet", "codebase_mapper": "sonnet",
+      "assessor": "sonnet", "wrapper": "sonnet"
+    },
+    "budget": {
+      "architect": "sonnet", "designer": "sonnet", "test_writer": "sonnet",
+      "implementer": "sonnet", "security": "haiku", "debugger": "sonnet",
+      "verifier": "haiku", "codebase_mapper": "haiku",
+      "assessor": "haiku", "wrapper": "sonnet"
+    }
+  },
+  "workflow": {
+    "security_scan": true,
+    "visual_checkpoint": true,
+    "auto_parallel": true,
+    "max_implementation_retries": 3,
+    "max_security_retries": 2,
+    "run_full_suite_after_slice": true
+  },
+  "test": {
+    "command": "make test",
+    "filter_flag": "-run",
+    "coverage_command": "go test ./... -cover",
+    "security_filter": "security",
+    "run_locally": false,
+    "note": "Tests run in continuous integration only. Running go test in this repository exhausts memory and kills the session. Local gates are go build, go vet, gofmt and golangci-lint."
+  },
+  "project": {
+    "name": "quay-krewe",
+    "stack": "Go 1.25, Postgres, protobuf with buf, Bubble Tea console, godog scenarios",
+    "src_dir": "internal",
+    "test_dir": "features"
+  }
+}
