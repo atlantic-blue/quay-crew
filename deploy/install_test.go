@@ -10,7 +10,7 @@ import (
 
 // A first run used to be four commands, and the order mattered. `make config`, `make sandbox-image`,
 // `make up`, `make install`. Miss one and the failure arrived somewhere else: compose reading a file
-// that is not there, or a first task refused for a missing image, which reads as a broken system
+// that is not there, or a first exec refused for a missing image, which reads as a broken system
 // rather than a missing step.
 //
 // These cases hold `make install` to being the only command a first run needs, and hold the four
@@ -46,7 +46,7 @@ func TestAFirstRunIsOneCommand(t *testing.T) {
 }
 
 // TestAFirstRunBringsTheStackUpOnce. Twice would replace the services a second time, which ends a
-// task that had just started under the first.
+// exec that had just started under the first.
 func TestAFirstRunBringsTheStackUpOnce(t *testing.T) {
 	if got := strings.Count(target(t, "install"), "--no-print-directory up\n"); got != 1 {
 		t.Errorf("a first run brings the stack up %d times, want once", got)
@@ -109,7 +109,7 @@ func TestAFirstRunSaysWhatItCannotDo(t *testing.T) {
 		"krewe workspace create <name>",
 		"krewe project create <name>",
 		"krewe secret set CLAUDE_CODE_OAUTH_TOKEN",
-		`krewe task \"say pong\"`,
+		`krewe exec \"say pong\"`,
 	} {
 		if !strings.Contains(recipe, said) {
 			t.Errorf("a first run never says %q, so the operator is left with a system and no next step:\n%s",
@@ -248,7 +248,7 @@ func TestOneCommandLeavesARunningSystemAndAKreweOnThePath(t *testing.T) {
 		"krewe workspace create <name>",
 		"krewe project create <name>",
 		"krewe secret set CLAUDE_CODE_OAUTH_TOKEN",
-		`krewe task "say pong"`,
+		`krewe exec "say pong"`,
 	} {
 		if !strings.Contains(system.said, next) {
 			t.Errorf("a first run never printed %q:\n%s", next, system.said)
@@ -296,7 +296,7 @@ func TestRunningItTwiceKeepsWhatTheOperatorEdited(t *testing.T) {
 
 // TestARunningSystemIsNotReplacedWithoutAWord.
 //
-// Compose replaces the services whose build moved, and a task in flight is executing through the
+// Compose replaces the services whose build moved, and an exec in flight is executing through the
 // control plane, so it ends with it. Nothing typed is the case that matters, because that is a
 // script: it refuses, it exits non zero, and it brings nothing up.
 func TestARunningSystemIsNotReplacedWithoutAWord(t *testing.T) {

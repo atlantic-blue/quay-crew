@@ -31,7 +31,7 @@ Feature: One identifier reaches every surface
     Given a session started by dispatching "remember this"
     When the operator copies the identifier out of the listing
     Then dispatch on what was copied continues that session
-    And tasks on what was copied lists that session's history
+    And execs on what was copied lists that session's history
     And attach on what was copied opens that session's conversation
     And label on what was copied names that session
     And mode on what was copied sets that session's mode
@@ -43,7 +43,7 @@ Feature: One identifier reaches every surface
     And the operator labels the session "the bills"
     When the operator copies the identifier out of the listing
     Then dispatch on what was copied continues that session
-    And tasks on what was copied lists that session's history
+    And execs on what was copied lists that session's history
     And attach on what was copied opens that session's conversation
     And label on what was copied names that session
     And mode on what was copied sets that session's mode
@@ -53,7 +53,7 @@ Feature: One identifier reaches every surface
     Given a session started by dispatching "remember this"
     When the operator copies the handle out of the system
     Then dispatch on what was copied continues that session
-    And tasks on what was copied lists that session's history
+    And execs on what was copied lists that session's history
     And attach on what was copied opens that session's conversation
     And label on what was copied names that session
     And mode on what was copied sets that session's mode
@@ -62,17 +62,17 @@ Feature: One identifier reaches every surface
     Given a session started by dispatching "remember this"
     When the operator copies the address of that session
     Then dispatch on what was copied continues that session
-    And tasks on what was copied lists that session's history
+    And execs on what was copied lists that session's history
     And attach on what was copied opens that session's conversation
     And label on what was copied names that session
     And mode on what was copied sets that session's mode
 
-  # The identifier used to become the first word of the message, and the task went to a new session.
+  # The identifier used to become the first word of the message, and the exec went to a new session.
   Scenario: A bare identifier continues that session rather than joining the message
     Given a session started by dispatching "remember this"
     When the operator types the identifier and then "and again"
     Then the reply is "you said: and again"
-    And both tasks ran in the same session
+    And both execs ran in the same session
 
   # The way off the old behaviour. A word shaped like an identifier that names nothing must stop,
   # never be absorbed.
@@ -82,7 +82,7 @@ Feature: One identifier reaches every surface
     Then the dispatch is refused
     And the refusal names the identifier the listing prints
     And the refusal says how to send it as the message instead
-    And that session was left with 1 task
+    And that session was left with 1 exec
     And the system holds 1 session
 
   Scenario: An ordinary first word is still the start of the message

@@ -22,7 +22,7 @@ type treeClient struct {
 	workspaces []*quaycrewv1.Workspace
 	projects   []*quaycrewv1.Project
 	sessions   []*quaycrewv1.Session
-	tasks      []*quaycrewv1.Task
+	execs      []*quaycrewv1.Exec
 }
 
 func (t *treeClient) ListWorkspaces(context.Context, *quaycrewv1.ListWorkspacesRequest, ...grpc.CallOption) (*quaycrewv1.ListWorkspacesResponse, error) {
@@ -49,14 +49,14 @@ func (t *treeClient) ListSessions(_ context.Context, req *quaycrewv1.ListSession
 	return &quaycrewv1.ListSessionsResponse{Sessions: matched}, nil
 }
 
-func (t *treeClient) ListTasks(_ context.Context, req *quaycrewv1.ListTasksRequest, _ ...grpc.CallOption) (*quaycrewv1.ListTasksResponse, error) {
-	matched := make([]*quaycrewv1.Task, 0, len(t.tasks))
-	for _, task := range t.tasks {
-		if task.GetSession() == req.GetSession() {
-			matched = append(matched, task)
+func (t *treeClient) ListExecs(_ context.Context, req *quaycrewv1.ListExecsRequest, _ ...grpc.CallOption) (*quaycrewv1.ListExecsResponse, error) {
+	matched := make([]*quaycrewv1.Exec, 0, len(t.execs))
+	for _, exec := range t.execs {
+		if exec.GetSession() == req.GetSession() {
+			matched = append(matched, exec)
 		}
 	}
-	return &quaycrewv1.ListTasksResponse{Tasks: matched}, nil
+	return &quaycrewv1.ListExecsResponse{Execs: matched}, nil
 }
 
 func (t *treeClient) AttachSession(context.Context, *quaycrewv1.AttachSessionRequest, ...grpc.CallOption) (*quaycrewv1.AttachSessionResponse, error) {
@@ -64,7 +64,7 @@ func (t *treeClient) AttachSession(context.Context, *quaycrewv1.AttachSessionReq
 }
 
 // aSystemWithOneOfEverything is one workspace holding one project holding one session that ran one
-// task, which is the shortest path from the top of the tree to the bottom of it.
+// exec, which is the shortest path from the top of the tree to the bottom of it.
 func aSystemWithOneOfEverything() *treeClient {
 	made := timestamppb.New(time.Now().Add(-90 * time.Second))
 	return &treeClient{
@@ -77,7 +77,7 @@ func aSystemWithOneOfEverything() *treeClient {
 			Id: "4444444444444444dddddddd", Workspace: "1111111111111111aaaaaaaa",
 			Project: "2222222222222222bbbbbbbb", Label: "bills", Status: "idle",
 		}},
-		tasks: []*quaycrewv1.Task{{
+		execs: []*quaycrewv1.Exec{{
 			Id: "5555555555555555eeeeeeee", Session: "4444444444444444dddddddd",
 			Status: "done", Prompt: "read the electricity bill", Reply: "it is due on the 14th",
 			OccurredAt: timestamppb.New(time.Now()),
@@ -202,7 +202,7 @@ func TestTheConsoleOpensAtTheTopAndGoesDownThreeLevelsAndBackUp(t *testing.T) {
 // refreshed under it, because that is the state an operator is actually in when they press escape.
 func TestTheWayBackWorksFromTheDeepestLevelAfterAnythingElseHappened(t *testing.T) {
 	client := aSystemWithOneOfEverything()
-	client.tasks = append(client.tasks, &quaycrewv1.Task{
+	client.execs = append(client.execs, &quaycrewv1.Exec{
 		Id: "6666666666666666ffffffff", Session: "4444444444444444dddddddd",
 		Status: "done", Prompt: "check the meter reading", Reply: "it matches",
 		OccurredAt: timestamppb.New(time.Now()),
@@ -256,14 +256,14 @@ func TestAProjectWithNoSessionsSaysSoRatherThanFailing(t *testing.T) {
 	screenSays(t, model, "nothing here")
 }
 
-// A task is a paragraph, and the panel is about a hundred characters wide. A line left whole is a
+// An exec is a paragraph, and the panel is about a hundred characters wide. A line left whole is a
 // line cut at the border, which is the fault this key exists to answer, one order of magnitude along.
 func TestALongAskIsReadWholeRatherThanCutAtTheBorder(t *testing.T) {
 	const ask = "read the electricity bill for the flat in the north of the city, work out what " +
 		"the standing charge came to over the quarter, and say whether the supplier moved it " +
 		"without telling anybody"
 	client := aSystemWithOneOfEverything()
-	client.tasks[0].Prompt = ask
+	client.execs[0].Prompt = ask
 
 	model := openedOnTheTree(t, client)
 	model = walk(t, walk(t, walk(t, model, enter()), enter()), runes("t"))
@@ -312,12 +312,12 @@ func TestWrappingKeepsEveryWord(t *testing.T) {
 }
 
 // The fault this level had: every row opened the same shell, so the one key that means "this one"
-// could not reach the task under the cursor. The column holds 34 characters, so what a row shows is a
+// could not reach the exec under the cursor. The column holds 34 characters, so what a row shows is a
 // fragment of a sentence, and the whole of it was only at the command line.
-func TestEnterOnATaskOpensTheTaskUnderTheCursor(t *testing.T) {
+func TestEnterOnAExecOpensTheExecUnderTheCursor(t *testing.T) {
 	const second = "pay the water bill before the fourteenth or the supply is cut off"
 	client := aSystemWithOneOfEverything()
-	client.tasks = append(client.tasks, &quaycrewv1.Task{
+	client.execs = append(client.execs, &quaycrewv1.Exec{
 		Id: "6666666666666666ffffffff", Session: "4444444444444444dddddddd",
 		Status: "done", Prompt: second, Reply: "it is paid",
 		OccurredAt: timestamppb.New(time.Now().Add(time.Minute)),
@@ -326,27 +326,27 @@ func TestEnterOnATaskOpensTheTaskUnderTheCursor(t *testing.T) {
 	model := openedOnTheTree(t, client)
 	model = walk(t, walk(t, walk(t, model, enter()), enter()), runes("t"))
 	if len(model.Listed()) != 2 {
-		t.Fatalf("the running work lists %d rows, want the two tasks this is about", len(model.Listed()))
+		t.Fatalf("the running work lists %d rows, want the two execs this is about", len(model.Listed()))
 	}
 	model = walk(t, model, tea.KeyMsg{Type: tea.KeyDown})
 	if row, found := model.Selected(); !found || row.ID != "6666666666666666ffffffff" {
-		t.Fatalf("the cursor is on %+v, want the second task", row)
+		t.Fatalf("the cursor is on %+v, want the second exec", row)
 	}
 
 	model = walk(t, model, enter())
 
 	// The whole sentence, which no row on this level could ever have drawn, and the answer under it.
 	screenSays(t, model, second, "it is paid")
-	// The first task's own answer, which is what a key that opened the row above this one would show.
+	// The first exec's own answer, which is what a key that opened the row above this one would show.
 	screenDoesNotSay(t, model, "it is due on the 14th")
 	// And the way out: any other key puts the rows back, so the reading is somewhere a person leaves.
 	model = walk(t, model, escape())
 	screenSays(t, model, "it is due on the 14th")
 }
 
-// Enter used to hand the terminal to a shell in the session's container. It reads the task now, and a
+// Enter used to hand the terminal to a shell in the session's container. It reads the exec now, and a
 // key that suspends the console into somebody else's container is not a thing to do by accident.
-func TestEnterOnATaskOpensNoShell(t *testing.T) {
+func TestEnterOnAExecOpensNoShell(t *testing.T) {
 	client := aSystemWithOneOfEverything()
 	model := openedOnTheTree(t, client)
 	model = walk(t, walk(t, walk(t, model, enter()), enter()), runes("t"))
@@ -359,19 +359,19 @@ func TestEnterOnATaskOpensNoShell(t *testing.T) {
 	model = walk(t, model, enter())
 
 	if handed != nil {
-		t.Fatalf("enter handed the terminal to %q, want the task on the screen instead", strings.Join(handed, " "))
+		t.Fatalf("enter handed the terminal to %q, want the exec on the screen instead", strings.Join(handed, " "))
 	}
 	if model.err != nil {
-		t.Fatalf("enter on a task refused: %v", model.err)
+		t.Fatalf("enter on an exec refused: %v", model.err)
 	}
 	screenSays(t, model, "read the electricity bill", "it is due on the 14th")
 }
 
 // The other half of the case a row could never answer. Enter needs a row and this session has none,
 // so the conversation keeps a key that acts on the session the level is scoped to.
-func TestTheConversationIsStillReachableWhenNoTaskHasAnswered(t *testing.T) {
+func TestTheConversationIsStillReachableWhenNoExecHasAnswered(t *testing.T) {
 	client := aSystemWithOneOfEverything()
-	client.tasks = nil
+	client.execs = nil
 
 	model := openedOnTheTree(t, client)
 	model = walk(t, walk(t, walk(t, model, enter()), enter()), runes("t"))

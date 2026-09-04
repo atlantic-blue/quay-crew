@@ -63,7 +63,7 @@ func TestTheOldNameRefusesWhateverIsTypedAfterIt(t *testing.T) {
 		{"-h"},
 		{"sideways"},
 		{""},
-		{"task", "when is the electricity bill due"},
+		{"exec", "when is the electricity bill due"},
 	} {
 		said := refusal(args)
 		if !strings.Contains(said, "krewe") {

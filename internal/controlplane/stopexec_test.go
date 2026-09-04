@@ -13,13 +13,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Stopping the task one session is running, and keeping the session.
+// Stopping the exec one session is running, and keeping the session.
 //
 // The failure this answers: killing the dispatch client was what people reached for, and the same
-// kill ended one task at once and left another working for sixteen more minutes.
+// kill ended one exec at once and left another working for sixteen more minutes.
 
-// aWorkingSession dispatches a task that will not land until its gate is opened, and answers once the
-// task is really under way rather than once the dispatch returned.
+// aWorkingSession dispatches an exec that will not land until its gate is opened, and answers once the
+// exec is really under way rather than once the dispatch returned.
 func aWorkingSession(t *testing.T, s *controlplane.Server, project string, gate, started chan struct{}) string {
 	t.Helper()
 	sent, err := s.Dispatch(context.Background(), &quaycrewv1.DispatchRequest{
@@ -33,7 +33,7 @@ func aWorkingSession(t *testing.T, s *controlplane.Server, project string, gate,
 	return sent.GetId()
 }
 
-func TestStoppingATaskEndsItAndKeepsTheSession(t *testing.T) {
+func TestStoppingAExecEndsItAndKeepsTheSession(t *testing.T) {
 	gate, started := make(chan struct{}), make(chan struct{})
 	runner := &model.FakeRunner{Reply: "done", Gate: gate, Started: started}
 	s := aSystemWithProvider(runner, &sandbox.FakeProvider{})
@@ -41,32 +41,32 @@ func TestStoppingATaskEndsItAndKeepsTheSession(t *testing.T) {
 	ctx := context.Background()
 	session := aWorkingSession(t, s, project, gate, started)
 
-	resp, err := s.StopTask(ctx, &quaycrewv1.StopTaskRequest{
+	resp, err := s.StopExec(ctx, &quaycrewv1.StopExecRequest{
 		Id: session, Reason: "it is duplicating another pull request",
 	})
 	if err != nil {
-		t.Fatalf("StopTask: %v", err)
+		t.Fatalf("StopExec: %v", err)
 	}
 	if !resp.GetStopped() {
-		t.Fatal("the system says there was nothing to stop, and a task was under way")
+		t.Fatal("the system says there was nothing to stop, and an exec was under way")
 	}
 
-	// The command answers only when the task has actually stopped, so the record is already closed
+	// The command answers only when the exec has actually stopped, so the record is already closed
 	// by the time the caller reads success.
-	tasks, err := s.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session})
+	execs, err := s.ListExecs(ctx, &quaycrewv1.ListExecsRequest{Session: session})
 	if err != nil {
-		t.Fatalf("ListTasks: %v", err)
+		t.Fatalf("ListExecs: %v", err)
 	}
-	if len(tasks.GetTasks()) != 1 {
-		t.Fatalf("the session holds %d tasks, want the one that was stopped", len(tasks.GetTasks()))
+	if len(execs.GetExecs()) != 1 {
+		t.Fatalf("the session holds %d execs, want the one that was stopped", len(execs.GetExecs()))
 	}
-	last := tasks.GetTasks()[0]
-	if last.GetStatus() != controlplane.StatusTaskStopped {
-		t.Fatalf("the task reads %q, and an operator asking for a stop is not a fault: "+
+	last := execs.GetExecs()[0]
+	if last.GetStatus() != controlplane.StatusExecStopped {
+		t.Fatalf("the exec reads %q, and an operator asking for a stop is not a fault: "+
 			"a stop reported as a crash hides the crashes", last.GetStatus())
 	}
 	if !strings.Contains(last.GetFailure(), "duplicating another pull request") {
-		t.Fatalf("the task record says %q, and it has to carry the operator's own reason",
+		t.Fatalf("the exec record says %q, and it has to carry the operator's own reason",
 			last.GetFailure())
 	}
 	if resp.GetSession().GetStatus() != controlplane.StatusIdle {
@@ -77,7 +77,7 @@ func TestStoppingATaskEndsItAndKeepsTheSession(t *testing.T) {
 }
 
 // The session survives, which is the difference between this and stopping a session.
-func TestAStoppedTaskLeavesTheConversationAndTheNextDispatchContinuesIt(t *testing.T) {
+func TestAStoppedExecLeavesTheConversationAndTheNextDispatchContinuesIt(t *testing.T) {
 	gate, started := make(chan struct{}), make(chan struct{})
 	runner := &model.FakeRunner{Reply: "done", Gate: gate, Started: started}
 	provider := &sandbox.FakeProvider{}
@@ -86,10 +86,10 @@ func TestAStoppedTaskLeavesTheConversationAndTheNextDispatchContinuesIt(t *testi
 	ctx := context.Background()
 	session := aWorkingSession(t, s, project, gate, started)
 
-	if _, err := s.StopTask(ctx, &quaycrewv1.StopTaskRequest{Id: session, Reason: "wrong branch"}); err != nil {
-		t.Fatalf("StopTask: %v", err)
+	if _, err := s.StopExec(ctx, &quaycrewv1.StopExecRequest{Id: session, Reason: "wrong branch"}); err != nil {
+		t.Fatalf("StopExec: %v", err)
 	}
-	// The gate is opened and a fresh runner put behind the next task, the way a model that is not
+	// The gate is opened and a fresh runner put behind the next exec, the way a model that is not
 	// being stopped answers.
 	close(gate)
 	runner.Gate = nil
@@ -102,18 +102,18 @@ func TestAStoppedTaskLeavesTheConversationAndTheNextDispatchContinuesIt(t *testi
 		t.Fatalf("dispatching after a stop: %v", err)
 	}
 	if again.GetId() != session {
-		t.Fatalf("the next task landed in %s, want the same session %s", again.GetId(), session)
+		t.Fatalf("the next exec landed in %s, want the same session %s", again.GetId(), session)
 	}
 	if again.GetReply() != "done" {
-		t.Fatalf("the session answered %q after a stop, want the new task's answer", again.GetReply())
+		t.Fatalf("the session answered %q after a stop, want the new exec's answer", again.GetReply())
 	}
-	tasks, _ := s.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session})
-	if len(tasks.GetTasks()) != 2 {
-		t.Fatalf("the session holds %d tasks, want the stopped one and the new one", len(tasks.GetTasks()))
+	execs, _ := s.ListExecs(ctx, &quaycrewv1.ListExecsRequest{Session: session})
+	if len(execs.GetExecs()) != 2 {
+		t.Fatalf("the session holds %d execs, want the stopped one and the new one", len(execs.GetExecs()))
 	}
-	if tasks.GetTasks()[0].GetStatus() != controlplane.StatusTaskStopped {
-		t.Fatalf("the first task reads %q, and the record of the stop has to survive",
-			tasks.GetTasks()[0].GetStatus())
+	if execs.GetExecs()[0].GetStatus() != controlplane.StatusExecStopped {
+		t.Fatalf("the first exec reads %q, and the record of the stop has to survive",
+			execs.GetExecs()[0].GetStatus())
 	}
 }
 
@@ -124,16 +124,16 @@ func TestStoppingASessionWithNothingRunningSaysSo(t *testing.T) {
 	ctx := context.Background()
 	session := anIdleSession(t, s, project)
 
-	resp, err := s.StopTask(ctx, &quaycrewv1.StopTaskRequest{Id: session.GetId()})
+	resp, err := s.StopExec(ctx, &quaycrewv1.StopExecRequest{Id: session.GetId()})
 	if err != nil {
-		t.Fatalf("StopTask: %v", err)
+		t.Fatalf("StopExec: %v", err)
 	}
 	if resp.GetStopped() {
-		t.Fatal("the system says it stopped a task, and the session was idle")
+		t.Fatal("the system says it stopped an exec, and the session was idle")
 	}
-	tasks, _ := s.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session.GetId()})
-	if len(tasks.GetTasks()) != 1 || tasks.GetTasks()[0].GetStatus() != controlplane.StatusIdle {
-		t.Fatalf("the history changed under a stop that stopped nothing: %v", tasks.GetTasks())
+	execs, _ := s.ListExecs(ctx, &quaycrewv1.ListExecsRequest{Session: session.GetId()})
+	if len(execs.GetExecs()) != 1 || execs.GetExecs()[0].GetStatus() != controlplane.StatusIdle {
+		t.Fatalf("the history changed under a stop that stopped nothing: %v", execs.GetExecs())
 	}
 }
 
@@ -145,17 +145,17 @@ func TestAStopWithNoReasonStillReadsAsAStop(t *testing.T) {
 	ctx := context.Background()
 	session := aWorkingSession(t, s, project, gate, started)
 
-	if _, err := s.StopTask(ctx, &quaycrewv1.StopTaskRequest{Id: session}); err != nil {
-		t.Fatalf("StopTask: %v", err)
+	if _, err := s.StopExec(ctx, &quaycrewv1.StopExecRequest{Id: session}); err != nil {
+		t.Fatalf("StopExec: %v", err)
 	}
 
-	tasks, _ := s.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session})
-	last := tasks.GetTasks()[0]
-	if last.GetStatus() != controlplane.StatusTaskStopped {
-		t.Fatalf("the task reads %q, want stopped", last.GetStatus())
+	execs, _ := s.ListExecs(ctx, &quaycrewv1.ListExecsRequest{Session: session})
+	last := execs.GetExecs()[0]
+	if last.GetStatus() != controlplane.StatusExecStopped {
+		t.Fatalf("the exec reads %q, want stopped", last.GetStatus())
 	}
 	if last.GetFailure() == "" {
-		t.Fatal("a stop with no reason recorded nothing at all, so nobody can tell it from a task " +
+		t.Fatal("a stop with no reason recorded nothing at all, so nobody can tell it from an exec " +
 			"that ended on its own")
 	}
 	close(gate)
@@ -163,7 +163,7 @@ func TestAStopWithNoReasonStillReadsAsAStop(t *testing.T) {
 
 func TestStoppingASessionNobodyHasIsNotFound(t *testing.T) {
 	s := aSystemWithProvider(&model.FakeRunner{}, &sandbox.FakeProvider{})
-	_, err := s.StopTask(context.Background(), &quaycrewv1.StopTaskRequest{Id: "ghost"})
+	_, err := s.StopExec(context.Background(), &quaycrewv1.StopExecRequest{Id: "ghost"})
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("stopping a missing session answered %v, want NotFound", err)
 	}
@@ -178,21 +178,21 @@ func TestTwoStopsLeaveOneReason(t *testing.T) {
 	ctx := context.Background()
 	session := aWorkingSession(t, s, project, gate, started)
 
-	if _, err := s.StopTask(ctx, &quaycrewv1.StopTaskRequest{Id: session, Reason: "the first reason"}); err != nil {
-		t.Fatalf("StopTask: %v", err)
+	if _, err := s.StopExec(ctx, &quaycrewv1.StopExecRequest{Id: session, Reason: "the first reason"}); err != nil {
+		t.Fatalf("StopExec: %v", err)
 	}
-	second, err := s.StopTask(ctx, &quaycrewv1.StopTaskRequest{Id: session, Reason: "the second reason"})
+	second, err := s.StopExec(ctx, &quaycrewv1.StopExecRequest{Id: session, Reason: "the second reason"})
 	if err != nil {
-		t.Fatalf("the second StopTask: %v", err)
+		t.Fatalf("the second StopExec: %v", err)
 	}
 	if second.GetStopped() {
-		t.Fatal("the second stop says it stopped a task, and the first had already ended it")
+		t.Fatal("the second stop says it stopped an exec, and the first had already ended it")
 	}
 
-	tasks, _ := s.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session})
-	if !strings.Contains(tasks.GetTasks()[0].GetFailure(), "the first reason") {
-		t.Fatalf("the task record says %q, want the reason of the stop that actually ended it",
-			tasks.GetTasks()[0].GetFailure())
+	execs, _ := s.ListExecs(ctx, &quaycrewv1.ListExecsRequest{Session: session})
+	if !strings.Contains(execs.GetExecs()[0].GetFailure(), "the first reason") {
+		t.Fatalf("the exec record says %q, want the reason of the stop that actually ended it",
+			execs.GetExecs()[0].GetFailure())
 	}
 	close(gate)
 }

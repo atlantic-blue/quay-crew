@@ -17,7 +17,7 @@ import (
 //
 // Four numbers rather than two, because two would be a lie by omission. On a real conversation the
 // input was 52 tokens and the cache read was 1,723,404: almost everything sent is the context being
-// read again on every task, and a report of "inbound and outbound" would show the 52 and hide the
+// read again on every exec, and a report of "inbound and outbound" would show the 52 and hide the
 // rest.
 type Usage struct {
 	// Input is what was sent and charged as new, not counting anything served from the cache.
@@ -27,7 +27,7 @@ type Usage struct {
 	// CacheRead is context the model read from its cache rather than being sent again. It is the
 	// largest of these by far on any conversation with real context behind it.
 	CacheRead int64
-	// CacheWritten is context put into the cache to be read on later tasks.
+	// CacheWritten is context put into the cache to be read on later execs.
 	CacheWritten int64
 }
 
@@ -48,7 +48,7 @@ func (u Usage) Total() int64 {
 	return u.Input + u.Output + u.CacheRead + u.CacheWritten
 }
 
-// Carried is the context a task sent: everything in, and nothing that came back. The model's own
+// Carried is the context an exec sent: everything in, and nothing that came back. The model's own
 // status line counts it the same way, so what the console says and what the operator reads under the
 // prompt cannot disagree.
 func (u Usage) Carried() int64 {
@@ -319,7 +319,7 @@ func (s Storage) ContextWindowSize(workspace string) (int64, bool) {
 }
 
 // HasConversation says whether the model runtime has opened this conversation already, which is what
-// decides whether a task starts it or resumes it.
+// decides whether an exec starts it or resumes it.
 //
 // The transcript is the answer because the transcript is the conversation: the runtime writes one as
 // it goes, under the name it was given, into the store this session mounts. The script that opens a

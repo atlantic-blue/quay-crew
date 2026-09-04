@@ -512,8 +512,8 @@ type Session struct {
 	// handle is the name a channel dispatches to: dispatch to the same handle and the conversation
 	// continues. It is chosen by whoever starts the session, or minted when nobody did.
 	Handle string `protobuf:"bytes,3,opt,name=handle,proto3" json:"handle,omitempty"`
-	// status is where the session is: "idle" when it is waiting for you, "running" while a task is under
-	// way, "failed" when the last task did not land, "reclaimed" when the system took its container back,
+	// status is where the session is: "idle" when it is waiting for you, "running" while an exec is under
+	// way, "failed" when the last exec did not land, "reclaimed" when the system took its container back,
 	// and "stopped" when the session was put down.
 	Status string `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
 	// model_session_id is the model's own identifier for the conversation, in the model's own word,
@@ -525,8 +525,8 @@ type Session struct {
 	// archived_at is when the session was put away. Unset means it is live. Archiving hides a session
 	// from the default listing and deletes nothing, so this is reversible by clearing it.
 	ArchivedAt *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=archived_at,json=archivedAt,proto3" json:"archived_at,omitempty"`
-	// permission_mode is what the model is allowed to do without asking, for this session's tasks:
-	// "plan", "acceptEdits" or "bypassPermissions". It belongs to the session rather than to a task, so
+	// permission_mode is what the model is allowed to do without asking, for this session's execs:
+	// "plan", "acceptEdits" or "bypassPermissions". It belongs to the session rather than to an exec, so
 	// a session started to plan something keeps planning.
 	PermissionMode string `protobuf:"bytes,10,opt,name=permission_mode,json=permissionMode,proto3" json:"permission_mode,omitempty"`
 	// driver says this session drives the system rather than doing work inside it. It reaches the
@@ -545,22 +545,22 @@ type Session struct {
 	// writes it: a name somebody picked is the one thing in a listing that is certainly right.
 	Label string `protobuf:"bytes,14,opt,name=label,proto3" json:"label,omitempty"`
 	// description is what the system observed the conversation to be, one line, written by the model that
-	// had the task. Empty until a task has happened. A listing prefers the label when there is one.
+	// had the exec. Empty until an exec has happened. A listing prefers the label when there is one.
 	Description string `protobuf:"bytes,15,opt,name=description,proto3" json:"description,omitempty"`
-	// described_at_task is how many tasks the session had when its description was written, so a
+	// described_at_exec is how many execs the session had when its description was written, so a
 	// conversation that has moved on can be described again. Zero means never described.
-	DescribedAtTask int32 `protobuf:"varint,16,opt,name=described_at_task,json=describedAtTask,proto3" json:"described_at_task,omitempty"`
+	DescribedAtExec int32 `protobuf:"varint,16,opt,name=described_at_exec,json=describedAtExec,proto3" json:"described_at_exec,omitempty"`
 	// context_window is how full the model's context window is. Absent where the system cannot say.
 	ContextWindow *ContextWindow `protobuf:"bytes,17,opt,name=context_window,json=contextWindow,proto3" json:"context_window,omitempty"`
 	// reclaimed_at is when the system took this session's container back. Unset means it holds one, or
 	// never had one taken. The row, the conversation handle and the files on the host all stay, so the
-	// next task builds a fresh container over the same state and the conversation carries on.
+	// next exec builds a fresh container over the same state and the conversation carries on.
 	//
 	// It is a stamp of its own rather than a reading of updated_at, because how long a session has been
 	// reclaimed is what the archive time is measured against, and updated_at moves on every write.
 	ReclaimedAt *timestamppb.Timestamp `protobuf:"bytes,19,opt,name=reclaimed_at,json=reclaimedAt,proto3" json:"reclaimed_at,omitempty"`
 	// presence is what the system found inside this session's sandbox, and it is the half of "is anything
-	// happening here" that status never knew. status only says whether a dispatched task is open, so a
+	// happening here" that status never knew. status only says whether a dispatched exec is open, so a
 	// session holding a conversation somebody started by hand read idle, and idle is the word that
 	// invites a restart, a drain or a reclaim.
 	//
@@ -569,7 +569,7 @@ type Session struct {
 	Presence SessionPresence `protobuf:"varint,20,opt,name=presence,proto3,enum=quaycrew.v1.SessionPresence" json:"presence,omitempty"`
 	// title is the name the session was dispatched with, written when the session is made and never
 	// afterwards, so a listing says which conversation is which from the first second rather than once
-	// a description is written behind a task that has landed.
+	// a description is written behind an exec that has landed.
 	//
 	// It is a third name rather than a second use of label, because the two are typed at different
 	// moments about different things: the title names what the session was made for, and the label is
@@ -718,9 +718,9 @@ func (x *Session) GetDescription() string {
 	return ""
 }
 
-func (x *Session) GetDescribedAtTask() int32 {
+func (x *Session) GetDescribedAtExec() int32 {
 	if x != nil {
-		return x.DescribedAtTask
+		return x.DescribedAtExec
 	}
 	return 0
 }
@@ -785,7 +785,7 @@ type ContextSpend struct {
 	Tools int64 `protobuf:"varint,2,opt,name=tools,proto3" json:"tools,omitempty"`
 	// turns is the session's own words: what it wrote, what it thought, and the calls it made.
 	Turns int64 `protobuf:"varint,3,opt,name=turns,proto3" json:"turns,omitempty"`
-	// told is what reached the session from outside a tool: the task it was given, and the answers to
+	// told is what reached the session from outside a tool: the exec it was given, and the answers to
 	// its questions.
 	Told          int64 `protobuf:"varint,4,opt,name=told,proto3" json:"told,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -857,7 +857,7 @@ func (x *ContextSpend) GetTold() int64 {
 // conversation has cost: cost only grows, while the window empties again when the model compacts.
 type ContextWindow struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// used is what the next task carries: everything sent on the last answer, including what was read
+	// used is what the next exec carries: everything sent on the last answer, including what was read
 	// back from the cache, because that is the context rather than the part of it charged as new. Read
 	// from the transcript the model keeps.
 	Used int64 `protobuf:"varint,1,opt,name=used,proto3" json:"used,omitempty"`
@@ -865,7 +865,7 @@ type ContextWindow struct {
 	// model runtime last told a session in this workspace. Zero where nothing has told it yet, which a
 	// listing shows as a count rather than as a guessed share.
 	Size int64 `protobuf:"varint,2,opt,name=size,proto3" json:"size,omitempty"`
-	// ceiling is the share of the window past which this workspace gives a session no new task, so a
+	// ceiling is the share of the window past which this workspace gives a session no new exec, so a
 	// client says what the number means rather than working it out from a limit of its own. Zero where
 	// the system did not say, and a client that reads zero marks nothing.
 	Ceiling       int32 `protobuf:"varint,3,opt,name=ceiling,proto3" json:"ceiling,omitempty"`
@@ -927,7 +927,7 @@ func (x *ContextWindow) GetCeiling() int32 {
 // Usage is what a conversation has cost, in tokens.
 //
 // Four numbers rather than two. On a real conversation the input was 52 tokens and the cache read was
-// 1,723,404, because almost everything sent is the context being read again on every task: reporting
+// 1,723,404, because almost everything sent is the context being read again on every exec: reporting
 // only what was sent and what came back would show the 52 and hide the rest.
 type Usage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -937,7 +937,7 @@ type Usage struct {
 	Output int64 `protobuf:"varint,2,opt,name=output,proto3" json:"output,omitempty"`
 	// cache_read is context the model read from its cache rather than being sent again.
 	CacheRead int64 `protobuf:"varint,3,opt,name=cache_read,json=cacheRead,proto3" json:"cache_read,omitempty"`
-	// cache_written is context put into the cache to be read on later tasks.
+	// cache_written is context put into the cache to be read on later execs.
 	CacheWritten  int64 `protobuf:"varint,4,opt,name=cache_written,json=cacheWritten,proto3" json:"cache_written,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2124,23 +2124,23 @@ type DispatchRequest struct {
 	Project string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
 	Handle  string                 `protobuf:"bytes,2,opt,name=handle,proto3" json:"handle,omitempty"`
 	Text    string                 `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`
-	// permission_mode is what the session's tasks may do without asking, and it applies from this task
+	// permission_mode is what the session's execs may do without asking, and it applies from this exec
 	// on: "plan", "acceptEdits" or "bypassPermissions". Empty leaves the session as it is, which is what
 	// every caller that does not care sends.
 	//
 	// It travels with the dispatch that starts a session because a sandbox is born with its
 	// capabilities and never drifts. Starting a session and then changing its mode costs a restart.
 	PermissionMode string `protobuf:"bytes,4,opt,name=permission_mode,json=permissionMode,proto3" json:"permission_mode,omitempty"`
-	// detach answers as soon as the session exists and runs the task behind the answer. The reply comes
-	// back empty, because there is not one yet: the session reads "running" until the task lands, and
-	// its tasks say what came back.
+	// detach answers as soon as the session exists and runs the exec behind the answer. The reply comes
+	// back empty, because there is not one yet: the session reads "running" until the exec lands, and
+	// its execs say what came back.
 	//
-	// It is what a surface that draws a screen needs. A task takes minutes, and a caller that waits
+	// It is what a surface that draws a screen needs. An exec takes minutes, and a caller that waits
 	// for one is a caller that is not drawing anything. The console
 	// waited, gave up at thirty seconds, and left a session whose conversation never happened.
 	Detach bool `protobuf:"varint,5,opt,name=detach,proto3" json:"detach,omitempty"`
 	// title is what to call the session this dispatch makes, and it is read only when the session is
-	// made: a name a caller sends with every task must not overwrite what the operator has called the
+	// made: a name a caller sends with every exec must not overwrite what the operator has called the
 	// conversation since.
 	//
 	// It is what a caller that already knows the name sends. Without it the system is handed that name
@@ -2226,7 +2226,7 @@ type DispatchResponse struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Id     string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Handle string                 `protobuf:"bytes,2,opt,name=handle,proto3" json:"handle,omitempty"`
-	// reply is what the model said, and is empty when the request detached: the task is still running,
+	// reply is what the model said, and is empty when the request detached: the exec is still running,
 	// so there is nothing to say yet.
 	Reply         string `protobuf:"bytes,3,opt,name=reply,proto3" json:"reply,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -2765,12 +2765,12 @@ func (*StopSessionResponse) Descriptor() ([]byte, []int) {
 }
 
 // DrainSessionsRequest puts every live session down, so whatever is about to take the containers
-// away finds nothing running. `make upgrade` removes them by name from the daemon, which ends a task
+// away finds nothing running. `make upgrade` removes them by name from the daemon, which ends an exec
 // in flight as "exit status 137" and leaves the row saying it was born holding skills its next
 // container will not have.
 type DrainSessionsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// force drains even when a task is under way. Without it a task in flight refuses the drain, and
+	// force drains even when an exec is under way. Without it an exec in flight refuses the drain, and
 	// the answer names what is working so the operator can wait for it instead.
 	Force         bool `protobuf:"varint,1,opt,name=force,proto3" json:"force,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -3053,9 +3053,9 @@ func (x *ArchiveSessionResponse) GetSession() *Session {
 //
 // It is the controller's move rather than an operator's, and it is not a stop. A stop is somebody's
 // decision and reads as one; a reclaim is the system saving memory on a session nobody is using, and
-// the next task to arrive builds a fresh container over the same conversation and the same files.
+// the next exec to arrive builds a fresh container over the same conversation and the same files.
 //
-// A session with a task under way is refused, and so is one an operator already stopped: overwriting
+// A session with an exec under way is refused, and so is one an operator already stopped: overwriting
 // a decision with bookkeeping is how a stop stops meaning anything.
 type ReclaimSessionRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -3145,38 +3145,38 @@ func (x *ReclaimSessionResponse) GetSession() *Session {
 	return nil
 }
 
-// StopTaskRequest halts the task a session is running now and keeps the reason.
+// StopExecRequest halts the exec a session is running now and keeps the reason.
 //
 // The session survives: its conversation, its container and its history all stay, so the next
 // dispatch continues it. That is the difference between this and StopSession, which puts the whole
 // session down and takes its container away.
 //
-// The task reads "stopped" with the reason rather than "failed". An operator asking for a stop is
+// The exec reads "stopped" with the reason rather than "failed". An operator asking for a stop is
 // not a fault, and a stop that reports as a crash hides the real crashes.
-type StopTaskRequest struct {
+type StopExecRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	// reason is what to record against the task, in the operator's own words. Empty records that
+	// reason is what to record against the exec, in the operator's own words. Empty records that
 	// somebody stopped it and nothing about why.
 	Reason        string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *StopTaskRequest) Reset() {
-	*x = StopTaskRequest{}
+func (x *StopExecRequest) Reset() {
+	*x = StopExecRequest{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *StopTaskRequest) String() string {
+func (x *StopExecRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*StopTaskRequest) ProtoMessage() {}
+func (*StopExecRequest) ProtoMessage() {}
 
-func (x *StopTaskRequest) ProtoReflect() protoreflect.Message {
+func (x *StopExecRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -3188,28 +3188,28 @@ func (x *StopTaskRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use StopTaskRequest.ProtoReflect.Descriptor instead.
-func (*StopTaskRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use StopExecRequest.ProtoReflect.Descriptor instead.
+func (*StopExecRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{52}
 }
 
-func (x *StopTaskRequest) GetId() string {
+func (x *StopExecRequest) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *StopTaskRequest) GetReason() string {
+func (x *StopExecRequest) GetReason() string {
 	if x != nil {
 		return x.Reason
 	}
 	return ""
 }
 
-type StopTaskResponse struct {
+type StopExecResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// stopped says whether there was a task to stop. False means nothing was running, which is not a
+	// stopped says whether there was an exec to stop. False means nothing was running, which is not a
 	// failure: the caller asked for a state the session is already in.
 	Stopped bool `protobuf:"varint,1,opt,name=stopped,proto3" json:"stopped,omitempty"`
 	// session is the session as it now is, so the caller does not read it back.
@@ -3218,20 +3218,20 @@ type StopTaskResponse struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *StopTaskResponse) Reset() {
-	*x = StopTaskResponse{}
+func (x *StopExecResponse) Reset() {
+	*x = StopExecResponse{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *StopTaskResponse) String() string {
+func (x *StopExecResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*StopTaskResponse) ProtoMessage() {}
+func (*StopExecResponse) ProtoMessage() {}
 
-func (x *StopTaskResponse) ProtoReflect() protoreflect.Message {
+func (x *StopExecResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -3243,19 +3243,19 @@ func (x *StopTaskResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use StopTaskResponse.ProtoReflect.Descriptor instead.
-func (*StopTaskResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use StopExecResponse.ProtoReflect.Descriptor instead.
+func (*StopExecResponse) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{53}
 }
 
-func (x *StopTaskResponse) GetStopped() bool {
+func (x *StopExecResponse) GetStopped() bool {
 	if x != nil {
 		return x.Stopped
 	}
 	return false
 }
 
-func (x *StopTaskResponse) GetSession() *Session {
+func (x *StopExecResponse) GetSession() *Session {
 	if x != nil {
 		return x.Session
 	}
@@ -3819,7 +3819,7 @@ func (x *LocateDirectoryResponse) GetKind() DirectoryKind {
 
 // SecretRef names a secret a workspace has set. It carries no value and there is no call that returns
 // one: a value the backend holds must not become readable because a client asked politely. The only
-// reader is the system itself, at the moment a task needs it.
+// reader is the system itself, at the moment an exec needs it.
 type SecretRef struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	Workspace string                 `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
@@ -4012,7 +4012,7 @@ type Skill struct {
 	// summary says when to reach for this skill, in a sentence. It is the line a session is told.
 	Summary string `protobuf:"bytes,3,opt,name=summary,proto3" json:"summary,omitempty"`
 	// binaries are the commands the skill needs in the sandbox image. A session missing one is refused
-	// before a task runs.
+	// before an exec runs.
 	Binaries   []string               `protobuf:"bytes,4,rep,name=binaries,proto3" json:"binaries,omitempty"`
 	Secrets    []*SkillSecret         `protobuf:"bytes,5,rep,name=secrets,proto3" json:"secrets,omitempty"`
 	ImportedAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=imported_at,json=importedAt,proto3" json:"imported_at,omitempty"`
@@ -4020,7 +4020,7 @@ type Skill struct {
 	System bool `protobuf:"varint,8,opt,name=system,proto3" json:"system,omitempty"`
 	// left_out says why a skill the workspace holds is not given to its sessions, and is empty when it
 	// is given. A skill naming a secret the workspace has not set is held and not given, rather than
-	// refusing the task, so one unusable skill cannot stop every conversation in the workspace.
+	// refusing the exec, so one unusable skill cannot stop every conversation in the workspace.
 	LeftOut       string `protobuf:"bytes,7,opt,name=left_out,json=leftOut,proto3" json:"left_out,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -4639,14 +4639,14 @@ type Hook struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Name    string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Version int32                  `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
-	// summary is the line a listing shows. Nothing pays for it per task, because a hook is invisible
+	// summary is the line a listing shows. Nothing pays for it per exec, because a hook is invisible
 	// to the model until it fires.
 	Summary string `protobuf:"bytes,3,opt,name=summary,proto3" json:"summary,omitempty"`
 	// events are what this hook fires on, in the order they were written, which is the order they are
 	// rendered into a session's settings.
 	Events []*HookBinding `protobuf:"bytes,4,rep,name=events,proto3" json:"events,omitempty"`
 	// binaries are the commands the hook needs in the sandbox image. A session missing one is refused
-	// before a task runs.
+	// before an exec runs.
 	Binaries   []string               `protobuf:"bytes,5,rep,name=binaries,proto3" json:"binaries,omitempty"`
 	Secrets    []*SkillSecret         `protobuf:"bytes,6,rep,name=secrets,proto3" json:"secrets,omitempty"`
 	ImportedAt *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=imported_at,json=importedAt,proto3" json:"imported_at,omitempty"`
@@ -5376,7 +5376,7 @@ func (x *ListContextsResponse) GetDirs() []*ContextDir {
 	return nil
 }
 
-// SetSessionPermissionModeRequest changes what a session's tasks may do without asking.
+// SetSessionPermissionModeRequest changes what a session's execs may do without asking.
 type SetSessionPermissionModeRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -5699,13 +5699,13 @@ func (*GetInfoRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{95}
 }
 
-// GetInfoResponse says what a task dispatched here would actually do.
+// GetInfoResponse says what an exec dispatched here would actually do.
 //
 // It carries configuration, never a secret and never a health verdict. The console shows it so the
 // operator can see which system they are about to act on, the way a cluster name does.
 type GetInfoResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// model is the backend a task runs against, for example "claude-code" or "echo".
+	// model is the backend an exec runs against, for example "claude-code" or "echo".
 	Model string `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`
 	// sandbox is the isolation a session runs in, for example "docker" or "local".
 	Sandbox string `protobuf:"bytes,2,opt,name=sandbox,proto3" json:"sandbox,omitempty"`
@@ -5718,7 +5718,7 @@ type GetInfoResponse struct {
 	State string `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`
 	// secrets is where a workspace's credentials are kept, for example "postgres, sealed". A system that
 	// keeps them in memory loses the subscription token on every restart, which is worth seeing before
-	// wondering why a task stopped working.
+	// wondering why an exec stopped working.
 	Secrets string `protobuf:"bytes,6,opt,name=secrets,proto3" json:"secrets,omitempty"`
 	// sandbox_build is the build of the system the sandbox image was made from, for example "37b070b".
 	// Sessions run whatever that image holds, so an image older than the tool means the system moved on
@@ -6078,20 +6078,20 @@ func (x *GetUsageResponse) GetSessions() int64 {
 	return 0
 }
 
-// Task is one exchange with the model, read back from the projection of the event log.
-type Task struct {
+// Exec is one exchange with the model, read back from the projection of the event log.
+type Exec struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Id      string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Session string                 `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
-	// prompt is what was asked, reply is what came back, empty when the task failed.
+	// prompt is what was asked, reply is what came back, empty when the exec failed.
 	Prompt string `protobuf:"bytes,3,opt,name=prompt,proto3" json:"prompt,omitempty"`
 	Reply  string `protobuf:"bytes,4,opt,name=reply,proto3" json:"reply,omitempty"`
-	// status is the session's status after the task: "idle" when it worked, "failed" when it did not.
+	// status is the session's status after the exec: "idle" when it worked, "failed" when it did not.
 	Status string `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
-	// failure says what went wrong, empty on a task that worked.
+	// failure says what went wrong, empty on an exec that worked.
 	Failure    string                 `protobuf:"bytes,6,opt,name=failure,proto3" json:"failure,omitempty"`
 	OccurredAt *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
-	// trace_id is the trace the call that ran this task belonged to, and empty for a task nothing was
+	// trace_id is the trace the call that ran this exec belonged to, and empty for an exec nothing was
 	// tracing. A reader holding it can open the trace, and it is the same value every log line written
 	// under that call carries, so the two join. See issue 346.
 	TraceId       string `protobuf:"bytes,8,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
@@ -6099,20 +6099,20 @@ type Task struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Task) Reset() {
-	*x = Task{}
+func (x *Exec) Reset() {
+	*x = Exec{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Task) String() string {
+func (x *Exec) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Task) ProtoMessage() {}
+func (*Exec) ProtoMessage() {}
 
-func (x *Task) ProtoReflect() protoreflect.Message {
+func (x *Exec) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -6124,70 +6124,70 @@ func (x *Task) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Task.ProtoReflect.Descriptor instead.
-func (*Task) Descriptor() ([]byte, []int) {
+// Deprecated: Use Exec.ProtoReflect.Descriptor instead.
+func (*Exec) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{102}
 }
 
-func (x *Task) GetId() string {
+func (x *Exec) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *Task) GetSession() string {
+func (x *Exec) GetSession() string {
 	if x != nil {
 		return x.Session
 	}
 	return ""
 }
 
-func (x *Task) GetPrompt() string {
+func (x *Exec) GetPrompt() string {
 	if x != nil {
 		return x.Prompt
 	}
 	return ""
 }
 
-func (x *Task) GetReply() string {
+func (x *Exec) GetReply() string {
 	if x != nil {
 		return x.Reply
 	}
 	return ""
 }
 
-func (x *Task) GetStatus() string {
+func (x *Exec) GetStatus() string {
 	if x != nil {
 		return x.Status
 	}
 	return ""
 }
 
-func (x *Task) GetFailure() string {
+func (x *Exec) GetFailure() string {
 	if x != nil {
 		return x.Failure
 	}
 	return ""
 }
 
-func (x *Task) GetOccurredAt() *timestamppb.Timestamp {
+func (x *Exec) GetOccurredAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.OccurredAt
 	}
 	return nil
 }
 
-func (x *Task) GetTraceId() string {
+func (x *Exec) GetTraceId() string {
 	if x != nil {
 		return x.TraceId
 	}
 	return ""
 }
 
-// ListTasksRequest asks for one session's history, most recent last, so a conversation reads the way
+// ListExecsRequest asks for one session's history, most recent last, so a conversation reads the way
 // it happened.
-type ListTasksRequest struct {
+type ListExecsRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Session string                 `protobuf:"bytes,1,opt,name=session,proto3" json:"session,omitempty"`
 	// limit caps how many come back. Zero means a sensible default rather than everything, because a
@@ -6197,20 +6197,20 @@ type ListTasksRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListTasksRequest) Reset() {
-	*x = ListTasksRequest{}
+func (x *ListExecsRequest) Reset() {
+	*x = ListExecsRequest{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListTasksRequest) String() string {
+func (x *ListExecsRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListTasksRequest) ProtoMessage() {}
+func (*ListExecsRequest) ProtoMessage() {}
 
-func (x *ListTasksRequest) ProtoReflect() protoreflect.Message {
+func (x *ListExecsRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -6222,46 +6222,46 @@ func (x *ListTasksRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListTasksRequest.ProtoReflect.Descriptor instead.
-func (*ListTasksRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use ListExecsRequest.ProtoReflect.Descriptor instead.
+func (*ListExecsRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{103}
 }
 
-func (x *ListTasksRequest) GetSession() string {
+func (x *ListExecsRequest) GetSession() string {
 	if x != nil {
 		return x.Session
 	}
 	return ""
 }
 
-func (x *ListTasksRequest) GetLimit() int32 {
+func (x *ListExecsRequest) GetLimit() int32 {
 	if x != nil {
 		return x.Limit
 	}
 	return 0
 }
 
-type ListTasksResponse struct {
+type ListExecsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Tasks         []*Task                `protobuf:"bytes,1,rep,name=tasks,proto3" json:"tasks,omitempty"`
+	Execs         []*Exec                `protobuf:"bytes,1,rep,name=execs,proto3" json:"execs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListTasksResponse) Reset() {
-	*x = ListTasksResponse{}
+func (x *ListExecsResponse) Reset() {
+	*x = ListExecsResponse{}
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListTasksResponse) String() string {
+func (x *ListExecsResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListTasksResponse) ProtoMessage() {}
+func (*ListExecsResponse) ProtoMessage() {}
 
-func (x *ListTasksResponse) ProtoReflect() protoreflect.Message {
+func (x *ListExecsResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_controlplane_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -6273,14 +6273,14 @@ func (x *ListTasksResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListTasksResponse.ProtoReflect.Descriptor instead.
-func (*ListTasksResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use ListExecsResponse.ProtoReflect.Descriptor instead.
+func (*ListExecsResponse) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{104}
 }
 
-func (x *ListTasksResponse) GetTasks() []*Task {
+func (x *ListExecsResponse) GetExecs() []*Exec {
 	if x != nil {
-		return x.Tasks
+		return x.Execs
 	}
 	return nil
 }
@@ -6435,7 +6435,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x05stale\x18\r \x01(\bR\x05stale\x12\x14\n" +
 	"\x05label\x18\x0e \x01(\tR\x05label\x12 \n" +
 	"\vdescription\x18\x0f \x01(\tR\vdescription\x12*\n" +
-	"\x11described_at_task\x18\x10 \x01(\x05R\x0fdescribedAtTask\x12A\n" +
+	"\x11described_at_exec\x18\x10 \x01(\x05R\x0fdescribedAtExec\x12A\n" +
 	"\x0econtext_window\x18\x11 \x01(\v2\x1a.quaycrew.v1.ContextWindowR\rcontextWindow\x12=\n" +
 	"\freclaimed_at\x18\x13 \x01(\v2\x1a.google.protobuf.TimestampR\vreclaimedAt\x128\n" +
 	"\bpresence\x18\x14 \x01(\x0e2\x1c.quaycrew.v1.SessionPresenceR\bpresence\x12\x14\n" +
@@ -6570,10 +6570,10 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"H\n" +
 	"\x16ReclaimSessionResponse\x12.\n" +
 	"\asession\x18\x01 \x01(\v2\x14.quaycrew.v1.SessionR\asession\"9\n" +
-	"\x0fStopTaskRequest\x12\x0e\n" +
+	"\x0fStopExecRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\"\\\n" +
-	"\x10StopTaskResponse\x12\x18\n" +
+	"\x10StopExecResponse\x12\x18\n" +
 	"\astopped\x18\x01 \x01(\bR\astopped\x12.\n" +
 	"\asession\x18\x02 \x01(\v2\x14.quaycrew.v1.SessionR\asession\"\xc0\x01\n" +
 	"\n" +
@@ -6750,7 +6750,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x10GetUsageResponse\x12(\n" +
 	"\x05total\x18\x01 \x01(\v2\x12.quaycrew.v1.UsageR\x05total\x12\x1a\n" +
 	"\bsessions\x18\x02 \x01(\x03R\bsessions\"\xe8\x01\n" +
-	"\x04Task\x12\x0e\n" +
+	"\x04Exec\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\asession\x18\x02 \x01(\tR\asession\x12\x16\n" +
 	"\x06prompt\x18\x03 \x01(\tR\x06prompt\x12\x14\n" +
@@ -6760,11 +6760,11 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\voccurred_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"occurredAt\x12\x19\n" +
 	"\btrace_id\x18\b \x01(\tR\atraceId\"B\n" +
-	"\x10ListTasksRequest\x12\x18\n" +
+	"\x10ListExecsRequest\x12\x18\n" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"<\n" +
-	"\x11ListTasksResponse\x12'\n" +
-	"\x05tasks\x18\x01 \x03(\v2\x11.quaycrew.v1.TaskR\x05tasks\"J\n" +
+	"\x11ListExecsResponse\x12'\n" +
+	"\x05execs\x18\x01 \x03(\v2\x11.quaycrew.v1.ExecR\x05execs\"J\n" +
 	"\x18ListSessionEventsRequest\x12\x18\n" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"N\n" +
@@ -6807,7 +6807,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"GetSession\x12\x1e.quaycrew.v1.GetSessionRequest\x1a\x1f.quaycrew.v1.GetSessionResponse\x12V\n" +
 	"\rAttachSession\x12!.quaycrew.v1.AttachSessionRequest\x1a\".quaycrew.v1.AttachSessionResponse\x12P\n" +
 	"\vStopSession\x12\x1f.quaycrew.v1.StopSessionRequest\x1a .quaycrew.v1.StopSessionResponse\x12G\n" +
-	"\bStopTask\x12\x1c.quaycrew.v1.StopTaskRequest\x1a\x1d.quaycrew.v1.StopTaskResponse\x12Y\n" +
+	"\bStopExec\x12\x1c.quaycrew.v1.StopExecRequest\x1a\x1d.quaycrew.v1.StopExecResponse\x12Y\n" +
 	"\x0eReclaimSession\x12\".quaycrew.v1.ReclaimSessionRequest\x1a#.quaycrew.v1.ReclaimSessionResponse\x12V\n" +
 	"\rDrainSessions\x12!.quaycrew.v1.DrainSessionsRequest\x1a\".quaycrew.v1.DrainSessionsResponse\x12Y\n" +
 	"\x0eRestartSession\x12\".quaycrew.v1.RestartSessionRequest\x1a#.quaycrew.v1.RestartSessionResponse\x12Y\n" +
@@ -6832,7 +6832,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"AttachHook\x12\x1e.quaycrew.v1.AttachHookRequest\x1a\x1f.quaycrew.v1.AttachHookResponse\x12M\n" +
 	"\n" +
 	"DetachHook\x12\x1e.quaycrew.v1.DetachHookRequest\x1a\x1f.quaycrew.v1.DetachHookResponse\x12J\n" +
-	"\tListTasks\x12\x1d.quaycrew.v1.ListTasksRequest\x1a\x1e.quaycrew.v1.ListTasksResponse\x12b\n" +
+	"\tListExecs\x12\x1d.quaycrew.v1.ListExecsRequest\x1a\x1e.quaycrew.v1.ListExecsResponse\x12b\n" +
 	"\x11ListSessionEvents\x12%.quaycrew.v1.ListSessionEventsRequest\x1a&.quaycrew.v1.ListSessionEventsResponse\x12D\n" +
 	"\aGetInfo\x12\x1b.quaycrew.v1.GetInfoRequest\x1a\x1c.quaycrew.v1.GetInfoResponse\x12G\n" +
 	"\bGetUsage\x12\x1c.quaycrew.v1.GetUsageRequest\x1a\x1d.quaycrew.v1.GetUsageResponse\x12J\n" +
@@ -6909,8 +6909,8 @@ var file_quaycrew_v1_controlplane_proto_goTypes = []any{
 	(*ArchiveSessionResponse)(nil),           // 52: quaycrew.v1.ArchiveSessionResponse
 	(*ReclaimSessionRequest)(nil),            // 53: quaycrew.v1.ReclaimSessionRequest
 	(*ReclaimSessionResponse)(nil),           // 54: quaycrew.v1.ReclaimSessionResponse
-	(*StopTaskRequest)(nil),                  // 55: quaycrew.v1.StopTaskRequest
-	(*StopTaskResponse)(nil),                 // 56: quaycrew.v1.StopTaskResponse
+	(*StopExecRequest)(nil),                  // 55: quaycrew.v1.StopExecRequest
+	(*StopExecResponse)(nil),                 // 56: quaycrew.v1.StopExecResponse
 	(*ContextDir)(nil),                       // 57: quaycrew.v1.ContextDir
 	(*SetContextRequest)(nil),                // 58: quaycrew.v1.SetContextRequest
 	(*SetContextResponse)(nil),               // 59: quaycrew.v1.SetContextResponse
@@ -6959,9 +6959,9 @@ var file_quaycrew_v1_controlplane_proto_goTypes = []any{
 	(*HealthComponent)(nil),                  // 102: quaycrew.v1.HealthComponent
 	(*GetUsageRequest)(nil),                  // 103: quaycrew.v1.GetUsageRequest
 	(*GetUsageResponse)(nil),                 // 104: quaycrew.v1.GetUsageResponse
-	(*Task)(nil),                             // 105: quaycrew.v1.Task
-	(*ListTasksRequest)(nil),                 // 106: quaycrew.v1.ListTasksRequest
-	(*ListTasksResponse)(nil),                // 107: quaycrew.v1.ListTasksResponse
+	(*Exec)(nil),                             // 105: quaycrew.v1.Exec
+	(*ListExecsRequest)(nil),                 // 106: quaycrew.v1.ListExecsRequest
+	(*ListExecsResponse)(nil),                // 107: quaycrew.v1.ListExecsResponse
 	(*ListSessionEventsRequest)(nil),         // 108: quaycrew.v1.ListSessionEventsRequest
 	(*ListSessionEventsResponse)(nil),        // 109: quaycrew.v1.ListSessionEventsResponse
 	(*timestamppb.Timestamp)(nil),            // 110: google.protobuf.Timestamp
@@ -6998,7 +6998,7 @@ var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
 	7,   // 27: quaycrew.v1.RestartSessionResponse.session:type_name -> quaycrew.v1.Session
 	7,   // 28: quaycrew.v1.ArchiveSessionResponse.session:type_name -> quaycrew.v1.Session
 	7,   // 29: quaycrew.v1.ReclaimSessionResponse.session:type_name -> quaycrew.v1.Session
-	7,   // 30: quaycrew.v1.StopTaskResponse.session:type_name -> quaycrew.v1.Session
+	7,   // 30: quaycrew.v1.StopExecResponse.session:type_name -> quaycrew.v1.Session
 	57,  // 31: quaycrew.v1.SetContextResponse.dir:type_name -> quaycrew.v1.ContextDir
 	60,  // 32: quaycrew.v1.ReadSessionWorkResponse.entries:type_name -> quaycrew.v1.SessionWorkEntry
 	2,   // 33: quaycrew.v1.LocateDirectoryResponse.kind:type_name -> quaycrew.v1.DirectoryKind
@@ -7025,8 +7025,8 @@ var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
 	102, // 54: quaycrew.v1.GetHealthResponse.components:type_name -> quaycrew.v1.HealthComponent
 	110, // 55: quaycrew.v1.GetHealthResponse.checked_at:type_name -> google.protobuf.Timestamp
 	10,  // 56: quaycrew.v1.GetUsageResponse.total:type_name -> quaycrew.v1.Usage
-	110, // 57: quaycrew.v1.Task.occurred_at:type_name -> google.protobuf.Timestamp
-	105, // 58: quaycrew.v1.ListTasksResponse.tasks:type_name -> quaycrew.v1.Task
+	110, // 57: quaycrew.v1.Exec.occurred_at:type_name -> google.protobuf.Timestamp
+	105, // 58: quaycrew.v1.ListExecsResponse.execs:type_name -> quaycrew.v1.Exec
 	111, // 59: quaycrew.v1.ListSessionEventsResponse.events:type_name -> quaycrew.v1.SessionEvent
 	11,  // 60: quaycrew.v1.ControlPlaneService.CreateWorkspace:input_type -> quaycrew.v1.CreateWorkspaceRequest
 	13,  // 61: quaycrew.v1.ControlPlaneService.GetWorkspace:input_type -> quaycrew.v1.GetWorkspaceRequest
@@ -7047,7 +7047,7 @@ var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
 	41,  // 76: quaycrew.v1.ControlPlaneService.GetSession:input_type -> quaycrew.v1.GetSessionRequest
 	43,  // 77: quaycrew.v1.ControlPlaneService.AttachSession:input_type -> quaycrew.v1.AttachSessionRequest
 	45,  // 78: quaycrew.v1.ControlPlaneService.StopSession:input_type -> quaycrew.v1.StopSessionRequest
-	55,  // 79: quaycrew.v1.ControlPlaneService.StopTask:input_type -> quaycrew.v1.StopTaskRequest
+	55,  // 79: quaycrew.v1.ControlPlaneService.StopExec:input_type -> quaycrew.v1.StopExecRequest
 	53,  // 80: quaycrew.v1.ControlPlaneService.ReclaimSession:input_type -> quaycrew.v1.ReclaimSessionRequest
 	47,  // 81: quaycrew.v1.ControlPlaneService.DrainSessions:input_type -> quaycrew.v1.DrainSessionsRequest
 	49,  // 82: quaycrew.v1.ControlPlaneService.RestartSession:input_type -> quaycrew.v1.RestartSessionRequest
@@ -7067,7 +7067,7 @@ var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
 	84,  // 96: quaycrew.v1.ControlPlaneService.ListHooks:input_type -> quaycrew.v1.ListHooksRequest
 	86,  // 97: quaycrew.v1.ControlPlaneService.AttachHook:input_type -> quaycrew.v1.AttachHookRequest
 	88,  // 98: quaycrew.v1.ControlPlaneService.DetachHook:input_type -> quaycrew.v1.DetachHookRequest
-	106, // 99: quaycrew.v1.ControlPlaneService.ListTasks:input_type -> quaycrew.v1.ListTasksRequest
+	106, // 99: quaycrew.v1.ControlPlaneService.ListExecs:input_type -> quaycrew.v1.ListExecsRequest
 	108, // 100: quaycrew.v1.ControlPlaneService.ListSessionEvents:input_type -> quaycrew.v1.ListSessionEventsRequest
 	98,  // 101: quaycrew.v1.ControlPlaneService.GetInfo:input_type -> quaycrew.v1.GetInfoRequest
 	103, // 102: quaycrew.v1.ControlPlaneService.GetUsage:input_type -> quaycrew.v1.GetUsageRequest
@@ -7091,7 +7091,7 @@ var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
 	42,  // 120: quaycrew.v1.ControlPlaneService.GetSession:output_type -> quaycrew.v1.GetSessionResponse
 	44,  // 121: quaycrew.v1.ControlPlaneService.AttachSession:output_type -> quaycrew.v1.AttachSessionResponse
 	46,  // 122: quaycrew.v1.ControlPlaneService.StopSession:output_type -> quaycrew.v1.StopSessionResponse
-	56,  // 123: quaycrew.v1.ControlPlaneService.StopTask:output_type -> quaycrew.v1.StopTaskResponse
+	56,  // 123: quaycrew.v1.ControlPlaneService.StopExec:output_type -> quaycrew.v1.StopExecResponse
 	54,  // 124: quaycrew.v1.ControlPlaneService.ReclaimSession:output_type -> quaycrew.v1.ReclaimSessionResponse
 	48,  // 125: quaycrew.v1.ControlPlaneService.DrainSessions:output_type -> quaycrew.v1.DrainSessionsResponse
 	50,  // 126: quaycrew.v1.ControlPlaneService.RestartSession:output_type -> quaycrew.v1.RestartSessionResponse
@@ -7111,7 +7111,7 @@ var file_quaycrew_v1_controlplane_proto_depIdxs = []int32{
 	85,  // 140: quaycrew.v1.ControlPlaneService.ListHooks:output_type -> quaycrew.v1.ListHooksResponse
 	87,  // 141: quaycrew.v1.ControlPlaneService.AttachHook:output_type -> quaycrew.v1.AttachHookResponse
 	89,  // 142: quaycrew.v1.ControlPlaneService.DetachHook:output_type -> quaycrew.v1.DetachHookResponse
-	107, // 143: quaycrew.v1.ControlPlaneService.ListTasks:output_type -> quaycrew.v1.ListTasksResponse
+	107, // 143: quaycrew.v1.ControlPlaneService.ListExecs:output_type -> quaycrew.v1.ListExecsResponse
 	109, // 144: quaycrew.v1.ControlPlaneService.ListSessionEvents:output_type -> quaycrew.v1.ListSessionEventsResponse
 	99,  // 145: quaycrew.v1.ControlPlaneService.GetInfo:output_type -> quaycrew.v1.GetInfoResponse
 	104, // 146: quaycrew.v1.ControlPlaneService.GetUsage:output_type -> quaycrew.v1.GetUsageResponse

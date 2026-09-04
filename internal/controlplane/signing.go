@@ -14,7 +14,7 @@ import (
 // carries.
 //
 // Signing with ssh needs one private key file and nothing else: no agent, no keyring, no pinentry,
-// and no interactive prompt to hang a task nobody is watching. GitHub verifies both formats. The
+// and no interactive prompt to hang an exec nobody is watching. GitHub verifies both formats. The
 // cost is that a commit signed in a sandbox verifies against a different key from one signed on the
 // operator's own machine, so both keys have to be on the account.
 const SigningKeySecret = "GIT_SSH_SIGNING_KEY"
@@ -28,8 +28,8 @@ const SigningKeySecret = "GIT_SSH_SIGNING_KEY"
 // identity. One key, one identity, whoever made the commit.
 //
 // What ssh avoids and this brings back is the keyring and the passphrase. The keyring is made at
-// sandbox birth in memory and dies with the container. The passphrase is the part that hangs a task:
-// gpg asks for one through pinentry, and a task nobody is watching waits forever. So the sandbox
+// sandbox birth in memory and dies with the container. The passphrase is the part that hangs an exec:
+// gpg asks for one through pinentry, and an exec nobody is watching waits forever. So the sandbox
 // tells gpg to work in batch, where a key that needs a passphrase and has none fails in a second
 // with a message, and an operator who has one mounts it as OpenPGPPassphraseSecret.
 const OpenPGPKeySecret = "GPG_SIGNING_KEY"
@@ -72,7 +72,7 @@ func (s *Server) readySigning(ctx context.Context, session *quaycrewv1.Session, 
 	if err != nil {
 		// A sandbox that cannot be configured to sign is a sandbox that cannot sign, which the git
 		// skill already tells a session to handle by asking rather than committing unsigned. Failing
-		// the task here would take the whole conversation down over it.
+		// the exec here would take the whole conversation down over it.
 		return nil
 	}
 	_, _ = io.Copy(io.Discard, proc.Stdout())
@@ -124,7 +124,7 @@ var (
 )
 
 // signingSetup points git at the key. Every line is idempotent, because a sandbox is adopted across
-// tasks and this runs again on a replacement.
+// execs and this runs again on a replacement.
 var signingSetup = `set -e
 git config --global gpg.format ssh
 git config --global user.signingkey ` + signingKeyPath + `
@@ -138,9 +138,9 @@ git config --global tag.gpgsign true`
 // image that says nothing gets the home directory, so an older image still signs, with the imported
 // key on the container's writable layer rather than in memory.
 //
-// batch and no-tty are what keep an unattended task from waiting on a passphrase prompt no operator
+// batch and no-tty are what keep an unattended exec from waiting on a passphrase prompt no operator
 // is there to answer. With them, a key that needs a passphrase the workspace did not mount fails
-// while the commit is being made, which is a message in a transcript rather than a task that never
+// while the commit is being made, which is a message in a transcript rather than an exec that never
 // ends.
 //
 // The signing key is named by fingerprint rather than left to gpg's default, which is the first

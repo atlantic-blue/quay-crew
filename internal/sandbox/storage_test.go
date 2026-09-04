@@ -152,7 +152,7 @@ func TestStoragePrepareRefusesWhatItCannotPlace(t *testing.T) {
 }
 
 // TestHasConversationFindsWhatTheModelKeeps: whether the runtime has opened a conversation decides
-// how the next task names it, so a wrong answer here fails the task either way. Resuming a name that
+// how the next exec names it, so a wrong answer here fails the exec either way. Resuming a name that
 // is not there prints "No conversation found" and exits, and starting a name that is there is refused
 // as one already in use.
 func TestHasConversationFindsWhatTheModelKeeps(t *testing.T) {
@@ -170,10 +170,10 @@ func TestHasConversationFindsWhatTheModelKeeps(t *testing.T) {
 	}
 
 	if !storage.HasConversation(cfg, conversation) {
-		t.Fatal("the conversation is on disk and was not found, so the next task would start it again")
+		t.Fatal("the conversation is on disk and was not found, so the next exec would start it again")
 	}
 	if storage.HasConversation(cfg, "37b8f60b-7ef1-4834-9820-2a62b9937faf") {
-		t.Fatal("a conversation that is not on disk was reported as opened, so the next task would resume nothing")
+		t.Fatal("a conversation that is not on disk was reported as opened, so the next exec would resume nothing")
 	}
 	other := sandbox.Config{ID: "sess2", Workspace: "other-workspace", Project: "prj1"}
 	if storage.HasConversation(other, conversation) {
@@ -183,7 +183,7 @@ func TestHasConversationFindsWhatTheModelKeeps(t *testing.T) {
 
 // A session running as a role keeps its own conversation store, so the transcript is not where a
 // workspace's are. Reading the workspace's store for it would say every one of its conversations was
-// unopened, and every task it ever ran would be told to start the conversation again.
+// unopened, and every exec it ever ran would be told to start the conversation again.
 func TestHasConversationReadsTheStoreARoleKeepsItsOwn(t *testing.T) {
 	dir := t.TempDir()
 	storage := sandbox.Storage{Dir: dir, Host: dir}

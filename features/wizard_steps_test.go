@@ -119,7 +119,7 @@ func initializeWizardSteps(sc *godog.ScenarioContext) {
 	// wizard made; the session under it is proved from the control plane.
 	sc.Step(`^the console lists what the wizard made$`, func(ctx context.Context) error {
 		w, c := worldFrom(ctx), consoleFrom(ctx)
-		// Asked of the control plane rather than of the world, because this task was dispatched by
+		// Asked of the control plane rather than of the world, because this exec was dispatched by
 		// the console rather than by a step.
 		listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{})
 		if err != nil {

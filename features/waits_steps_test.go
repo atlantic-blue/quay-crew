@@ -70,12 +70,12 @@ func initializeWaitsSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("the session reads %q, and a session that never started must not read idle",
 				session.GetStatus())
 		}
-		tasks, err := listTasks(ctx, w, session.GetId())
+		execs, err := listExecs(ctx, w, session.GetId())
 		if err != nil {
 			return err
 		}
-		if len(tasks) != 1 || tasks[0].GetFailure() == "" {
-			return fmt.Errorf("%d tasks came back, and the operator has nothing to read about why", len(tasks))
+		if len(execs) != 1 || execs[0].GetFailure() == "" {
+			return fmt.Errorf("%d execs came back, and the operator has nothing to read about why", len(execs))
 		}
 		return nil
 	})

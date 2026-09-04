@@ -79,22 +79,22 @@ func attributesOn(got metricdata.ResourceMetrics, name string) []map[string]stri
 	return sets
 }
 
-func aTask() telemetry.TaskMeasurement {
-	return telemetry.TaskMeasurement{
+func aExec() telemetry.ExecMeasurement {
+	return telemetry.ExecMeasurement{
 		Workspace: "me", Project: "house-bills", Model: "claude-code", Status: "idle",
 		Usage:   sandbox.Usage{Input: 1200, Output: 340, CacheRead: 9000, CacheWritten: 500},
 		CostUSD: 0.0241, Reported: true,
 	}
 }
 
-func TestATaskPublishesItsTokensAndItsCost(t *testing.T) {
+func TestAExecPublishesItsTokensAndItsCost(t *testing.T) {
 	read := collected(t)
-	metrics, err := telemetry.NewTaskMetrics()
+	metrics, err := telemetry.NewExecMetrics()
 	if err != nil {
 		t.Fatalf("creating the instruments: %v", err)
 	}
 
-	metrics.Record(context.Background(), aTask())
+	metrics.Record(context.Background(), aExec())
 
 	got := read()
 	if total, found := sumFor(got, telemetry.TokensMetric); !found || total != 11040 {
@@ -103,17 +103,17 @@ func TestATaskPublishesItsTokensAndItsCost(t *testing.T) {
 	if total, found := sumFor(got, telemetry.CostMetric); !found || total != 0.0241 {
 		t.Errorf("cost published %v (found %v), wanted 0.0241", total, found)
 	}
-	if total, found := sumFor(got, telemetry.TasksMetric); !found || total != 1 {
-		t.Errorf("tasks published %v (found %v), wanted 1", total, found)
+	if total, found := sumFor(got, telemetry.ExecsMetric); !found || total != 1 {
+		t.Errorf("execs published %v (found %v), wanted 1", total, found)
 	}
 }
 
 // A total nobody can break down answers the only cheap question and none of the expensive ones.
 func TestEveryTokenCountSaysWhoseItIsAndWhatKindItIs(t *testing.T) {
 	read := collected(t)
-	metrics, _ := telemetry.NewTaskMetrics()
+	metrics, _ := telemetry.NewExecMetrics()
 
-	metrics.Record(context.Background(), aTask())
+	metrics.Record(context.Background(), aExec())
 
 	sets := attributesOn(read(), telemetry.TokensMetric)
 	if len(sets) != 4 {
@@ -138,51 +138,51 @@ func TestEveryTokenCountSaysWhoseItIsAndWhatKindItIs(t *testing.T) {
 	}
 }
 
-// A zero that means "the backend never said" must not read as "this task was free". The task is
-// still counted, so the task rate stays right.
-func TestATaskThatReportsNothingCountsAsATaskAndNotAsFree(t *testing.T) {
+// A zero that means "the backend never said" must not read as "this exec was free". The exec is
+// still counted, so the exec rate stays right.
+func TestAExecThatReportsNothingCountsAsAExecAndNotAsFree(t *testing.T) {
 	read := collected(t)
-	metrics, _ := telemetry.NewTaskMetrics()
+	metrics, _ := telemetry.NewExecMetrics()
 
-	metrics.Record(context.Background(), telemetry.TaskMeasurement{
+	metrics.Record(context.Background(), telemetry.ExecMeasurement{
 		Workspace: "me", Project: "house-bills", Model: "echo", Status: "idle", Reported: false,
 	})
 
 	got := read()
-	if total, found := sumFor(got, telemetry.TasksMetric); !found || total != 1 {
-		t.Errorf("tasks published %v (found %v), wanted the task counted", total, found)
+	if total, found := sumFor(got, telemetry.ExecsMetric); !found || total != 1 {
+		t.Errorf("execs published %v (found %v), wanted the exec counted", total, found)
 	}
 	if _, found := sumFor(got, telemetry.TokensMetric); found {
-		t.Error("a task whose backend reported no usage published a token count, so an unknown reads as a zero")
+		t.Error("an exec whose backend reported no usage published a token count, so an unknown reads as a zero")
 	}
 	if _, found := sumFor(got, telemetry.CostMetric); found {
-		t.Error("a task whose backend reported no usage published a cost, so an unknown reads as free")
+		t.Error("an exec whose backend reported no usage published a cost, so an unknown reads as free")
 	}
 }
 
-// A failed task spent what it spent. Counting only the tasks that worked understates the bill in
+// A failed exec spent what it spent. Counting only the execs that worked understates the bill in
 // exactly the situation somebody is investigating.
-func TestAFailedTaskIsMeasuredToo(t *testing.T) {
+func TestAFailedExecIsMeasuredToo(t *testing.T) {
 	read := collected(t)
-	metrics, _ := telemetry.NewTaskMetrics()
+	metrics, _ := telemetry.NewExecMetrics()
 
-	failed := aTask()
+	failed := aExec()
 	failed.Status = "failed"
 	metrics.Record(context.Background(), failed)
 
 	for _, set := range attributesOn(read(), telemetry.TokensMetric) {
 		if set[telemetry.StatusAttribute] != "failed" {
-			t.Errorf("a failed task was published as %q", set[telemetry.StatusAttribute])
+			t.Errorf("a failed exec was published as %q", set[telemetry.StatusAttribute])
 		}
 	}
 	if total, _ := sumFor(read(), telemetry.TokensMetric); total == 0 {
-		t.Error("a failed task published no tokens, so what it spent is invisible")
+		t.Error("a failed exec published no tokens, so what it spent is invisible")
 	}
 }
 
-// Recording on a system with no telemetry must not be a crash. NewTaskMetrics returning nil is the
+// Recording on a system with no telemetry must not be a crash. NewExecMetrics returning nil is the
 // shape a caller gets when it ignored the error, and every call site would otherwise need a guard.
 func TestRecordingOnNothingIsSafe(t *testing.T) {
-	var absent *telemetry.TaskMetrics
-	absent.Record(context.Background(), aTask())
+	var absent *telemetry.ExecMetrics
+	absent.Record(context.Background(), aExec())
 }

@@ -15,19 +15,19 @@ import (
 	"github.com/atlantic-blue/quay-krewe/internal/store"
 )
 
-// One word sends a task. It waits for the answer, and --dispatch lets go of it.
+// One word sends an exec. It waits for the answer, and --dispatch lets go of it.
 //
-// Letting go used to be a word of its own, and before that it did not exist at all: the task was
+// Letting go used to be a word of its own, and before that it did not exist at all: the exec was
 // held in the client for as long as the job took, so the terminal was the weakest part of the system.
-// A task killed at seventeen minutes recorded "failed: model: run exited: signal: killed", said
+// An exec killed at seventeen minutes recorded "failed: model: run exited: signal: killed", said
 // nothing about why, and the job was gone.
 //
 // The tests below hold the model open rather than timing it. What is being tested is whether a
-// command comes back before its task does, and a test that waits a duration for that passes on a
+// command comes back before its exec does, and a test that waits a duration for that passes on a
 // fast machine by accident.
 
 // aHeldSystem is a system whose model will not answer until the returned func lets it, and which says
-// when a task has genuinely reached it.
+// when an exec has genuinely reached it.
 func aHeldSystem(t *testing.T) (quaycrewv1.ControlPlaneServiceClient, *model.FakeRunner) {
 	t.Helper()
 	runner := &model.FakeRunner{
@@ -48,7 +48,7 @@ func aHeldSystem(t *testing.T) (quaycrewv1.ControlPlaneServiceClient, *model.Fak
 // Run behind the test rather than in front of it, because a flag that stopped letting go would
 // otherwise hold this test open for as long as the runner is held, which is forever, and a suite
 // that hangs says nothing about what is wrong.
-func TestTheDispatchFlagLetsGoOfTheTask(t *testing.T) {
+func TestTheDispatchFlagLetsGoOfTheExec(t *testing.T) {
 	client, runner := aHeldSystem(t)
 
 	said := letGoOf(t, client, "when is the electricity bill due")
@@ -56,15 +56,15 @@ func TestTheDispatchFlagLetsGoOfTheTask(t *testing.T) {
 	select {
 	case <-runner.Started:
 	case <-time.After(5 * time.Second):
-		t.Fatal("the task never reached the model")
+		t.Fatal("the exec never reached the model")
 	}
 	// The model has not answered and cannot have: nothing has let it go.
 	if strings.Contains(said, "the electricity bill is due on the ninth") {
 		t.Fatalf("--dispatch waited for the model after all: %q", said)
 	}
-	// And it says where the answer will be, because a blank where a reply used to be reads as a task
+	// And it says where the answer will be, because a blank where a reply used to be reads as an exec
 	// that answered nothing.
-	for _, want := range []string{"krewe task list", "krewe attach", "handle "} {
+	for _, want := range []string{"krewe exec list", "krewe attach", "handle "} {
 		if !strings.Contains(said, want) {
 			t.Fatalf("--dispatch does not say %q: %q", want, said)
 		}
@@ -73,7 +73,7 @@ func TestTheDispatchFlagLetsGoOfTheTask(t *testing.T) {
 	close(runner.Gate)
 	handle := handleFrom(t, said)
 	waitForTheAnswer(t, client, handle)
-	history := mustRun(t, client, "task", "list", handle)
+	history := mustRun(t, client, "exec", "list", handle)
 	if !strings.Contains(history, "the electricity bill is due on the ninth") {
 		t.Fatalf("the answer never landed in the history:\n%s", history)
 	}
@@ -87,7 +87,7 @@ func TestTheWordOnItsOwnWaitsForTheAnswer(t *testing.T) {
 	go func() {
 		var out bytes.Buffer
 		if err := run(context.Background(), client,
-			[]string{"task", "when is the electricity bill due"}, &out, ""); err != nil {
+			[]string{"exec", "when is the electricity bill due"}, &out, ""); err != nil {
 			answered <- "failed: " + err.Error()
 			return
 		}
@@ -97,12 +97,12 @@ func TestTheWordOnItsOwnWaitsForTheAnswer(t *testing.T) {
 	select {
 	case <-runner.Started:
 	case <-time.After(5 * time.Second):
-		t.Fatal("the task never reached the model")
+		t.Fatal("the exec never reached the model")
 	}
 	// Held open, so anything arriving here would be an answer nobody has given yet.
 	select {
 	case early := <-answered:
-		t.Fatalf("krewe task came back before the model did: %q", early)
+		t.Fatalf("krewe exec came back before the model did: %q", early)
 	case <-time.After(50 * time.Millisecond):
 	}
 
@@ -110,44 +110,44 @@ func TestTheWordOnItsOwnWaitsForTheAnswer(t *testing.T) {
 	select {
 	case said := <-answered:
 		if !strings.Contains(said, "the electricity bill is due on the ninth") {
-			t.Fatalf("krewe task does not print the answer: %q", said)
+			t.Fatalf("krewe exec does not print the answer: %q", said)
 		}
 		if !strings.Contains(said, "handle ") {
-			t.Fatalf("krewe task does not say which session answered: %q", said)
+			t.Fatalf("krewe exec does not say which session answered: %q", said)
 		}
 	case <-time.After(10 * time.Second):
-		t.Fatal("krewe task never came back")
+		t.Fatal("krewe exec never came back")
 	}
 }
 
 // The job is the system's now, so a caller that goes away does not take it. This is the failure that
 // started it: seventeen minutes of work lost with the terminal that asked for it.
-func TestATaskOutlivesTheCommandThatStartedIt(t *testing.T) {
+func TestAExecOutlivesTheCommandThatStartedIt(t *testing.T) {
 	client, runner := aHeldSystem(t)
 
 	handle := handleFrom(t, letGoOf(t, client, "read the repository"))
 	select {
 	case <-runner.Started:
 	case <-time.After(5 * time.Second):
-		t.Fatal("the task never reached the model")
+		t.Fatal("the exec never reached the model")
 	}
 
-	// The caller is gone. Nothing here is holding the task open any more.
+	// The caller is gone. Nothing here is holding the exec open any more.
 	close(runner.Gate)
 	waitForTheAnswer(t, client, handle)
 
 	session := onlySession(t, client)
 	if session.GetStatus() != "idle" {
-		t.Fatalf("the session reads %q after its task landed, want idle", session.GetStatus())
+		t.Fatalf("the session reads %q after its exec landed, want idle", session.GetStatus())
 	}
-	if history := mustRun(t, client, "task", "list", handle); strings.Contains(history, "failed") {
-		t.Fatalf("the task failed once nobody was waiting for it:\n%s", history)
+	if history := mustRun(t, client, "exec", "list", handle); strings.Contains(history, "failed") {
+		t.Fatalf("the exec failed once nobody was waiting for it:\n%s", history)
 	}
 }
 
 // The three words this one replaced, each refused by name and each naming what to type.
 //
-// This is the way off, and it is the half that gets skipped: ask, dispatch and tasks are in fingers,
+// This is the way off, and it is the half that gets skipped: ask, dispatch and execs are in fingers,
 // in scripts and in notes, and every test written for a replacement passes while the old form does
 // something quietly wrong. A silent alias would keep two spellings alive for one thing, and an
 // unknown command reads as the tool being broken.
@@ -160,13 +160,13 @@ func TestTheThreeWordsOneWordReplacedAreRefusedByName(t *testing.T) {
 		typed []string
 		names string
 	}{
-		{[]string{"ask", "when is the electricity bill due"}, `krewe task [<address>] "..."`},
-		{[]string{"dispatch", "read the repository"}, `krewe task --dispatch [<address>] "..."`},
-		{[]string{"tasks", "3db6b81e"}, "krewe task list <session>"},
+		{[]string{"ask", "when is the electricity bill due"}, `krewe exec [<address>] "..."`},
+		{[]string{"dispatch", "read the repository"}, `krewe exec --dispatch [<address>] "..."`},
+		{[]string{"execs", "3db6b81e"}, "krewe exec list <session>"},
 		// With nothing after them too, because that is how a person checks what a word does.
-		{[]string{"ask"}, `krewe task [<address>] "..."`},
-		{[]string{"dispatch"}, `krewe task --dispatch [<address>] "..."`},
-		{[]string{"tasks"}, "krewe task list <session>"},
+		{[]string{"ask"}, `krewe exec [<address>] "..."`},
+		{[]string{"dispatch"}, `krewe exec --dispatch [<address>] "..."`},
+		{[]string{"execs"}, "krewe exec list <session>"},
 	} {
 		err := refused(t, client, testCase.typed...)
 		if !strings.Contains(err.Error(), testCase.names) {
@@ -197,7 +197,7 @@ func TestARemovedWordNeverTakesTheMessageWithIt(t *testing.T) {
 	for _, typed := range [][]string{
 		{"ask", "remember the number"},
 		{"dispatch", "remember the number"},
-		{"tasks", "remember the number"},
+		{"execs", "remember the number"},
 	} {
 		err := refused(t, client, typed...)
 		if strings.Contains(err.Error(), "remember the number") {
@@ -214,11 +214,11 @@ func TestTheFlagsForWaitingAndLettingGoAreRefusedByName(t *testing.T) {
 	mustRun(t, client, "project", "create", "house-bills")
 
 	for _, testCase := range []struct{ flag, names string }{
-		{"--detach", "krewe task --dispatch"},
-		{"--wait", "krewe task ["},
-		{"--no-wait", "krewe task --dispatch"},
+		{"--detach", "krewe exec --dispatch"},
+		{"--wait", "krewe exec ["},
+		{"--no-wait", "krewe exec --dispatch"},
 	} {
-		err := refused(t, client, "task", testCase.flag, "hello")
+		err := refused(t, client, "exec", testCase.flag, "hello")
 		if !strings.Contains(err.Error(), testCase.names) {
 			t.Errorf("%s is refused with %q, which does not name what to type instead", testCase.flag, err)
 		}
@@ -236,9 +236,9 @@ func TestTheWordNamesBothOfItsShapesInItsUsage(t *testing.T) {
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
 
-	for _, typed := range [][]string{{"task"}, {"task", flagDispatch}} {
+	for _, typed := range [][]string{{"exec"}, {"exec", flagDispatch}} {
 		err := refused(t, client, typed...)
-		for _, want := range []string{"usage: krewe task [--dispatch] [<address>] <text>", "krewe task list <session>"} {
+		for _, want := range []string{"usage: krewe exec [--dispatch] [<address>] <text>", "krewe exec list <session>"} {
 			if !strings.Contains(err.Error(), want) {
 				t.Errorf("krewe %s answers %q, which does not say %q", strings.Join(typed, " "), err, want)
 			}
@@ -246,29 +246,29 @@ func TestTheWordNamesBothOfItsShapesInItsUsage(t *testing.T) {
 	}
 }
 
-// The one that a rename creates on its own: `krewe tasks <session>` becomes `krewe task <session>`,
+// The one that a rename creates on its own: `krewe execs <session>` becomes `krewe exec <session>`,
 // which is a good command that sends the session's identifier to the model as a message. It succeeds,
 // the operator gets no history, and nothing anywhere says the word changed.
 func TestASessionOnItsOwnIsRefusedRatherThanSentAsAMessage(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "task", "hello")
+	mustRun(t, client, "exec", "hello")
 	session := onlySession(t, client)
 
 	for _, typed := range []string{session.GetId()[:8], session.GetHandle()[:8]} {
-		err := refused(t, client, "task", typed)
-		if !strings.Contains(err.Error(), "krewe task list "+typed) {
-			t.Errorf("krewe task %s does not name the history command: %q", typed, err)
+		err := refused(t, client, "exec", typed)
+		if !strings.Contains(err.Error(), "krewe exec list "+typed) {
+			t.Errorf("krewe exec %s does not name the history command: %q", typed, err)
 		}
-		if !strings.Contains(err.Error(), "krewe task <address> "+typed) {
-			t.Errorf("krewe task %s does not say how to send it as a message: %q", typed, err)
+		if !strings.Contains(err.Error(), "krewe exec <address> "+typed) {
+			t.Errorf("krewe exec %s does not say how to send it as a message: %q", typed, err)
 		}
 	}
 
-	// And nothing was sent: the session still holds the one task it was given above. The prompts
+	// And nothing was sent: the session still holds the one exec it was given above. The prompts
 	// only, because the listing also names the session it read, which is the identifier itself.
-	history := mustRun(t, client, "task", "list", session.GetHandle()[:8])
+	history := mustRun(t, client, "exec", "list", session.GetHandle()[:8])
 	for _, line := range strings.Split(history, "\n") {
 		if !strings.Contains(line, "  you  ") {
 			continue
@@ -288,9 +288,9 @@ func TestAnAddressOnItsOwnIsRefusedRatherThanSentAsAMessage(t *testing.T) {
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
 
-	err := refused(t, client, "task", "me/house-bills")
-	if !strings.Contains(err.Error(), `krewe task me/house-bills "..."`) {
-		t.Errorf("krewe task me/house-bills does not say what is missing: %q", err)
+	err := refused(t, client, "exec", "me/house-bills")
+	if !strings.Contains(err.Error(), `krewe exec me/house-bills "..."`) {
+		t.Errorf("krewe exec me/house-bills does not say what is missing: %q", err)
 	}
 	if listed := mustRun(t, client, "sessions"); strings.Contains(listed, "idle") {
 		t.Errorf("an address on its own started a session anyway:\n%s", listed)
@@ -304,7 +304,7 @@ func TestTheDispatchFlagIsOnlyReadInFirstPosition(t *testing.T) {
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
 
-	err := refused(t, client, "task", "say", flagDispatch, "to the operator")
+	err := refused(t, client, "exec", "say", flagDispatch, "to the operator")
 	if !strings.Contains(err.Error(), flagDispatch+" comes first") {
 		t.Errorf("a flag in the middle of a message is refused with %q, which does not say why", err)
 	}
@@ -317,13 +317,13 @@ func TestLettingGoAndReadingBackAreNotAskedForTogether(t *testing.T) {
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
 
-	err := refused(t, client, "task", flagDispatch, "list", "3db6b81e")
-	if !strings.Contains(err.Error(), "krewe task list <session>") {
+	err := refused(t, client, "exec", flagDispatch, "list", "3db6b81e")
+	if !strings.Contains(err.Error(), "krewe exec list <session>") {
 		t.Errorf("--dispatch with list is refused with %q, which does not name the command: %q", err, err)
 	}
 }
 
-// letGoOf sends a task with the flag, and fails if the command has not come back.
+// letGoOf sends an exec with the flag, and fails if the command has not come back.
 //
 // Run behind the test rather than in front of it, because a flag that stopped letting go would
 // otherwise hold the test open for as long as the model is held, which is forever, and a suite that
@@ -333,7 +333,7 @@ func letGoOf(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, text str
 	cameBack := make(chan string, 1)
 	go func() {
 		var out bytes.Buffer
-		if err := run(context.Background(), client, []string{"task", flagDispatch, text}, &out, ""); err != nil {
+		if err := run(context.Background(), client, []string{"exec", flagDispatch, text}, &out, ""); err != nil {
 			cameBack <- "failed: " + err.Error()
 			return
 		}
@@ -342,11 +342,11 @@ func letGoOf(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, text str
 	select {
 	case said := <-cameBack:
 		if strings.HasPrefix(said, "failed: ") {
-			t.Fatalf("krewe task %s %q: %s", flagDispatch, text, said)
+			t.Fatalf("krewe exec %s %q: %s", flagDispatch, text, said)
 		}
 		return said
 	case <-time.After(5 * time.Second):
-		t.Fatalf("krewe task %s never came back, so it is waiting for a task nobody is waiting for",
+		t.Fatalf("krewe exec %s never came back, so it is waiting for an exec nobody is waiting for",
 			flagDispatch)
 		return ""
 	}
@@ -362,19 +362,19 @@ func handleFrom(t *testing.T, said string) string {
 	return strings.TrimSuffix(strings.TrimSpace(after), ")")
 }
 
-// waitForTheAnswer waits until the system has finished with a task it was let go of, so an assertion
-// about what landed is never made against a task still in flight.
+// waitForTheAnswer waits until the system has finished with an exec it was let go of, so an assertion
+// about what landed is never made against an exec still in flight.
 func waitForTheAnswer(t *testing.T, client quaycrewv1.ControlPlaneServiceClient, handle string) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		history, err := runKrewe(t, client, "task", "list", handle)
-		// A history with nothing in it yet, or with a task still in flight, is not a landed task.
+		history, err := runKrewe(t, client, "exec", "list", handle)
+		// A history with nothing in it yet, or with an exec still in flight, is not a landed exec.
 		if err == nil && strings.TrimSpace(history) != "" &&
-			!strings.Contains(history, "no tasks recorded") && !strings.Contains(history, "still running") {
+			!strings.Contains(history, "no execs recorded") && !strings.Contains(history, "still running") {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatal("the task never landed")
+	t.Fatal("the exec never landed")
 }

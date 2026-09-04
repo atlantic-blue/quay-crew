@@ -316,7 +316,7 @@ func TestGitFindsItsCredentialWithoutArguments(t *testing.T) {
 }
 
 // Every binary a shipped skill declares has to actually be in the image, or the declaration is a
-// promise the sandbox breaks on somebody's first task. One guard over the whole class, so the next
+// promise the sandbox breaks on somebody's first exec. One guard over the whole class, so the next
 // skill cannot repeat the gap: the set of binaries is read from skills/ itself, and each is asked
 // for inside a real container rather than looked for in the Dockerfile.
 func TestTheImageCarriesEveryBinaryAShippedSkillDeclares(t *testing.T) {
@@ -481,7 +481,7 @@ func TestAMountedSecretIsAFileTheSandboxUserCanReadAndNobodyElseCan(t *testing.T
 // TestASandboxFromBeforeTheRenameIsFoundAndRemoved asks the daemon the question the unit tests can
 // only ask the code. An operator upgrades with sessions up, so their containers carry the retired
 // name, and a system that cannot see one does not drain it, does not remove it and starts a second
-// container beside it on the next task, while the first keeps the machine's memory.
+// container beside it on the next exec, while the first keeps the machine's memory.
 //
 // The container is made here by name rather than through the provider, because the provider can no
 // longer write that name. That is the point: this is the state an upgrade inherits, not a state this

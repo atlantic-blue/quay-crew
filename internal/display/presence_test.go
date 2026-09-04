@@ -50,7 +50,7 @@ func TestTheListingSaysWhichKindOfIdleItIs(t *testing.T) {
 }
 
 // TestAWordThatIsNotIdleKeepsItself. Each of the others carries something presence cannot say, and
-// overwriting failed with awake would lose that the last task did not land. A task under way is the
+// overwriting failed with awake would lose that the last exec did not land. An exec under way is the
 // clearest of them: running is what a drain refuses on.
 func TestAWordThatIsNotIdleKeepsItself(t *testing.T) {
 	for _, status := range []string{"running", "failed", "stopped", "reclaimed"} {

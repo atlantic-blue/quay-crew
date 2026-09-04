@@ -44,7 +44,7 @@ Feature: The tool is called krewe, and the name it had refuses
     Examples:
       | typed     |
       | workspace |
-      | task      |
+      | exec      |
       | version   |
       | help      |
       | --help    |

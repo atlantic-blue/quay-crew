@@ -1,5 +1,5 @@
 // Command krewe is the command line channel, a client of the control plane. You create workspaces,
-// start a task and list sessions. `krewe task` waits here for the answer and `krewe task --dispatch`
+// start an exec and list sessions. `krewe exec` waits here for the answer and `krewe exec --dispatch`
 // lets go of it, which is the one difference between the two ways of talking to a session. Async
 // chat channels use the event log instead; this tool talks to the ControlPlaneService gRPC API
 // directly.
@@ -65,19 +65,19 @@ func mentions(feature features.Feature, needle string) bool {
 }
 
 // removedFlags are the flags this tool used to take. They are refused by name rather than ignored,
-// because ignoring one is worse than not having it: `krewe task --project default "hello"` reads
+// because ignoring one is worse than not having it: `krewe exec --project default "hello"` reads
 // as a perfectly good command, and what actually happened was that the flag and its value became the
 // first three words of the message.
 // Each entry carries the whole of its own advice, because what to do instead differs: the three that
 // addresses replaced are answered by an address, and the fourth is answered by a different command.
 var removedFlags = map[string]string{
-	"--project": "an address names the project: krewe task <workspace>/<project> \"...\"" +
+	"--project": "an address names the project: krewe exec <workspace>/<project> \"...\"" +
 		"\n\nor move there once and stop saying it: krewe use <workspace>/<project>",
 	"--workspace": "an address names the workspace: krewe sessions <workspace>" +
 		"\n\nor move there once and stop saying it: krewe use <workspace>/<project>",
-	"--session": "an address names the session: krewe task <workspace>/<project>/<session> \"...\"" +
+	"--session": "an address names the session: krewe exec <workspace>/<project>/<session> \"...\"" +
 		"\n\nor move there once and stop saying it: krewe use <workspace>/<project>",
-	"--thread": "an address names the session: krewe task <workspace>/<project>/<session> \"...\"" +
+	"--thread": "an address names the session: krewe exec <workspace>/<project>/<session> \"...\"" +
 		"\n\nor move there once and stop saying it: krewe use <workspace>/<project>",
 	"--remote": "a repository is cloned in conversation now, following the git skill: attach it " +
 		"with krewe skill attach <workspace> git and ask the session to clone what it works on. To say " +
@@ -88,11 +88,11 @@ var removedFlags = map[string]string{
 	"--version": "which build this is: krewe version",
 	// Letting go is one flag on one word now, so every other spelling of it names that flag, and
 	// none of them can be quietly swallowed into the message.
-	"--detach": "letting go is krewe task --dispatch [<address>] \"...\", and krewe task list <session> " +
+	"--detach": "letting go is krewe exec --dispatch [<address>] \"...\", and krewe exec list <session> " +
 		"reads it back",
-	"--wait": "krewe task waits for the answer already: krewe task [<address>] \"...\"",
-	"--no-wait": "letting go is krewe task --dispatch [<address>] \"...\"" +
-		"\n\nand krewe task on its own waits for the answer instead",
+	"--wait": "krewe exec waits for the answer already: krewe exec [<address>] \"...\"",
+	"--no-wait": "letting go is krewe exec --dispatch [<address>] \"...\"" +
+		"\n\nand krewe exec on its own waits for the answer instead",
 	// It was a flag on job create, and jobs are gone, so there is no flag to send anybody to.
 	"--hands": "--hands is gone with jobs. What a session works from is the context and the skills " +
 		"its workspace holds: krewe context set <workspace> \"...\"",
@@ -116,21 +116,21 @@ var removedCommands = map[string]string{
 		"\n\n  krewe read <session> [<path>]",
 	"job": "the job subsystem is gone. A job was four stages, a controller and a gate, and it cost " +
 		"more than the work it delivered. Dispatch a session and talk to it" +
-		"\n\n  krewe task [<address>] \"...\"",
+		"\n\n  krewe exec [<address>] \"...\"",
 	"flow": "flows are gone with jobs. They were the second way to run work above a session, and " +
 		"nothing runs above a session now" +
-		"\n\n  krewe task [<address>] \"...\"",
+		"\n\n  krewe exec [<address>] \"...\"",
 	"role": "roles are gone with jobs. A session holds its workspace's skills and hooks, and there " +
 		"is no role to narrow it to" +
 		"\n\n  krewe skill list <workspace>",
 	"steer": "a steer recorded what a job should have known, and jobs are gone. Say it to the " +
 		"session instead" +
-		"\n\n  krewe task <session> \"...\"",
+		"\n\n  krewe exec <session> \"...\"",
 	"steers": "a steer recorded what a job should have known, and jobs are gone. What a session was " +
 		"told is its own history" +
-		"\n\n  krewe task list <session>",
+		"\n\n  krewe exec list <session>",
 	"history": "a history was a digest of jobs, and jobs are gone. What a session did is under it" +
-		"\n\n  krewe task list <session>",
+		"\n\n  krewe exec list <session>",
 	"limits": "limits capped what a workspace's jobs could declare, and jobs are gone. What is " +
 		"running is the listing" +
 		"\n\n  krewe sessions",
@@ -143,20 +143,23 @@ var removedCommands = map[string]string{
 		"\n\n  krewe",
 	"record": "recording a briefing page is gone with the page itself. The console reads the same rows" +
 		"\n\n  krewe",
-	"ask": "a task is one word now, and waiting here for the answer is what it does" +
-		"\n\n  krewe task [<address>] \"...\"",
-	"dispatch": "a task is one word now, and letting go of one is a flag on it" +
-		"\n\n  krewe task --dispatch [<address>] \"...\"",
-	"tasks": "a task is one word now, and reading a session's history back is a verb under it" +
-		"\n\n  krewe task list <session>",
+	"ask": "an exec is one word now, and waiting here for the answer is what it does" +
+		"\n\n  krewe exec [<address>] \"...\"",
+	"dispatch": "an exec is one word now, and letting go of one is a flag on it" +
+		"\n\n  krewe exec --dispatch [<address>] \"...\"",
+	"tasks": "an exec is one word now, and reading a session's history back is a verb under it" +
+		"\n\n  krewe exec list <session>",
+	"task": "what a session runs is called an exec, because that is the word the command line, the " +
+		"store and the console all use for it" +
+		"\n\n  krewe exec [<address>] \"...\"",
 	"threads": "a thread is called a session now, because the system has one word for a conversation " +
 		"and this was the second. Use krewe sessions",
 	"thread": "a thread is called a session now, because the system has one word for a conversation " +
 		"and this was the second. Use krewe sessions",
-	"turns": "a turn is called a task now, because a turn is a word from conversation analysis and " +
-		"nothing about it said how long it takes. Use krewe task list <session>",
-	"turn": "a turn is called a task now, because a turn is a word from conversation analysis and " +
-		"nothing about it said how long it takes. Use krewe task list <session>",
+	"turns": "a turn is called an exec now, because a turn is a word from conversation analysis and " +
+		"nothing about it said how long it takes. Use krewe exec list <session>",
+	"turn": "a turn is called an exec now, because a turn is a word from conversation analysis and " +
+		"nothing about it said how long it takes. Use krewe exec list <session>",
 	"repository": "a repository is cloned in conversation now, following the git skill. Import it " +
 		"once with krewe skill import skills/git, attach it with krewe skill attach <workspace> git, " +
 		"and ask the session to clone what it works on. To say which repository a project's work " +
@@ -181,14 +184,14 @@ var helpSpellings = map[string]bool{
 // The ones that remain say what shape the output takes, or which of two things a word does, rather
 // than where anything is.
 var takenFlags = map[string]map[string]bool{
-	"task":   {flagDispatch: true},
+	"exec":   {flagDispatch: true},
 	"answer": {allAnswers: true},
 	"target": targetFlagsTaken(),
 }
 
 // refuseFlags returns an error when an invocation uses a flag the command it names does not take. A
 // flag that is quietly ignored is worse than one that never existed, because
-// `krewe task --project default "hello"` reads as a good command and what actually happened was
+// `krewe exec --project default "hello"` reads as a good command and what actually happened was
 // that both words became the start of the message.
 func refuseFlags(args []string) error {
 	taken := takenFlags[args[0]]
@@ -240,8 +243,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runWorkspace(ctx, client, args[1:], out)
 	case "project":
 		return runProject(ctx, client, args[1:], out)
-	case "task":
-		return runTask(ctx, client, args[1:], out)
+	case "exec":
+		return runExec(ctx, client, args[1:], out)
 	case "read":
 		return runRead(ctx, client, args[1:], out)
 	case "answer":
@@ -321,7 +324,7 @@ func addressFrom(typed string) (workspace.Path, error) {
 	}
 	if current.IsZero() {
 		return workspace.Path{}, fmt.Errorf(
-			"you are nowhere yet: run `krewe use <workspace>/<project>`, or give an address, for example `krewe task me/house-bills \"hello\"`")
+			"you are nowhere yet: run `krewe use <workspace>/<project>`, or give an address, for example `krewe exec me/house-bills \"hello\"`")
 	}
 	return current, nil
 }

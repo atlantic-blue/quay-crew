@@ -8,10 +8,10 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// Steps for the scenarios about a task the system keeps after the caller has gone. The caller's own
+// Steps for the scenarios about an exec the system keeps after the caller has gone. The caller's own
 // context is cancelled here, which is what a closed terminal does to the call it was holding.
 func initializeDispatchingSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^a task dispatched by a caller that then goes away$`, func(ctx context.Context) error {
+	sc.Step(`^an exec dispatched by a caller that then goes away$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		calling, hangUp := context.WithCancel(ctx)
 		resp, err := w.client.Dispatch(calling, &quaycrewv1.DispatchRequest{
@@ -22,8 +22,8 @@ func initializeDispatchingSteps(sc *godog.ScenarioContext) {
 			hangUp()
 			return err
 		}
-		w.tasks = append(w.tasks, task{sessionID: resp.GetId(), handle: resp.GetHandle()})
-		// The caller is gone from here on, while the task it asked for is still in the model.
+		w.execs = append(w.execs, dispatched{sessionID: resp.GetId(), handle: resp.GetHandle()})
+		// The caller is gone from here on, while the exec it asked for is still in the model.
 		hangUp()
 		if resp.GetReply() != "" {
 			return fmt.Errorf("a dispatch that lets go answered %q, and there is no answer yet", resp.GetReply())

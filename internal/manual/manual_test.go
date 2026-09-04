@@ -36,7 +36,7 @@ func TestTheManualCarriesTheRealCommandList(t *testing.T) {
 }
 
 // TestTheManualIsGeneratedFromTheSpecification, not copied from it. Every feature the binary carries
-// has to task up, or the manual describes a tool that is not the one running.
+// has to exec up, or the manual describes a tool that is not the one running.
 func TestTheManualIsGeneratedFromTheSpecification(t *testing.T) {
 	got := Text()
 

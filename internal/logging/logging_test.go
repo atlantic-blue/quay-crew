@@ -44,7 +44,7 @@ func TestALineUnderACallCarriesTheTraceIDAsItsCorrelationID(t *testing.T) {
 	logger := logging.Init("controlplane", &out)
 	ctx, traceID := underACall(t)
 
-	logger.WarnContext(ctx, "a task could not be exported")
+	logger.WarnContext(ctx, "an exec could not be exported")
 
 	read := lines(t, &out)
 	if len(read) != 1 {
@@ -79,14 +79,14 @@ func TestThePackageLevelSlogIsTheSystemsLogger(t *testing.T) {
 	}
 }
 
-// Task and flow job is detached from the request that started it, so the id has to survive the
-// detaching or the interesting half of a task is uncorrelated.
+// Exec and flow job is detached from the request that started it, so the id has to survive the
+// detaching or the interesting half of an exec is uncorrelated.
 func TestTheCorrelationIDSurvivesADetachedContext(t *testing.T) {
 	var out bytes.Buffer
 	logger := logging.Init("controlplane", &out)
 	ctx, traceID := underACall(t)
 
-	logger.WarnContext(context.WithoutCancel(ctx), "a task could not be written to history")
+	logger.WarnContext(context.WithoutCancel(ctx), "an exec could not be written to history")
 
 	read := lines(t, &out)
 	if got := read[0][logging.CorrelationKey]; got != traceID {
@@ -134,7 +134,7 @@ func TestExportingKeepsWritingToStdout(t *testing.T) {
 	logger := logging.AlsoExport("controlplane", &out)
 	ctx, traceID := underACall(t)
 
-	logger.WarnContext(ctx, "a task could not be exported", "session", "3cb04bf5")
+	logger.WarnContext(ctx, "an exec could not be exported", "session", "3cb04bf5")
 
 	read := lines(t, &out)
 	if len(read) != 1 {

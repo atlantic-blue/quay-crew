@@ -5,7 +5,7 @@ Feature: A change carries a scenario and a changelog entry, or says why not
   written out as scenarios in `features/`". Both were promises to a reader, and nothing asked whether
   a change kept them.
 
-  One change shipped 200 lines of new behaviour, a rule that refuses a whole class of task, with
+  One change shipped 200 lines of new behaviour, a rule that refuses a whole class of exec, with
   no scenario and no changelog entry. Every check was green. Nothing was wrong with the checks: they
   were never asked the question. The promise held for as long as whoever opened the pull request
   remembered it, which is not a gate.

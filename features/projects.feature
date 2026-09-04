@@ -33,7 +33,7 @@ Feature: Projects hold a body of work inside a workspace
     And a second project named "gardening"
     When the operator dispatches "hello" to the project
     And the operator dispatches "hello" to the second project
-    Then the tasks ran in different sessions
+    Then the execs ran in different sessions
     And the workspace has 2 sessions
 
   Scenario: One workspace's projects are not another's

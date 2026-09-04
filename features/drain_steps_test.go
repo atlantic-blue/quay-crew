@@ -32,7 +32,7 @@ func initializeDrainSteps(sc *godog.ScenarioContext) {
 	// conversation again, and the handle is what they would type.
 	sc.Step(`^the drain names the session it put down$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -50,7 +50,7 @@ func initializeDrainSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the drain says the session was working when it went$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if len(w.lastDrain.GetWorking()) == 0 {
-			return fmt.Errorf("the drain interrupted a task and says nothing about it")
+			return fmt.Errorf("the drain interrupted an exec and says nothing about it")
 		}
 		return nil
 	})
@@ -58,9 +58,9 @@ func initializeDrainSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the refusal names what is still working$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if w.lastErr == nil {
-			return fmt.Errorf("the system drained over a task that was still working")
+			return fmt.Errorf("the system drained over an exec that was still working")
 		}
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}

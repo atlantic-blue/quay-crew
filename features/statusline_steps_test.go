@@ -109,7 +109,7 @@ func initializeStatusLineSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the model has answered carrying (\d+) tokens of context$`,
 		func(ctx context.Context, carried int) error {
 			world := worldFrom(ctx)
-			current, err := world.lastTask()
+			current, err := world.lastExec()
 			if err != nil {
 				return err
 			}
@@ -126,7 +126,7 @@ func initializeStatusLineSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^a session in the workspace was told the window holds (\d+)$`,
 		func(ctx context.Context, size int) error {
 			world := worldFrom(ctx)
-			current, err := world.lastTask()
+			current, err := world.lastExec()
 			if err != nil {
 				return err
 			}

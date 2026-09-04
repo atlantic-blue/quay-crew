@@ -29,7 +29,7 @@ func Skills(client quaycrewv1.ControlPlaneServiceClient) Resource {
 			{Title: "version", Width: 7, Colour: dim},
 			{Title: "reaches", Width: 11, Colour: dim},
 			// The commands the sandbox image has to carry. It gives way first: a session missing one
-			// is refused before a task runs, and that refusal names the command anyway.
+			// is refused before an exec runs, and that refusal names the command anyway.
 			{Title: "needs", Width: 16, Give: 1, Colour: dim},
 			{Title: "summary", Width: 0},
 		},

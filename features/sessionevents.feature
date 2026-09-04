@@ -1,6 +1,6 @@
 Feature: A session says what happened to it
 
-  The system emitted one event, a finished task, so nothing could tell that a session was made, that
+  The system emitted one event, a finished exec, so nothing could tell that a session was made, that
   work had begun, or that a session had been put away. Nothing could react to a change, and no view
   could say what the system is doing right now.
 
@@ -20,7 +20,7 @@ Feature: A session says what happened to it
     Then the session's events read "session.created", "session.started", "session.completed"
     And the completed event carries what the model replied
 
-  Scenario: A second task on the same session says started and completed again, and is not created twice
+  Scenario: A second exec on the same session says started and completed again, and is not created twice
     When the operator dispatches "hello" to the project
     And the operator dispatches "and again" to the same session
     Then the session's events read "session.created", "session.started", "session.completed", "session.started", "session.completed"
@@ -39,8 +39,8 @@ Feature: A session says what happened to it
     Then no event's kind is "session.idle" or "session.running"
 
   # An event carries what the model said and what a failure said, and either can hold something the
-  # operator pasted, so it goes through the same redactor a task does.
-  Scenario: A secret pasted into a task does not reach the events
+  # operator pasted, so it goes through the same redactor an exec does.
+  Scenario: A secret pasted into an exec does not reach the events
     Given the workspace has the secret "GITHUB_TOKEN" set to "ghp-a-credential-somebody-pasted"
     When the operator dispatches "clone with ghp-a-credential-somebody-pasted please" to the project
     Then nothing in the session's events says "ghp-a-credential-somebody-pasted"

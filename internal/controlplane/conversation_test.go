@@ -22,10 +22,10 @@ import (
 // Naming a conversation, driven through the real control plane and the real model adapter.
 //
 // The container is the only double, and it is the boundary a test cannot cross: it records the
-// command line the model would have been run with, holds the task open so the test can be an operator
+// command line the model would have been run with, holds the exec open so the test can be an operator
 // attaching while the model works, and streams back what a runtime streams. The command line is the
 // point. Everything else about this could be right while the flag that names the conversation is
-// missing, and a task whose command line names no conversation is the whole defect.
+// missing, and an exec whose command line names no conversation is the whole defect.
 
 // heldSandbox is a container that records what it was asked to run and holds it open until let go.
 type heldSandbox struct {
@@ -48,8 +48,8 @@ func (h *heldSandbox) Exec(ctx context.Context, spec sandbox.Spec) (sandbox.Proc
 	h.ran = append(h.ran, spec)
 	ignores := h.ignores
 	h.mu.Unlock()
-	// Only a task is held, and only a task says one has started. Everything else a session's container
-	// is asked to run happens before the task and answers straight away, the way it does in a real one.
+	// Only an exec is held, and only an exec says one has started. Everything else a session's container
+	// is asked to run happens before the exec and answers straight away, the way it does in a real one.
 	if len(spec.Argv) == 0 || spec.Argv[0] != "claude" {
 		return &streamedResult{body: strings.NewReader("")}, nil
 	}
@@ -71,18 +71,18 @@ func (h *heldSandbox) Close(context.Context) error { return nil }
 
 func (h *heldSandbox) release() { close(h.hold) }
 
-func (h *heldSandbox) waitForTask(t *testing.T) {
+func (h *heldSandbox) waitForExec(t *testing.T) {
 	t.Helper()
 	select {
 	case <-h.started:
 	case <-time.After(30 * time.Second):
-		t.Fatal("no task reached the container")
+		t.Fatal("no exec reached the container")
 	}
 }
 
 // commands is every command line the model was run with, read under its own lock because a test reads
-// it while a task is in flight. A session's container is asked to run other things as well, the git
-// identity and whatever a skill sets up among them, and none of those is a task.
+// it while an exec is in flight. A session's container is asked to run other things as well, the git
+// identity and whatever a skill sets up among them, and none of those is an exec.
 func (h *heldSandbox) commands() [][]string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -147,7 +147,7 @@ func conversationOpenedBy(argv []string) string {
 	return ""
 }
 
-// aSystemRunningTheModelAdapter is the control plane running tasks through the real Claude Code adapter
+// aSystemRunningTheModelAdapter is the control plane running execs through the real Claude Code adapter
 // into a container the test holds open.
 func aSystemRunningTheModelAdapter(box *heldSandbox) *controlplane.Server {
 	return controlplane.NewServer(controlplane.Config{
@@ -156,16 +156,16 @@ func aSystemRunningTheModelAdapter(box *heldSandbox) *controlplane.Server {
 	})
 }
 
-// The defect, in the shape it was found in: a session's first task is running, and the operator
+// The defect, in the shape it was found in: a session's first exec is running, and the operator
 // attaches to watch it.
 //
-// Everything here is asserted while the task is in flight, because that is the whole of it. The system
-// used to pass no name on a first task, read the name the runtime chose out of the output stream, and
-// record it once the task had landed. So for the life of that task the session held nothing, attaching
+// Everything here is asserted while the exec is in flight, because that is the whole of it. The system
+// used to pass no name on a first exec, read the name the runtime chose out of the output stream, and
+// record it once the exec had landed. So for the life of that exec the session held nothing, attaching
 // found an empty field, named a second conversation and opened that one instead. A test that looks
-// once the task has landed finds a system that already knew the name, and reports this as fixed while
+// once the exec has landed finds a system that already knew the name, and reports this as fixed while
 // it is still there.
-func TestAttachingToARunningFirstTaskOpensTheConversationTheTaskIsIn(t *testing.T) {
+func TestAttachingToARunningFirstExecOpensTheConversationTheExecIsIn(t *testing.T) {
 	box := newHeldSandbox()
 	s := aSystemRunningTheModelAdapter(box)
 	ctx := context.Background()
@@ -177,34 +177,34 @@ func TestAttachingToARunningFirstTaskOpensTheConversationTheTaskIsIn(t *testing.
 	if err != nil {
 		t.Fatalf("Dispatch: %v", err)
 	}
-	box.waitForTask(t)
+	box.waitForExec(t)
 
 	named := conversationHeldBy(t, s, sent.GetId())
 	if named == "" {
-		t.Fatal("the session is running a task and holds no conversation, so nothing can open the one it is in")
+		t.Fatal("the session is running an exec and holds no conversation, so nothing can open the one it is in")
 	}
 
-	// The task is running in that conversation, under the flag that starts one: nothing has written a
+	// The exec is running in that conversation, under the flag that starts one: nothing has written a
 	// transcript for it yet, and resuming a name with nothing behind it exits saying so.
 	commands := box.commands()
 	if len(commands) != 1 {
-		t.Fatalf("the container was asked to run %d commands, want the one task", len(commands))
+		t.Fatalf("the container was asked to run %d commands, want the one exec", len(commands))
 	}
 	if got := conversationOn(commands[0]); got != named {
-		t.Fatalf("the task is running in conversation %q and the session holds %q", got, named)
+		t.Fatalf("the exec is running in conversation %q and the session holds %q", got, named)
 	}
 	if got := flagOn(commands[0]); got != "--session-id" {
-		t.Fatalf("the first task names its conversation with %q, want --session-id", got)
+		t.Fatalf("the first exec names its conversation with %q, want --session-id", got)
 	}
 
 	// The operator attaches, and lands in the conversation doing the work rather than beside it.
 	spec, err := s.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: sent.GetId()})
 	if err != nil {
-		t.Fatalf("AttachSession while the task runs: %v", err)
+		t.Fatalf("AttachSession while the exec runs: %v", err)
 	}
 	opened := conversationOpenedBy(spec.GetArgv())
 	if opened != conversationOn(box.commands()[0]) {
-		t.Fatalf("attaching opens conversation %q and the task is running in %q, so the operator is "+
+		t.Fatalf("attaching opens conversation %q and the exec is running in %q, so the operator is "+
 			"watching an empty conversation beside the job", opened, conversationOn(box.commands()[0]))
 	}
 	// Attaching named nothing of its own. A second name here is the defect wearing a fix.
@@ -215,17 +215,17 @@ func TestAttachingToARunningFirstTaskOpensTheConversationTheTaskIsIn(t *testing.
 	box.release()
 	waitForIdle(t, s, sent.GetId())
 
-	// The name survives the task landing: what the runtime reports is a check now, not the source.
+	// The name survives the exec landing: what the runtime reports is a check now, not the source.
 	if got := conversationHeldBy(t, s, sent.GetId()); got != named {
-		t.Fatalf("the task landed and the session holds conversation %q, want the %q it ran in", got, named)
+		t.Fatalf("the exec landed and the session holds conversation %q, want the %q it ran in", got, named)
 	}
 }
 
-// The second task continues the conversation the first one started, and says so with the other flag.
-// Getting this pair the wrong way round fails the task either way: resuming a name nothing has written
+// The second exec continues the conversation the first one started, and says so with the other flag.
+// Getting this pair the wrong way round fails the exec either way: resuming a name nothing has written
 // exits saying no conversation was found, and starting a name the runtime already has is refused as
 // one already in use.
-func TestASecondTaskResumesTheConversationTheFirstOneStarted(t *testing.T) {
+func TestASecondExecResumesTheConversationTheFirstOneStarted(t *testing.T) {
 	box := newHeldSandbox()
 	box.release()
 	s := aSystemRunningTheModelAdapter(box)
@@ -244,23 +244,23 @@ func TestASecondTaskResumesTheConversationTheFirstOneStarted(t *testing.T) {
 
 	commands := box.commands()
 	if len(commands) != 2 {
-		t.Fatalf("the container ran %d commands, want the two tasks", len(commands))
+		t.Fatalf("the container ran %d commands, want the two execs", len(commands))
 	}
 	named := conversationHeldBy(t, s, first.GetId())
 	for index, want := range []string{"--session-id", "--resume"} {
 		if got := flagOn(commands[index]); got != want {
-			t.Errorf("task %d names its conversation with %q, want %q", index+1, got, want)
+			t.Errorf("exec %d names its conversation with %q, want %q", index+1, got, want)
 		}
 		if got := conversationOn(commands[index]); got != named {
-			t.Errorf("task %d runs in conversation %q, want the session's %q", index+1, got, named)
+			t.Errorf("exec %d runs in conversation %q, want the session's %q", index+1, got, named)
 		}
 	}
 }
 
 // A session nobody has dispatched to has no conversation, and opening it is what names one. Attaching
-// is still the moment a conversation starts to exist for a session whose first task failed before the
+// is still the moment a conversation starts to exist for a session whose first exec failed before the
 // model ran, and that session used to sit in the listing with no way to open it at all.
-func TestAttachingToASessionThatHasNeverRunATaskNamesItsConversation(t *testing.T) {
+func TestAttachingToASessionThatHasNeverRunAExecNamesItsConversation(t *testing.T) {
 	kept := store.NewMemory()
 	box := newHeldSandbox()
 	box.release()
@@ -323,8 +323,8 @@ func TestAStoppedSessionOpensTheConversationItAlreadyHolds(t *testing.T) {
 	}
 }
 
-// A session carried over from a system that named conversations after the task, caught mid task. Its
-// conversation has a name and the system cannot know it until the task lands, so attaching says so
+// A session carried over from a system that named conversations after the exec, caught mid exec. Its
+// conversation has a name and the system cannot know it until the exec lands, so attaching says so
 // rather than naming a second one and opening an empty conversation beside the job.
 func TestAttachingToARunningSessionThatNamedItsOwnConversationIsRefused(t *testing.T) {
 	kept := store.NewMemory()
@@ -340,14 +340,14 @@ func TestAttachingToARunningSessionThatNamedItsOwnConversationIsRefused(t *testi
 	if err != nil {
 		t.Fatalf("FindOrCreateSession: %v", err)
 	}
-	// Running, with no conversation on it: what the old system left behind while a first task was in
+	// Running, with no conversation on it: what the old system left behind while a first exec was in
 	// flight, and the one state where naming a conversation here is the defect rather than the fix.
-	if err := kept.RecordTask(ctx, session.GetId(), "", controlplane.StatusRunning); err != nil {
-		t.Fatalf("RecordTask: %v", err)
+	if err := kept.RecordExec(ctx, session.GetId(), "", controlplane.StatusRunning); err != nil {
+		t.Fatalf("RecordExec: %v", err)
 	}
 
 	if _, err := s.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: session.GetId()}); err == nil {
-		t.Fatal("attaching was allowed, and it would have opened a second conversation beside the task")
+		t.Fatal("attaching was allowed, and it would have opened a second conversation beside the exec")
 	} else {
 		for _, want := range []string{"named its own conversation", "second conversation"} {
 			if !strings.Contains(err.Error(), want) {
@@ -355,7 +355,7 @@ func TestAttachingToARunningSessionThatNamedItsOwnConversationIsRefused(t *testi
 			}
 		}
 	}
-	// Nothing was named, so nothing was orphaned: the conversation the task is in lands on the session
+	// Nothing was named, so nothing was orphaned: the conversation the exec is in lands on the session
 	// when it finishes.
 	after, err := kept.GetSession(ctx, session.GetId())
 	if err != nil {
@@ -367,7 +367,7 @@ func TestAttachingToARunningSessionThatNamedItsOwnConversationIsRefused(t *testi
 }
 
 // A runtime that ignores the name it was given keeps the system's own name, because that is the name
-// every later task and every attach will carry. What the system must not do is quietly adopt the other
+// every later exec and every attach will carry. What the system must not do is quietly adopt the other
 // one and leave the two disagreeing about which conversation this session is.
 func TestARuntimeThatIgnoresTheNameLeavesTheSystemHoldingItsOwn(t *testing.T) {
 	box := newHeldSandbox()
@@ -386,7 +386,7 @@ func TestARuntimeThatIgnoresTheNameLeavesTheSystemHoldingItsOwn(t *testing.T) {
 		t.Fatal("the system adopted the name the runtime chose, so its own name now points at nothing")
 	}
 	if got := conversationOn(box.commands()[0]); got != held {
-		t.Fatalf("the task asked for conversation %q and the session holds %q", got, held)
+		t.Fatalf("the exec asked for conversation %q and the session holds %q", got, held)
 	}
 }
 
@@ -400,8 +400,8 @@ func conversationHeldBy(t *testing.T, s *controlplane.Server, session string) st
 	return got.GetSession().GetModelSessionId()
 }
 
-// aSessionNobodyHasDispatchedTo is a session that exists and has never run a task, which is what a
-// first task that failed before the model ran leaves behind: a session in the listing holding no
+// aSessionNobodyHasDispatchedTo is a session that exists and has never run an exec, which is what a
+// first exec that failed before the model ran leaves behind: a session in the listing holding no
 // conversation at all.
 func aSessionNobodyHasDispatchedTo(t *testing.T, ctx context.Context, kept store.Store, project string) string {
 	t.Helper()
@@ -416,7 +416,7 @@ func aSessionNobodyHasDispatchedTo(t *testing.T, ctx context.Context, kept store
 	return session.GetId()
 }
 
-// waitForIdle waits for a detached task to land.
+// waitForIdle waits for a detached exec to land.
 func waitForIdle(t *testing.T, s *controlplane.Server, session string) {
 	t.Helper()
 	deadline := time.Now().Add(30 * time.Second)
@@ -430,14 +430,14 @@ func waitForIdle(t *testing.T, s *controlplane.Server, session string) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatal("the task never landed")
+	t.Fatal("the exec never landed")
 }
 
-// A conversation the operator opened by hand, before any task ran in it. The transcript on the host
-// is what says it has been opened, so the first task resumes it rather than starting it again, and
+// A conversation the operator opened by hand, before any exec ran in it. The transcript on the host
+// is what says it has been opened, so the first exec resumes it rather than starting it again, and
 // this is the case a system's own memory cannot answer: the transcript was written by somebody typing
 // in a container, and this control plane never saw it happen.
-func TestATaskResumesAConversationTheOperatorOpenedByHand(t *testing.T) {
+func TestAExecResumesAConversationTheOperatorOpenedByHand(t *testing.T) {
 	dir := t.TempDir()
 	kept := store.NewMemory()
 	box := newHeldSandbox()
@@ -481,13 +481,13 @@ func TestATaskResumesAConversationTheOperatorOpenedByHand(t *testing.T) {
 
 	commands := box.commands()
 	if len(commands) != 1 {
-		t.Fatalf("the container ran %d tasks, want the one", len(commands))
+		t.Fatalf("the container ran %d execs, want the one", len(commands))
 	}
 	if got := flagOn(commands[0]); got != "--resume" {
-		t.Fatalf("the task names its conversation with %q, want --resume: the operator has already "+
+		t.Fatalf("the exec names its conversation with %q, want --resume: the operator has already "+
 			"typed in it, and starting a conversation the runtime holds is refused as a name in use", got)
 	}
 	if got := conversationOn(commands[0]); got != named {
-		t.Fatalf("the task runs in conversation %q, want the %q the operator opened", got, named)
+		t.Fatalf("the exec runs in conversation %q, want the %q the operator opened", got, named)
 	}
 }

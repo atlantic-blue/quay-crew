@@ -66,7 +66,7 @@ Feature: A sandbox keeps a session's state outside itself
     When the operator dispatches "hello" to the project
     Then the sandbox carries nothing called "QC_TOKEN"
 
-  # The model's token is how a task runs at all, so it is carried without being named.
+  # The model's token is how an exec runs at all, so it is carried without being named.
   Scenario: The model's own token needs no naming
     Given a workspace named "acme"
     And a project named "house-bills"

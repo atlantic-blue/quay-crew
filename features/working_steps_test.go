@@ -9,11 +9,11 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// Steps for the scenarios about seeing a task while it happens. The caller here waits, which is what
+// Steps for the scenarios about seeing an exec while it happens. The caller here waits, which is what
 // a terminal does, so the dispatch runs behind the scenario: a step that called it directly would not
-// come back until the task had landed, and the whole question is what is true before then.
+// come back until the exec had landed, and the whole question is what is true before then.
 func initializeWorkingSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^a task dispatched with the caller waiting for it$`, func(ctx context.Context) error {
+	sc.Step(`^an exec dispatched with the caller waiting for it$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		w.waited = make(chan waitedDispatch, 1)
 		go func(client quaycrewv1.ControlPlaneServiceClient, project string, answered chan<- waitedDispatch) {
@@ -36,7 +36,7 @@ func initializeWorkingSteps(sc *godog.ScenarioContext) {
 			if answered.err != nil {
 				return answered.err
 			}
-			w.tasks = append(w.tasks, task{
+			w.execs = append(w.execs, dispatched{
 				sessionID: answered.resp.GetId(),
 				handle:    answered.resp.GetHandle(),
 				reply:     answered.resp.GetReply(),
@@ -54,29 +54,29 @@ func initializeWorkingSteps(sc *godog.ScenarioContext) {
 			if err != nil {
 				return err
 			}
-			tasks, err := listTasks(ctx, w, session.GetId())
+			execs, err := listExecs(ctx, w, session.GetId())
 			if err != nil {
 				return err
 			}
-			if len(tasks) != 1 {
-				return fmt.Errorf("%d tasks are recorded while one runs, want 1", len(tasks))
+			if len(execs) != 1 {
+				return fmt.Errorf("%d execs are recorded while one runs, want 1", len(execs))
 			}
-			if tasks[0].GetPrompt() != prompt {
-				return fmt.Errorf("the recorded task says %q was asked, want %q", tasks[0].GetPrompt(), prompt)
+			if execs[0].GetPrompt() != prompt {
+				return fmt.Errorf("the recorded exec says %q was asked, want %q", execs[0].GetPrompt(), prompt)
 			}
-			if tasks[0].GetStatus() != "running" {
-				return fmt.Errorf("the recorded task reads %q, want running", tasks[0].GetStatus())
+			if execs[0].GetStatus() != "running" {
+				return fmt.Errorf("the recorded exec reads %q, want running", execs[0].GetStatus())
 			}
 			return nil
 		})
 
-	sc.Step(`^the system's one session has (\d+) tasks?$`, func(ctx context.Context, want int) error {
+	sc.Step(`^the system's one session has (\d+) execs?$`, func(ctx context.Context, want int) error {
 		w := worldFrom(ctx)
 		session, err := theOneSession(ctx, w)
 		if err != nil {
 			return err
 		}
-		return sessionHasTasks(ctx, w, session.GetId(), want)
+		return sessionHasExecs(ctx, w, session.GetId(), want)
 	})
 }
 

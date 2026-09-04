@@ -64,8 +64,9 @@ func TestAMovedKeySaysWhatToPressNow(t *testing.T) {
 		key   string
 		names []string
 	}{
-		{"l", []string{"history", "t"}},
-		{"h", []string{"history", "t"}},
+		{"l", []string{"krewe exec list"}},
+		{"h", []string{"krewe exec list"}},
+		{"t", []string{"krewe exec list"}},
 		{"D", []string{"mode", "m"}},
 	} {
 		t.Run(moved.key, func(t *testing.T) {
@@ -90,13 +91,13 @@ func TestAMovedKeySaysWhatToPressNow(t *testing.T) {
 	}
 }
 
-// The archived view carries the same history key, so it carries the same way off it.
+// The archived view carried the same history key, so it carries the same way off it.
 func TestTheArchivedViewAlsoSaysWhereItsHistoryKeyWent(t *testing.T) {
-	for _, key := range []string{"l", "h"} {
+	for _, key := range []string{"l", "h", "t"} {
 		t.Run(key, func(t *testing.T) {
 			model := press(t, newTestModel(t, Archived(&fakeClient{})), key)
-			if model.err == nil || !strings.Contains(model.err.Error(), "t") {
-				t.Fatalf("%s on the archived view says %v, want it to name t", key, model.err)
+			if model.err == nil || !strings.Contains(model.err.Error(), "krewe exec list") {
+				t.Fatalf("%s on the archived view says %v, want it to name krewe exec list", key, model.err)
 			}
 		})
 	}
@@ -106,8 +107,8 @@ func TestTheArchivedViewAlsoSaysWhereItsHistoryKeyWent(t *testing.T) {
 // somebody presses the old key and concludes the console is broken.
 func TestAMovedKeySaysSoWithNothingListed(t *testing.T) {
 	model := press(t, newTestModel(t, Sessions(&fakeClient{})), "l")
-	if model.err == nil || !strings.Contains(model.err.Error(), "t") {
-		t.Fatalf("l on an empty listing says %v, want it to name t", model.err)
+	if model.err == nil || !strings.Contains(model.err.Error(), "krewe exec list") {
+		t.Fatalf("l on an empty listing says %v, want it to name krewe exec list", model.err)
 	}
 }
 
@@ -370,9 +371,9 @@ func TestRestoreIsStillOnU(t *testing.T) {
 	}
 }
 
-// The history is reachable, on the key that names the view it opens. Testing the way off a key and
-// never the way on is how a move quietly lands nowhere.
-func TestTheHistoryIsOnT(t *testing.T) {
+// The history left the console with a row under the cursor, which is where a key that quietly does
+// nothing is hardest to spot: the listing redraws, so the screen looks like it answered.
+func TestTheHistoryKeyOpensNothingWithARowUnderTheCursor(t *testing.T) {
 	for _, view := range []struct {
 		name  string
 		build func() Resource
@@ -381,7 +382,7 @@ func TestTheHistoryIsOnT(t *testing.T) {
 		{"archived", func() Resource { return Archived(&fakeClient{}) }},
 	} {
 		t.Run(view.name, func(t *testing.T) {
-			registry, err := NewRegistry(view.build(), staticResource("exec"))
+			registry, err := NewRegistry(view.build())
 			if err != nil {
 				t.Fatalf("NewRegistry: %v", err)
 			}
@@ -393,8 +394,11 @@ func TestTheHistoryIsOnT(t *testing.T) {
 			model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme"}}))
 
 			model = press(t, model, "t")
-			if model.active.Name != "exec" {
-				t.Fatalf("t on %s opened %s, want the exec view", view.name, model.active.Name)
+			if model.active.Name != view.name {
+				t.Fatalf("t on %s opened %s, and there is no history view to open", view.name, model.active.Name)
+			}
+			if model.err == nil || !strings.Contains(model.err.Error(), "krewe exec list") {
+				t.Fatalf("t on %s says %v, want it to name krewe exec list", view.name, model.err)
 			}
 		})
 	}
@@ -428,17 +432,16 @@ func TestTheKeysViewListsTheNewSpellings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listing the keys: %v", err)
 	}
-	history, mode := "", ""
+	mode := ""
 	for _, row := range rows {
 		switch row.Cells[2] {
+		// A key that is gone is not an entry beside the keys that work: the way off it is a refusal
+		// when it is pressed, so listing it would be advertising something the view cannot do.
 		case "History":
-			history = row.Cells[1]
+			t.Fatalf("the keys view still lists a history on %q", row.Cells[1])
 		case "Mode":
 			mode = row.Cells[1]
 		}
-	}
-	if history != "t" {
-		t.Fatalf("the keys view lists the history on %q, want t", history)
 	}
 	if mode != "m" {
 		t.Fatalf("the keys view lists the mode on %q, want m", mode)

@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// What a dispatch waits on between writing a session row and the first task running. Each wait is
+// What a dispatch waits on between writing a session row and the first exec running. Each wait is
 // named, because "the dispatch failed" sends the reader to the whole path and one of these sends
 // them to a component.
 const (
@@ -26,13 +26,13 @@ const (
 	waitStoreWrite = "the store to take a write"
 )
 
-// startWait is the whole budget from a session row to a sandbox ready for its first task: the start
+// startWait is the whole budget from a session row to a sandbox ready for its first exec: the start
 // ahead of this one, the container, and the setup inside it. One budget rather than one each, so the
 // longest a dispatch can take to fail is this and never the sum of them.
 //
 // Measured rather than chosen. `docker run --rm krewe-sandbox-claude:local echo ok` answered in
 // about two seconds on the machine that wedged, and in continuous integration the whole first
-// dispatch, container start and task included, lands inside six and a half (run 33092308502,
+// dispatch, container start and exec included, lands inside six and a half (run 33092308502,
 // 16:19:02.893 to 16:19:09.277). This is ten times the slower of the two, which gives a loaded
 // machine and a daemon pulling an image room, and still fails long before an operator gives up.
 const startWait = 60 * time.Second
@@ -66,12 +66,12 @@ func waited(ctx context.Context, session, what string, step func(context.Context
 	return err
 }
 
-// startSandbox is the path from a session row to a sandbox ready for its first task, under one
+// startSandbox is the path from a session row to a sandbox ready for its first exec, under one
 // budget so it always ends.
 //
 // Without the budget the path had no end at all. A control plane that had survived the machine
 // running out of memory served every read normally and answered no dispatch: the row was written,
-// no task was recorded, no container was made, and the caller stayed inside the call until it was
+// no exec was recorded, no container was made, and the caller stayed inside the call until it was
 // killed. See issue 400.
 func (s *Server) startSandbox(ctx context.Context, session *quaycrewv1.Session) (sandbox.Sandbox, error) {
 	ctx, giveUp := context.WithTimeout(ctx, s.startWait)
@@ -110,14 +110,14 @@ func (s *Server) keepSandbox(sessionID string, box sandbox.Sandbox) {
 // startFailed says on the session's own row that a dispatch could not start, and hands back the
 // error to return.
 //
-// A row written for a dispatch that then failed used to stay idle in the listing with no task and no
+// A row written for a dispatch that then failed used to stay idle in the listing with no exec and no
 // container behind it, which reads as a session waiting for work rather than one that never began.
 // Rows were left that way by the fault in issue 400.
 func (s *Server) startFailed(ctx context.Context, session *quaycrewv1.Session, text string, err error) error {
 	ctx = context.WithoutCancel(ctx)
-	failure := taskFailure(err)
-	s.recordTask(ctx, session.GetId(), "", StatusFailed)
-	s.recordHistory(ctx, session, &quaycrewv1.TaskEvent{Prompt: text, Status: StatusFailed, Failure: failure})
+	failure := execFailure(err)
+	s.recordExec(ctx, session.GetId(), "", StatusFailed)
+	s.recordHistory(ctx, session, &quaycrewv1.ExecEvent{Prompt: text, Status: StatusFailed, Failure: failure})
 	s.emit(ctx, session, KindSessionErrored, failure)
 	return err
 }

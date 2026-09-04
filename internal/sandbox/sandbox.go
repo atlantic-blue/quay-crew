@@ -1,5 +1,5 @@
 // Package sandbox provides isolated execution environments for agent sessions. Each session runs in
-// its own Sandbox, created by a Provider and reused across the session's tasks, then closed when the
+// its own Sandbox, created by a Provider and reused across the session's execs, then closed when the
 // session ends.
 package sandbox
 
@@ -87,7 +87,7 @@ type Provider interface {
 	// none. It never makes one.
 	//
 	// It is the difference between reaching into a session and starting one. Create adopts a
-	// container by name and makes one where there is nothing to adopt, which is right for a task and
+	// container by name and makes one where there is nothing to adopt, which is right for an exec and
 	// wrong for the system going to fetch what a finished job left behind: a job that ends is a job
 	// whose session may have been reclaimed, and creating a container to look inside it would cost a
 	// machine a sandbox and find an empty directory.
@@ -179,7 +179,7 @@ const (
 	AttachedSessionName = "krewe"
 	// RuntimeBinary is what the model runtime is called inside a sandbox, which is what says a session
 	// is holding a conversation rather than sitting empty. A property of the image: the Dockerfile
-	// installs it and every task and every attached conversation runs it by this name.
+	// installs it and every exec and every attached conversation runs it by this name.
 	RuntimeBinary = "claude"
 	// MemoryFile is the model's own convention, not ours.
 	MemoryFile = "CLAUDE.md"
@@ -188,7 +188,7 @@ const (
 	OpenConversation = "open-conversation"
 	// GitConfigSecret is the workspace secret an operator mounts to give every session their own git
 	// configuration. The image's own configuration includes the file it lands in, so identity,
-	// aliases and settings reach a session from any shell rather than only the process a task runs.
+	// aliases and settings reach a session from any shell rather than only the process an exec runs.
 	GitConfigSecret = "gitconfig"
 	// GitConfigPath is the sandbox user's git configuration, the file git reads as global. Shipped by
 	// the image holding the include, and written to by the system at sandbox birth.

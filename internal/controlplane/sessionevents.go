@@ -22,8 +22,8 @@ const (
 	KindSessionCompleted = "session.completed"
 	KindSessionErrored   = "session.errored"
 	KindSessionStopped   = "session.stopped"
-	// KindSessionHalted is a task an operator stopped, which is not the session going down. It sits
-	// with started, completed and errored, which are the other three about one task, rather than with
+	// KindSessionHalted is an exec an operator stopped, which is not the session going down. It sits
+	// with started, completed and errored, which are the other three about one exec, rather than with
 	// stopped, which is about the session: the session survives a halt, keeps its container and its
 	// conversation, and the next dispatch continues it. Writing this as session.stopped would tell a
 	// consumer a live session had been put down.
@@ -38,12 +38,12 @@ const (
 )
 
 // detailLine is how much of a detail is kept. A reply runs to paragraphs and this is one line about
-// one event, so the whole of it belongs in the task record that already holds it.
+// one event, so the whole of it belongs in the exec record that already holds it.
 const detailLine = 240
 
 // emit records one thing that happened to a session, and offers it to the export.
 //
-// The store first and the log after, for the same reason a task is written that way: the store is
+// The store first and the log after, for the same reason an exec is written that way: the store is
 // the truth, so a system whose broker is down still knows what happened, and a view reading the store
 // works whether or not anything is listening. Neither write ever fails what it describes, because
 // the thing already happened.
@@ -63,7 +63,7 @@ func (s *Server) emit(ctx context.Context, session *quaycrewv1.Session, kind, de
 		Project:   session.GetProject(),
 		Handle:    session.GetHandle(),
 		// What the model said and what a failure said both reach this line, and either can carry
-		// something the operator pasted, so it goes through the same redactor a task does.
+		// something the operator pasted, so it goes through the same redactor an exec does.
 		Detail:     oneShortLine(model.Redact(detail, s.sealedValues(ctx, session))),
 		OccurredAt: timestamppb.Now(),
 	}
@@ -75,7 +75,7 @@ func (s *Server) emit(ctx context.Context, session *quaycrewv1.Session, kind, de
 }
 
 // oneShortLine flattens a detail onto one line and caps it. A listing of what the system is doing is
-// for finding the moment you want; the task record holds the whole of what was said.
+// for finding the moment you want; the exec record holds the whole of what was said.
 func oneShortLine(text string) string {
 	flat := strings.Join(strings.Fields(text), " ")
 	if len(flat) <= detailLine {

@@ -15,7 +15,7 @@ import (
 //
 // The word is read out of the cells a listing prints rather than off the session's status field,
 // because the cell is what the operator reads and the field is what lied to them: status says
-// whether a dispatched task is open, and a conversation nobody dispatched is not one.
+// whether a dispatched exec is open, and a conversation nobody dispatched is not one.
 
 // presenceWorld is the listing the scenario just drew, and what the sandboxes had been asked before
 // it was drawn.
@@ -40,7 +40,7 @@ func listedWord(ctx context.Context) (string, error) {
 	if !drawn.drawn {
 		return "", fmt.Errorf("nothing has been listed, so there is no word on the screen to read")
 	}
-	current, err := w.lastTask()
+	current, err := w.lastExec()
 	if err != nil {
 		return "", err
 	}
@@ -75,7 +75,7 @@ func initializePresenceSteps(sc *godog.ScenarioContext) {
 	// reads the container's own process table.
 	sc.Step(`^that session's sandbox is running a model runtime$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -87,7 +87,7 @@ func initializePresenceSteps(sc *godog.ScenarioContext) {
 	// sitting in a conversation they have already closed.
 	sc.Step(`^that session's sandbox is running nothing$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}

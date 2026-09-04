@@ -24,7 +24,7 @@ import (
 
 // aSystemOnDisk stands up a system whose data directory is a real one, and hands back the client, the
 // store and that directory. The store comes back because the hard case is a session that never ran,
-// and the only way to make one is to put the row in without a task touching it.
+// and the only way to make one is to put the row in without an exec touching it.
 func aSystemOnDisk(t *testing.T) (quaycrewv1.ControlPlaneServiceClient, store.Store, string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -91,7 +91,7 @@ func TestWhereNamesTheDirectoryASandboxActuallyMounts(t *testing.T) {
 	})
 	mustRun(t, client, "workspace", "create", "acme")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "task", "acme/house-bills", "sort the listing by the clock it shows")
+	mustRun(t, client, "exec", "acme/house-bills", "sort the listing by the clock it shows")
 	session := theOnlySession(t, client)
 
 	shared := firstLineOf(mustRun(t, client, "where", "acme"))
@@ -286,7 +286,7 @@ func TestTheListingsSayHowToReachADirectory(t *testing.T) {
 	client, _, _ := aSystemOnDisk(t)
 	mustRun(t, client, "workspace", "create", "acme")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "task", "acme/house-bills", "sort the listing")
+	mustRun(t, client, "exec", "acme/house-bills", "sort the listing")
 
 	for _, listing := range [][]string{
 		{"workspace", "list"}, {"project", "list"}, {"sessions"},
@@ -299,7 +299,7 @@ func TestTheListingsSayHowToReachADirectory(t *testing.T) {
 	}
 }
 
-// aSessionNothingHasRunIn puts a session row into the named project without a task, which is the only
+// aSessionNothingHasRunIn puts a session row into the named project without an exec, which is the only
 // way to have a session whose directory has never been made. The project is named rather than taken
 // first from the listing, because a test about the wrong project needs to know which one it is in.
 func aSessionNothingHasRunIn(t *testing.T, held store.Store, project string) string {

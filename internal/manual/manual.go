@@ -28,8 +28,8 @@ press : to switch resource, / to filter, enter to drill in, s to shell into a se
 you work in one place at a time, and say where with an address: workspace/project/session.
 
   krewe use me/house-bills
-  krewe task "when is the electricity bill due"
-  krewe task --dispatch "read the repository and write the migration"
+  krewe exec "when is the electricity bill due"
+  krewe exec --dispatch "read the repository and write the migration"
 
 commands:
   help                                    print this, which -h and --help do too
@@ -63,12 +63,12 @@ commands:
                                           anything: infrastructure ships through the repository's
                                           own pipeline, and this says which account that pipeline is
                                           aimed at. --clear takes it back off
-  task [<address>] <text>                 start or continue a session, and wait here for the
+  exec [<address>] <text>                 start or continue a session, and wait here for the
                                           answer. For a short question, where the reply is the
                                           point
-  task --dispatch [<address>] <text>      the same, and let go of the task. It runs in the system, so
+  exec --dispatch [<address>] <text>      the same, and let go of the exec. It runs in the system, so
                                           closing the terminal does not take the work with it
-  task list <session>                     what a session was asked to do, and what came back
+  exec list <session>                     what a session was asked to do, and what came back
   sessions [<address>|system]             list sessions, which session and sessions also do. It
                                           reads where you are standing and says so; system reads
                                           every workspace. The
@@ -98,19 +98,19 @@ commands:
   answer <session> [--all]                 what a session came back with, and nothing else, so a
                                           caller can pipe it. The most recent answer, or with --all
                                           every one of them, oldest first
-  stop <session> [<reason>]               halt the task one session is running, keeping the reason.
+  stop <session> [<reason>]               halt the exec one session is running, keeping the reason.
                                           The session survives: its conversation, its container and
-                                          its history all stay, so the next task continues it.
+                                          its history all stay, so the next exec continues it.
                                           A stop while nothing is running says so and changes
                                           nothing
   drain [anyway]                          put every live session down, so an upgrade does not take
                                           their containers away underneath them. Refuses while a
-                                          task is working, and anyway drains over it
+                                          exec is working, and anyway drains over it
   label <session> [<text>]                 what you call a conversation, so a listing reads as
                                           conversations rather than identifiers. No text reads it,
                                           and "" clears it
-  mode <session> [<mode>]                  what a session's tasks may do without asking: plan, edits
-                                          or dangerous. A task nobody waits for has nobody to approve
+  mode <session> [<mode>]                  what a session's execs may do without asking: plan, edits
+                                          or dangerous. An exec nobody waits for has nobody to approve
                                           anything, so this is how it is given room to work
   context [<address>]                     where the files the model reads live, and how big each
                                           level is. A level past 20,000 characters also says who
@@ -194,8 +194,8 @@ The ` + "`krewe`" + ` command drives it. If it is on your path, you can use it.
   workspace   who you are, for example "me" or an organisation. Secrets attach here.
   project     a body of work inside a workspace, for example "house bills" or a ticket.
   session     one conversation, running inside its own sandbox container. It belongs to a project.
-  task        one instruction and the work it caused. You ask for something, the system works
-              until it has an answer, and the whole of that is one task. A task runs in a
+  exec        one instruction and the work it caused. You ask for something, the system works
+              until it has an answer, and the whole of that is one exec. An exec runs in a
               session, and a session is a series of them. Minutes is normal.
   sandbox     the isolated container a session runs in. A session runs IN a sandbox.
 

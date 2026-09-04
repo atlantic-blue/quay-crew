@@ -21,11 +21,11 @@ import (
 // right, and nothing automatic is allowed to overwrite it.
 
 const (
-	// describeEveryDefault is how many tasks past its description a conversation goes before it is
+	// describeEveryDefault is how many execs past its description a conversation goes before it is
 	// described again.
 	//
 	// Ten is a starting number, not a measured one. Nothing here has been running long enough to say
-	// how far a conversation drifts per task, so this is set where it can be changed rather than
+	// how far a conversation drifts per exec, so this is set where it can be changed rather than
 	// presented as derived: QC_DESCRIBE_EVERY in the system's configuration. What would replace it is a
 	// count of how often a re-description actually differs from the one before it.
 	describeEveryDefault = 10
@@ -33,15 +33,15 @@ const (
 	// own label, so it is capped at the same kind of length for the same reason: a listing gives the
 	// name one column among ten.
 	descriptionLimit = 60
-	// describeTasks is how much of a conversation is read to describe it. The opening exchange says
+	// describeExecs is how much of a conversation is read to describe it. The opening exchange says
 	// what a conversation is for better than the middle of it does, and reading the whole thing would
-	// cost more than the task being described.
-	describeTasks = 6
+	// cost more than the exec being described.
+	describeExecs = 6
 )
 
 // DescribeEvery reads how often a session is described from what the system was configured with.
 //
-// "off" and zero both task it off, because a system running automation makes a session per run and
+// "off" and zero both turn it off, because a system running automation makes a session per run and
 // should be able to pay for none of this. Anything unreadable keeps the default rather than refusing:
 // the system starting matters more than this setting being exactly right, which is the opposite of the
 // permission mode, where being wrong changes what a session may do.
@@ -62,17 +62,17 @@ func DescribeEvery(configured string) int {
 
 // worthDescribing says whether a session's description has fallen behind its conversation.
 //
-// The first task is always worth describing, because until then the listing has nothing but an
-// identifier. After that it is tasks since, not tasks total: a session described at task one is
+// The first exec is always worth describing, because until then the listing has nothing but an
+// identifier. After that it is execs since, not execs total: a session described at exec one is
 // described again at eleven, not at ten.
-func worthDescribing(tasks, describedAtTask, every int) bool {
-	if every <= 0 || tasks == 0 {
+func worthDescribing(execs, describedAtExec, every int) bool {
+	if every <= 0 || execs == 0 {
 		return false
 	}
-	if describedAtTask == 0 {
+	if describedAtExec == 0 {
 		return true
 	}
-	return tasks-describedAtTask >= every
+	return execs-describedAtExec >= every
 }
 
 // tidyDescription is what the model said, as a listing can hold it: the first line, unquoted,
@@ -98,11 +98,11 @@ func tidyDescription(said string) string {
 // It says what not to write as firmly as what to write. Asked without that, a model answers with a
 // title in its own voice, and a listing of "an engaging exploration of agent tooling" is worse than a
 // listing of hexadecimal because it takes longer to read and says less.
-func describePrompt(tasks []*quaycrewv1.Task) string {
+func describePrompt(execs []*quaycrewv1.Exec) string {
 	var conversation strings.Builder
-	for _, task := range tasks {
-		fmt.Fprintf(&conversation, "asked: %s\n", oneLine(task.GetPrompt(), 300))
-		if reply := task.GetReply(); reply != "" {
+	for _, exec := range execs {
+		fmt.Fprintf(&conversation, "asked: %s\n", oneLine(exec.GetPrompt(), 300))
+		if reply := exec.GetReply(); reply != "" {
 			fmt.Fprintf(&conversation, "answered: %s\n", oneLine(reply, 300))
 		}
 	}
@@ -113,7 +113,7 @@ func describePrompt(tasks []*quaycrewv1.Task) string {
 		"interesting it is, and nothing but the line itself."
 }
 
-// oneLine flattens text to a single line and caps it, so a long task does not become most of the
+// oneLine flattens text to a single line and caps it, so a long exec does not become most of the
 // prompt that describes it.
 func oneLine(text string, limit int) string {
 	flat := strings.Join(strings.Fields(text), " ")
@@ -126,10 +126,10 @@ func oneLine(text string, limit int) string {
 // describeSession writes what a session is about, if it has fallen behind.
 //
 // It takes the session's id rather than the session, and reads everything it needs again, because it
-// runs behind a task that has already been answered: anything handed to it would be a value somebody
+// runs behind an exec that has already been answered: anything handed to it would be a value somebody
 // else is still reading. That is the same mistake that made `krewe flow start` fail one run in six.
 //
-// Every failure is a log line and nothing else. A description is a convenience, and a task that
+// Every failure is a log line and nothing else. A description is a convenience, and an exec that
 // worked must not be reported as failed because the system could not think of a name for it.
 func (s *Server) describeSession(ctx context.Context, sessionID string) {
 	if s.describeEvery <= 0 {
@@ -140,16 +140,16 @@ func (s *Server) describeSession(ctx context.Context, sessionID string) {
 		slog.DebugContext(ctx, "a session could not be described", "session", sessionID, "error", err)
 		return
 	}
-	tasks, err := s.store.CountTasks(ctx, sessionID)
+	execs, err := s.store.CountExecs(ctx, sessionID)
 	if err != nil {
 		slog.DebugContext(ctx, "a session could not be described", "session", sessionID, "error", err)
 		return
 	}
-	if !worthDescribing(tasks, int(session.GetDescribedAtTask()), s.describeEvery) {
+	if !worthDescribing(execs, int(session.GetDescribedAtExec()), s.describeEvery) {
 		return
 	}
 
-	history, err := s.store.ListTasks(ctx, sessionID, describeTasks)
+	history, err := s.store.ListExecs(ctx, sessionID, describeExecs)
 	if err != nil || len(history) == 0 {
 		slog.DebugContext(ctx, "a session could not be described", "session", sessionID, "error", err)
 		return
@@ -166,7 +166,7 @@ func (s *Server) describeSession(ctx context.Context, sessionID string) {
 	said, err := s.runner.Run(ctx, box, model.Request{
 		Text:           prompt,
 		PermissionMode: model.PermissionPlan,
-		Env:            s.taskEnv(ctx, session, "", false),
+		Env:            s.execEnv(ctx, session, "", false),
 	})
 	if err != nil {
 		slog.DebugContext(ctx, "a session could not be described", "session", sessionID, "error", err)
@@ -176,7 +176,7 @@ func (s *Server) describeSession(ctx context.Context, sessionID string) {
 	if description == "" || isTheQuestionBack(prompt, description) {
 		return
 	}
-	if err := s.store.SetDescription(ctx, sessionID, description, tasks); err != nil {
+	if err := s.store.SetDescription(ctx, sessionID, description, execs); err != nil {
 		slog.DebugContext(ctx, "a session's description could not be kept", "session", sessionID, "error", err)
 	}
 }

@@ -89,11 +89,11 @@ Feature: A hook is a constraint the system holds
     And the hooks directory is mounted read only
     And the settings file binds "git-approval" to "PreToolUse"
 
-  Scenario: The task is told to load the hooks settings
+  Scenario: The exec is told to load the hooks settings
     Given a hook "git-approval" imported firing on "PreToolUse"
     And the operator attaches the hook "git-approval" to the workspace
     When the operator dispatches "hello" to the project
-    Then the task loaded the hooks settings
+    Then the exec loaded the hooks settings
 
   # The settings the system renders carry more than hooks: the line the runtime draws under the
   # conversation is in there too, and an operator attached to a session with no hooks needs that line
@@ -102,7 +102,7 @@ Feature: A hook is a constraint the system holds
     When the operator dispatches "hello" to the project
     Then the session's sandbox carries the hooks directory
     And the settings file binds nothing to any event
-    And the task loaded the hooks settings
+    And the exec loaded the hooks settings
 
   # A seeded hook used to mean a hook that cannot refuse, because a hook that refuses wrongly blocks
   # the work. The merge gate refuses, and it is seeded anyway: it refuses one thing, no session in

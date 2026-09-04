@@ -18,10 +18,10 @@ import (
 // draws under the conversation. Every session gets them, because an operator attached to a session
 // with no hooks needs that line as much as anybody.
 //
-// The file has to be there before a task is told to load it. The runtime refuses to start on a
-// settings file that is missing, saying only "Settings file not found", and that would be every task
+// The file has to be there before an exec is told to load it. The runtime refuses to start on a
+// settings file that is missing, saying only "Settings file not found", and that would be every exec
 // on the system rather than one.
-func TestATaskLoadsTheSystemsSettingsOnlyWhenTheyAreOnDisk(t *testing.T) {
+func TestAExecLoadsTheSystemsSettingsOnlyWhenTheyAreOnDisk(t *testing.T) {
 	dir := t.TempDir()
 	server := NewServer(Config{
 		Store: store.NewMemory(), Runner: model.EchoRunner{},
@@ -40,16 +40,16 @@ func TestATaskLoadsTheSystemsSettingsOnlyWhenTheyAreOnDisk(t *testing.T) {
 	}
 	want := sandbox.HooksPath + "/" + hook.SettingsFile
 	if got := server.settingsFor(ctx, session); got != want {
-		t.Errorf("the task was told to load %q, want %q", got, want)
+		t.Errorf("the exec was told to load %q, want %q", got, want)
 	}
 
 	// A system whose data directory has been taken away underneath it. Naming the file anyway is a
-	// task that dies before the model sees it.
+	// exec that dies before the model sees it.
 	at, _ := server.storage.WorkspaceHooksDir(session.GetWorkspace())
 	if err := os.Remove(filepath.Join(at, hook.SettingsFile)); err != nil {
 		t.Fatalf("take the settings away: %v", err)
 	}
 	if got := server.settingsFor(ctx, session); got != "" {
-		t.Errorf("the task was told to load %q, and there is no such file", got)
+		t.Errorf("the exec was told to load %q, and there is no such file", got)
 	}
 }

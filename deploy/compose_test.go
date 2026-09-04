@@ -273,7 +273,7 @@ func TestTwoStacksOnOneMachineDoNotShareASessionNetwork(t *testing.T) {
 //
 // Compose prefixes every named volume and every network with the project name, so the database sits
 // in <project>_postgres-data. Start the stack under a different project and compose makes an empty
-// volume of the new name, mounts that, and every job, session, task and secret stays in the old one.
+// volume of the new name, mounts that, and every job, session, exec and secret stays in the old one.
 // The stack comes up. The database is empty. Nothing anywhere says why.
 //
 // So this is a guard on a name rather than a test of behaviour, and it fails loudly the day somebody

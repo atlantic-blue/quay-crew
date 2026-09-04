@@ -2,7 +2,7 @@ Feature: A first run is one command
 
   A first run used to be four commands, and the order mattered: the configuration file, the sandbox
   image, the stack, and the tool. Miss one and the failure arrived somewhere else. Compose read a
-  file that was not there, or a first task was refused for a missing image, which reads as a broken
+  file that was not there, or a first exec was refused for a missing image, which reads as a broken
   system rather than a missing step.
 
   `make install` is now the whole first run. It writes the configuration file if there is none,
@@ -34,7 +34,7 @@ Feature: A first run is one command
       | krewe workspace create <name>            |
       | krewe project create <name>              |
       | krewe secret set CLAUDE_CODE_OAUTH_TOKEN |
-      | krewe task "say pong"                    |
+      | krewe exec "say pong"                    |
 
   Scenario: Running it again keeps the configuration the operator edited
     Given a machine with no system on it
@@ -46,7 +46,7 @@ Feature: A first run is one command
     And the system has a data directory
 
   # The one thing a second run can take away. Compose replaces the services whose build moved, and a
-  # task in flight is executing through the control plane, so it ends with it.
+  # exec in flight is executing through the control plane, so it ends with it.
   Scenario: A system that is already working is not replaced without a word
     Given a machine with a system already running
     When the operator runs "make install"

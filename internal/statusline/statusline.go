@@ -3,7 +3,7 @@
 // An operator attached to a session is talking to the model directly, and the one number that
 // decides whether the conversation is still worth continuing, how much of the context window it has
 // filled, was nowhere on the screen. It is not in the console, it is not in the header, and asking
-// for it costs a task. So the session says it itself, on every redraw, in the one place that is
+// for it costs an exec. So the session says it itself, on every redraw, in the one place that is
 // always in front of the person typing.
 package statusline
 
@@ -16,7 +16,7 @@ import (
 
 // Warn is the share of the context window at which the line stops being information and starts being
 // a warning. Thirty rather than something closer to full: what the operator does about it, finishing
-// the task, compacting, or opening a fresh session, takes a while and is much cheaper decided early
+// the exec, compacting, or opening a fresh session, takes a while and is much cheaper decided early
 // than at ninety.
 const Warn = 30
 
@@ -27,7 +27,7 @@ type Input struct {
 	Window *Window `json:"context_window"`
 }
 
-// Window is what the runtime says about the context window: how much of it the next task will carry,
+// Window is what the runtime says about the context window: how much of it the next exec will carry,
 // and how much there is. Used counts what was sent, including everything read back from the cache,
 // because that is the context rather than the part of it charged as new.
 type Window struct {

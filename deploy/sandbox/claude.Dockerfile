@@ -1,7 +1,7 @@
 # The default sandbox image for a session: an isolated environment with the Claude Code CLI in it.
 #
 # The control plane starts one container from this image per session and execs `claude` inside it.
-# The image carries no credentials. The subscription token is injected at task time as
+# The image carries no credentials. The subscription token is injected at exec time as
 # CLAUDE_CODE_OAUTH_TOKEN (minted by `claude setup-token`, stored as a per project secret), so the
 # same image is safe to build, share, and run anywhere.
 # krewe itself, so a session can drive the system from inside its sandbox. Built here rather than mounted
@@ -168,7 +168,7 @@ COPY --chown=agent:agent deploy/sandbox/gitconfig /home/agent/.gitconfig
 
 # Get the first run out of the way.
 #
-# A task is non interactive and skips all of this, but attaching to a conversation is interactive, and
+# An exec is non interactive and skips all of this, but attaching to a conversation is interactive, and
 # a sandbox is a fresh container every time. Without this the operator lands in the theme picker and
 # then the workspace trust prompt instead of their conversation, which reads as "the token is not
 # working" because nothing ever gets far enough to authenticate. The runtime rewrites this file as it

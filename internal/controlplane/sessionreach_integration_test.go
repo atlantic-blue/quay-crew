@@ -31,8 +31,8 @@ import (
 // whatever it is told to: it would have reported this feature working for as long as it existed.
 //
 // What is substituted is the model, which is what continuous integration substitutes everywhere
-// else. The runner here runs the task's text as a shell command inside the session's sandbox, with
-// the environment the system built for that task, which is exactly what the Claude Code adapter does
+// else. The runner here runs the exec's text as a shell command inside the session's sandbox, with
+// the environment the system built for that exec, which is exactly what the Claude Code adapter does
 // with the same values.
 //
 // What is not proved here: the control plane in this test listens on the host rather than in a
@@ -146,14 +146,14 @@ func aSystemWhoseSessionsCanReachIt(ctx context.Context, t *testing.T) *reachabl
 	return system
 }
 
-// run dispatches a task to the driver and returns what it said.
+// run dispatches an exec to the driver and returns what it said.
 //
 // The driver rather than an ordinary session, because the driver is the one session the system tells
 // where it is: an ordinary session is told no address and no token at all, which is what
 // features/sessions.feature specifies. So the driver is the session that can reach the system, and
 // therefore the only one where "it reaches the system and nothing else" is a claim worth making.
 //
-// The script runs inside that session's container, in the environment the system built for the task,
+// The script runs inside that session's container, in the environment the system built for the exec,
 // which is where the address and the token are.
 func (c *reachableSystem) run(ctx context.Context, t *testing.T, script string) string {
 	t.Helper()
@@ -165,7 +165,7 @@ func (c *reachableSystem) run(ctx context.Context, t *testing.T, script string) 
 		Project: c.projectID, Handle: opened.GetSession().GetHandle(), Text: script,
 	})
 	if err != nil {
-		t.Fatalf("dispatch the task: %v", err)
+		t.Fatalf("dispatch the exec: %v", err)
 	}
 	c.removeSandbox(t, dispatched.GetId())
 	return dispatched.GetReply()
@@ -246,8 +246,8 @@ func networkGateway(t *testing.T, network string) string {
 	return gateway
 }
 
-// shellRunner runs the task's text as a command inside the session's sandbox, with the environment
-// the system built for that task.
+// shellRunner runs the exec's text as a command inside the session's sandbox, with the environment
+// the system built for that exec.
 //
 // It stands in for the model and for nothing else. The Claude Code adapter execs in the same way with
 // the same values, which is what makes this a proof about the system rather than about the double: the
@@ -270,7 +270,7 @@ func (r *shellRunner) Run(ctx context.Context, box sandbox.Sandbox, req model.Re
 	}
 	said, readErr := io.ReadAll(proc.Stdout())
 	// The exit status is deliberately not an error. A refusal is what these tests are about, and
-	// `krewe` exits non zero when the system refuses it, so a runner that failed the task would throw
+	// `krewe` exits non zero when the system refuses it, so a runner that failed the exec would throw
 	// away the sentence being asserted on.
 	_ = proc.Wait()
 	if readErr != nil {

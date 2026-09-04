@@ -21,7 +21,7 @@ func TestEchoRunnerExecsInsideTheSandbox(t *testing.T) {
 		t.Fatalf("Reply = %q, want %q", resp.Reply, "hello there")
 	}
 	if resp.ModelSessionID == "" {
-		t.Fatal("ModelSessionID is empty, want a session id so a task can be resumed")
+		t.Fatal("ModelSessionID is empty, want a session id so an exec can be resumed")
 	}
 
 	// The point of this runner is that the command really goes through the sandbox.
@@ -73,7 +73,7 @@ func TestNewRunnerRejectsUnknownKinds(t *testing.T) {
 // The echo backend stands in for a model runtime in the smoke test and in the composed stack, so it
 // answers the way a runtime that honours the flag answers: with the conversation it was given. A
 // double that reported a name of its own instead would read as the runtime ignoring the name on every
-// task, and the check that catches a runtime ignoring the name would be crying wolf in the one place
+// exec, and the check that catches a runtime ignoring the name would be crying wolf in the one place
 // the system is driven end to end.
 func TestEchoRunnerReportsTheConversationItWasGiven(t *testing.T) {
 	box := &sandbox.FakeSandbox{Output: "hello\n"}

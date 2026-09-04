@@ -35,7 +35,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the operator asks how to attach to the session$`, func(ctx context.Context) error {
 		w, a := worldFrom(ctx), attachFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -75,7 +75,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		if len(w.drivers) > 0 {
 			id = w.drivers[0].GetId()
 		} else {
-			current, err := w.lastTask()
+			current, err := w.lastExec()
 			if err != nil {
 				return err
 			}
@@ -110,41 +110,41 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// While the task runs, not after it. Read off the task itself rather than off the session, so this
+	// While the exec runs, not after it. Read off the exec itself rather than off the session, so this
 	// says the operator lands where the job is happening rather than only that two of the system's own
 	// fields agree with each other.
-	sc.Step(`^the command opens the conversation the task is running in$`, func(ctx context.Context) error {
+	sc.Step(`^the command opens the conversation the exec is running in$`, func(ctx context.Context) error {
 		w, a := worldFrom(ctx), attachFrom(ctx)
 		if a.err != nil {
 			return fmt.Errorf("attaching was refused: %w", a.err)
 		}
-		running, err := w.conversationOfFirstTask()
+		running, err := w.conversationOfFirstExec()
 		if err != nil {
 			return err
 		}
 		if got := conversationIn(a.spec); got != running {
-			return fmt.Errorf("the command opens conversation %q and the task is running in %q, "+
+			return fmt.Errorf("the command opens conversation %q and the exec is running in %q, "+
 				"so the operator is watching an empty conversation beside the job", got, running)
 		}
 		return nil
 	})
 
-	// The name came from the system, before the task, which is what makes it knowable while the task
-	// runs. A task that resumed instead would be asking for a conversation nothing has written yet.
-	sc.Step(`^the system named the conversation before the task started$`, func(ctx context.Context) error {
+	// The name came from the system, before the exec, which is what makes it knowable while the exec
+	// runs. An exec that resumed instead would be asking for a conversation nothing has written yet.
+	sc.Step(`^the system named the conversation before the exec started$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		first, found := w.runner.task(0)
+		first, found := w.runner.exec(0)
 		if !found {
-			return fmt.Errorf("no task has reached the model runner")
+			return fmt.Errorf("no exec has reached the model runner")
 		}
 		if first.ModelSessionID == "" {
-			return fmt.Errorf("the task is running in a conversation nobody named")
+			return fmt.Errorf("the exec is running in a conversation nobody named")
 		}
 		if first.ConversationStarted {
-			return fmt.Errorf("the task resumed conversation %q, which nothing has written yet: "+
+			return fmt.Errorf("the exec resumed conversation %q, which nothing has written yet: "+
 				"the model exits saying no conversation was found", first.ModelSessionID)
 		}
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -153,17 +153,17 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		if got := resp.GetSession().GetModelSessionId(); got != first.ModelSessionID {
-			return fmt.Errorf("the session holds conversation %q while its task runs in %q", got, first.ModelSessionID)
+			return fmt.Errorf("the session holds conversation %q while its exec runs in %q", got, first.ModelSessionID)
 		}
 		return nil
 	})
 
-	sc.Step(`^the operator asks how to attach to a session that has never had a task$`, func(ctx context.Context) error {
+	sc.Step(`^the operator asks how to attach to a session that has never had an exec$`, func(ctx context.Context) error {
 		w, a := worldFrom(ctx), attachFrom(ctx)
-		// A session exists only once a task creates it, so a failing runner gives us one with no
+		// A session exists only once an exec creates it, so a failing runner gives us one with no
 		// conversation behind it, which is exactly the state this refusal is about.
 		w.runner.failNext = true
-		_ = w.dispatch(ctx, w.projectID, "", "this task fails")
+		_ = w.dispatch(ctx, w.projectID, "", "this exec fails")
 		sessions, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Project: w.projectID})
 		if err != nil {
 			return err
@@ -174,7 +174,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		only := sessions.GetSessions()[0]
 		// Recorded as the session in play, so the steps that name the sandbox and read the system's
 		// conversation back can be asked about it. The dispatch failed, so nothing else recorded it.
-		w.tasks = append(w.tasks, task{sessionID: only.GetId(), handle: only.GetHandle()})
+		w.execs = append(w.execs, dispatched{sessionID: only.GetId(), handle: only.GetHandle()})
 		a.spec, a.err = w.client.AttachSession(ctx, &quaycrewv1.AttachSessionRequest{Id: only.GetId()})
 		return nil
 	})
@@ -184,7 +184,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		if a.err != nil {
 			return fmt.Errorf("attaching was refused: %w", a.err)
 		}
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -194,20 +194,20 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the command resumes the conversation the task started$`, func(ctx context.Context) error {
+	sc.Step(`^the command resumes the conversation the exec started$`, func(ctx context.Context) error {
 		w, a := worldFrom(ctx), attachFrom(ctx)
 		if a.err != nil {
 			return fmt.Errorf("attaching was refused: %w", a.err)
 		}
-		// The conversation the task itself ran in, read off the task rather than off the session, so
+		// The conversation the exec itself ran in, read off the exec rather than off the session, so
 		// this says the operator lands where the job happened rather than only that two of the system's
 		// own fields agree.
-		ran, err := w.conversationOfFirstTask()
+		ran, err := w.conversationOfFirstExec()
 		if err != nil {
 			return err
 		}
 		if got := conversationIn(a.spec); got != ran {
-			return fmt.Errorf("the command opens conversation %q and the task ran in %q", got, ran)
+			return fmt.Errorf("the command opens conversation %q and the exec ran in %q", got, ran)
 		}
 		return nil
 	})
@@ -284,7 +284,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 	// exactly what happened to every conversation from a sandbox built before those mounts existed.
 	sc.Step(`^the conversation the model kept is lost$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -309,7 +309,7 @@ func initializeAttachSteps(sc *godog.ScenarioContext) {
 		// A refusal that only says no leaves the operator staring at a session they cannot open, and one
 		// written in the system's own vocabulary leaves them asking what it means. It says what to do
 		// instead, in words that appear on their screen.
-		for _, want := range []string{"no conversation left", "krewe task"} {
+		for _, want := range []string{"no conversation left", "krewe exec"} {
 			if !strings.Contains(a.err.Error(), want) {
 				return fmt.Errorf("the refusal is %q, want it to say %q", a.err.Error(), want)
 			}

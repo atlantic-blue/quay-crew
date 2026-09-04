@@ -23,7 +23,7 @@ mode="$2"
 # question, and a sandbox made before the system rendered one simply has none.
 #
 # Checked here rather than passed in, so opening a conversation is under the same constraints a
-# dispatched task is. A gate that only runs on dispatched tasks is one the operator walks around by
+# dispatched exec is. A gate that only runs on dispatched execs is one the operator walks around by
 # opening the session, which is the easiest thing in the product to do.
 settings=""
 if [ -f /home/agent/hooks/settings.json ]; then

@@ -1,6 +1,6 @@
 Feature: A call can be followed after it happened
 
-  When a task hangs or fails, the question is which of the tool, the system, the sandbox and the model
+  When an exec hangs or fails, the question is which of the tool, the system, the sandbox and the model
   it is sitting in. A log line in each cannot answer that, so every call the system serves runs inside
   a span, and every log line written while it runs carries that call's correlation id. The id is the
   trace id rather than a second identifier beside it, because an id you have to join to the trace id

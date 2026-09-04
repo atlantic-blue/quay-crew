@@ -27,7 +27,7 @@ const ManifestFile = "hook.yaml"
 
 // SummaryLimit is how long a summary may be, in bytes. It is the line a listing shows.
 //
-// Shorter than it needs to be on purpose. Nothing pays for it per task, because a hook is not in the
+// Shorter than it needs to be on purpose. Nothing pays for it per exec, because a hook is not in the
 // context, but a summary that runs to a paragraph is a design document arriving in a listing.
 const SummaryLimit = 200
 

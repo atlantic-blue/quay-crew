@@ -256,11 +256,11 @@ jobs:
       - name: Pre-pull the sandbox image
         run: docker pull alpine:3.22
 
-      # The point of this step: prove a task really runs. It goes through the gRPC API, creates a
+      # The point of this step: prove an exec really runs. It goes through the gRPC API, creates a
       # session, starts a sandbox container on the host daemon, execs inside it, and returns the
       # reply. Only the model is substituted (QC_MODEL=echo in compose). Asserting the services are
-      # merely running let a stack ship that could not execute a single task.
-      - name: Dispatch a task end to end
+      # merely running let a stack ship that could not execute a single exec.
+      - name: Dispatch an exec end to end
         env:
           QC_GRPC_ADDR: localhost:50051
         run: |
@@ -271,17 +271,17 @@ jobs:
           go run ./cmd/krewe project create bills
           test "$(go run ./cmd/krewe use)" = "smoke/bills"
 
-          out=$(go run ./cmd/krewe task "hello from ci")
+          out=$(go run ./cmd/krewe exec "hello from ci")
           echo "$out"
           test "$(printf '%s' "$out" | head -1)" = "hello from ci"
 
-          # The task must have run inside a sandbox container, not in the control plane itself.
+          # The exec must have run inside a sandbox container, not in the control plane itself.
           test "$(docker ps --filter 'name=krewe-' --quiet | wc -l)" -eq 1
 
-          # A second task on the same session reuses that one sandbox.
+          # A second exec on the same session reuses that one sandbox.
           handle=$(printf '%s' "$out" | sed -n 's/.*handle \([a-f0-9]*\))$/\1/p')
           test -n "$handle"
-          go run ./cmd/krewe task "smoke/bills/$handle" "second task" >/dev/null
+          go run ./cmd/krewe exec "smoke/bills/$handle" "second exec" >/dev/null
           test "$(docker ps --filter 'name=krewe-' --quiet | wc -l)" -eq 1
 
       # The point of this step: prove a session can reach the system and reach nothing else of it. The
@@ -354,10 +354,10 @@ jobs:
           case "$both" in *"$QC_SESSION_NETWORK"*) ;; *) echo "the system is not where its sessions are"; exit 1 ;; esac
           case "$both" in *qcci_default*) ;; *) echo "the system left its own network, so it has no store"; exit 1 ;; esac
 
-      # Tasks have now run, so the signals have to have moved. This is the check docs/OBSERVABILITY.md
+      # Execs have now run, so the signals have to have moved. This is the check docs/OBSERVABILITY.md
       # tells an operator to run, and it is the one that was never automated: the stack could ship
       # emitting nothing and every other step here would still pass.
-      - name: The tasks that just ran produced telemetry
+      - name: The execs that just ran produced telemetry
         run: |
           set -euo pipefail
           # The debug exporter spells its summary differently by verbosity: "ResourceSpans" only at
@@ -416,7 +416,7 @@ jobs:
           workspace=$(go run ./cmd/krewe workspace create durable | sed -n 's/created workspace \([a-f0-9]*\).*/\1/p')
           test -n "$workspace"
           go run ./cmd/krewe project create bills
-          out=$(go run ./cmd/krewe task "remember this")
+          out=$(go run ./cmd/krewe exec "remember this")
           session=$(printf '%s' "$out" | sed -n 's/.*(session \([a-f0-9]*\),.*/\1/p')
           test -n "$session"
 
@@ -442,7 +442,7 @@ jobs:
           # and the only one a listing prints.
           test "$(printf '%s\n' "$sessions" | awk -v want="${session:0:8}" 'NR > 1 && $1 == want' | wc -l)" -eq 1
 
-          # Dispatching a task after the restart is deliberately not asserted here. The control plane
+          # Dispatching an exec after the restart is deliberately not asserted here. The control plane
           # forgets which container each session was running in, so it tries to start a second one
           # with the same name and the daemon refuses. Reattaching is issue #35, and the assertion
           # belongs in that change.
@@ -458,7 +458,7 @@ jobs:
           set -euo pipefail
           go run ./cmd/krewe workspace create durable-state
           go run ./cmd/krewe project create bills
-          out=$(go run ./cmd/krewe task "first task")
+          out=$(go run ./cmd/krewe exec "first exec")
           session=$(printf '%s' "$out" | sed -n 's/.*session \([a-f0-9]*\),.*/\1/p')
           handle=$(printf '%s' "$out" | sed -n 's/.*handle \([a-f0-9]*\))$/\1/p')
           test -n "$session" && test -n "$handle"
@@ -477,7 +477,7 @@ jobs:
             sleep 2
           done
 
-          go run ./cmd/krewe task "durable-state/bills/$handle" "second task" >/dev/null
+          go run ./cmd/krewe exec "durable-state/bills/$handle" "second exec" >/dev/null
           kept=$(docker exec "krewe-$session" cat /home/agent/.claude/note)
           context=$(docker exec "krewe-$session" cat /home/agent/workspace/CLAUDE.md)
           echo "conversation store: $kept"

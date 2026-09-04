@@ -34,7 +34,7 @@ func initializeUsageSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the model has written (\d+) in, (\d+) out and (\d+) read from cache$`,
 		func(ctx context.Context, in, out, cached int) error {
 			world := worldFrom(ctx)
-			current, err := world.lastTask()
+			current, err := world.lastExec()
 			if err != nil {
 				return err
 			}

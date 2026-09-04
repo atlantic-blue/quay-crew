@@ -22,8 +22,8 @@ func TestStopSaysThereWasNothingToStop(t *testing.T) {
 		t.Fatalf("stopping an idle session said %q, and it has to say nothing was running", said)
 	}
 	// It must not claim to have stopped anything, or an operator reads success and stops watching.
-	if strings.Contains(said, "stopped the task") {
-		t.Fatalf("stopping an idle session claimed it stopped a task: %q", said)
+	if strings.Contains(said, "stopped the exec") {
+		t.Fatalf("stopping an idle session claimed it stopped an exec: %q", said)
 	}
 }
 

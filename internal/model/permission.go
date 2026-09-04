@@ -21,7 +21,7 @@ var spokenModes = map[string]string{
 	"bypasspermissions": PermissionBypass,
 }
 
-// PermissionModeNamed tasks what somebody typed into the mode the model understands, and says whether
+// PermissionModeNamed execs what somebody typed into the mode the model understands, and says whether
 // it was a mode at all.
 //
 // It lives here because every surface that takes a mode needs the same answer: the command line, the
@@ -38,7 +38,7 @@ func PermissionModesOffered() []string {
 	return append([]string(nil), modeOrder...)
 }
 
-// PermissionModeBornIn is what a session's tasks may do when it is created: the system's own choice when
+// PermissionModeBornIn is what a session's execs may do when it is created: the system's own choice when
 // it made one, and otherwise the mode every session had before this was configurable.
 //
 // The fallback is here rather than at each caller so a store, a server and a test cannot each pick a
@@ -74,7 +74,7 @@ func permissionRank(mode string) int {
 	return 0
 }
 
-// PermissionModeReachesTheNetwork says whether a task in this mode runs a command that needs the
+// PermissionModeReachesTheNetwork says whether an exec in this mode runs a command that needs the
 // network without a person approving it first.
 //
 // One answer in one place, because more than one surface asks it. A job that names a repository is

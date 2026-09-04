@@ -24,8 +24,8 @@ func runSessionLifecycleConformance(t *testing.T, newDataset func(t *testing.T) 
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
 		session, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", store.Birth{})
-		if err := s.RecordTask(ctx, session.GetId(), "conversation-1", "idle"); err != nil {
-			t.Fatalf("RecordTask: %v", err)
+		if err := s.RecordExec(ctx, session.GetId(), "conversation-1", "idle"); err != nil {
+			t.Fatalf("RecordExec: %v", err)
 		}
 
 		if err := s.ReclaimSession(ctx, session.GetId()); err != nil {
@@ -76,7 +76,7 @@ func runSessionLifecycleConformance(t *testing.T, newDataset func(t *testing.T) 
 		}
 	})
 
-	t.Run("a task clears the reclaim stamp, so the next dispatch undoes it", func(t *testing.T) {
+	t.Run("an exec clears the reclaim stamp, so the next dispatch undoes it", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house bills")
@@ -85,13 +85,13 @@ func runSessionLifecycleConformance(t *testing.T, newDataset func(t *testing.T) 
 			t.Fatalf("ReclaimSession: %v", err)
 		}
 
-		if err := s.RecordTask(ctx, session.GetId(), "conversation-1", "running"); err != nil {
-			t.Fatalf("RecordTask: %v", err)
+		if err := s.RecordExec(ctx, session.GetId(), "conversation-1", "running"); err != nil {
+			t.Fatalf("RecordExec: %v", err)
 		}
 
 		got, _ := s.GetSession(ctx, session.GetId())
 		if got.GetReclaimedAt() != nil {
-			t.Fatal("the reclaim stamp survived a task, so the archive rule would go on measuring " +
+			t.Fatal("the reclaim stamp survived an exec, so the archive rule would go on measuring " +
 				"against a reclaim that a dispatch already undid")
 		}
 		if got.GetStatus() != "running" {
@@ -145,11 +145,11 @@ func runSessionLifecycleConformance(t *testing.T, newDataset func(t *testing.T) 
 		broken, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "broken", store.Birth{})
 		halted, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "halted", store.Birth{})
 		filed, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "filed", store.Birth{})
-		if err := s.RecordTask(ctx, working.GetId(), "", "running"); err != nil {
-			t.Fatalf("RecordTask: %v", err)
+		if err := s.RecordExec(ctx, working.GetId(), "", "running"); err != nil {
+			t.Fatalf("RecordExec: %v", err)
 		}
-		if err := s.RecordTask(ctx, broken.GetId(), "", "failed"); err != nil {
-			t.Fatalf("RecordTask: %v", err)
+		if err := s.RecordExec(ctx, broken.GetId(), "", "failed"); err != nil {
+			t.Fatalf("RecordExec: %v", err)
 		}
 		if err := s.StopSession(ctx, halted.GetId()); err != nil {
 			t.Fatalf("StopSession: %v", err)
@@ -164,13 +164,13 @@ func runSessionLifecycleConformance(t *testing.T, newDataset func(t *testing.T) 
 		}
 		if got := idsOf(settled); !holds(got, waiting.GetId()) || !holds(got, broken.GetId()) {
 			t.Fatalf("the settled sessions are %v, and both the waiting one and the one whose last "+
-				"task failed are settled: nothing is running in either", got)
+				"exec failed are settled: nothing is running in either", got)
 		}
 		for _, absent := range []struct {
 			id  string
 			why string
 		}{
-			{working.GetId(), "a task is under way in it"},
+			{working.GetId(), "an exec is under way in it"},
 			{halted.GetId(), "an operator stopped it, and filing away what somebody halted overwrites a decision"},
 			{filed.GetId(), "it is already archived"},
 		} {
@@ -267,8 +267,8 @@ func runSessionLifecycleConformance(t *testing.T, newDataset func(t *testing.T) 
 		project := newProject(t, s, "acme", "house bills")
 		for _, handle := range []string{"first", "second", "third"} {
 			session, _, _ := s.FindOrCreateSession(ctx, project.GetId(), handle, store.Birth{})
-			if err := s.RecordTask(ctx, session.GetId(), "", "idle"); err != nil {
-				t.Fatalf("RecordTask: %v", err)
+			if err := s.RecordExec(ctx, session.GetId(), "", "idle"); err != nil {
+				t.Fatalf("RecordExec: %v", err)
 			}
 			// Distinct stamps, so the ordering is a fact rather than a tie broken by chance.
 			time.Sleep(2 * time.Millisecond)

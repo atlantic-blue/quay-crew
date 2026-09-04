@@ -33,8 +33,8 @@ func TestAnAddressCarriesTheWholeSessionId(t *testing.T) {
 	id := onlySession(t, client).GetId()
 
 	for _, reference := range []string{id, id[:8]} {
-		if said, err := runKrewe(t, client, "task", "me/house-bills/"+reference, "and again"); err != nil {
-			t.Errorf("krewe task me/house-bills/%s: %v (%s)", reference, err, said)
+		if said, err := runKrewe(t, client, "exec", "me/house-bills/"+reference, "and again"); err != nil {
+			t.Errorf("krewe exec me/house-bills/%s: %v (%s)", reference, err, said)
 		}
 	}
 	// One session throughout. An address that started a second conversation would be worse than a

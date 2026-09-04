@@ -17,7 +17,7 @@ import (
 )
 
 // What a listing says is inside a session's sandbox. The row's status only ever said whether a
-// dispatched task was open, so a conversation somebody opened and left answering read idle, and idle
+// dispatched exec was open, so a conversation somebody opened and left answering read idle, and idle
 // is the word that invites a restart, a drain or a reclaim.
 
 // listOne lists the system's sessions, asking what is in each sandbox, and returns the only one.
@@ -57,10 +57,10 @@ func TestASessionWhoseRuntimeIsRunningDoesNotReadIdle(t *testing.T) {
 	} else if word != display.StatusAwake {
 		t.Fatalf("the listing says %q, want %q", word, display.StatusAwake)
 	}
-	// The row itself is untouched. Status says whether a dispatched task is open and that is still
+	// The row itself is untouched. Status says whether a dispatched exec is open and that is still
 	// true, so an event log and a job controller reading it are unaffected.
 	if listed.GetStatus() != controlplane.StatusIdle {
-		t.Fatalf("the session's own status reads %q, and no task is open, so it should read idle",
+		t.Fatalf("the session's own status reads %q, and no exec is open, so it should read idle",
 			listed.GetStatus())
 	}
 }

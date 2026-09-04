@@ -51,7 +51,7 @@ func TestTheChildKeepsTheCredentialItNeedsToAuthenticate(t *testing.T) {
 
 // The failure the second name exists for. Claude Code removes CLAUDE_CODE_OAUTH_TOKEN from the
 // environment of every process it starts, by that name and no other, so inside a sandbox the hook
-// never holds it: keeping it was keeping something that was never there. A real task on 30 August
+// never holds it: keeping it was keeping something that was never there. A real exec on 30 August
 // 2026 recorded "no answer 770ms" against every message, and the child had exited 1 in 851
 // milliseconds with nothing to authenticate with.
 func TestTheChildIsGivenTheCredentialUnderTheNameTheCommandLineReads(t *testing.T) {

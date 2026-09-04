@@ -44,7 +44,7 @@ Feature: A session is given the skills the system has
     When the operator dispatches "hello" to the project
     Then the sandbox mounts the git skill read only
 
-  # The index is rendered from what the session holds, every task. Taken into the system's context it
+  # The index is rendered from what the session holds, every exec. Taken into the system's context it
   # would be stored, then rendered beside itself, then again, which is exactly what happens to unmarked
   # text in a memory file and is by design. It is marked so it cannot be mistaken for that.
   Scenario: The index is never taken into the system's own context
@@ -59,10 +59,10 @@ Feature: A session is given the skills the system has
   # secret the workspace has not set is left out of the session entirely, and the listing carries the
   # reason for a person to read.
   #
-  # Refusing the whole task was the earlier answer. It made one unusable skill enough to stop every
+  # Refusing the whole exec was the earlier answer. It made one unusable skill enough to stop every
   # conversation in the workspace, which is the wrong trade the moment a skill is held system wide
   # rather than attached one workspace at a time.
-  Scenario: A skill needing a secret the workspace has not set is left out, and the task still runs
+  Scenario: A skill needing a secret the workspace has not set is left out, and the exec still runs
     Given the system has a skill "github" needing the secret "GH_TOKEN"
     When the operator dispatches "hello" to the project
     Then the reply is "you said: hello"
@@ -93,7 +93,7 @@ Feature: A session is given the skills the system has
 
   # A skill needs a secret set on the workspace, and that is the whole of it. There was once a
   # second list naming which secrets were allowed to reach a sandbox at all, which meant a secret
-  # could be set, and its skill attached, and the task still refused for a reason that lived in a
+  # could be set, and its skill attached, and the exec still refused for a reason that lived in a
   # file on the host. Setting the secret is the operator saying yes.
   Scenario: A skill's secret reaches the sandbox with nothing else to set
     Given the system has a skill "github" needing the secret "GH_TOKEN"
@@ -348,7 +348,7 @@ Feature: A session is given the skills the system has
 
   # A build before the index moved wrote it into the session's own memory file. Read back by a build
   # that only knew the mark in the outer file, the whole index was swept into session context, stored
-  # as though the operator had typed it, and rendered again on every task from then on. The mark is
+  # as though the operator had typed it, and rendered again on every exec from then on. The mark is
   # recognised in every file now, and what sits under it is dropped rather than swept.
   Scenario: A skills index left in the session's own memory file by an earlier build is dropped
     Given the system has a skill "git" that says "Branch first."
@@ -360,7 +360,7 @@ Feature: A session is given the skills the system has
 
   # Where the sweep already happened, the stored context is the index and nothing else, so the read
   # back has nothing to save and the store has to be put right where it renders.
-  Scenario: A skills index already swept into session context is cleaned on the next task
+  Scenario: A skills index already swept into session context is cleaned on the next exec
     Given the system has a skill "git" that says "Branch first."
     When the operator dispatches "hello" to the project
     And the session's stored context is only a swept skills index
@@ -381,7 +381,7 @@ Feature: A session is given the skills the system has
   # sandbox as a file and the system never handles the value at all.
   #
   # An ssh key rather than a gpg one: signing with ssh needs one private key file and no agent, no
-  # keyring and no pinentry prompt to hang a task nobody is watching.
+  # keyring and no pinentry prompt to hang an exec nobody is watching.
   Scenario: A workspace mounting a signing key gets sandboxes that sign
     Given the workspace mounts the secret "GIT_SSH_SIGNING_KEY" holding "-----BEGIN OPENSSH PRIVATE KEY-----"
     When the operator dispatches "hello" to the project

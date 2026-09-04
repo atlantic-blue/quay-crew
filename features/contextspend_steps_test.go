@@ -45,23 +45,23 @@ func initializeContextSpendSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the session read (\d+) characters of a file$`,
 		func(ctx context.Context, characters int) error {
-			return conversationGrew(ctx, sessionOfLastTask, readAFile(characters))
+			return conversationGrew(ctx, sessionOfLastExec, readAFile(characters))
 		})
 
 	sc.Step(`^the session ran a command that printed (\d+) characters$`,
 		func(ctx context.Context, characters int) error {
-			return conversationGrew(ctx, sessionOfLastTask, ranACommand(characters))
+			return conversationGrew(ctx, sessionOfLastExec, ranACommand(characters))
 		})
 
 	sc.Step(`^the session wrote (\d+) characters of its own$`,
 		func(ctx context.Context, characters int) error {
-			return conversationGrew(ctx, sessionOfLastTask, wroteItsOwnWords(characters))
+			return conversationGrew(ctx, sessionOfLastExec, wroteItsOwnWords(characters))
 		})
 
 	sc.Step(`^the model says it carries (\d+) tokens of context$`,
 		func(ctx context.Context, tokens int) error {
 			contextSpendFrom(ctx).carried = int64(tokens)
-			return conversationGrew(ctx, sessionOfLastTask)
+			return conversationGrew(ctx, sessionOfLastExec)
 		})
 
 	sc.Step(`^the session reports no breakdown of its context$`, func(ctx context.Context) error {
@@ -198,9 +198,9 @@ func onlyListedSession(ctx context.Context) (*quaycrewv1.Session, error) {
 	return nil, fmt.Errorf("the session this scenario wrote a conversation for is not in the listing")
 }
 
-// sessionOfLastTask is how a scenario reaches the session it dispatched a task to.
-func sessionOfLastTask(ctx context.Context) (string, error) {
-	current, err := worldFrom(ctx).lastTask()
+// sessionOfLastExec is how a scenario reaches the session it dispatched an exec to.
+func sessionOfLastExec(ctx context.Context) (string, error) {
+	current, err := worldFrom(ctx).lastExec()
 	if err != nil {
 		return "", err
 	}

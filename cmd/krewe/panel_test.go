@@ -267,15 +267,15 @@ func TestTheConversationBesideTheConsoleIsTheOneTheCursorIsOn(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "acme")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "task", "one")
-	mustRun(t, client, "task", "two")
+	mustRun(t, client, "exec", "one")
+	mustRun(t, client, "exec", "two")
 
 	sessions, err := client.ListSessions(context.Background(), &quaycrewv1.ListSessionsRequest{})
 	if err != nil {
 		t.Fatalf("listing the sessions: %v", err)
 	}
 	if len(sessions.GetSessions()) < 2 {
-		t.Fatalf("the system holds %d sessions, want the two the tasks made", len(sessions.GetSessions()))
+		t.Fatalf("the system holds %d sessions, want the two the execs made", len(sessions.GetSessions()))
 	}
 	beside := conversationBeside(context.Background(), client)
 

@@ -25,7 +25,7 @@ Eight resources, and everything the system holds is one of them.
 
 **Sessions.** The workers. A container holding one conversation and its history.
 
-**Tasks.** One thing you said to a session, and the reply. Ephemeral: a task is written when it
+**Execs.** One thing you said to a session, and the reply. Ephemeral: an exec is written when it
 starts and nothing survives the process going down.
 
 **Skills.** What the system can do. Imported, then attached to a workspace so its sessions hold them.
@@ -59,7 +59,7 @@ It cannot mint your model credential. So it ends by printing these four commands
 krewe workspace create me
 krewe project create house-bills
 krewe secret set CLAUDE_CODE_OAUTH_TOKEN <from `claude setup-token`>
-krewe task "say pong"
+krewe exec "say pong"
 ```
 
 Then run `krewe` with no arguments to open the console. `make help` lists every other target.

@@ -43,7 +43,7 @@ Feature: Prose written for a person is held to the standard
       | "One. Two things happen. Three is the count. Four comes next. Five is here. Six follows it. Seven is too many."                             |
       | "The gate has refused the command."                                                                                                        |
       | "The session had written the file before the check ran."                                                                                    |
-      | "The task is running."                                                                                                                     |
+      | "The exec is running."                                                                                                                     |
       | "The gate reads the command - then it answers."                                                                                             |
 
   # The other direction, and the one that decides whether this gate is worth attaching. A gate with

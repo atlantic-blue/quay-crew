@@ -356,134 +356,16 @@ func Sessions(client quaycrewv1.ControlPlaneServiceClient) Resource {
 		SortBy:  -1,
 		List:    sessionLister(client, live),
 		Actions: sessionActions(client),
+		Gone:    historyIsGone,
 	}
 }
 
-// Exec is what a session ran: one session, what it was asked, and what came back from each. It is
-// read from the tasks the dispatch path writes, so it answers without starting a container and keeps
-// answering once the sandbox is gone. It has no tool calls and no thinking: opening the conversation
-// is for that, and that is a key here.
-//
-// This is the deepest level of the tree, and the level a person watches something happen on, so the
-// keys that reach the machine live here: a opens the conversation and s opens a shell in the sandbox.
-// Both act on the session this view is scoped to rather than on a row, because a job whose session
-// has produced no task yet lists nothing and still has a container worth opening. Enter is the row's
-// own: it opens the task under the cursor.
-//
-// The view was called tasks, and every word it answered to then answers to it now: tasks, task,
-// history and h all open it. They are in fingers, in notes and in the two keys that descend here, so
-// a word that quietly stopped working is how an operator learns to distrust the rest of the bar.
-func Exec(client quaycrewv1.ControlPlaneServiceClient) Resource {
-	return Resource{
-		Name:    "exec",
-		Aliases: []string{"e", "tasks", "task", "history", "h"},
-		Columns: []Column{
-			{Title: "when", Width: 10, Colour: dim},
-			{Title: "status", Width: 10, Colour: colourOfStatus},
-			{Title: "asked", Width: 34},
-			{Title: "answered", Width: 0, Colour: dim},
-		},
-		// Oldest first, the order it happened in, which is the only order a conversation reads in.
-		SortBy:  0,
-		Actions: workActions(client),
-		List: func(ctx context.Context, session string) ([]Row, error) {
-			if session == "" {
-				return nil, fmt.Errorf(
-					"open the running work from a job or from a session: there is no work to read without one")
-			}
-			resp, err := client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session})
-			if err != nil {
-				return nil, err
-			}
-			rows := make([]Row, 0, len(resp.GetTasks()))
-			for _, task := range resp.GetTasks() {
-				rows = append(rows, turnRow(task))
-			}
-			return rows, nil
-		},
-	}
-}
-
-// workActions are the three keys on the deepest level of the tree: read the task under the cursor,
-// open the conversation, and open a shell in the sandbox it runs in. The last two are the same keys,
-// with the same meaning, that the sessions view already binds, because the thing being acted on is
-// the same thing.
-//
-// The conversation and the shell act on the session the view is scoped to. A row here is one task,
-// and a task has no container to open; the session does. Reading the session off a row would also
-// leave a job whose session has answered nothing with no way in, and that is the job somebody is most
-// likely to be watching.
-//
-// Enter is the exception, because the thing on the row is a task and a reader wants to read the task.
-// Every row opened the same shell before, so the one key that means "this one" acted on something
-// else. The conversation keeps `a`, which it already answered to.
-func workActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
-	return []Action{
-		{
-			Key:   "enter",
-			Label: "Read",
-			Reads: func(row Row) string { return row.Detail },
-		},
-		{
-			Key:     "a",
-			Label:   "Open",
-			OnScope: true,
-			Shell: func(row Row) (*exec.Cmd, error) {
-				return attachCommand(client, row.ID)
-			},
-		},
-		{
-			Key:     "s",
-			Label:   "Shell",
-			OnScope: true,
-			Shell: func(row Row) (*exec.Cmd, error) {
-				return exec.Command("docker", "exec", "-it",
-					"-e", "PS1="+display.ShortID(row.ID)+" $ ", sandbox.ContainerName(row.ID), "sh"), nil
-			},
-		},
-	}
-}
-
-// turnRow is one exchange as a listing row. A failed task shows why it failed where the reply would
-// have been, because that is the answer to what happened.
-func turnRow(task *quaycrewv1.Task) Row {
-	answered := oneLine(task.GetReply())
-	state := StateReady
-	if task.GetStatus() == "failed" {
-		answered, state = oneLine(task.GetFailure()), StateFailed
-	}
-	return Row{
-		ID:     task.GetId(),
-		Parent: task.GetSession(),
-		State:  state,
-		Label:  display.ShortID(task.GetId()),
-		Cells: []string{
-			task.GetOccurredAt().AsTime().Local().Format("15:04:05"),
-			task.GetStatus(),
-			oneLine(task.GetPrompt()),
-			answered,
-		},
-		// The whole of what was said, for a view that can show more than a row.
-		Detail: taskReading(task),
-	}
-}
-
-// taskReading is one task as a person reads it: what was asked, and what came back or why it did not.
-// Neither is flattened or cut here, which is the difference between this and the row: a row holds 34
-// characters of a sentence, and this holds the sentence.
-func taskReading(task *quaycrewv1.Task) string {
-	lines := []string{"asked", task.GetPrompt(), ""}
-	switch task.GetStatus() {
-	case "failed":
-		lines = append(lines, "failed", task.GetFailure())
-	// A task is written when it starts, so the last one in a listing is often still working. Saying
-	// so is the difference between a task in flight and one that answered with nothing.
-	case "running":
-		lines = append(lines, "still running")
-	default:
-		lines = append(lines, "answered", task.GetReply())
-	}
-	return strings.Join(lines, "\n")
+// historyIsGone are the three keys that opened a session's history on the two views that hold
+// sessions. They are in fingers, so each one says where the reading went rather than doing nothing.
+var historyIsGone = Gone{
+	"t": historyIsACommand,
+	"l": historyIsACommand,
+	"h": historyIsACommand,
 }
 
 // oneLine flattens text onto one line, so a reply that runs to paragraphs does not break the table.
@@ -539,16 +421,8 @@ func Archived(client quaycrewv1.ControlPlaneServiceClient) Resource {
 					return err
 				},
 			},
-			{
-				// The same key the live view uses, because an archived session is the one whose
-				// history somebody actually comes looking for. The history is read from the store, so
-				// it needs no container and no restore.
-				Key:     "t",
-				Moved:   []string{"l", "h"},
-				Label:   "History",
-				Descend: "exec",
-			},
 		},
+		Gone: historyIsGone,
 	}
 }
 
@@ -576,7 +450,7 @@ func sessionLister(client quaycrewv1.ControlPlaneServiceClient, from shelf) List
 			return nil, err
 		}
 		// A session carries its workspace id, and an id says nothing to the operator reading the
-		// list. One extra call tasks every one of them into a name. If it fails the rows still
+		// list. One extra call execs every one of them into a name. If it fails the rows still
 		// render, with the id as the fallback, because a listing that refuses to draw because the
 		// names could not be looked up is worse than one that shows ids.
 		workspaces, projects := workspaceNames(ctx, client), projectNames(ctx, client)
@@ -681,18 +555,6 @@ func sessionActions(client quaycrewv1.ControlPlaneServiceClient) []Action {
 				// console never has to know how a sandbox is named or how a resume works.
 				return attachCommand(client, row.ID)
 			},
-		},
-		{
-			// The history, beside opening the conversation. Lowercase and cheap, because looking at
-			// what a session has been doing is something an operator does constantly, and it changes
-			// nothing. The view it opens is called exec now and the key stays on `t`, because a key is
-			// in fingers and the word it was named after moved without it. It was on `l` and `h`, which
-			// are vim's horizontal motion keys, and an action on a motion key is what teaches an
-			// operator to distrust the rest of them.
-			Key:     "t",
-			Moved:   []string{"l", "h"},
-			Label:   "History",
-			Descend: "exec",
 		},
 		{
 			Key:   "s",
@@ -884,7 +746,7 @@ func Stats(client quaycrewv1.ControlPlaneServiceClient) Resource {
 				return nil, err
 			}
 			probed := lastProbed(ctx, client)
-			// In the order they matter when something is wrong: what runs a task, where it runs,
+			// In the order they matter when something is wrong: what runs an exec, where it runs,
 			// what survives a restart, then what is watching.
 			//
 			// A row with no component beside it is a part the system runs no probe against, and it

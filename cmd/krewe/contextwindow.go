@@ -24,7 +24,7 @@ var conversationDir = sandbox.ConversationPath
 // that reports a full disk in place of the conversation is worse than a listing without a share in it.
 //
 // Written only when the number changes, which is almost never: the file is read on every draw and the
-// runtime draws several times a task.
+// runtime draws several times an exec.
 func rememberWindowSize(dir string, size int64) {
 	if size <= 0 || dir == "" {
 		return

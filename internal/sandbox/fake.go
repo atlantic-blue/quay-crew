@@ -23,7 +23,7 @@ type FakeProvider struct {
 	// Created records the configuration of each sandbox actually made, in order, so a test can assert
 	// which session, project and workspace it belongs to and what environment it carries. Adopting an
 	// existing one is not a creation and does not appear here, which is what lets a scenario say a
-	// second task made no second sandbox.
+	// second exec made no second sandbox.
 	Created []Config
 	// Calls records every request, adopted or not, for a test that cares how often it was asked.
 	Calls []Config

@@ -12,53 +12,53 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// beginTask writes a task the moment it starts, and hands back the record it opened so the landing
+// beginExec writes an exec the moment it starts, and hands back the record it opened so the landing
 // can close that same record rather than write a second one.
 //
-// It is written at the start because that is when the operator needs it. A task takes minutes, and a
-// history that only holds finished tasks says nothing at all about the one burning the tokens: the
+// It is written at the start because that is when the operator needs it. An exec takes minutes, and a
+// history that only holds finished execs says nothing at all about the one burning the tokens: the
 // session reads as though it were asked nothing, while the job it was actually asked for is
 // invisible until it lands.
 //
-// It is not exported here. The log carries one record per task, at the end, and a consumer handed a
-// task twice would have to work out which of the two to believe.
-func (s *Server) beginTask(ctx context.Context, session *quaycrewv1.Session, prompt string) *quaycrewv1.TaskEvent {
-	task := &quaycrewv1.TaskEvent{Prompt: prompt, Status: StatusRunning}
-	s.writeTask(ctx, session, task)
-	return task
+// It is not exported here. The log carries one record per exec, at the end, and a consumer handed a
+// exec twice would have to work out which of the two to believe.
+func (s *Server) beginExec(ctx context.Context, session *quaycrewv1.Session, prompt string) *quaycrewv1.ExecEvent {
+	exec := &quaycrewv1.ExecEvent{Prompt: prompt, Status: StatusRunning}
+	s.writeExec(ctx, session, exec)
+	return exec
 }
 
-// landTask closes the record beginTask opened, with what the task came to and what it said. The
+// landExec closes the record beginExec opened, with what the exec came to and what it said. The
 // prompt and the time it started stay as they were written, so the history says when the operator
 // asked rather than when the answer arrived.
 //
-// This is where the task reaches the export, once, whole.
-func (s *Server) landTask(ctx context.Context, session *quaycrewv1.Session, task *quaycrewv1.TaskEvent, landed, reply, failure string) {
+// This is where the exec reaches the export, once, whole.
+func (s *Server) landExec(ctx context.Context, session *quaycrewv1.Session, exec *quaycrewv1.ExecEvent, landed, reply, failure string) {
 	ctx = context.WithoutCancel(ctx)
 	sealed := s.sealedValues(ctx, session)
-	task.Status = landed
-	task.Reply = model.Redact(reply, sealed)
-	task.Failure = model.Redact(failure, sealed)
+	exec.Status = landed
+	exec.Reply = model.Redact(reply, sealed)
+	exec.Failure = model.Redact(failure, sealed)
 
-	if err := s.store.FinishTask(ctx, task.GetId(), task.GetStatus(), task.GetReply(), task.GetFailure()); err != nil {
-		slog.WarnContext(ctx, "a task could not be closed in history", "session", session.GetId(), "error", err)
+	if err := s.store.FinishExec(ctx, exec.GetId(), exec.GetStatus(), exec.GetReply(), exec.GetFailure()); err != nil {
+		slog.WarnContext(ctx, "an exec could not be closed in history", "session", session.GetId(), "error", err)
 	}
 }
 
-// recordHistory writes a task into the store, in the same breath as the task itself, and then
+// recordHistory writes an exec into the store, in the same breath as the exec itself, and then
 // offers it to the export. The store is the truth: history is complete whether or not any broker is
-// configured, reachable, or behind. It never fails the task, because the task already happened, and
+// configured, reachable, or behind. It never fails the exec, because the exec already happened, and
 // a history write that could not land is a warning about the store, which the whole system depends on
 // anyway.
 //
-// The context is detached first: a client hanging up after a long task used to cancel the write and
-// silently lose the record of the very task they were waiting on.
-func (s *Server) recordHistory(ctx context.Context, session *quaycrewv1.Session, event *quaycrewv1.TaskEvent) {
-	s.writeTask(context.WithoutCancel(ctx), session, event)
+// The context is detached first: a client hanging up after a long exec used to cancel the write and
+// silently lose the record of the very exec they were waiting on.
+func (s *Server) recordHistory(ctx context.Context, session *quaycrewv1.Session, event *quaycrewv1.ExecEvent) {
+	s.writeExec(context.WithoutCancel(ctx), session, event)
 }
 
-// writeTask redacts a task, stamps it with where it belongs, and stores it.
-func (s *Server) writeTask(ctx context.Context, session *quaycrewv1.Session, event *quaycrewv1.TaskEvent) {
+// writeExec redacts an exec, stamps it with where it belongs, and stores it.
+func (s *Server) writeExec(ctx context.Context, session *quaycrewv1.Session, event *quaycrewv1.ExecEvent) {
 	ctx = context.WithoutCancel(ctx)
 
 	// What an operator pastes into a conversation can be a credential, and everything recorded here
@@ -71,7 +71,7 @@ func (s *Server) writeTask(ctx context.Context, session *quaycrewv1.Session, eve
 	event.Reply = model.Redact(event.Reply, sealed)
 	event.Failure = model.Redact(event.Failure, sealed)
 
-	// The id is minted here rather than derived from the task, because two tasks can carry the same
+	// The id is minted here rather than derived from the exec, because two execs can carry the same
 	// prompt in the same session and still be two different things that happened.
 	event.Id = store.NewID()
 	event.Session = session.GetId()
@@ -79,13 +79,13 @@ func (s *Server) writeTask(ctx context.Context, session *quaycrewv1.Session, eve
 	event.Project = session.GetProject()
 	event.Handle = session.GetHandle()
 	event.OccurredAt = timestamppb.Now()
-	// The trace the call that ran this task belonged to, which is the same value every log line
+	// The trace the call that ran this exec belonged to, which is the same value every log line
 	// written under it carries. Without it the durable record of what the system did joins to neither
-	// the trace nor the lines: weeks later the logs are gone and this row is all that is left. A task
+	// the trace nor the lines: weeks later the logs are gone and this row is all that is left. An exec
 	// nothing was tracing leaves it empty rather than inventing one. See issue 346.
 	event.TraceId = telemetry.TraceIDFrom(ctx)
 
-	task := &quaycrewv1.Task{
+	exec := &quaycrewv1.Exec{
 		Id:         event.GetId(),
 		Session:    event.GetSession(),
 		Prompt:     event.GetPrompt(),
@@ -95,15 +95,15 @@ func (s *Server) writeTask(ctx context.Context, session *quaycrewv1.Session, eve
 		TraceId:    event.GetTraceId(),
 		OccurredAt: event.GetOccurredAt(),
 	}
-	if err := s.store.AppendTask(ctx, task, event.GetWorkspace(), event.GetProject(), event.GetHandle()); err != nil {
-		slog.WarnContext(ctx, "a task could not be written to history", "session", session.GetId(), "error", err)
+	if err := s.store.AppendExec(ctx, exec, event.GetWorkspace(), event.GetProject(), event.GetHandle()); err != nil {
+		slog.WarnContext(ctx, "an exec could not be written to history", "session", session.GetId(), "error", err)
 	}
 }
 
 // sealedValues is everything the system holds that must never be persisted in the clear, keyed by the
 // name it would be redacted under: every secret the workspace has sealed, whether or not any
 // sandbox was handed it, and the driver's token for a driver session. A name whose value cannot be
-// read is skipped rather than failing the task, because the redactor still catches the published
+// read is skipped rather than failing the exec, because the redactor still catches the published
 // token shape without it.
 func (s *Server) sealedValues(ctx context.Context, session *quaycrewv1.Session) map[string]string {
 	values := s.sealedForWorkspace(ctx, session.GetWorkspace())

@@ -22,7 +22,7 @@ func aSession(t *testing.T) (quaycrewv1.ControlPlaneServiceClient, string) {
 }
 
 // aSessionWatchingTheModel is the same system, keeping hold of the model double, for the case that has
-// to see what a later task was actually run with.
+// to see what a later exec was actually run with.
 func aSessionWatchingTheModel(t *testing.T) (quaycrewv1.ControlPlaneServiceClient, *model.FakeRunner) {
 	t.Helper()
 	runner := &model.FakeRunner{Reply: "ok"}
@@ -32,12 +32,12 @@ func aSessionWatchingTheModel(t *testing.T) (quaycrewv1.ControlPlaneServiceClien
 	})
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "task", "hello")
+	mustRun(t, client, "exec", "hello")
 	return client, runner
 }
 
 // sessionOf is the id of the one session the system has, which is what a session scoped command takes,
-// the same as attach and tasks.
+// the same as attach and execs.
 func sessionOf(t *testing.T, client quaycrewv1.ControlPlaneServiceClient) string {
 	t.Helper()
 	return onlySession(t, client).GetId()[:8]
@@ -59,22 +59,22 @@ func onlySession(t *testing.T, client quaycrewv1.ControlPlaneServiceClient) *qua
 	return listed.GetSessions()[0]
 }
 
-// The one that matters: setting the mode is worth nothing unless the next task runs in it. Every
+// The one that matters: setting the mode is worth nothing unless the next exec runs in it. Every
 // case above stops at what the system reports about itself, and a command that recorded the mode
 // without it reaching the model would pass all of them.
-func TestTheNextTaskRunsInTheModeThatWasSet(t *testing.T) {
+func TestTheNextExecRunsInTheModeThatWasSet(t *testing.T) {
 	client, runner := aSessionWatchingTheModel(t)
 	session := sessionOf(t, client)
 
 	if was := runner.LastReq.PermissionMode; was != model.PermissionAcceptEdits {
-		t.Fatalf("the first task ran in %q, want the mode a session is born in", was)
+		t.Fatalf("the first exec ran in %q, want the mode a session is born in", was)
 	}
 
 	mustRun(t, client, "mode", session, "dangerous")
-	mustRun(t, client, "task", addressOf(t, client), "and again")
+	mustRun(t, client, "exec", addressOf(t, client), "and again")
 
 	if was := runner.LastReq.PermissionMode; was != model.PermissionBypass {
-		t.Fatalf("the task after the change ran in %q, want %q", was, model.PermissionBypass)
+		t.Fatalf("the exec after the change ran in %q, want %q", was, model.PermissionBypass)
 	}
 }
 

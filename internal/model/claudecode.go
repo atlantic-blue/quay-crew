@@ -15,30 +15,30 @@ import (
 
 // ClaudeCodeOAuthTokenEnv is the environment variable the Claude Code CLI reads a long lived
 // subscription token from (minted by `claude setup-token`). The control plane stores this per workspace
-// as a secret and injects it into the sandbox at task time.
+// as a secret and injects it into the sandbox at exec time.
 const ClaudeCodeOAuthTokenEnv = "CLAUDE_CODE_OAUTH_TOKEN"
 
 // ModelTokenEnv carries the same subscription token under a second name, and it exists because of
 // how the CLI treats the first one. Claude Code removes CLAUDE_CODE_OAUTH_TOKEN from the environment
-// of every process it starts, by that name and no other, so anything the task starts inherits no
+// of every process it starts, by that name and no other, so anything the exec starts inherits no
 // credential: a hook fired on a message got nine other CLAUDE_ variables and not that one. On a
 // laptop that costs nothing, because a logged in install keeps its credential in a file. A sandbox
 // has no such file, so the hook could never authenticate, and it told nobody.
 //
-// So the system writes the value twice. This name survives into what the task starts, the same way
+// So the system writes the value twice. This name survives into what the exec starts, the same way
 // QC_TOKEN and GH_TOKEN already do, and the hook reads it when the first name is missing.
 const ModelTokenEnv = "QUAY_MODEL_TOKEN"
 
-// ClaudeCodeRunner runs tasks by driving the Claude Code CLI, under your subscription (no API cost).
+// ClaudeCodeRunner runs execs by driving the Claude Code CLI, under your subscription (no API cost).
 // It runs the CLI inside the session's sandbox it is handed, so the run is isolated and the CLI's
-// state persists across the session's tasks. It streams JSON events, captures the session id so the
+// state persists across the session's execs. It streams JSON events, captures the session id so the
 // session can be resumed, and returns the result text.
 type ClaudeCodeRunner struct {
 	// Bin is the CLI binary; empty defaults to "claude".
 	Bin string
 	// DefaultWorkdir is used when a Request does not set Workdir.
 	DefaultWorkdir string
-	// Model is which model a task runs against, as an alias for the newest of a tier ("opus") or a
+	// Model is which model an exec runs against, as an alias for the newest of a tier ("opus") or a
 	// full name ("claude-opus-5"). Empty passes no --model, which leaves the choice to the CLI, and
 	// the CLI chooses Sonnet.
 	Model string
@@ -50,7 +50,7 @@ func NewClaudeCodeRunner() *ClaudeCodeRunner { return &ClaudeCodeRunner{Bin: "cl
 // compile time check.
 var _ Runner = (*ClaudeCodeRunner)(nil)
 
-// envList tasks the request env into the "KEY=value" form the sandbox expects, sorted so the exec is
+// envList execs the request env into the "KEY=value" form the sandbox expects, sorted so the exec is
 // deterministic.
 func envList(env map[string]string) []string {
 	if len(env) == 0 {
@@ -76,26 +76,26 @@ func buildArgs(req Request, model string) []string {
 	args := []string{"-p", req.Text, "--output-format", "stream-json", "--verbose", "--permission-mode", mode}
 	// Which model, when the system has been told. Left off when it has not, so a system can always fall
 	// back to whatever the CLI picks for itself: a name the CLI stops accepting would otherwise fail
-	// every task with no way to configure around it.
+	// every exec with no way to configure around it.
 	if model != "" {
 		args = append(args, "--model", model)
 	}
-	// Which conversation, and which of the two ways of naming one. A first task used to carry neither,
-	// so the runtime named the conversation itself and told nobody until the task was over, and a
+	// Which conversation, and which of the two ways of naming one. A first exec used to carry neither,
+	// so the runtime named the conversation itself and told nobody until the exec was over, and a
 	// session opened while it worked opened an empty conversation beside the one doing the work.
 	if req.ModelSessionID != "" {
 		args = append(args, conversationFlag(req.ConversationStarted), req.ModelSessionID)
 	}
 	// Additional settings, so the operator's own file inside the sandbox still applies and the system's
 	// hooks are added to it rather than replacing it. Left off when there are none, because a path to
-	// a file that is not there is a task that fails before it starts.
+	// a file that is not there is an exec that fails before it starts.
 	if req.Settings != "" {
 		args = append(args, "--settings", req.Settings)
 	}
 	return args
 }
 
-// Run runs one task inside the session's sandbox and parses its streamed output.
+// Run runs one exec inside the session's sandbox and parses its streamed output.
 func (r *ClaudeCodeRunner) Run(ctx context.Context, box sandbox.Sandbox, req Request) (Response, error) {
 	if box == nil {
 		return Response{}, fmt.Errorf("model: no sandbox provided")
@@ -126,7 +126,7 @@ func (r *ClaudeCodeRunner) Run(ctx context.Context, box sandbox.Sandbox, req Req
 	return resp, nil
 }
 
-// why explains a task that failed, in the order the explanations are worth anything.
+// why explains an exec that failed, in the order the explanations are worth anything.
 //
 // Every model failure used to read "run exited: exit status 1", which is the same sentence for an
 // expired token, a network failure, a missing binary and the model refusing the request. The reason
@@ -162,7 +162,7 @@ const killedStatus = 137
 const killed = "run exited: exit status 137, which is a kill rather than a failure, and nothing " +
 	"killed this way gets to say so. Two things do it. The kernel takes a process for memory, which " +
 	"krewe room reports from inside the sandbox: it says what memory is there and what has already " +
-	"been killed in it. Or the container went away underneath the task, which an upgrade or a stop " +
+	"been killed in it. Or the container went away underneath the exec, which an upgrade or a stop " +
 	"does."
 
 // exitStatus is anything that can say what status a command exited with. *exec.ExitError is one,
@@ -204,14 +204,14 @@ type streamEvent struct {
 	Type      string `json:"type"`
 	SessionID string `json:"session_id"`
 	Result    string `json:"result"`
-	// IsError and APIErrorStatus are how the model says the task did not do what was asked. They
+	// IsError and APIErrorStatus are how the model says the exec did not do what was asked. They
 	// arrive on the result event, on standard output, in the same stream as a reply: the reason a
-	// task failed is usually here rather than on the error stream, and it was being parsed past.
+	// exec failed is usually here rather than on the error stream, and it was being parsed past.
 	IsError        bool `json:"is_error"`
 	APIErrorStatus int  `json:"api_error_status"`
 	// TotalCostUSD and Usage arrive on the result event and were being read past. The stream has
 	// carried them the whole time, so the system was throwing away the only number that says what a
-	// task cost.
+	// exec cost.
 	TotalCostUSD *float64 `json:"total_cost_usd"`
 	Usage        *struct {
 		InputTokens              int64 `json:"input_tokens"`
@@ -228,12 +228,12 @@ type streamEvent struct {
 }
 
 // parseStream reads streamed JSON events and extracts the session id, the final reply, and the
-// model's own account of refusing the task. It prefers the "result" event's text and falls back to
+// model's own account of refusing the exec. It prefers the "result" event's text and falls back to
 // the concatenated assistant text.
 // It also keeps whatever arrived on that stream and was not a stream event at all. Something running
 // in place of the model writes there too, and it is the only account of the failure there is: the
 // Docker command line reports "executable file not found" on standard output rather than on the error
-// stream, so a task against an image with no model in it explained itself as an exit status until
+// stream, so an exec against an image with no model in it explained itself as an exit status until
 // this was kept. Found by running it, not by reading it.
 func parseStream(r io.Reader) (Response, string, string, error) {
 	var resp Response
@@ -289,7 +289,7 @@ func parseStream(r io.Reader) (Response, string, string, error) {
 			if event.IsError {
 				refused = event.Result
 				if refused == "" {
-					refused = "the model refused the task and gave no reason"
+					refused = "the model refused the exec and gave no reason"
 				}
 				if event.APIErrorStatus != 0 {
 					refused = fmt.Sprintf("%s (status %d)", refused, event.APIErrorStatus)
@@ -313,7 +313,7 @@ const unparsedKept = 4 << 10
 // conversationFlag is how a conversation is named on the command line: started under a name the
 // runtime has not seen, resumed when it has. The sandbox script that opens a conversation for an
 // operator chooses between the same two, on the same question, so a conversation reached by typing
-// and a conversation reached by dispatching a task are one conversation.
+// and a conversation reached by dispatching an exec are one conversation.
 func conversationFlag(started bool) string {
 	if started {
 		return "--resume"
@@ -325,7 +325,7 @@ func conversationFlag(started bool) string {
 // output stream, and returns what to say when they differ. Empty means nothing to say.
 //
 // The identifier in the stream used to be where the name came from, which is why it arrived too late
-// to be any use. It is a check now: the system hands the name down before the task starts, so a stream
+// to be any use. It is a check now: the system hands the name down before the exec starts, so a stream
 // carrying a different one means the runtime ignored the flag, and everything the system reports about
 // that session afterwards, its history and what it cost, is being read from a transcript nobody wrote.
 // Both names are in the sentence, because the job is under the second one.

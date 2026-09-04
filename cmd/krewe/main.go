@@ -75,8 +75,8 @@ func inAContainer() bool {
 // address the operator did not choose and cannot fix, which reads as the system being down. What is
 // actually true is that nothing told this session where to go, and that cannot be set from in here.
 //
-// A task is told where the system is when it runs a job, so the ordinary reason to see this
-// is a task that is running none. The other reason is a system whose own address is unset.
+// An exec is told where the system is when it runs a job, so the ordinary reason to see this
+// is an exec that is running none. The other reason is a system whose own address is unset.
 func unreachable(err error, told string, sandboxed bool) error {
 	if err == nil || !sandboxed || told != "" {
 		return err
@@ -85,8 +85,8 @@ func unreachable(err error, told string, sandboxed bool) error {
 		return err
 	}
 	return fmt.Errorf("this session was not told where the system is, so there is nothing at the "+
-		"address it fell back to. A task is told where the system is when it runs a job, and what "+
-		"it may do there comes from that job's role. So either this task is running none, or the "+
+		"address it fell back to. An exec is told where the system is when it runs a job, and what "+
+		"it may do there comes from that job's role. So either this exec is running none, or the "+
 		"system has no address of its own: QC_SANDBOX_CONTROL_PLANE on the control plane, which is "+
 		"the system's configuration file, ~/.krewe/env on a compose stack. (%w)", err)
 }
@@ -127,7 +127,7 @@ func kreweOpens(args []string, terminal bool) opening {
 func dispatch(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, addr string) error {
 	switch kreweOpens(args, isatty.IsTerminal(os.Stdout.Fd())) {
 	case aCommand:
-		// Before the command, so an operator watching a task run sees it rather than finding it
+		// Before the command, so an operator watching an exec run sees it rather than finding it
 		// above the answer afterwards. The console says which build the system is in its own header
 		// and which part of it is down in its stats view, and a line drawn over a full screen view
 		// would corrupt it.

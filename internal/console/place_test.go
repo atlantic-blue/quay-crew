@@ -122,7 +122,7 @@ func TestAConsoleWithNothingRememberedOpensAtTheTop(t *testing.T) {
 	}
 }
 
-// The way back has to work from a resumed place too. A console that walked to the tasks of a session on the
+// The way back has to work from a resumed place too. A console that walked to the execs of a session on the
 // way up, and then cannot come back, has stranded whoever opened it.
 func TestTheWayBackWorksFromAPlaceTheConsoleResumedInto(t *testing.T) {
 	client := aSystemWithOneOfEverything()

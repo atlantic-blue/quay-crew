@@ -33,7 +33,7 @@ type Config struct {
 	RulesFile        string
 	Skip             []string
 	// LastRunFile is overwritten with one line per run, which is how you tell a hook that fired and
-	// stayed quiet from one that never fired. Empty tasks it off, as does an empty RulesFile.
+	// stayed quiet from one that never fired. Empty turns it off, as does an empty RulesFile.
 	LastRunFile string
 }
 

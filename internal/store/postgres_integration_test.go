@@ -156,16 +156,16 @@ func truncate(t *testing.T) {
 	// when the next one listed what that workspace held. The system's own are keyed by name alone, so
 	// they belong here for the same reason as skills.
 	if _, err := pool.Exec(ctx,
-		// Tasks are named here for the same reason as skills. A task is keyed by its own id and
-		// survived a truncate that claimed to leave nothing behind, so one subtest's task-0 was still
-		// there when the next one wrote its own, and AppendTask's "on conflict do nothing" dropped it
-		// silently. What that looked like was a case reading zero tasks it had just written.
+		// Execs are named here for the same reason as skills. An exec is keyed by its own id and
+		// survived a truncate that claimed to leave nothing behind, so one subtest's exec-0 was still
+		// there when the next one wrote its own, and AppendExec's "on conflict do nothing" dropped it
+		// silently. What that looked like was a case reading zero execs it had just written.
 		//
 		// Session events are the same shape once more. They are keyed by their own id and reference
 		// nothing, so the cascade cannot reach them, and a case that counts what the whole system has
 		// seen was counting another test's sessions. It passed for as long as no test file sorting
 		// before this one happened to dispatch anything.
-		`truncate sessions, tasks, session_events, channels, workspaces, skills, hooks, secrets, system_secrets, contexts restart identity cascade`); err != nil {
+		`truncate sessions, execs, session_events, channels, workspaces, skills, hooks, secrets, system_secrets, contexts restart identity cascade`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }
@@ -260,7 +260,7 @@ func TestRenameMigrationKeepsExistingRows(t *testing.T) {
 		t.Fatalf("the session belongs to project %q, want the adopting project %q", session.GetProject(), adopted[0].GetId())
 	}
 
-	// The session must still resolve to the same session, or the next task starts a new conversation.
+	// The session must still resolve to the same session, or the next exec starts a new conversation.
 	same, _, err := migrated.FindOrCreateSession(ctx, adopted[0].GetId(), "session-1", store.Birth{})
 	if err != nil {
 		t.Fatalf("FindOrCreateSession after the rename: %v", err)
@@ -299,7 +299,7 @@ func dropEverything(t *testing.T) {
 
 // TestTheSubscriptionTokenSurvivesARestart is the whole point of keeping secrets in the database.
 //
-// Every restart of the stack lost the token, so the next task failed with nothing useful to say and
+// Every restart of the stack lost the token, so the next exec failed with nothing useful to say and
 // the operator had to mint and set one again before anything worked. This closes a second store over
 // the same database, which is what a restarted control plane is from the outside.
 func TestTheSubscriptionTokenSurvivesARestart(t *testing.T) {

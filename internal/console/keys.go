@@ -333,6 +333,12 @@ func (m Model) act(key string) (Model, tea.Cmd) {
 			key, strings.ToLower(action.Label), action.Key), true
 		return m, nil
 	}
+	// A key whose whole subject left the console. It says what to type at the command line instead,
+	// because there is nothing on this screen to send anybody to.
+	if instead, gone := m.active.Gone[key]; gone {
+		m.err, m.held = fmt.Errorf("%s is gone from the console: %s", key, instead), true
+		return m, nil
+	}
 	// A key that acts on the view's scope is answered before the cursor is read, because the case it
 	// exists for is a listing with nothing in it to put a cursor on.
 	for _, action := range m.active.Actions {
@@ -517,7 +523,7 @@ func (m Model) descendInto(name string, row Row) (Model, tea.Cmd) {
 		return m, nil
 	}
 	// What the child is scoped by, which is the row itself everywhere except jobs: a job descends
-	// into its session's tasks, and a job with no session yet says so rather than opening an empty
+	// into its session's execs, and a job with no session yet says so rather than opening an empty
 	// listing under a heading that promises one.
 	scope := row.ID
 	if m.active.DrillBy != nil {

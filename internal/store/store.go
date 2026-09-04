@@ -29,17 +29,17 @@ import (
 // A conversation is unbounded and a terminal is not, so asking for everything gets the most recent
 // slice of it.
 const (
-	defaultTaskLimit = 50
-	maxTaskLimit     = 500
+	defaultExecLimit = 50
+	maxExecLimit     = 500
 )
 
-// TaskLimit applies the default when nothing was asked for and the ceiling when too much was.
-func TaskLimit(limit int) int {
+// ExecLimit applies the default when nothing was asked for and the ceiling when too much was.
+func ExecLimit(limit int) int {
 	switch {
 	case limit <= 0:
-		return defaultTaskLimit
-	case limit > maxTaskLimit:
-		return maxTaskLimit
+		return defaultExecLimit
+	case limit > maxExecLimit:
+		return maxExecLimit
 	default:
 		return limit
 	}
@@ -54,9 +54,9 @@ var ErrNotFound = errors.New("store: not found")
 const StatusReclaimed = "reclaimed"
 
 // holdingStatuses are the states a session can be in, still hold a container, and still be nothing's
-// to hold open: waiting for job, or holding a failed last task.
+// to hold open: waiting for job, or holding a failed last exec.
 //
-// "running" is absent because a task is in flight. "stopped" is absent because an operator put the
+// "running" is absent because an exec is in flight. "stopped" is absent because an operator put the
 // session down, and a system that reclaimed what somebody halted would be overwriting a decision with
 // bookkeeping. "reclaimed" is absent because the container has already gone, and mixing it in here is
 // what starved the reclaim: see IdleSandboxes.
@@ -93,14 +93,14 @@ type ImportedHook struct {
 // Both fields are read once, when the row is written, and ignored for a session that already exists.
 // A session's sandbox is born with its capabilities and never drifts, and these are the same
 // statement one level up: changing the system's configuration must not widen a conversation already
-// running, and a role's boundary must hold for every task of the session rather than for the first.
+// running, and a role's boundary must hold for every exec of the session rather than for the first.
 type Birth struct {
-	// Mode is what the session's tasks may do without asking, from the system's configuration. An
+	// Mode is what the session's execs may do without asking, from the system's configuration. An
 	// unknown or empty one is the mode every session had before this was configurable, so a system
 	// that says nothing does not change under an upgrade.
 	Mode string
 	// Title is what to call the session, from whoever dispatched it, so the name is on the row before
-	// the first task runs. Empty for a caller that has no name for the conversation yet.
+	// the first exec runs. Empty for a caller that has no name for the conversation yet.
 	Title string
 }
 
@@ -154,9 +154,9 @@ type Store interface {
 	SessionSkills(ctx context.Context, id string) (string, error)
 	// FindOrCreateDriver returns the project's driver, one per project, creating it on first open.
 	FindOrCreateDriver(ctx context.Context, project string) (*quaycrewv1.Session, error)
-	// RecordTask leaves the stored handle alone when modelSessionID is empty, so a failed task cannot
+	// RecordExec leaves the stored handle alone when modelSessionID is empty, so a failed exec cannot
 	// erase it.
-	RecordTask(ctx context.Context, id, modelSessionID, status string) error
+	RecordExec(ctx context.Context, id, modelSessionID, status string) error
 	GetSession(ctx context.Context, id string) (*quaycrewv1.Session, error)
 	// ListSessions returns sessions last moved first: put away if they were, last touched otherwise,
 	// which is the clock a listing's age column shows. The order is decided here rather than by each
@@ -165,7 +165,7 @@ type Store interface {
 	StopSession(ctx context.Context, id string) error
 	// ReclaimSession records that the system took a session's container back: the status becomes
 	// reclaimed and the moment is stamped. Nothing else moves. The conversation handle, the workspace's
-	// conversation store and the project's files are all untouched, so the next task builds a fresh
+	// conversation store and the project's files are all untouched, so the next exec builds a fresh
 	// container over the same state and the conversation carries on.
 	//
 	// It is not a stop. A stop is somebody's decision, and a session that went quiet must never read
@@ -195,15 +195,15 @@ type Store interface {
 	ArchiveSession(ctx context.Context, id string) error
 	// RestoreSession brings an archived session back into the default listing.
 	RestoreSession(ctx context.Context, id string) error
-	// SetPermissionMode records what a session's tasks may do without asking. Whether the mode is one
+	// SetPermissionMode records what a session's execs may do without asking. Whether the mode is one
 	// the model understands is the control plane's question, not the store's.
 	SetPermissionMode(ctx context.Context, id, mode string) error
-	// SetDescription records what the system observed a session to be, and how many tasks it had when
+	// SetDescription records what the system observed a session to be, and how many execs it had when
 	// that was written, so the two can never disagree about how current the description is.
-	SetDescription(ctx context.Context, id, description string, atTask int) error
-	// CountTasks is how many tasks a session has had, which is what decides whether a description has
+	SetDescription(ctx context.Context, id, description string, atExec int) error
+	// CountExecs is how many execs a session has had, which is what decides whether a description has
 	// fallen behind the conversation.
-	CountTasks(ctx context.Context, session string) (int, error)
+	CountExecs(ctx context.Context, session string) (int, error)
 	// SetLabel records what the operator calls a session. Empty clears it, which is the only way back
 	// to the identifier, so it is a value rather than an absence.
 	SetLabel(ctx context.Context, id, label string) error
@@ -279,20 +279,20 @@ type Store interface {
 	// SystemHooks returns what the system holds, at the versions it pinned, files included.
 	SystemHooks(ctx context.Context) ([]ImportedHook, error)
 
-	// AppendTask records one task of a session's history, and is safe to call twice with the same
-	// task: a caller retrying a write it is not sure landed must leave one task, so a record it has
-	// already written must not double it. The task's Id is what makes that possible.
-	AppendTask(ctx context.Context, task *quaycrewv1.Task, workspace, project, session string) error
-	// FinishTask writes what came of a task into the record its start opened, and leaves the rest
-	// of that record alone. A task is written when it starts, so what a session was asked is
+	// AppendExec records one exec of a session's history, and is safe to call twice with the same
+	// exec: a caller retrying a write it is not sure landed must leave one exec, so a record it has
+	// already written must not double it. The exec's Id is what makes that possible.
+	AppendExec(ctx context.Context, exec *quaycrewv1.Exec, workspace, project, session string) error
+	// FinishExec writes what came of an exec into the record its start opened, and leaves the rest
+	// of that record alone. An exec is written when it starts, so what a session was asked is
 	// visible while it works; this is the other half of that, the same row closed.
 	//
-	// A task the store does not hold is not an error. The task itself already happened, and the
-	// operator has its result, so a missing row must not come back as a failure of the task.
-	FinishTask(ctx context.Context, id, status, reply, failure string) error
+	// An exec the store does not hold is not an error. The exec itself already happened, and the
+	// operator has its result, so a missing row must not come back as a failure of the exec.
+	FinishExec(ctx context.Context, id, status, reply, failure string) error
 
 	// AppendSessionEvent records one thing that happened to a session, and is safe to call twice with
-	// the same event for the same reason AppendTask is: the event's Id is what makes a repeat harmless.
+	// the same event for the same reason AppendExec is: the event's Id is what makes a repeat harmless.
 	AppendSessionEvent(ctx context.Context, event *quaycrewv1.SessionEvent) error
 	// ListSessionEvents returns a session's lifecycle oldest first, capped at limit, so it reads the
 	// way it happened. An empty session asks for the whole system's, which is what a view of what is
@@ -303,9 +303,9 @@ type Store interface {
 	// said. Neither is a movement of the job: the job ended when it ended, and what happened to the
 	// work afterwards happened on the forge.
 
-	// ListTasks returns a session's history oldest first, capped at limit, so a conversation reads
+	// ListExecs returns a session's history oldest first, capped at limit, so a conversation reads
 	// the way it happened. A limit of zero or less means the default.
-	ListTasks(ctx context.Context, session string, limit int) ([]*quaycrewv1.Task, error)
+	ListExecs(ctx context.Context, session string, limit int) ([]*quaycrewv1.Exec, error)
 
 	// Probe writes, so a caller can prove the store still takes one. A system whose reads all answer
 	// and whose writes never land looks healthy from every listing, which is how a control plane that

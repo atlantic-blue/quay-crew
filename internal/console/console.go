@@ -23,7 +23,7 @@ func NewDefaultRegistry(client quaycrewv1.ControlPlaneServiceClient) (*Registry,
 	if client == nil {
 		return nil, fmt.Errorf("console: nil control plane client")
 	}
-	registry, err := NewRegistry(Sessions(client), Exec(client), Archived(client), Projects(client),
+	registry, err := NewRegistry(Sessions(client), Archived(client), Projects(client),
 		Workspaces(client), Contexts(client), Secrets(client), Skills(client),
 		Hooks(client), Stats(client))
 	if err != nil {
@@ -47,10 +47,20 @@ var movedViews = map[string]string{
 	"f":            featuresAreACommand,
 	"feature":      featuresAreACommand,
 	"capabilities": featuresAreACommand,
+	"e":            historyIsACommand,
+	"exec":         historyIsACommand,
+	"execs":        historyIsACommand,
+	"history":      historyIsACommand,
+	"h":            historyIsACommand,
 }
 
 // featuresAreACommand is what to type instead of the view that went.
 const featuresAreACommand = "what this build does is a command now, so type features"
+
+// historyIsACommand is what to type instead of the view that read a session's execs. The console
+// shows what is running; what a session already ran is read at the command line, where the whole of
+// an answer fits and a row of a table does not.
+const historyIsACommand = "read it with krewe exec list <session>"
 
 // moved says whether a word the console used to open has gone, and what to type instead of it.
 func moved(typed string) (string, bool) {

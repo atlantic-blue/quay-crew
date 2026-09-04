@@ -18,7 +18,7 @@ import (
 // Docker is a double, written as a program on the path, because make calls docker by name and there
 // is no other way to answer it. So these prove which commands make runs and in what order, and they
 // deliberately do not prove that a real daemon brings the compose file up. That is the containers
-// job in continuous integration, which boots the stack and dispatches a task for real.
+// job in continuous integration, which boots the stack and dispatches an exec for real.
 
 type installWorld struct {
 	// home is KREWE_HOME, bin is BINDIR, and stubs holds the docker double and the log of its calls.

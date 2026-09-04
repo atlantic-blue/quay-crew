@@ -9,17 +9,17 @@ import (
 	"github.com/cucumber/godog"
 )
 
-// Steps for the one word that sends a task, and for the three words it replaced.
+// Steps for the one word that sends an exec, and for the words it replaced.
 //
 // They run the real tool through the harness in tool_steps_test.go, because what is specified here
 // is what a caller receives: which stream a thing went to, and what the exit status was. A refusal
 // that exits zero is the failure this specification exists to catch, and neither the stream nor the
 // status exists inside the test process.
 
-type taskWordKey struct{}
+type execWordKey struct{}
 
-// taskWordWorld is what one scenario sent, and to which session.
-type taskWordWorld struct {
+// execWordWorld is what one scenario sent, and to which session.
+type execWordWorld struct {
 	sessionID string
 	handle    string
 	reply     string
@@ -27,27 +27,27 @@ type taskWordWorld struct {
 	message string
 }
 
-func taskWordFrom(ctx context.Context) *taskWordWorld {
-	t, _ := ctx.Value(taskWordKey{}).(*taskWordWorld)
+func execWordFrom(ctx context.Context) *execWordWorld {
+	t, _ := ctx.Value(execWordKey{}).(*execWordWorld)
 	return t
 }
 
-func initializeTaskWordSteps(sc *godog.ScenarioContext) {
+func initializeExecWordSteps(sc *godog.ScenarioContext) {
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
-		return context.WithValue(ctx, taskWordKey{}, &taskWordWorld{}), nil
+		return context.WithValue(ctx, execWordKey{}, &execWordWorld{}), nil
 	})
 
 	// One step for every shape, so the specification names the words a person actually types and a
 	// word that is gone is driven exactly the way a person's fingers would drive it.
 	sc.Step(`^the caller types "([^"]*)" against the project with "([^"]*)"$`,
 		func(ctx context.Context, typed, text string) error {
-			taskWordFrom(ctx).message = text
+			execWordFrom(ctx).message = text
 			args := append(strings.Fields(typed), whereTheProjectIs(ctx), text)
 			return runTool(ctx, args...)
 		})
 
 	sc.Step(`^a session that was sent "([^"]*)"$`, func(ctx context.Context, text string) error {
-		w, t := worldFrom(ctx), taskWordFrom(ctx)
+		w, t := worldFrom(ctx), execWordFrom(ctx)
 		resp, err := w.client.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: w.projectID, Text: text})
 		if err != nil {
 			return err
@@ -56,20 +56,20 @@ func initializeTaskWordSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the caller reads that session's tasks back$`, func(ctx context.Context) error {
-		t := taskWordFrom(ctx)
+	sc.Step(`^the caller reads that session's execs back$`, func(ctx context.Context) error {
+		t := execWordFrom(ctx)
 		if t.handle == "" {
 			return fmt.Errorf("this scenario sent nothing, so there is no session to read back")
 		}
-		return runTool(ctx, "task", "list", t.handle)
+		return runTool(ctx, "exec", "list", t.handle)
 	})
 
 	sc.Step(`^the caller names that session with nothing to say$`, func(ctx context.Context) error {
-		t := taskWordFrom(ctx)
+		t := execWordFrom(ctx)
 		if t.handle == "" {
 			return fmt.Errorf("this scenario sent nothing, so there is no session to name")
 		}
-		return runTool(ctx, "task", t.handle[:8])
+		return runTool(ctx, "exec", t.handle[:8])
 	})
 
 	sc.Step(`^standard output carries the reply$`, func(ctx context.Context) error {
@@ -96,7 +96,7 @@ func initializeTaskWordSteps(sc *godog.ScenarioContext) {
 	// The one that matters most, and the one a test for the replacement never covers: a removed word
 	// whose value is absorbed into the next argument reads as a command that worked.
 	sc.Step(`^standard error does not carry the message$`, func(ctx context.Context) error {
-		t := taskWordFrom(ctx)
+		t := execWordFrom(ctx)
 		if t.message == "" {
 			return fmt.Errorf("this scenario sent no message, so there is nothing to look for")
 		}
@@ -120,17 +120,17 @@ func initializeTaskWordSteps(sc *godog.ScenarioContext) {
 	})
 
 	sc.Step(`^that session was sent nothing more$`, func(ctx context.Context) error {
-		w, t := worldFrom(ctx), taskWordFrom(ctx)
-		tasks, err := w.client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: t.sessionID})
+		w, t := worldFrom(ctx), execWordFrom(ctx)
+		execs, err := w.client.ListExecs(ctx, &quaycrewv1.ListExecsRequest{Session: t.sessionID})
 		if err != nil {
 			return err
 		}
-		if len(tasks.GetTasks()) != 1 {
-			return fmt.Errorf("the session holds %d tasks, want the one it was sent",
-				len(tasks.GetTasks()))
+		if len(execs.GetExecs()) != 1 {
+			return fmt.Errorf("the session holds %d execs, want the one it was sent",
+				len(execs.GetExecs()))
 		}
 		// The identifier reaching the model as a message is the whole defect, so look for it by name.
-		if prompt := tasks.GetTasks()[0].GetPrompt(); strings.Contains(prompt, t.handle[:8]) {
+		if prompt := execs.GetExecs()[0].GetPrompt(); strings.Contains(prompt, t.handle[:8]) {
 			return fmt.Errorf("the session's identifier was sent as a message: %q", prompt)
 		}
 		return nil

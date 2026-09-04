@@ -15,23 +15,23 @@ import (
 // FakeRunner is a Runner for tests. It records the last request and returns a canned response.
 type FakeRunner struct {
 	Reply string
-	// Exact answers with Reply and nothing else, whatever the task asked for. It is how a test says "a
+	// Exact answers with Reply and nothing else, whatever the exec asked for. It is how a test says "a
 	// session that did not do as it was told", which is the only way to write the sad path of a rule
 	// the double otherwise follows.
 	Exact     bool
 	SessionID string
 	Err       error
 	LastReq   Request
-	// Takes is how long a task pretends to take. Zero is instant, which is right for almost every
-	// test and wrong for any test about something happening while a task is under way: with an
+	// Takes is how long an exec pretends to take. Zero is instant, which is right for almost every
+	// test and wrong for any test about something happening while an exec is under way: with an
 	// instant model a whole automation finishes before a second command can be typed, and a test
 	// of stopping one would be racing rather than testing.
 	Takes time.Duration
-	// Gate holds a task open until it is closed. Same purpose as Takes and none of its guesswork: a
+	// Gate holds an exec open until it is closed. Same purpose as Takes and none of its guesswork: a
 	// test that waits for a duration is a test that passes on a fast machine, and the thing being
-	// tested here is what is true *while* a task runs. Nil runs straight through.
+	// tested here is what is true *while* an exec runs. Nil runs straight through.
 	Gate chan struct{}
-	// Started is closed once, when the first task begins, so a test can know a task is under way
+	// Started is closed once, when the first exec begins, so a test can know an exec is under way
 	// rather than assume it by the time it took to ask.
 	Started chan struct{}
 
@@ -78,12 +78,12 @@ func (f *FakeRunner) Run(ctx context.Context, _ sandbox.Sandbox, req Request) (R
 // a double cannot import what imports it. internal/job holds the two together in a test.
 const OutcomeMarker = "Outcome:"
 
-// FakeOutcome is the word this double states when the task it was given asked for one. It is
+// FakeOutcome is the word this double states when the exec it was given asked for one. It is
 // deliberately the ordinary one: a test about a session that states nothing, or something else, sets
 // Reply itself.
 const FakeOutcome = "proved"
 
-// UnderstandingAsk is the phrase a task carries when it asks a session what it understood before it
+// UnderstandingAsk is the phrase an exec carries when it asks a session what it understood before it
 // plans, and UnderstandingMarker opens the first line of what comes back. Both are spelled here
 // because internal/job imports this package and a double cannot import what imports it. internal/job
 // holds them together in a test, and holds this double's reading to its own reader.
@@ -96,7 +96,7 @@ const (
 //
 // It is the same rule the outcome line follows: a job that states the sentence is asked what it
 // understood before anything else, so a double that answered its plan to that question would make
-// every test about a planned job into a test about the double ignoring its task. A test about a
+// every test about a planned job into a test about the double ignoring its exec. A test about a
 // session that says nothing readable sets Reply itself, or sets Exact.
 const FakeUnderstanding = "Understood: the work the brief describes, for the person in the sentence\n" +
 	"Not: anything the brief leaves out\n" +
@@ -106,7 +106,7 @@ const FakeUnderstanding = "Understood: the work the brief describes, for the per
 	"Confidence: fairly sure of the shape, and least sure of the surface\n" +
 	"Question 1: which surface does a person read this on"
 
-// DesignAsk is the phrase a task carries when it asks a session what it would build, and DesignMarker
+// DesignAsk is the phrase an exec carries when it asks a session what it would build, and DesignMarker
 // opens the first line of the list that comes back. Both are spelled here for the reason the two
 // above are: internal/job imports this package, so a double cannot import what imports it, and
 // internal/job holds them together in a test.
@@ -126,7 +126,7 @@ const FakeDesign = "Vertical 1: a person pastes a link on the command line and g
 	"Vertical 2: a person opens the same transcript in a browser and sends the address to somebody\n" +
 	"Shown 2: the page renders that transcript at an address the person can share"
 
-// TestAsk is the phrase a task carries when it asks a session for the failing tests of one
+// TestAsk is the phrase an exec carries when it asks a session for the failing tests of one
 // requirement, and TestMarker opens the line of the report that says the run happened. Both are
 // spelled here for the reason the four above are: internal/job imports this package.
 const (
@@ -139,7 +139,7 @@ const (
 // FakeTestReport is what this double says when it is asked for the failing tests of one requirement.
 //
 // It names no requirement on a report line, because the stage no longer asks for one: it reads that
-// number off the run. What the double reads out of the task is which requirement it was handed, and
+// number off the run. What the double reads out of the exec is which requirement it was handed, and
 // it uses that for the test it names and for the branch its work goes to.
 func FakeTestReport(asked string) string {
 	requirement := 1
@@ -152,11 +152,11 @@ func FakeTestReport(asked string) string {
 		requirement, requirement), asked, requirement)
 }
 
-// namingWhereTheWorkWent ends a report the way a session that read its task ends one: a task that
+// namingWhereTheWorkWent ends a report the way a session that read its exec ends one: an exec that
 // says the job works in a repository says the answer has to name the pull request the work went to,
 // and a job whose answer names none does not land.
 //
-// A task that already names the pull request its work lands in gets that one back. That is the build
+// An exec that already names the pull request its work lands in gets that one back. That is the build
 // worker, whose tests are open in a pull request somebody else opened, and a double that opened a
 // second one would be doing what this stage exists to stop.
 func namingWhereTheWorkWent(reply, asked string, number int) string {
@@ -170,19 +170,19 @@ func namingWhereTheWorkWent(reply, asked string, number int) string {
 	return reply
 }
 
-// theRepositoryNamed is the repository a task says the job works in, and aPullRequestNamed is a pull
-// request address a task carries. The system writes both lines, so the double reads what it was
+// theRepositoryNamed is the repository an exec says the job works in, and aPullRequestNamed is a pull
+// request address an exec carries. The system writes both lines, so the double reads what it was
 // given rather than being told the address by whoever wrote the scenario.
 var (
 	theRepositoryNamed = regexp.MustCompile(`(?im)^This job works in ([^\s,]+)`)
 	aPullRequestNamed  = regexp.MustCompile(`https?://[^\s]+/pull/[0-9]+`)
 )
 
-// whichRequirement finds the requirement a task was handed, which the ask states on a line of its
+// whichRequirement finds the requirement an exec was handed, which the ask states on a line of its
 // own.
 var whichRequirement = regexp.MustCompile(`(?im)^Requirement:?[ \t]+(\d+)`)
 
-// BuildAsk is the phrase a task carries when it asks a session to build one vertical against its
+// BuildAsk is the phrase an exec carries when it asks a session to build one vertical against its
 // failing tests, and BuildMarker opens the line of the report that names a test passing now. Both are
 // spelled here for the reason the six above are: internal/job imports this package.
 const (
@@ -195,7 +195,7 @@ const (
 // FakeBuildReport is what this double says when it is asked to build one vertical.
 //
 // It names no vertical on a report line, because the stage no longer asks for one: it reads that
-// number off the run. It does read the vertical and the failing tests out of the task, because the
+// number off the run. It does read the vertical and the failing tests out of the exec, because the
 // stage refuses a report that does not name the tests that were failing, and a double that always
 // named the same tests would be refused for every worker but the first.
 func FakeBuildReport(asked string) string {
@@ -239,15 +239,15 @@ func fakeEvidence(asked string, vertical int) string {
 	}
 }
 
-// whichVertical finds the vertical a task was handed, which the ask states on a line of its own.
+// whichVertical finds the vertical an exec was handed, which the ask states on a line of its own.
 var whichVertical = regexp.MustCompile(`(?im)^Vertical:?[ \t]+(\d+)`)
 
 // failingTest finds the tests the ask says fail now, which it lists one to a line under a dash.
 var failingTest = regexp.MustCompile(`(?m)^- (.+)$`)
 
-// answer is what the double says, which follows the task it was handed the way a model does.
+// answer is what the double says, which follows the exec it was handed the way a model does.
 //
-// A task that asks for an outcome gets one. Every job says so beside its brief, so a double that
+// An exec that asks for an outcome gets one. Every job says so beside its brief, so a double that
 // ignored it would be looser than the thing it stands in for: every job would stop, and every test
 // about a job would be a test about that. A reply that already states an outcome is left alone, which
 // is how a test says the word it means.
@@ -255,9 +255,9 @@ func (f *FakeRunner) answer(req Request) string {
 	if f.Exact {
 		return f.Reply
 	}
-	// A task that asks what the session understood gets an understanding rather than whatever this
+	// An exec that asks what the session understood gets an understanding rather than whatever this
 	// double was going to say next, for the reason the outcome line exists: the double follows the
-	// task it was handed.
+	// exec it was handed.
 	if strings.Contains(req.Text, DesignAsk) && !strings.Contains(f.Reply, DesignMarker) {
 		return FakeDesign
 	}
@@ -273,7 +273,7 @@ func (f *FakeRunner) answer(req Request) string {
 	return statingTheOutcome(f.Reply, req.Text)
 }
 
-// statingTheOutcome ends an answer the way a session that read its task ends one: every job tells its
+// statingTheOutcome ends an answer the way a session that read its exec ends one: every job tells its
 // session to state an outcome on a line of its own, and a job whose answer states none does not
 // settle.
 func statingTheOutcome(reply, asked string) string {

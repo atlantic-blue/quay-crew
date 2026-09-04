@@ -162,15 +162,15 @@ type Action struct {
 	Widens func(row Row, chosen string) bool
 	// OnScope says this key acts on what the view is scoped to rather than on the row under the
 	// cursor, and the row it is handed then carries that scope as its identifier. The running work is
-	// the case: it lists the tasks of one session, and shelling into that session has to work on the
-	// job that has produced no task yet, where there is no row to stand on at all.
+	// the case: it lists the execs of one session, and shelling into that session has to work on the
+	// job that has produced no exec yet, where there is no row to stand on at all.
 	OnScope bool
 	// Conversation says this key opens the row's conversation. Where the console already has one
 	// beside it, which is what a panel is, that is where it opens: the listing stays on screen and
 	// the conversation the operator is talking to becomes the one they pointed at. A console with
 	// nothing beside it has only its own screen to give, and Shell is what it hands over.
 	Conversation bool
-	// Reads is the whole of what the row under the cursor is, put over the rows to be read. A task is
+	// Reads is the whole of what the row under the cursor is, put over the rows to be read. An exec is
 	// the case: its asked column holds 34 characters, so the row is a fragment of a sentence and the
 	// rest of it used to be at the command line.
 	Reads func(row Row) string
@@ -184,6 +184,12 @@ type Action struct {
 	// rather than taking the cheapest one away from what it is used for.
 	Descend string
 }
+
+// Gone says what to type instead of a key this view used to answer to and no longer has at all. It is
+// the whole class Moved cannot cover: Moved points at another key on the same action, and there is no
+// action left to point at once the thing the key opened is gone. A key that quietly does nothing is
+// how an operator learns to distrust the rest of them.
+type Gone map[string]string
 
 // Bound says whether a keypress runs this action.
 func (a Action) Bound(key string) bool {
@@ -222,6 +228,10 @@ type Resource struct {
 	Aliases []string
 	Columns []Column
 	List    Lister
+	// Gone are keys this view used to answer to and does not have any more, against what to type
+	// instead. They are not listed in the help: the way off a key is a refusal, not an entry beside
+	// the keys that still work.
+	Gone Gone
 	// Summary is the line drawn above the columns, and nil in a view with nothing to add up. The room
 	// view is the one so far: eighteen rows of megabytes never said what the machine had left.
 	Summary Summariser
@@ -241,7 +251,7 @@ type Resource struct {
 	// does nothing here.
 	DrillTo string
 	// DrillBy is the identifier the child is scoped by, when it is not the row's own. Jobs is the
-	// case: what a job did is its session's tasks, so the child is scoped by the session the row
+	// case: what a job did is its session's execs, so the child is scoped by the session the row
 	// names rather than by the job. Nil scopes by the row's own identifier, which is every other
 	// view. The error is what the operator is told when there is nothing to descend to yet.
 	DrillBy func(row Row) (string, error)

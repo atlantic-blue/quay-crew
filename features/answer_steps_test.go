@@ -60,18 +60,18 @@ func initializeAnswerSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		a.sessionID, a.handle = opened.GetSession().GetId(), opened.GetSession().GetHandle()
-		tasks, err := w.client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: a.sessionID})
+		execs, err := w.client.ListExecs(ctx, &quaycrewv1.ListExecsRequest{Session: a.sessionID})
 		if err != nil {
 			return err
 		}
-		if len(tasks.GetTasks()) != 0 {
-			return fmt.Errorf("the opened session already has %d tasks, so it proves nothing about an empty history",
-				len(tasks.GetTasks()))
+		if len(execs.GetExecs()) != 0 {
+			return fmt.Errorf("the opened session already has %d execs, so it proves nothing about an empty history",
+				len(execs.GetExecs()))
 		}
 		return nil
 	})
 
-	sc.Step(`^a session whose task failed$`, func(ctx context.Context) error {
+	sc.Step(`^a session whose exec failed$`, func(ctx context.Context) error {
 		w, a := worldFrom(ctx), answerFrom(ctx)
 		w.runner.failNext = true
 		_, err := w.client.Dispatch(ctx, &quaycrewv1.DispatchRequest{
@@ -151,19 +151,19 @@ func initializeAnswerSteps(sc *godog.ScenarioContext) {
 	})
 
 	sc.Step(`^standard output carries what went wrong$`, func(ctx context.Context) error {
-		return says("standard output", toolFrom(ctx).stdout, "the model refused this task")
+		return says("standard output", toolFrom(ctx).stdout, "the model refused this exec")
 	})
 
-	sc.Step(`^standard error says there is no landed task$`, func(ctx context.Context) error {
-		return says("standard error", toolFrom(ctx).stderr, "no landed task")
+	sc.Step(`^standard error says there is no landed exec$`, func(ctx context.Context) error {
+		return says("standard error", toolFrom(ctx).stderr, "no landed exec")
 	})
 
-	sc.Step(`^standard error says the task is still running$`, func(ctx context.Context) error {
+	sc.Step(`^standard error says the exec is still running$`, func(ctx context.Context) error {
 		return says("standard error", toolFrom(ctx).stderr, "still running")
 	})
 }
 
-// answerDispatch runs one task and keeps what the model said, so an assertion names the reply rather
+// answerDispatch runs one exec and keeps what the model said, so an assertion names the reply rather
 // than repeating how the double builds one.
 func answerDispatch(ctx context.Context, text string) error {
 	w, a := worldFrom(ctx), answerFrom(ctx)
@@ -184,7 +184,7 @@ func answerSubject(ctx context.Context) (string, error) {
 	if a := answerFrom(ctx); a.sessionID != "" {
 		return a.sessionID, nil
 	}
-	last, err := worldFrom(ctx).lastTask()
+	last, err := worldFrom(ctx).lastExec()
 	if err != nil {
 		return "", err
 	}
