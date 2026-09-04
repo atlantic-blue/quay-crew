@@ -5,7 +5,7 @@ Written 2026-09-04, from `.greenlight/DESIGN.md` and the code the design touches
 These contracts are the source of truth for the tests. A contract states the input, the output and
 every error. A contract with no stated error is an incomplete contract.
 
-Nothing here is code. Nothing here is a test. No code exists before Julian approves the path.
+Nothing here is code. Nothing here is a test. No code exists before the operator approves the path.
 
 ## How to read this
 
@@ -26,11 +26,11 @@ The groups are:
 - `MEASURE` for the proof of the riskiest assumption.
 
 Verification is `auto` or `verify`. `auto` means a green test fully proves the contract. `verify`
-means Julian looks at the result before the slice closes.
+means the operator looks at the result before the slice closes.
 
 ## Decisions the architect took, beyond the design
 
-The design does not answer these. Each one is a decision, not a fact. Julian can reverse any of them.
+The design does not answer these. Each one is a decision, not a fact. The operator can reverse any of them.
 
 1. The migration splits into three numbered pairs, not one. Section 11 of the design says one pair.
    One reviewable pull request per slice forces the split. `0062` creates `project_designs`. `0063`
@@ -333,7 +333,7 @@ Signature:
 `SetProjectDesign(ctx context.Context, project, body, writtenBy string) (*quaycrewv1.Design, error)`
 
 Input: a project identifier, the design document whole, and who wrote it. `writtenBy` is empty when
-the operator wrote it.
+The operator wrote it.
 
 Output: the design row after the write.
 
@@ -733,7 +733,7 @@ Invariants:
 - The approval check comes first. A refusal costs one line of output and starts nothing.
 - The session is created by `Dispatch`, which is unchanged. The step text is the dispatch text.
 - The store records the session in the same write that moves the state, before the dispatch starts.
-- A step whose `after` step is not done warns and continues. Julian may know something the path does
+- A step whose `after` step is not done warns and continues. The operator may know something the path does
   not. The warning names the unfinished step.
 - The response carries the composed text so a caller can show what the session was asked to do
   without a second call.
@@ -1368,7 +1368,7 @@ This is not code. It is the gate. Section 2 of the design names the assumption a
 comes before every milestone that costs real work.
 
 The assumption. A session starts holding a design, the project context and one atomised step. It
-then produces work Julian accepts more often than a session that starts with a line of text.
+then produces work the operator accepts more often than a session that starts with a line of text.
 
 Input: one real path of about five steps, on a real project, with a real design.
 
@@ -1378,7 +1378,7 @@ the assumption holds.
 The method:
 - Dispatch step one twice. Once with the composed step text of RENDER-4, once with a line of text.
 - Compare what comes back.
-- Record which one Julian accepts, in his own words.
+- Record which one the operator accepts, in their own words.
 
 Errors:
 - A run that produces nothing to compare is not an answer. Say so and run it again.
@@ -1389,12 +1389,12 @@ Invariants:
   inference.
 - If the answer is no, every slice after this one is cancelled. The cost so far is one migration and
   one render.
-- Nothing is built between this measurement and Julian reading it.
+- Nothing is built between this measurement and the operator reading it.
 
 Verification: verify
 Acceptance criteria:
 - `.greenlight/DECISIONS.md` carries a dated entry naming both dispatches and what came back.
-- The entry says whether the assumption holds, and Julian says the next move.
+- The entry says whether the assumption holds, and the operator says the next move.
 Steps:
 - Run `krewe exec --dispatch <address> "<a line of text>"` and read the reply.
 - Run `krewe step take <address> 1` and read the reply.

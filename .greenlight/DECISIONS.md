@@ -4,10 +4,10 @@ Seeded 2026-09-04 from the design session in the worktree
 `design-a-project-carries-its-own-context`.
 
 Two kinds of entry. A settled decision states what is true and why. A proposed decision waits for
-Julian, and nothing is built on it.
+The operator, and nothing is built on it.
 
 Append the moment a decision is made, in the same turn. Never argue with a settled entry. If it looks
-wrong, raise it as a question and let Julian change it.
+wrong, raise it as a question and let the operator change it.
 
 ## Settled in this session
 
@@ -24,7 +24,7 @@ wrong, raise it as a question and let Julian change it.
 
 **The guard, so a later change can be measured.**
 - Status: settled.
-- Any component that dispatches a session without Julian asking is the controller. Refuse it.
+- Any component that dispatches a session without the operator asking is the controller. Refuse it.
 - Any stage word on a project or a session, with something that moves the row between values, is the
   same failure under a different name. Refuse it.
 
@@ -84,7 +84,7 @@ wrong, raise it as a question and let Julian change it.
 
 **Nothing inside a sandbox can set the approval.**
 - Status: settled.
-- Why. A session may write a design body. Approval reaches the store only through Julian's own
+- Why. A session may write a design body. Approval reaches the store only through the operator's own
   command. This is the boundary that makes the guard real.
 
 **The dead role brief path is removed before anything is built on it.**
@@ -97,11 +97,11 @@ wrong, raise it as a question and let Julian change it.
 **The riskiest assumption is named and is not yet proved.**
 - Status: settled as an entry. The assumption itself is open.
 - Assumption. A session starts holding a design, the project context and one atomised step. It then
-  produces work Julian accepts more often than a session that starts with a line of text.
+  produces work the operator accepts more often than a session that starts with a line of text.
 - Proved where. Nowhere yet.
 - The proof is milestone 2 of the roadmap, and it sits before every milestone that costs real work.
 
-## Proposed, waiting for Julian
+## Proposed, waiting for the operator
 
 Nothing is built on any of these.
 
@@ -114,7 +114,7 @@ Nothing is built on any of these.
   which is the machinery that made the last attempt expensive.
 
 **Decision 2. How a step gets marked done.**
-- Options. A: Julian says done, with one command and the result. B: the session writes a marked
+- Options. A: the operator says done, with one command and the result. B: the session writes a marked
   section into its memory file and the control plane reads it back. C: an ordinary session gets a
   narrow credential for one call.
 - My recommendation: A.
@@ -143,14 +143,14 @@ Nothing is built on any of these.
 
 ## Settled on 2026-09-04
 
-Julian answered decisions 1 to 4. Each one took the recommendation above. Status: accepted.
+The operator answered decisions 1 to 4. Each one took the recommendation above. Status: accepted.
 
 - Decision 1. The design and the path live in the store only. Accepted.
-- Decision 2. Julian marks a step done, with one command and the result. Accepted.
+- Decision 2. The operator marks a step done, with one command and the result. Accepted.
 - Decision 3. The design reaches the model as a summary of about 400 characters plus a pointer to
   `.krewe/design.md`. Accepted.
 - Decision 4. An unapproved design refuses `krewe step take`. Accepted.
-- Decision 5. Not put to him. It stays at one predecessor per step. Status: proposed.
+- Decision 5. Not put to the operator. It stays at one predecessor per step. Status: proposed.
 
 ## Deferred, recorded so it is not lost
 

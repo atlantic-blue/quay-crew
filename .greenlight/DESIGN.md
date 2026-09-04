@@ -2,7 +2,7 @@
 
 Written 2026-09-04, in the worktree `design-a-project-carries-its-own-context`.
 
-Status: proposed. Four decisions wait for Julian. See section 12. No code exists yet.
+Status: proposed. The four decisions in section 12 are settled. No code exists yet.
 
 ## 1. Why a design stage succeeds now, when the last one did not
 
@@ -42,9 +42,9 @@ at `internal/controlplane/server.go:580` writes the store into the memory files.
 
 Three consequences follow, and each one is a test of whether this claim holds:
 
-1. The system never starts a session by itself. Every session starts because Julian typed a command
+1. The system never starts a session by itself. Every session starts because the operator typed a command
    or pressed a key. There is no fan out, so a refusal cannot cost four workers.
-2. The only gate refuses one of Julian's own commands. A refusal costs one line of output and starts
+2. The only gate refuses one of the operator's own commands. A refusal costs one line of output and starts
    nothing. The old gate refused a controller, which then rebuilt the world.
 3. The design belongs to the project, which outlives every session. The old design belonged to a job,
    which is declared once and thrown away. A project is read many times, so the record earns its
@@ -52,7 +52,7 @@ Three consequences follow, and each one is a test of whether this claim holds:
 
 ### The guard, stated so a later change can be measured against it
 
-A later change may add a component that dispatches a session without Julian asking. That component
+A later change may add a component that dispatches a session without the operator asking. That component
 is the controller, and it is the thing that failed. Refuse it.
 
 A later change may add a stage word to a project or a session, and something that moves the row
@@ -61,7 +61,7 @@ between stage values. That is the same failure under a different name. Refuse it
 ### The honest risk
 
 Migration 0060 also states this: a table nobody writes is a table somebody reads a year later and
-believes. If Julian does not read the design, or if a session builds no better from it, then this
+believes. If the operator does not read the design, or if a session builds no better from it, then this
 design creates exactly that table. Section 2 names the assumption and says how to prove it early and
 cheaply.
 
@@ -70,7 +70,7 @@ cheaply.
 The `proving` skill in this repository asks a design for three lines. Here they are.
 
 Riskiest assumption. A session starts holding a design, the project context and one atomised step.
-It then produces work Julian accepts more often than a session that starts with a line of text.
+It then produces work the operator accepts more often than a session that starts with a line of text.
 
 Proved where. Not yet proved.
 
@@ -99,7 +99,7 @@ session writes the design.
 The five actions, as this design states them:
 
 **Action 1. A project holds a brief and a design.**
-- Julian sets a brief on a project. The brief is one paragraph: what this project is for.
+- The operator sets a brief on a project. The brief is one paragraph: what this project is for.
 - A design session reads the brief, the project context and the repository, and writes a design.
 - The design is one document. It carries the requirements, the decisions and the shape.
 - Any write to the design body clears the approval. An approved design that somebody rewrote is not
@@ -116,7 +116,7 @@ The five actions, as this design states them:
 - Writing the path replaces every step that nobody took. It refuses to drop or rename a step that is
   taken, done or stopped.
 
-**Action 3. Julian takes a step, and the session starts holding what it needs.**
+**Action 3. The operator takes a step, and the session starts holding what it needs.**
 - One command names a project and a step number.
 - The system composes the dispatch text from the step and starts a session with it.
 - The session's memory file carries the project context, the design summary and the approval state.
@@ -124,7 +124,7 @@ The five actions, as this design states them:
 - The system records which session took the step.
 - The command refuses when the design carries no approval. See section 12, decision 4.
 
-**Action 4. Julian reads the state of the path.**
+**Action 4. The operator reads the state of the path.**
 - One command lists every step of a project, in number order.
 - Each row says the number, the title, the state, and which session took it.
 - The listing says what is done, what a session holds now, and which step is next.
@@ -171,7 +171,7 @@ memory store already does with every other row.
   the conformance suite in `internal/store/storetest`.
 - Every word the system puts in front of a person follows Simplified Technical English.
 - No length cap refuses text. Each cap is a warning that says the length.
-- No code exists before Julian approves this path.
+- No code exists before the operator approves this path.
 
 ### 3.4 Explicitly out of scope
 
@@ -338,12 +338,12 @@ One row per project. Created when somebody sets a brief or a design. A project w
 design, which is the normal state.
 
 - `project` text, primary key, references `projects (id)` on delete cascade
-- `brief` text not null default ''. What Julian says the project is for. One paragraph. He writes it.
+- `brief` text not null default ''. What the operator says the project is for. One paragraph. The operator writes it.
 - `body` text not null default ''. The design document, whole. A design session writes it. Markdown.
-- `approved` boolean not null default false. Julian's word. Any write to `body` sets this to false.
+- `approved` boolean not null default false. The operator's word. Any write to `body` sets this to false.
 - `approved_at` timestamptz, null while `approved` is false
 - `written_by` text not null default ''. The session identifier that last wrote `body`. Empty when
-  Julian wrote it directly. It is not a foreign key, because the session may be archived or deleted
+  The operator wrote it directly. It is not a foreign key, because the session may be archived or deleted
   and the record of who wrote the design must survive that.
 - `created_at` timestamptz not null default now()
 - `updated_at` timestamptz not null default now()
@@ -402,7 +402,7 @@ Rules, each proved by a scenario:
   a step in state `taken`, `done` or `stopped`. The refusal names those steps.
 - Taking a step in state `taken` or `done` is refused. The refusal says which session holds it.
 - Taking a step whose `after` step is not `done` warns and continues. It does not refuse, because
-  Julian may know something the path does not.
+  The operator may know something the path does not.
 - Deleting a project deletes its steps through the cascade.
 
 ### 6.4 The single dependency field, and its limit
@@ -603,19 +603,19 @@ the new calls, which is the ordinary result of a new call against an old server.
 The down migration drops both tables. The data goes with them, and it exists nowhere else. So the
 down migration says so in its own comment, the way `0060` says there is no way back.
 
-## 12. Grey areas, settled by Julian on 2026-09-04
+## 12. Grey areas, settled by the operator on 2026-09-04
 
-Julian answered all four. Each one took the recommendation. The four options and the reasoning stay
+The operator answered all four. Each one took the recommendation. The four options and the reasoning stay
 below, because a later reader needs to know what was rejected and why.
 
 1. The design and the path live in the store only. Option B, a file committed into the repository,
    stays deferred in section 13.
-2. Julian marks a step done, with one command and the result.
+2. The operator marks a step done, with one command and the result.
 3. The design reaches the model as a summary of about 400 characters and a pointer to
    `.krewe/design.md`.
 4. An unapproved design refuses `krewe step take`.
 
-The fifth question, whether `after` holds one predecessor or a list, was not put to him. It stays as
+The fifth question, whether `after` holds one predecessor or a list, was not put to the operator. It stays as
 one predecessor, and section 6.4 states the limit.
 
 **Decision 1. Where the design and the path live.**

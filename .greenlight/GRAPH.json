@@ -7,8 +7,8 @@
   "user_actions": {
     "1": "A project holds a brief and a design, and any write to the design clears the approval.",
     "2": "The design carries a numbered path of atomised changes.",
-    "3": "Julian takes a step, and the session starts holding what it needs.",
-    "4": "Julian reads the state of the path.",
+    "3": "The operator takes a step, and the session starts holding what it needs.",
+    "4": "The operator reads the state of the path.",
     "5": "A step records what came of it."
   },
   "rules": [
@@ -111,13 +111,13 @@
       "contracts": ["MEASURE-1"],
       "touches": [".greenlight/DECISIONS.md"],
       "changes": "Nothing in the product. One dated entry in the decisions file.",
-      "proves": "The entry names both dispatches, what came back, and whether Julian accepts the work. It is an observation, never an inference.",
-      "gate": "Every slice after this one waits for Julian to read the entry and say the next move. If the answer is no, they are cancelled. The cost so far is one migration and one render."
+      "proves": "The entry names both dispatches, what came back, and whether the operator accepts the work. It is an observation, never an inference.",
+      "gate": "Every slice after this one waits for the operator to read the entry and say the next move. If the answer is no, they are cancelled. The cost so far is one migration and one render."
     },
     {
       "id": "S-6",
       "name": "A design carries an approval only the operator can grant",
-      "intention": "Make Julian's word a fact the system holds, and tie it to a specific text.",
+      "intention": "Make the operator's word a fact the system holds, and tie it to a specific text.",
       "user_actions": [1],
       "depends_on": ["S-5"],
       "contracts": ["TABLE-1", "STORE-0", "STORE-4", "WIRE-6", "COMMAND-5", "RENDER-1"],
@@ -242,7 +242,7 @@
       ],
       "changes": "Two store methods, one remote procedure call, the text composition, and the word krewe step take. The step text is the dispatch text, so Dispatch is untouched.",
       "proves": "features/path.feature. Taking a step dispatches a session whose text names the step. Taking it twice is refused, naming the session that holds it. Taking a step on an unapproved design is refused and starts nothing.",
-      "note": "This is the only gate in the work, and it refuses one of Julian's own commands. A refusal costs one line of output and starts nothing. Nothing dispatches a session without Julian asking."
+      "note": "This is the only gate in the work, and it refuses one of the operator's own commands. A refusal costs one line of output and starts nothing. Nothing dispatches a session without the operator asking."
     },
     {
       "id": "S-11",

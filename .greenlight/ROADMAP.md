@@ -1,6 +1,6 @@
 # Roadmap: a project carries its own context
 
-Written 2026-09-04. Status: proposed. Nothing starts before Julian approves it.
+Written 2026-09-04. Status: proposed. Nothing starts before the operator approves it.
 
 Read `.greenlight/DESIGN.md` first. Section 12 holds four decisions that are not settled. Milestones
 2, 5 and 6 change shape depending on those answers.
@@ -52,7 +52,7 @@ it, it is a note and not a milestone.
 
 **Milestone 2. A project holds a brief and a design, and a session reads it.**
 - This is the proof of the riskiest assumption, and it is why it comes second.
-- Julian writes the brief and the design by hand. Nothing generates them yet.
+- The operator writes the brief and the design by hand. Nothing generates them yet.
 - Touches: a migration pair `0062_a_project_carries_its_design`; `internal/store/store.go`,
   `postgres.go`, `memory.go`, `storetest/`; `proto/quaycrew/v1/controlplane.proto` (the `Design`
   message, `GetDesign`, `SetBrief`, `SetDesign`); `internal/controlplane/design.go` (new);
@@ -64,21 +64,21 @@ it, it is a note and not a milestone.
   line of text. Compare. Write the result into `.greenlight/DECISIONS.md`.
 - Depends on: milestone 1.
 
-**Milestone 3. Julian approves a design, and a rewrite clears the approval.**
+**Milestone 3. The operator approves a design, and a rewrite clears the approval.**
 - Touches: `ApproveDesign` on the proto and the server, and `krewe design approve`. Also the store
   method that clears `approved` on any write to `body`. The migration adds nothing new.
 - Proves it: `features/design.feature` gains scenarios. Approve, then rewrite, then read: the
   approval is gone. Approving an empty design is refused.
 - Depends on: milestone 2.
 
-**Milestone 4. A design carries a numbered path, and Julian reads it.**
+**Milestone 4. A design carries a numbered path, and the operator reads it.**
 - Touches: the second table in migration `0062`; the `Step` message; `SetPath` and `ListSteps`;
   `internal/controlplane/design.go`; `cmd/krewe/path.go` (new).
 - Proves it: `features/path.feature`. Set a path of five steps, read it back in number order.
   Replacing a path refuses to drop a step that is taken or done, and the refusal names it.
 - Depends on: milestone 3.
 
-**Milestone 5. Julian takes a step, and the session starts holding it.**
+**Milestone 5. The operator takes a step, and the session starts holding it.**
 - Touches: `TakeStep` on the proto and the server; the text composition in
   `internal/controlplane/design.go`; the render of `.krewe/path.md`; `cmd/krewe/step.go` (new).
 - Proves it: `features/path.feature`. Taking a step dispatches a session whose text names the step.
@@ -98,7 +98,7 @@ it, it is a note and not a milestone.
 - This is where krewe carries the ideation and the design stages itself.
 - Touches: `skills/design/SKILL.md` and `skills/design/skill.yaml`, both new, prose only, no code.
   Also the path file grammar that `SetPath` reads. Also a scenario that proves a session writes a
-  design through the same call Julian uses.
+  design through the same call the operator uses.
 - The session stays ordinary. It is dispatched by hand. No stage, no controller, no gate on it.
 - Proves it: `features/design.feature`. A session dispatched with the design skill writes a design
   and a path that read back whole.

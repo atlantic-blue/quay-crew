@@ -1,6 +1,6 @@
 # Project Interview
 
-Recorded 2026-09-04. The answers come from Julian in the session that opened this worktree.
+Recorded 2026-09-04. The answers come from the operator in the session that opened this worktree.
 
 ## Value Proposition
 
@@ -10,7 +10,7 @@ and the one change it is taking.
 
 ## Users
 
-Julian is the operator. He opens a project, runs the design stage and dispatches the work.
+The operator opens a project, runs the design stage and dispatches the work.
 
 The agent sessions are the second user, and they are the reason the capability exists. A session
 today starts with a line of text. It must instead start with enough context to build something
@@ -52,7 +52,7 @@ Anything removed from the command line or from the console must refuse by name a
 type instead. The existing mechanisms are Moved, Gone, movedViews, removedCommands and
 removedFlags.
 
-The design stage is the deliverable. No code exists before Julian approves the path.
+The design stage is the deliverable. No code exists before the operator approves the path.
 
 ## Deferred Ideas
 
