@@ -124,6 +124,13 @@ commands:
                                           system does, which skill attach takes too
   context edit [<address>]                open a project's context in $EDITOR
   context clear [<address>]               empty what a level says
+  design [<address>]                      what a project is for, whether its design is approved, and
+                                          the design itself. The body prints whole, so it can be
+                                          piped
+  design brief [<address>] "<text>"       say what a project is for, in one paragraph. An empty text
+                                          clears it
+  design set [<address>] --file <path>    write the design document from a file. Any write clears the
+                                          approval, because approval is a statement about one text
   attach <session>                         open a session's conversation, with its history
   secret set [<workspace>] <key>          set a workspace secret from standard input, so the value
                                           never reaches your shell history: pipe it in, or redirect

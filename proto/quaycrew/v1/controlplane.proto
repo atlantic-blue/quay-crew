@@ -536,6 +536,56 @@ message SetContextResponse {
   ContextDir dir = 1;
 }
 
+// Design is what a project is for and what was designed for it. A project with no design row answers
+// with a Design carrying only its project identifier, which is the normal state.
+//
+// The field numbers follow the order the slices add them, not the order the design document lists
+// them. A field number is fixed once it ships, so a later change appends rather than renumbers.
+message Design {
+  string project = 1;
+  // brief is what the project is for, one paragraph.
+  string brief = 2;
+  // body is the design document, whole, in markdown.
+  string body = 3;
+  // approved is the operator's word on this exact body. Nothing sets it yet: the column and the call
+  // that writes it arrive with the approval, and until then every design reads as unapproved.
+  bool approved = 4;
+  google.protobuf.Timestamp approved_at = 5;
+  // written_by is the session that last wrote body, empty when the operator wrote it. It is what the
+  // caller claimed, never what the system authenticated, and it grants nothing.
+  string written_by = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message GetDesignRequest {
+  string project = 1;
+}
+message GetDesignResponse {
+  Design design = 1;
+}
+
+// SetBriefRequest records what a project is for. No length refuses a brief: a long one warns and is
+// kept whole.
+message SetBriefRequest {
+  string project = 1;
+  string brief = 2;
+}
+message SetBriefResponse {
+  Design design = 1;
+  repeated string warnings = 2;
+}
+
+// SetDesignRequest records the design document, whole. No length refuses a body.
+message SetDesignRequest {
+  string project = 1;
+  string body = 2;
+  string written_by = 3;
+}
+message SetDesignResponse {
+  Design design = 1;
+  repeated string warnings = 2;
+}
+
 // SessionWorkEntry is one thing in a session's work: a file or a directory, with the size of a file.
 message SessionWorkEntry {
   string name = 1;
@@ -1006,6 +1056,12 @@ service ControlPlaneService {
   rpc SetSessionLabel(SetSessionLabelRequest) returns (SetSessionLabelResponse);
   rpc ListContexts(ListContextsRequest) returns (ListContextsResponse);
   rpc SetContext(SetContextRequest) returns (SetContextResponse);
+
+  // What a project is for and what was designed for it. The driver may call all three: reading what
+  // the project holds is the point, and a session that writes a design grants itself nothing.
+  rpc GetDesign(GetDesignRequest) returns (GetDesignResponse);
+  rpc SetBrief(SetBriefRequest) returns (SetBriefResponse);
+  rpc SetDesign(SetDesignRequest) returns (SetDesignResponse);
   // Reads a file, or a listing, out of the work a session left behind, without attaching to it.
   rpc ReadSessionWork(ReadSessionWorkRequest) returns (ReadSessionWorkResponse);
   // Says where an address is on the machine, so a person can put a file in it by hand. It reads the

@@ -187,6 +187,9 @@ var takenFlags = map[string]map[string]bool{
 	"exec":   {flagDispatch: true},
 	"answer": {allAnswers: true},
 	"target": targetFlagsTaken(),
+	// A design body is a document, so it is named as a path rather than piped: the file is the thing
+	// being kept, and a path in the command is what makes the write repeatable.
+	"design": {flagFile: true},
 }
 
 // refuseFlags returns an error when an invocation uses a flag the command it names does not take. A
@@ -272,6 +275,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runLabel(ctx, client, args[1:], out)
 	case "context":
 		return runContext(ctx, client, args[1:], out)
+	case "design":
+		return runDesign(ctx, client, args[1:], out)
 	case "secret":
 		return runSecret(ctx, client, args[1:], out)
 	case "skill":

@@ -219,6 +219,19 @@ type Store interface {
 	// SetContext records what the model should be told at a scope.
 	SetContext(ctx context.Context, scope ContextScope, owner, body string) error
 
+	// GetDesign returns what a project is for and what was designed for it. A project that exists
+	// with no design row answers with a Design carrying its identifier and nothing else, the way
+	// GetContext answers an unwritten level: nothing written is the normal state and is not an error.
+	// The body comes back whole, because a design read short is a design read wrong.
+	GetDesign(ctx context.Context, project string) (*quaycrewv1.Design, error)
+	// SetProjectBrief records what a project is for, and creates the row on first use. An empty brief
+	// clears it, which makes the brief a value rather than an absence.
+	SetProjectBrief(ctx context.Context, project, brief string) (*quaycrewv1.Design, error)
+	// SetProjectDesign records the design document whole, and creates the row on first use.
+	// writtenBy is the session that wrote it and is empty when the operator did; it is a claim the
+	// system keeps rather than one it checks. No length refuses a body.
+	SetProjectDesign(ctx context.Context, project, body, writtenBy string) (*quaycrewv1.Design, error)
+
 	// ImportSkill takes a skill into the system at the version its manifest declares.
 	//
 	// Importing the same name and version again is fine when it is the same skill and refused when it
