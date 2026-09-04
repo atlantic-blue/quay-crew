@@ -35,8 +35,11 @@ The diagram renders through the mermaid command line tool.
 
 ## How to read a milestone
 
-Each milestone is one intention and one reviewable pull request. Each one is revertable on its own.
-Each one names the files it touches, what it changes, what proves it, and what it depends on.
+Each milestone is one intention. The graph splits it into slices, and a slice is one reviewable pull
+request. A slice is revertable on its own.
+
+Each milestone names the files it touches, what it changes, what proves it, and what it depends on.
+`.greenlight/GRAPH.json` holds the slices. Thirteen of the sixteen milestones hold more than one.
 
 Each one is written for a person who was not in this conversation. If a milestone needs somebody to
 explain it, it is a note and not a milestone.
