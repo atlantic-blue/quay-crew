@@ -5,22 +5,40 @@
   "model_overrides": {},
   "profiles": {
     "quality": {
-      "architect": "opus", "designer": "opus", "test_writer": "opus",
-      "implementer": "opus", "security": "opus", "debugger": "opus",
-      "verifier": "opus", "codebase_mapper": "opus",
-      "assessor": "opus", "wrapper": "opus"
+      "architect": "opus",
+      "designer": "opus",
+      "test_writer": "opus",
+      "implementer": "opus",
+      "security": "opus",
+      "debugger": "opus",
+      "verifier": "opus",
+      "codebase_mapper": "opus",
+      "assessor": "opus",
+      "wrapper": "opus"
     },
     "balanced": {
-      "architect": "opus", "designer": "opus", "test_writer": "sonnet",
-      "implementer": "sonnet", "security": "sonnet", "debugger": "sonnet",
-      "verifier": "sonnet", "codebase_mapper": "sonnet",
-      "assessor": "sonnet", "wrapper": "sonnet"
+      "architect": "opus",
+      "designer": "opus",
+      "test_writer": "sonnet",
+      "implementer": "sonnet",
+      "security": "sonnet",
+      "debugger": "sonnet",
+      "verifier": "sonnet",
+      "codebase_mapper": "sonnet",
+      "assessor": "sonnet",
+      "wrapper": "sonnet"
     },
     "budget": {
-      "architect": "sonnet", "designer": "sonnet", "test_writer": "sonnet",
-      "implementer": "sonnet", "security": "haiku", "debugger": "sonnet",
-      "verifier": "haiku", "codebase_mapper": "haiku",
-      "assessor": "haiku", "wrapper": "sonnet"
+      "architect": "sonnet",
+      "designer": "sonnet",
+      "test_writer": "sonnet",
+      "implementer": "sonnet",
+      "security": "haiku",
+      "debugger": "sonnet",
+      "verifier": "haiku",
+      "codebase_mapper": "haiku",
+      "assessor": "haiku",
+      "wrapper": "sonnet"
     }
   },
   "workflow": {
@@ -36,8 +54,8 @@
     "filter_flag": "-run",
     "coverage_command": "go test ./... -cover",
     "security_filter": "security",
-    "run_locally": false,
-    "note": "Tests run in continuous integration only. Running go test in this repository exhausts memory and kills the session. Local gates are go build, go vet, gofmt and golangci-lint."
+    "run_locally": true,
+    "note": "The whole suite runs locally in about 42 seconds and peaks at about 1.18 GB. Local gates are make test, go build, go vet, gofmt and golangci-lint."
   },
   "project": {
     "name": "quay-krewe",

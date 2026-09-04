@@ -41,9 +41,13 @@ console. Godog scenarios under features/. Docker and tmux run the sandboxes.
 
 ## Constraints
 
-Tests never run on this machine. Running go test in this repository exhausts memory and the
-process is killed, which ends the session. Continuous integration is the test runner. The safe
-local gates are go build, go vet, gofmt and golangci-lint.
+Tests run on this machine and in continuous integration. The whole suite takes about 42 seconds
+and peaks at about 1.18 GB.
+
+This constraint used to say the opposite. A test drove the terminal multiplexer without saying
+which server it meant, so it reached the server the operator was sitting in and ended it. The run
+reported only that it was killed, which reads as an out of memory failure and is not one. A guard
+now fails any test that runs the multiplexer without naming a socket or clearing the variable.
 
 Every change ships with its scenarios. The promises gate refuses a behaviour change that carries
 no scenario.
