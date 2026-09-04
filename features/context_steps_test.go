@@ -280,6 +280,28 @@ func initializeContextSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// Both files, because a role brief went into the outer one and the read back sweeps text under an
+	// unknown mark into the inner one. The mark is written out here rather than read from the package,
+	// so a constant that comes back under another name does not take the check with it.
+	sc.Step(`^no memory file carries a role section$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		inner, err := sessionWorkingDir(ctx)
+		if err != nil {
+			return err
+		}
+		outer := filepath.Join(w.storage.Dir, "workspaces", w.workspaceID, "claude")
+		for _, dir := range []string{outer, inner} {
+			body, found := sandbox.ReadMemory(dir)
+			if !found {
+				return fmt.Errorf("there is no memory file at %s to read", dir)
+			}
+			if strings.Contains(body, "<!-- quay:role -->") {
+				return fmt.Errorf("the memory file at %s carries a role section: %q", dir, body)
+			}
+		}
+		return nil
+	})
+
 	// Appending to the file is what an agent writing a note actually does: the directory is mounted in,
 	// so this process and that container are looking at one place.
 	sc.Step(`^something inside the sandbox writes "([^"]*)" into its memory$`,

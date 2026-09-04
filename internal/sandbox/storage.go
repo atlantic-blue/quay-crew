@@ -77,21 +77,9 @@ type dir struct {
 // a session is a conversation with its own files, and two conversations sharing a working directory
 // means one of them changing a file under the other. It also gives the session a place of its own for
 // what it is told, which is the level the operator asked for.
-//
-// A session running as a role keeps its conversation to itself instead. The shared store is one
-// directory holding every transcript in the workspace, so a role that must not see the code could
-// read the conversation of the session that wrote it, and the memory file in that directory is the
-// workspace's own, read by every session in it: a role given no context would have to blank a file
-// that is not its to blank. Its own directory answers both. What it costs is that a role session's
-// conversation cannot be resumed from another project, which is not something a sub exec does.
 func layout(cfg Config) []dir {
-	conversation := []string{"workspaces", cfg.Workspace, "claude"}
-	if cfg.Role != "" {
-		conversation = []string{"workspaces", cfg.Workspace, "projects", cfg.Project,
-			"sessions", cfg.ID, "claude"}
-	}
 	return []dir{
-		{conversation, ConversationPath, true},
+		{[]string{"workspaces", cfg.Workspace, "claude"}, ConversationPath, true},
 		{[]string{"workspaces", cfg.Workspace, "projects", cfg.Project, "sessions", cfg.ID, "workspace"}, WorkingPath, true},
 		// The workspace's own volume, shared by every session in it. A repository is cloned here once
 		// rather than per session, which is the difference between one copy of a large checkout and one

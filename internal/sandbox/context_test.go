@@ -151,31 +151,3 @@ func TestTheWindowSizeIsWhateverASessionWroteDown(t *testing.T) {
 		})
 	}
 }
-
-// A role session keeps its own conversation store, so the window has to be read from there. Read from
-// the workspace's store instead and a full window answers empty, which reads as a conversation nobody
-// has spoken in rather than as one that is nearly out of room.
-func TestARoleSessionsWindowIsReadFromItsOwnStore(t *testing.T) {
-	const workspace, project, session = "0b4f2f7c2f0e4a1e8a2a9a6f", "3d5e", "7a9b"
-	const conversation = "1c4f2f7c-2f0e-4a1e-8a2a-9a6f1b3c5d7e"
-	dir := t.TempDir()
-	at := filepath.Join(dir, "workspaces", workspace, "projects", project, "sessions", session,
-		"claude", "projects", "-home-agent-workspace")
-	if err := os.MkdirAll(at, 0o777); err != nil {
-		t.Fatalf("make the transcript directory: %v", err)
-	}
-	body := answer(52, 400, 180_000, 100) + "\n"
-	if err := os.WriteFile(filepath.Join(at, conversation+sandbox.ConversationFile), []byte(body), 0o666); err != nil {
-		t.Fatalf("write the transcript: %v", err)
-	}
-	storage := sandbox.Storage{Dir: dir, Host: dir}
-
-	asTheRole := sandbox.Config{ID: session, Workspace: workspace, Project: project, Role: "test-writer"}
-	if carried := storage.ConversationContext(asTheRole, conversation).Carried(); carried != 180_152 {
-		t.Errorf("the role session's window holds %d, want 180152", carried)
-	}
-	asTheWorkspace := sandbox.Config{ID: session, Workspace: workspace, Project: project}
-	if carried := storage.ConversationContext(asTheWorkspace, conversation).Carried(); carried != 0 {
-		t.Errorf("the workspace's store answered %d for a role session's conversation, want 0", carried)
-	}
-}

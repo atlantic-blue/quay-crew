@@ -167,15 +167,6 @@ func (s Storage) transcript(cfg Config, conversation string) (string, bool) {
 // conversationDir is where this session's conversation store sits, read from the same layout the
 // mounts come from so the two cannot drift.
 func (s Storage) conversationDir(cfg Config) (string, bool) {
-	if cfg.Role != "" {
-		for _, part := range []struct{ kind, value string }{
-			{"project", cfg.Project}, {"session", cfg.ID},
-		} {
-			if usableAsPath(part.kind, part.value) != nil {
-				return "", false
-			}
-		}
-	}
 	for _, one := range layout(cfg) {
 		if one.target == ConversationPath {
 			return filepath.Join(append([]string{s.Dir}, one.parts...)...), true

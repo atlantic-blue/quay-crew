@@ -48,6 +48,16 @@ Feature: The operator can find the files the model reads
     Then the session's memory file carries "pay the water bill first"
     And the workspace's memory file carries "no acronyms"
 
+  # An earlier build rendered a brief for the role a session ran as. It wrote the brief under its own
+  # mark. Nothing writes that brief now. A dead mark next to a live one tells a reader to copy the
+  # wrong one, so neither memory file carries the role mark.
+  Scenario: A memory file carries no role section
+    When the operator sets context at scope "system" to "no acronyms"
+    And the operator sets the project's context to "pay the water bill first"
+    And the operator dispatches "hello" to the project
+    Then the session's memory file carries "pay the water bill first"
+    And no memory file carries a role section
+
   # An agent that writes something into its own memory has learned something. Overwriting that on the
   # next exec would make the system's memory strictly worse than a text file, so the file wins and is
   # taken into the store.
