@@ -41,17 +41,17 @@ import (
 // Where a session is. These five are the whole vocabulary of Session.status, written down here because
 // the console colours by them and a sixth invented at a call site would come out uncoloured.
 const (
-	// StatusIdle is a session waiting for you: no task is running and the last one landed.
+	// StatusIdle is a session waiting for you: no exec is running and the last one landed.
 	StatusIdle = "idle"
-	// StatusRunning is a task under way. A detached dispatch sets it before it answers, so the
+	// StatusRunning is an exec under way. A detached dispatch sets it before it answers, so the
 	// listing drawn straight afterwards says the session is busy rather than ready.
 	StatusRunning = "running"
-	// StatusFailed is a session whose last task did not land. The task record carries why.
+	// StatusFailed is a session whose last exec did not land. The exec record carries why.
 	StatusFailed = "failed"
 	// StatusStopped is a session that was put down. Its sandbox is gone and its history is not.
 	StatusStopped = "stopped"
 	// StatusReclaimed is a session the system took the container back from. Its sandbox is gone and
-	// everything else it has is not, so the next task builds a fresh one over the same conversation
+	// everything else it has is not, so the next exec builds a fresh one over the same conversation
 	// and the same files.
 	//
 	// It is deliberately not stopped. A stop is an operator's decision and somebody reading it goes
@@ -63,7 +63,7 @@ const (
 // Info is what this control plane is running, reported over the API so an operator can see which
 // system they are about to act on. It is configuration: never a secret, and never a health verdict.
 type Info struct {
-	// Model is the backend a task runs against, for example "claude-code".
+	// Model is the backend an exec runs against, for example "claude-code".
 	Model string
 	// Sandbox is what a session is isolated in, for example "docker".
 	Sandbox string
@@ -117,17 +117,17 @@ type Config struct {
 	// operator's so the system can tell the two apart and refuse the driver the calls that grant
 	// capability (see DeniedToDriver).
 	DriverToken string
-	// BirthPermissionMode is what a session's tasks may do when nothing else says. It used to be a
+	// BirthPermissionMode is what a session's execs may do when nothing else says. It used to be a
 	// constant here, so every session that did not come through the console's wizard arrived in
 	// acceptEdits and the only way to change that was to edit the binary. Empty keeps acceptEdits,
 	// because an upgrade that quietly widens what a session may do is the worst way to learn this
 	// setting exists.
 	BirthPermissionMode string
-	// DescribeEvery is how many tasks past its description a conversation goes before the system writes
+	// DescribeEvery is how many execs past its description a conversation goes before the system writes
 	// it again. Zero is off.
 	DescribeEvery int
 	// StartWait is how long a dispatch is given to get from a session row to a sandbox ready for its
-	// first task. Zero takes startWait, which is measured from what a healthy start costs.
+	// first exec. Zero takes startWait, which is measured from what a healthy start costs.
 	StartWait time.Duration
 }
 
@@ -162,25 +162,25 @@ type Server struct {
 	driverToken string
 	// gitAuthor is who a commit made inside a sandbox is by.
 	gitAuthor Identity
-	// birthMode is what a session's tasks may do when nothing else says. Empty means acceptEdits.
+	// birthMode is what a session's execs may do when nothing else says. Empty means acceptEdits.
 	birthMode string
-	// describeEvery is how many tasks past its description a conversation goes before the system writes
+	// describeEvery is how many execs past its description a conversation goes before the system writes
 	// it again. Zero is off, which is what a system paying for automation runs wants.
 	describeEvery int
 	// describing counts the descriptions still being written, so a test can wait for them rather than
 	// sleeping and a shutdown can tell whether any are in flight.
 	describing sync.WaitGroup
-	// tasking counts the detached tasks still running, for the same reasons: a task nobody is waiting
-	// on is still a task, and a process that cannot count them cannot tell whether it is idle.
-	tasking sync.WaitGroup
+	// runningExecs counts the detached execs still running, for the same reasons: an exec nobody is waiting
+	// on is still an exec, and a process that cannot count them cannot tell whether it is idle.
+	runningExecs sync.WaitGroup
 	// skills are the capabilities a session is given, and where they are on the host.
 	skills       []skill.Skill
 	skillsHost   string
 	sandboxImage string
 	info         Info
-	// taskMetrics publishes what each task spent. Nil records nothing, which is what a system with no
+	// execMetrics publishes what each exec spent. Nil records nothing, which is what a system with no
 	// telemetry provider installed does.
-	taskMetrics *telemetry.TaskMetrics
+	execMetrics *telemetry.ExecMetrics
 	// headroom keeps the last reading of the machine. Everything that reports it reads the sampler
 	// and never the daemon, so a slow daemon slows the sampler and never a command.
 	// pullRequests reads back the pull requests the crew opened, on its own timer, and keeps what the
@@ -192,7 +192,7 @@ type Server struct {
 	healthMu   sync.RWMutex
 	lastHealth HealthReading
 
-	// startWait is the budget from a session row to a sandbox ready for its first task. A field
+	// startWait is the budget from a session row to a sandbox ready for its first exec. A field
 	// rather than a constant so a test can shorten it.
 	startWait time.Duration
 
@@ -204,9 +204,9 @@ type Server struct {
 	sandboxesMu sync.Mutex
 	sandboxes   map[string]sandbox.Sandbox // one per session, created lazily, closed on stop
 
-	// running is the task each session has in flight, and how to stop it. A task runs the model
+	// running is the exec each session has in flight, and how to stop it. An exec runs the model
 	// through a context, so holding the cancel is what makes stopping one possible at all; without
-	// it the only way to end a task was to kill the client, which does not reliably end anything.
+	// it the only way to end an exec was to kill the client, which does not reliably end anything.
 	runningMu sync.Mutex
 	running   map[string]*running
 
@@ -240,11 +240,11 @@ func NewServer(cfg Config) *Server {
 	// Creating an instrument fails only on a name this package chose, so a failure here is a defect
 	// in this file rather than an operator's problem. Say it and carry on unmeasured: a system that
 	// will not start because a counter would not be made is worse than a system with no counter.
-	metrics, err := telemetry.NewTaskMetrics()
+	metrics, err := telemetry.NewExecMetrics()
 	if err != nil {
-		slog.Warn("tasks are not being measured", "error", err)
+		slog.Warn("execs are not being measured", "error", err)
 	}
-	server.taskMetrics = metrics
+	server.execMetrics = metrics
 	return server
 }
 
@@ -258,23 +258,23 @@ func orWait(configured, standard time.Duration) time.Duration {
 
 // eventsOr is the log to publish on, and Discard when there is none, so nothing downstream has to
 
-// ListTasks returns a session's history, oldest first, from the tasks the dispatch path writes in
-// the same breath as each task.
+// ListExecs returns a session's history, oldest first, from the execs the dispatch path writes in
+// the same breath as each exec.
 //
 // It reads the store rather than the log: the log is the write side and replaying it on every
 // request would make a listing cost more the longer a system has been running.
-func (s *Server) ListTasks(ctx context.Context, req *quaycrewv1.ListTasksRequest) (*quaycrewv1.ListTasksResponse, error) {
+func (s *Server) ListExecs(ctx context.Context, req *quaycrewv1.ListExecsRequest) (*quaycrewv1.ListExecsResponse, error) {
 	if req.GetSession() == "" {
 		return nil, status.Error(codes.InvalidArgument, "session is required")
 	}
 	if _, err := s.store.GetSession(ctx, req.GetSession()); err != nil {
 		return nil, storeError(err, "session")
 	}
-	tasks, err := s.store.ListTasks(ctx, req.GetSession(), int(req.GetLimit()))
+	execs, err := s.store.ListExecs(ctx, req.GetSession(), int(req.GetLimit()))
 	if err != nil {
-		return nil, storeError(err, "list tasks")
+		return nil, storeError(err, "list execs")
 	}
-	return &quaycrewv1.ListTasksResponse{Tasks: tasks}, nil
+	return &quaycrewv1.ListExecsResponse{Execs: execs}, nil
 }
 
 // GetInfo reports what this control plane is running.
@@ -343,8 +343,8 @@ func storeError(err error, what string) error {
 
 // sandboxFor returns the session's sandbox, creating it on first use.
 //
-// The environment is set on the sandbox itself rather than on each task, so attaching to the
-// conversation is authenticated too. A token set after the first task does not reach the existing
+// The environment is set on the sandbox itself rather than on each exec, so attaching to the
+// conversation is authenticated too. A token set after the first exec does not reach the existing
 // sandbox: stop the session to get a fresh one.
 func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (sandbox.Sandbox, error) {
 	// One start at a time, as it has always been, and now abandonable: the system took this as a mutex
@@ -373,9 +373,9 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 	}
 	cfg := boxOf(session)
 	// No credential at sandbox birth. A sandbox keeps the configuration it was made with, so a
-	// credential written here would label every later task with the first task's grant, and one
-	// minted after birth would never reach the container at all. It travels on the task instead.
-	cfg.Env = environ(s.taskEnv(ctx, session, "", false))
+	// credential written here would label every later exec with the first exec's grant, and one
+	// minted after birth would never reach the container at all. It travels on the exec instead.
+	cfg.Env = environ(s.execEnv(ctx, session, "", false))
 	cfg.Mounts = mounts
 	cfg.Driver = session.GetDriver()
 	var box sandbox.Sandbox
@@ -416,7 +416,7 @@ func (s *Server) sandboxFor(ctx context.Context, session *quaycrewv1.Session) (s
 	return box, nil
 }
 
-// provision is everything a fresh sandbox needs before its first task.
+// provision is everything a fresh sandbox needs before its first exec.
 //
 // A session's working directory starts empty on purpose: a repository is cloned in conversation,
 // following the git skill, so the only provisioning a sandbox needs is its skills.
@@ -429,7 +429,7 @@ func (s *Server) provision(ctx context.Context, session *quaycrewv1.Session, hel
 	if err := s.readySkills(ctx, session, held, box); err != nil {
 		return err
 	}
-	// After the skills, because a skill can refuse the task and signing never does: a sandbox that
+	// After the skills, because a skill can refuse the exec and signing never does: a sandbox that
 	// cannot be set up to sign is one that asks the operator to commit, which the git skill covers.
 	return s.readySigning(ctx, session, box)
 }
@@ -437,7 +437,7 @@ func (s *Server) provision(ctx context.Context, session *quaycrewv1.Session, hel
 // readySkills checks the sandbox has what its skills need, and runs each skill's setup once.
 //
 // Inside the container because that is the only place that knows what the image carries. Once,
-// because a sandbox is adopted across tasks and a setup script run on every task is a script whose
+// because a sandbox is adopted across execs and a setup script run on every exec is a script whose
 // author has to think about being run a thousand times. The marker lives in the container, so a
 // replaced container runs setup again, which is right: it is the container that was set up.
 func (s *Server) readySkills(ctx context.Context, session *quaycrewv1.Session, held []skill.Held, box sandbox.Sandbox) error {
@@ -494,7 +494,7 @@ func (s *Server) imageName() string {
 // it, and it is read back first: an agent that wrote into its own CLAUDE.md has learned something,
 // and overwriting that would make the system's memory worse than a text file.
 //
-// A failure here never fails a task.
+// A failure here never fails an exec.
 func (s *Server) syncContext(ctx context.Context, session *quaycrewv1.Session) {
 	s.syncContextExcept(ctx, session, contextLevel{})
 }
@@ -513,13 +513,13 @@ func (s *Server) syncContextExcept(ctx context.Context, session *quaycrewv1.Sess
 	// A session running as a role is never read back into the system's memory.
 	for at, levels := range contextFiles(session) {
 		// Read back first. Something inside the sandbox writing into its own memory has learned
-		// something, and overwriting that on the next task would make the system's memory strictly
+		// something, and overwriting that on the next exec would make the system's memory strictly
 		// worse than a text file.
 		// The skills index is a section in the same file and is not a level: it is rendered from what the
 		// session holds rather than written by anybody. It is named in every file so the read back
 		// recognises its mark and drops what sits under it, because text under a mark this build does not
 		// know is swept into the innermost level, which stores the index as though the operator had typed
-		// it and renders it again underneath itself on the next task. The index belongs only to the outer
+		// it and renders it again underneath itself on the next exec. The index belongs only to the outer
 		// file, but a build that wrote it into the session's own file has been and gone, so the inner
 		// file's read back has to know the mark too. It goes first, never last: the last scope is where
 		// unmarked text belongs, and a note an agent appends is a note, not an index.
@@ -576,7 +576,7 @@ func join(kept, added string) string {
 // `krewe context set` is the operator saying what the context is now, so the store wins.
 //
 // A conversation already running does not see it. The tool reads its memory at the start, so a change
-// lands on the next task or the next open.
+// lands on the next exec or the next open.
 func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session) {
 	dirs := s.storage.MyDirs(boxOf(session))
 	if len(dirs) != 2 {
@@ -587,7 +587,7 @@ func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session)
 		sections := make([]sandbox.Section, 0, len(levels)+2)
 		// Who the session is, first, because everything under it is read in that light. It goes in
 		// the outer file beside the workspace's context, which is the file every session reads
-		// first, and it is rendered every task and never read back.
+		// first, and it is rendered every exec and never read back.
 		if at == outerFile && brief != "" {
 			sections = append(sections, sandbox.Section{Scope: sandbox.RoleScope, Body: brief})
 		}
@@ -604,7 +604,7 @@ func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session)
 			}
 			// A level can carry a swept skills index, from a build whose read back did not know the mark
 			// in the session's own file. An index is rendered state, never context, so the store is put
-			// right here, once, rather than rendering the stale index on every task from now on.
+			// right here, once, rather than rendering the stale index on every exec from now on.
 			if cleaned, swept := sandbox.WithoutSection(body, sandbox.SkillsScope); swept {
 				body = cleaned
 				_ = s.store.SetContext(ctx, level.scope, level.owner, body)
@@ -634,7 +634,7 @@ func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session)
 // The system's skills are not written: they are already a directory the operator keeps, and they are
 // mounted from it. Only the ones that live in the store have to be put somewhere before they can be.
 //
-// A failure here does not fail a task, for the same reason a context failure does not. The model is told
+// A failure here does not fail an exec, for the same reason a context failure does not. The model is told
 // what it holds rather than made to depend on being told.
 func (s *Server) renderSkills(ctx context.Context, session *quaycrewv1.Session, _ string) string {
 	caps := s.capabilityOf(ctx, session)
@@ -770,17 +770,17 @@ func (s *Server) ReapStrays(ctx context.Context) {
 	}
 }
 
-// WaitForTasks blocks until every detached task has landed, or until the caller gives up.
+// WaitForExecs blocks until every detached exec has landed, or until the caller gives up.
 //
-// A detached task is a goroutine and not a call, so draining requests does not drain it: a graceful
-// stop that skips this exits mid task, and the session comes back up settled as failed for no better
-// reason than that nobody waited. Bounded by the caller, because a task takes as long as the job
+// A detached exec is a goroutine and not a call, so draining requests does not drain it: a graceful
+// stop that skips this exits mid exec, and the session comes back up settled as failed for no better
+// reason than that nobody waited. Bounded by the caller, because an exec takes as long as the job
 // takes and a shutdown cannot.
-func (s *Server) WaitForTasks(ctx context.Context) {
+func (s *Server) WaitForExecs(ctx context.Context) {
 	landed := make(chan struct{})
 	go func() {
 		defer close(landed)
-		s.tasking.Wait()
+		s.runningExecs.Wait()
 	}()
 	select {
 	case <-landed:
@@ -788,12 +788,12 @@ func (s *Server) WaitForTasks(ctx context.Context) {
 	}
 }
 
-// SettleTasks marks every session the store still calls running as failed, and runs once at startup.
+// SettleExecs marks every session the store still calls running as failed, and runs once at startup.
 //
-// A task runs in this process. Nothing survives the process going down, so a row saying running on
-// the way up is a task that died with the last one, and leaving it says a session is busy for as long
+// An exec runs in this process. Nothing survives the process going down, so a row saying running on
+// the way up is an exec that died with the last one, and leaving it says a session is busy for as long
 // as the system lives. That reads as a hung conversation and there is nothing to wait for.
-func (s *Server) SettleTasks(ctx context.Context) {
+func (s *Server) SettleExecs(ctx context.Context) {
 	sessions, err := s.store.ListSessions(ctx, store.SessionFilter{})
 	if err != nil {
 		return
@@ -802,28 +802,28 @@ func (s *Server) SettleTasks(ctx context.Context) {
 		if session.GetStatus() != StatusRunning {
 			continue
 		}
-		s.recordTask(ctx, session.GetId(), session.GetModelSessionId(), StatusFailed)
-		s.settleHistory(ctx, session, "the system restarted while this task was running, so it did not finish")
+		s.recordExec(ctx, session.GetId(), session.GetModelSessionId(), StatusFailed)
+		s.settleHistory(ctx, session, "the system restarted while this exec was running, so it did not finish")
 	}
 }
 
-// settleHistory marks whatever the session left open as failed. A task is written when it starts, so
-// the row is already there, carrying what the operator asked: closing it says which task died rather
-// than that some task did. A session with nothing open still gets a record, because a session the
+// settleHistory marks whatever the session left open as failed. An exec is written when it starts, so
+// the row is already there, carrying what the operator asked: closing it says which exec died rather
+// than that some exec did. A session with nothing open still gets a record, because a session the
 // store calls running was working on something and a history that says nothing is worse than a
 // history that says this much.
 func (s *Server) settleHistory(ctx context.Context, session *quaycrewv1.Session, why string) {
-	open, err := s.store.ListTasks(ctx, session.GetId(), 0)
+	open, err := s.store.ListExecs(ctx, session.GetId(), 0)
 	if err == nil {
 		settled := false
-		for _, task := range open {
-			if task.GetStatus() != StatusRunning {
+		for _, exec := range open {
+			if exec.GetStatus() != StatusRunning {
 				continue
 			}
-			s.landTask(ctx, session, &quaycrewv1.TaskEvent{
-				Id: task.GetId(), Session: session.GetId(), Workspace: session.GetWorkspace(),
+			s.landExec(ctx, session, &quaycrewv1.ExecEvent{
+				Id: exec.GetId(), Session: session.GetId(), Workspace: session.GetWorkspace(),
 				Project: session.GetProject(), Handle: session.GetHandle(),
-				Prompt: task.GetPrompt(), OccurredAt: task.GetOccurredAt(),
+				Prompt: exec.GetPrompt(), OccurredAt: exec.GetOccurredAt(),
 			}, StatusFailed, "", why)
 			settled = true
 		}
@@ -831,7 +831,7 @@ func (s *Server) settleHistory(ctx context.Context, session *quaycrewv1.Session,
 			return
 		}
 	}
-	s.recordHistory(ctx, session, &quaycrewv1.TaskEvent{Status: StatusFailed, Failure: why})
+	s.recordHistory(ctx, session, &quaycrewv1.ExecEvent{Status: StatusFailed, Failure: why})
 }
 
 // CreateWorkspace creates a workspace at runtime.
@@ -1123,7 +1123,7 @@ func (s *Server) SetDeployTarget(ctx context.Context, req *quaycrewv1.SetDeployT
 	return &quaycrewv1.SetDeployTargetResponse{Project: written}, nil
 }
 
-// Dispatch starts or continues a session, running one task through the model runner.
+// Dispatch starts or continues a session, running one exec through the model runner.
 func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) (*quaycrewv1.DispatchResponse, error) {
 	// Said before anything is done, because a dispatch that stopped inside this call wrote no line at
 	// all and the system read as healthy while it answered none of them.
@@ -1159,13 +1159,13 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 			"session %s is archived: restore it first", display.ShortID(session.GetHandle()))
 	}
 
-	// The conversation is named before any task runs in it, so the system can say which conversation a
+	// The conversation is named before any exec runs in it, so the system can say which conversation a
 	// session is working in while it is working rather than once it has finished. A session opened
 	// meanwhile lands in the conversation doing the work.
 	s.nameConversation(ctx, session)
 
 	// Anything that fails from here on says so on the session's row. The row exists by now, and a row
-	// left idle with no task and no container reads as a session waiting for work rather than one
+	// left idle with no exec and no container reads as a session waiting for work rather than one
 	// that never started.
 	//
 	// A mode given here applies before the sandbox is built, because a sandbox is born with its
@@ -1186,78 +1186,78 @@ func (s *Server) Dispatch(ctx context.Context, req *quaycrewv1.DispatchRequest) 
 	if req.GetDetach() {
 		// Marked running before the goroutine starts, not inside it: the caller is about to be told the
 		// session exists, and a session that reads idle in the listing it draws next is a session the
-		// operator will type into while its first task is still running. The task itself marks it
+		// operator will type into while its first exec is still running. The exec itself marks it
 		// running too, which covers the waited path, and doing it twice costs a row update.
-		s.recordTask(ctx, session.GetId(), session.GetModelSessionId(), StatusRunning)
-		// The task is written down before the answer, for the same reason and one more. A caller told
-		// the dispatch happened reads the history next, and a history that still ends on the task
+		s.recordExec(ctx, session.GetId(), session.GetModelSessionId(), StatusRunning)
+		// The exec is written down before the answer, for the same reason and one more. A caller told
+		// the dispatch happened reads the history next, and a history that still ends on the exec
 		// before this one reads as though this one was never asked for. The one more is that a
-		// controller sending a job's task again reads that history to decide what came of it: written
+		// controller sending a job's exec again reads that history to decide what came of it: written
 		// inside the goroutine, the record of the attempt before is still the last one there for as
 		// long as the goroutine takes to start, and the controller would answer for this attempt with
 		// the last attempt's failure.
-		opened := s.beginTask(ctx, session, req.GetText())
+		opened := s.beginExec(ctx, session, req.GetText())
 		// Detached from the caller's context as well as from its patience. The caller is a console that
-		// answers a keystroke and moves on, so its context is cancelled the moment it does, and a task
+		// answers a keystroke and moves on, so its context is cancelled the moment it does, and an exec
 		// carrying that context would be killed by the very thing that started it.
-		s.tasking.Add(1)
+		s.runningExecs.Add(1)
 		go func(session *quaycrewv1.Session, text, credential string, building bool,
-			opened *quaycrewv1.TaskEvent) {
-			defer s.tasking.Done()
-			_, _ = s.task(context.WithoutCancel(ctx), session, text, credential, building, opened)
+			opened *quaycrewv1.ExecEvent) {
+			defer s.runningExecs.Done()
+			_, _ = s.exec(context.WithoutCancel(ctx), session, text, credential, building, opened)
 		}(session, req.GetText(), "", false, opened)
 		return &quaycrewv1.DispatchResponse{Id: session.GetId(), Handle: handle}, nil
 	}
 
-	reply, err := s.task(ctx, session, req.GetText(), "", false, nil)
+	reply, err := s.exec(ctx, session, req.GetText(), "", false, nil)
 	if err != nil {
 		return nil, err
 	}
 	return &quaycrewv1.DispatchResponse{Id: session.GetId(), Handle: handle, Reply: reply}, nil
 }
 
-// task runs one task of a session and records what came of it, whichever way it was dispatched. Both
-// roads meet here so a detached task and a waited one cannot come to mean different things: the same
+// exec runs one exec of a session and records what came of it, whichever way it was dispatched. Both
+// roads meet here so a detached exec and a waited one cannot come to mean different things: the same
 // sandbox, the same recording, the same description behind it.
 //
-// opened is the task record a caller has already written, which a detached dispatch does before it
+// opened is the exec record a caller has already written, which a detached dispatch does before it
 // answers. Nil opens one here, which is what the waited road does.
-func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, credential string,
-	building bool, opened *quaycrewv1.TaskEvent) (string, error) {
+func (s *Server) exec(ctx context.Context, session *quaycrewv1.Session, text, credential string,
+	building bool, opened *quaycrewv1.ExecEvent) (string, error) {
 	// Registered before anything runs, so a stop that arrives a moment after the dispatch has
-	// something to cancel. The task runs under this context from here down, which is what makes
+	// something to cancel. The exec runs under this context from here down, which is what makes
 	// `krewe stop` end the model rather than only mark a row.
 	ctx, held := s.beginRunning(ctx, session.GetId())
 	defer s.endRunning(session.GetId(), held)
 	// Both of these happen before any job does, and that is the point of them. An operator has to be
 	// able to see what a session was asked to do while it is doing it, whether or not the caller
-	// waited: a task typed at a terminal used to record nothing at all until it landed, so a session
-	// working for half an hour read idle, with the task burning its tokens invisible.
-	s.recordTask(ctx, session.GetId(), session.GetModelSessionId(), StatusRunning)
-	task := opened
-	if task == nil {
-		task = s.beginTask(ctx, session, text)
+	// waited: an exec typed at a terminal used to record nothing at all until it landed, so a session
+	// working for half an hour read idle, with the exec burning its tokens invisible.
+	s.recordExec(ctx, session.GetId(), session.GetModelSessionId(), StatusRunning)
+	exec := opened
+	if exec == nil {
+		exec = s.beginExec(ctx, session, text)
 	}
-	// Emitted here rather than where the task was asked for, so both roads say the same thing: a
-	// detached task and a waited one are one path from this line down.
+	// Emitted here rather than where the exec was asked for, so both roads say the same thing: a
+	// detached exec and a waited one are one path from this line down.
 	s.emit(ctx, session, KindSessionStarted, text)
 
 	box, err := s.startSandbox(ctx, session)
 	if err != nil {
 		if asked, reason := held.stopped(); asked {
-			return "", s.landStopped(ctx, session, task, model.Response{}, reason)
+			return "", s.landStopped(ctx, session, exec, model.Response{}, reason)
 		}
-		s.recordTask(ctx, session.GetId(), "", StatusFailed)
-		// The system's own words for a task it never started, from the one place they are written down.
+		s.recordExec(ctx, session.GetId(), "", StatusFailed)
+		// The system's own words for an exec it never started, from the one place they are written down.
 		// The controller reads this to tell a job it could not start from a job that was wrong, and
 		// puts the first back to pending rather than failing it.
 		failure := "no sandbox" + ": " + err.Error()
-		s.landTask(ctx, session, task, StatusFailed, "", failure)
+		s.landExec(ctx, session, exec, StatusFailed, "", failure)
 		s.emit(ctx, session, KindSessionErrored, failure)
 		return "", sandboxError(err, "create sandbox")
 	}
 
-	// Named here as well as at dispatch, so a task always carries a conversation whatever road it
+	// Named here as well as at dispatch, so an exec always carries a conversation whatever road it
 	// arrived by, and started decides which of the two ways it is named on the command line.
 	conversation := s.nameConversation(ctx, session)
 	resp, err := s.runner.Run(ctx, box, model.Request{
@@ -1265,30 +1265,30 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, cr
 		ModelSessionID:      conversation,
 		ConversationStarted: s.conversationStarted(session, conversation),
 		PermissionMode:      permissionModeOf(session, s.birthMode),
-		Env:                 withTraceparent(ctx, s.taskEnv(ctx, session, credential, building)),
+		Env:                 withTraceparent(ctx, s.execEnv(ctx, session, credential, building)),
 		Settings:            s.settingsFor(ctx, session),
 	})
 	if err != nil {
 		if asked, reason := held.stopped(); asked {
-			return "", s.landStopped(ctx, session, task, resp, reason)
+			return "", s.landStopped(ctx, session, exec, resp, reason)
 		}
-		s.recordTask(ctx, session.GetId(), "", StatusFailed)
-		// A task that failed still spent what it spent, and a bill that counts only the tasks that
+		s.recordExec(ctx, session.GetId(), "", StatusFailed)
+		// An exec that failed still spent what it spent, and a bill that counts only the execs that
 		// worked understates itself in exactly the situation somebody is investigating.
-		s.measureTask(ctx, session, resp, StatusFailed)
-		// The error itself, not a sentence about tasks. Every failure used to read "the model did not
-		// complete the task", so a deadline, a crash and a refusal were one indistinguishable line and
+		s.measureExec(ctx, session, resp, StatusFailed)
+		// The error itself, not a sentence about execs. Every failure used to read "the model did not
+		// complete the exec", so a deadline, a crash and a refusal were one indistinguishable line and
 		// the operator had nothing to act on.
-		s.landTask(ctx, session, task, StatusFailed, "", taskFailure(err))
-		s.emit(ctx, session, KindSessionErrored, taskFailure(err))
-		return "", status.Errorf(codes.Internal, "run task: %v", err)
+		s.landExec(ctx, session, exec, StatusFailed, "", execFailure(err))
+		s.emit(ctx, session, KindSessionErrored, execFailure(err))
+		return "", status.Errorf(codes.Internal, "run exec: %v", err)
 	}
-	s.recordTask(ctx, session.GetId(), s.confirmConversation(ctx, session, resp.ModelSessionID), StatusIdle)
-	s.measureTask(ctx, session, resp, StatusIdle)
-	s.landTask(ctx, session, task, StatusIdle, resp.Reply, "")
+	s.recordExec(ctx, session.GetId(), s.confirmConversation(ctx, session, resp.ModelSessionID), StatusIdle)
+	s.measureExec(ctx, session, resp, StatusIdle)
+	s.landExec(ctx, session, exec, StatusIdle, resp.Reply, "")
 	s.emit(ctx, session, KindSessionCompleted, resp.Reply)
 
-	// Behind the answer, so the operator waits for their task rather than for the system to think of a
+	// Behind the answer, so the operator waits for their exec rather than for the system to think of a
 	// name for it. Only the identifier crosses into it: everything else is read again in there, so
 	// nothing this call is still holding can be written underneath it.
 	s.describing.Add(1)
@@ -1300,11 +1300,11 @@ func (s *Server) task(ctx context.Context, session *quaycrewv1.Session, text, cr
 	return resp.Reply, nil
 }
 
-// withTraceparent adds this task's trace context to the environment the command runs with.
+// withTraceparent adds this exec's trace context to the environment the command runs with.
 //
-// On the task and never on the sandbox, and that is the whole point of it being here rather than in
-// taskEnv. A sandbox is born with its environment and is then reused across every later task, so a
-// trace context written at birth labels the tenth task with the first task's span for as long as the
+// On the exec and never on the sandbox, and that is the whole point of it being here rather than in
+// execEnv. A sandbox is born with its environment and is then reused across every later exec, so a
+// trace context written at birth labels the tenth exec with the first exec's span for as long as the
 // container lives. The same trap the system's refusal message names about a capability granted after
 // birth: the container already running never sees the new value, and the value it does hold is the
 // one from a moment that has passed.
@@ -1324,13 +1324,13 @@ func withTraceparent(ctx context.Context, env map[string]string) map[string]stri
 	return env
 }
 
-// measureTask publishes what a task spent and where it was spent.
+// measureExec publishes what an exec spent and where it was spent.
 //
 // The workspace and the project are on it because the useful question is never "what did the system
 // cost" but "what did this job cost". The model is on it because a system that moved from
 // one model to another wants to see the step.
-func (s *Server) measureTask(ctx context.Context, session *quaycrewv1.Session, resp model.Response, status string) {
-	s.taskMetrics.Record(ctx, telemetry.TaskMeasurement{
+func (s *Server) measureExec(ctx context.Context, session *quaycrewv1.Session, resp model.Response, status string) {
+	s.execMetrics.Record(ctx, telemetry.ExecMeasurement{
 		// Names rather than identifiers, the way the audit export already publishes them: nobody
 		// groups a cost dashboard by a uuid. A lookup that fails falls back to the identifier, so a
 		// measurement is never lost to a naming problem.
@@ -1360,23 +1360,23 @@ func (s *Server) projectName(ctx context.Context, id string) string {
 	return project.GetName()
 }
 
-// taskFailure is what the operator is told a failed task failed of.
+// execFailure is what the operator is told a failed exec failed of.
 //
-// A cancelled task is named for what actually happened to it, because "context canceled" describes
+// A cancelled exec is named for what actually happened to it, because "context canceled" describes
 // the plumbing rather than the event, and the two causes need telling apart: a deadline is a caller
 // that would not wait, and a cancellation is a caller that went away.
-func taskFailure(err error) string {
+func execFailure(err error) string {
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
-		return "the task ran past the time the caller allowed it"
+		return "the exec ran past the time the caller allowed it"
 	case errors.Is(err, context.Canceled):
-		return "the task was cancelled before it finished"
+		return "the exec was cancelled before it finished"
 	default:
 		return err.Error()
 	}
 }
 
-// permissionModeOf is the mode a session's tasks run in. A session from before the mode was written
+// permissionModeOf is the mode a session's execs run in. A session from before the mode was written
 // down has none, and every one of those has been running acceptEdits, so that is what it keeps.
 func permissionModeOf(session *quaycrewv1.Session, born string) string {
 	if mode := session.GetPermissionMode(); model.KnownPermissionMode(mode) {
@@ -1451,7 +1451,7 @@ func (s *Server) ListContexts(ctx context.Context, req *quaycrewv1.ListContextsR
 }
 
 // SetContext records what the model should be told at a scope, and renders it into every directory
-// that already exists for it, so a sandbox already running picks it up on its next task.
+// that already exists for it, so a sandbox already running picks it up on its next exec.
 func (s *Server) SetContext(ctx context.Context, req *quaycrewv1.SetContextRequest) (*quaycrewv1.SetContextResponse, error) {
 	if err := refusedScope(req.GetScope()); err != nil {
 		return nil, err
@@ -1515,9 +1515,9 @@ func (s *Server) contextDir(ctx context.Context, scope store.ContextScope, owner
 	}
 }
 
-// SetSessionPermissionMode changes what a session's tasks may do without asking.
+// SetSessionPermissionMode changes what a session's execs may do without asking.
 //
-// The mode belongs to the session rather than to a task, so a session started to plan something keeps
+// The mode belongs to the session rather than to an exec, so a session started to plan something keeps
 // planning instead of being re armed on every dispatch. An unknown mode is refused here rather than
 // handed to the model, which would take it as far as its own argument parser and no further.
 // ImportSkill takes a skill into the system from the files a client read out of its directory.
@@ -1701,11 +1701,11 @@ func (s *Server) SetSessionPermissionMode(ctx context.Context, req *quaycrewv1.S
 			req.GetMode(), model.PermissionPlan, model.PermissionAcceptEdits, model.PermissionBypass)
 	}
 	// The one place where skipping every permission means the host rather than a container. The local
-	// backend is a stopgap for running without Docker, and arming a task there gives the model the
+	// backend is a stopgap for running without Docker, and arming an exec there gives the model the
 	// machine the operator is sitting at.
 	if req.GetMode() == model.PermissionBypass && s.info.Sandbox == "local" {
 		return nil, status.Errorf(codes.FailedPrecondition,
-			"this system runs tasks on the host, not in a container, so %s would give the model your machine",
+			"this system runs execs on the host, not in a container, so %s would give the model your machine",
 			model.PermissionBypass)
 	}
 	if _, err := s.store.GetSession(ctx, req.GetId()); err != nil {
@@ -1749,20 +1749,20 @@ func tidyLabel(label string) string {
 	return tidy
 }
 
-// recordTask stores the outcome of a task. A store failure here must not replace the task's own
+// recordExec stores the outcome of an exec. A store failure here must not replace the exec's own
 // result, which the operator already has, so it is not returned; a later read shows a stale status
-// rather than the task appearing to have failed when it did not.
+// rather than the exec appearing to have failed when it did not.
 //
 // An archived session keeps its conversation handle and its status. Archiving stops a session and takes
-// its container away, and the task that was running in it lands afterwards: recording what that task
+// its container away, and the exec that was running in it lands afterwards: recording what that exec
 // came to put the session back to idle, or marked it failed, so a session the operator had just put
 // away read as one still working. The handle is still written, because restoring the session has to
 // come back to the conversation it was in.
-func (s *Server) recordTask(ctx context.Context, sessionID, modelSessionID, sessionStatus string) {
+func (s *Server) recordExec(ctx context.Context, sessionID, modelSessionID, sessionStatus string) {
 	if session, err := s.store.GetSession(ctx, sessionID); err == nil && session.GetArchivedAt() != nil {
 		sessionStatus = session.GetStatus()
 	}
-	_ = s.store.RecordTask(ctx, sessionID, modelSessionID, sessionStatus)
+	_ = s.store.RecordExec(ctx, sessionID, modelSessionID, sessionStatus)
 }
 
 // environ renders an environment map as the "KEY=value" entries a sandbox expects, sorted so the
@@ -1783,10 +1783,10 @@ func environ(values map[string]string) []string {
 	return entries
 }
 
-// taskEnv gathers the environment a task runs with from the workspace's secrets. A workspace that has
+// execEnv gathers the environment an exec runs with from the workspace's secrets. A workspace that has
 // set none, or a model backend that needs none, simply runs with no extra env: nothing here fails a
-// task, because a secret that cannot be read is a worse reason to refuse job than to attempt it.
-func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, credential string,
+// exec, because a secret that cannot be read is a worse reason to refuse job than to attempt it.
+func (s *Server) execEnv(ctx context.Context, session *quaycrewv1.Session, credential string,
 	building bool) map[string]string {
 	env := map[string]string{}
 	// Who this session is. The volume is shared by every session in the workspace, so anything a
@@ -1813,13 +1813,13 @@ func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, crede
 			env[auth.TokenEnv] = s.driverToken
 		}
 	}
-	// The credential this one task runs under, where the task runs a job. It is minted for
+	// The credential this one exec runs under, where the exec runs a job. It is minted for
 	// that job, carries the verbs its role declared, and expires with it, so a value read out of the
 	// container grants what that job could do and only until it ends.
 	//
 	// Never written at sandbox birth, and that is the constraint the obvious design fails on: a
-	// sandbox keeps what it was created with, so a credential put there would label every later task
-	// with the first task's grant, and one minted afterwards would never reach the container.
+	// sandbox keeps what it was created with, so a credential put there would label every later exec
+	// with the first exec's grant, and one minted afterwards would never reach the container.
 	if credential != "" && s.reachable != "" {
 		env[grpcAddrEnv] = s.reachable
 		env[auth.TokenEnv] = credential
@@ -1839,7 +1839,7 @@ func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, crede
 	// list of which names are allowed out was a third answer to a question already answered twice.
 	//
 	// The model's own token is asked for by name as well, so a store that cannot enumerate still
-	// runs a task rather than failing one for a reason the operator cannot see.
+	// runs an exec rather than failing one for a reason the operator cannot see.
 	//
 	// A mounted secret is left out. It reaches the sandbox as a file, and putting it here as well
 	// would hand back the exposure the file exists to avoid: a container's environment is readable
@@ -1872,11 +1872,11 @@ func (s *Server) taskEnv(ctx context.Context, session *quaycrewv1.Session, crede
 		env[name] = value
 	}
 	// The model's token a second time, under a name Claude Code leaves alone. The CLI strips
-	// CLAUDE_CODE_OAUTH_TOKEN from every process a task starts, so a hook fired on a message holds no
+	// CLAUDE_CODE_OAUTH_TOKEN from every process an exec starts, so a hook fired on a message holds no
 	// credential and cannot ask a model anything. The value is the same value; only the name is new.
 	//
 	// The system owns this name, so it is written last and a workspace secret answering to it does not
-	// stand in for the token a task actually runs under.
+	// stand in for the token an exec actually runs under.
 	if token := env[model.ClaudeCodeOAuthTokenEnv]; token != "" {
 		env[model.ModelTokenEnv] = token
 	}
@@ -2067,21 +2067,21 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 		}
 	}
 	// Opening a session opens the conversation the session already holds. The system names one before
-	// any task runs in it, so by the time anybody can open a session there is a name to open, and
+	// any exec runs in it, so by the time anybody can open a session there is a name to open, and
 	// naming one here would be naming a second conversation beside the first.
 	//
 	// A session with no name at all is one nothing has ever been dispatched to, or one carried over
-	// from a system that named conversations after the task rather than before it. Naming it here is
-	// what makes it openable: a first task that failed used to leave a session in the listing that
+	// from a system that named conversations after the exec rather than before it. Naming it here is
+	// what makes it openable: a first exec that failed used to leave a session in the listing that
 	// nobody could open at all.
 	if session.GetModelSessionId() == "" {
 		if session.GetStatus() == StatusRunning {
-			// The one case where naming a conversation here is the defect rather than the fix. The task
+			// The one case where naming a conversation here is the defect rather than the fix. The exec
 			// is working in a conversation this system never named and cannot know the name of until the
-			// task lands, and a name minted now would open an empty conversation beside the job.
+			// exec lands, and a name minted now would open an empty conversation beside the job.
 			return nil, status.Errorf(codes.FailedPrecondition,
-				"session %s is running a task that named its own conversation: it lands on the session "+
-					"when the task finishes, and opening the session now would start a second conversation "+
+				"session %s is running an exec that named its own conversation: it lands on the session "+
+					"when the exec finishes, and opening the session now would start a second conversation "+
 					"beside the one doing the work", display.ShortID(session.GetHandle()))
 		}
 		s.nameConversation(ctx, session)
@@ -2114,13 +2114,13 @@ func (s *Server) AttachSession(ctx context.Context, req *quaycrewv1.AttachSessio
 
 // RestartSession gives a session a fresh sandbox and leaves it idle, whatever state it was in.
 //
-// The sandbox is started here rather than on the next task, so the operator can attach into the
-// conversation straight away instead of having to dispatch a task to make the container exist. That
+// The sandbox is started here rather than on the next exec, so the operator can attach into the
+// conversation straight away instead of having to dispatch an exec to make the container exist. That
 // is only safe because a session's state lives on the host now: the sandbox this creates is a new
 // container over the same conversation store and the same project files.
 //
 // A session that is already live is stopped first rather than refused. Restarting is what the operator
-// reaches for when the container is wrong: a wedged task, a shell that will not answer, a credential
+// reaches for when the container is wrong: a wedged exec, a shell that will not answer, a credential
 // the sandbox was born without. Refusing until it was stopped made that two keys, and the second was
 // the one that did the job, so the first key read as broken.
 //
@@ -2135,7 +2135,7 @@ func (s *Server) RestartSession(ctx context.Context, req *quaycrewv1.RestartSess
 			"session %s is archived: restore it first", display.ShortID(session.GetHandle()))
 	}
 	// The old container goes before the new one is asked for, so the session never holds two, and a
-	// task running in the old one loses the room it was working in, which is the point of the key.
+	// exec running in the old one loses the room it was working in, which is the point of the key.
 	if session.GetStatus() != StatusStopped {
 		if err := s.store.StopSession(ctx, req.GetId()); err != nil {
 			return nil, storeError(err, "session")
@@ -2226,14 +2226,14 @@ func (s *Server) StopSession(ctx context.Context, req *quaycrewv1.StopSessionReq
 // DrainSessions puts every live session down, so whatever is about to take the containers away finds
 // nothing running.
 //
-// `make upgrade` removes sandboxes by name from the daemon. A container removed that way takes a task
+// `make upgrade` removes sandboxes by name from the daemon. A container removed that way takes an exec
 // in flight with it, which lands as "model: run exited: exit status 137, and it said nothing about
 // why", and it leaves the row still holding the skills its container was born with while the
 // container is gone, so the listing measures staleness against a birth set nothing has any more.
 // Going through here instead stops each session first: the row says stopped, which is true, and the
 // birth set is cleared with the sandbox.
 //
-// A task under way refuses the drain rather than being interrupted, and the answer names what is
+// An exec under way refuses the drain rather than being interrupted, and the answer names what is
 // working so the operator can wait for it. Force is the operator saying they know, and then the drain
 // says what it interrupted rather than doing it quietly.
 func (s *Server) DrainSessions(ctx context.Context, req *quaycrewv1.DrainSessionsRequest) (*quaycrewv1.DrainSessionsResponse, error) {
@@ -2253,8 +2253,8 @@ func (s *Server) DrainSessions(ctx context.Context, req *quaycrewv1.DrainSession
 	}
 	if len(working) > 0 && !req.GetForce() {
 		return nil, status.Errorf(codes.FailedPrecondition,
-			"%s still working: %s. Wait for it, or drain anyway and lose the task",
-			taskWord(len(working)), namesOf(working))
+			"%s still working: %s. Wait for it, or drain anyway and lose the exec",
+			execWord(len(working)), namesOf(working))
 	}
 	for _, session := range live {
 		if err := s.store.StopSession(ctx, session.GetId()); err != nil {
@@ -2265,13 +2265,13 @@ func (s *Server) DrainSessions(ctx context.Context, req *quaycrewv1.DrainSession
 	return &quaycrewv1.DrainSessionsResponse{Stopped: live, Working: working}, nil
 }
 
-// taskWord counts the tasks in flight in words, because "1 tasks still working" is the sentence that
+// execWord counts the execs in flight in words, because "1 execs still working" is the sentence that
 // makes an operator doubt the rest of the message.
-func taskWord(count int) string {
+func execWord(count int) string {
 	if count == 1 {
-		return "1 task is"
+		return "1 exec is"
 	}
-	return fmt.Sprintf("%d tasks are", count)
+	return fmt.Sprintf("%d execs are", count)
 }
 
 // namesOf lists sessions the way the operator sees them: the handle they would type, and the label

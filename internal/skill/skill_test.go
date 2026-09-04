@@ -71,8 +71,8 @@ func TestASkillIsWhatItsFilesSay(t *testing.T) {
 	}
 }
 
-// TestASkillWithSomethingToDoBeforeTheFirstTask.
-func TestASkillWithSomethingToDoBeforeTheFirstTask(t *testing.T) {
+// TestASkillWithSomethingToDoBeforeTheFirstExec.
+func TestASkillWithSomethingToDoBeforeTheFirstExec(t *testing.T) {
 	dir := t.TempDir()
 	at := write(t, dir, "git", gitManifest, "# git\n\nBranch first.\n")
 	if err := os.MkdirAll(filepath.Join(at, "bin"), 0o777); err != nil {

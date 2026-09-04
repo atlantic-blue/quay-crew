@@ -54,7 +54,7 @@ func TestTheShippedProvingSkillLoads(t *testing.T) {
 }
 
 // A skill naming a secret the workspace has not set is left out of the session, and one naming a
-// binary the image does not carry refuses the task. This skill is prose and nothing else, so it can
+// binary the image does not carry refuses the exec. This skill is prose and nothing else, so it can
 // name neither: a skill that reaches every session must have nothing that can leave it out of one.
 func TestTheProvingSkillNeedsNothingThatCouldLeaveItOut(t *testing.T) {
 	proving := shipped(t, "proving")
@@ -65,7 +65,7 @@ func TestTheProvingSkillNeedsNothingThatCouldLeaveItOut(t *testing.T) {
 		t.Errorf("the proving skill names the secrets %v, so a workspace that has not set them is a workspace where a design job is never offered it", proving.Secrets)
 	}
 	if len(proving.Binaries) != 0 {
-		t.Errorf("the proving skill names the binaries %v, so an image without one refuses every task in every workspace", proving.Binaries)
+		t.Errorf("the proving skill names the binaries %v, so an image without one refuses every exec in every workspace", proving.Binaries)
 	}
 	if proving.HasSetup {
 		t.Error("the proving skill runs a setup script, and there is nothing for it to set up")

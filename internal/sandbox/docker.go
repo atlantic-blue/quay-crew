@@ -13,7 +13,7 @@ import (
 )
 
 // DockerProvider gives each session its own long lived container. The container starts once, the
-// session's tasks exec inside it, and it is removed when the session ends.
+// session's execs exec inside it, and it is removed when the session ends.
 //
 // The state that has to outlive the container comes from Storage, mounted in from the host, so
 // removing a container no longer destroys the conversation the database holds a handle to.
@@ -283,7 +283,7 @@ const processTable = `for p in /proc/[0-9]*/cmdline; do cat "$p" 2>/dev/null; ec
 //
 // This is the state the system could not see. `krewe attach` opens the conversation in tmux inside the
 // sandbox, and detaching leaves the runtime answering with nobody watching it, so the tmux question
-// says nobody is there and the row says no task is open, and both are true while a conversation is
+// says nobody is there and the row says no exec is open, and both are true while a conversation is
 // mid answer.
 //
 // Nothing is written and nothing has to be kept fresh, which is why it is asked rather than stamped:

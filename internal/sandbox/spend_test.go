@@ -174,7 +174,7 @@ func TestARecordThisDoesNotUnderstandIsStillCounted(t *testing.T) {
 // would fail here rather than report a tidy total.
 func TestEveryCharacterOfAConversationLandsInOneCategory(t *testing.T) {
 	const (
-		task     = "read the controller and say what it does"
+		exec     = "read the controller and say what it does"
 		thinking = "the controller is where the loop lives"
 		answer   = "it reconciles jobs"
 	)
@@ -182,7 +182,7 @@ func TestEveryCharacterOfAConversationLandsInOneCategory(t *testing.T) {
 	output := strings.Repeat("b", 3_000)
 
 	spent := spendOf(t,
-		asked(task),
+		asked(exec),
 		thought(thinking),
 		called("t1", "Read", map[string]any{"file_path": "/repo/controller.go"}),
 		returned("t1", file),
@@ -197,7 +197,7 @@ func TestEveryCharacterOfAConversationLandsInOneCategory(t *testing.T) {
 		Reads: int64(len(file)),
 		Tools: int64(len(output)),
 		Turns: int64(len(thinking) + len(answer) + calls),
-		Told:  int64(len(task)),
+		Told:  int64(len(exec)),
 	}
 	if spent != want {
 		t.Fatalf("the breakdown is %+v, want %+v", spent, want)

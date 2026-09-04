@@ -14,7 +14,7 @@ import (
 // allAnswers is the one flag this command takes.
 const allAnswers = "--all"
 
-// statusRunning and statusFailed are what a task record says about how it ended. A task that has
+// statusRunning and statusFailed are what an exec record says about how it ended. An exec that has
 // not landed carries no answer, and a failed one carries what went wrong instead of a reply.
 const (
 	statusRunning = "running"
@@ -28,7 +28,7 @@ const (
 // characters and puts a clock and a speaker beside it. A caller piping that reads a listing where
 // the value belongs.
 //
-// So a refusal goes to standard error, by being returned rather than printed, and what a failed task
+// So a refusal goes to standard error, by being returned rather than printed, and what a failed exec
 // failed with goes where an answer goes: it is the answer to what was asked, and the exit status is
 // what tells the caller it is reading one.
 func runAnswer(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
@@ -49,61 +49,61 @@ func runAnswer(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 	if err != nil {
 		return err
 	}
-	resp, err := client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session.GetId()})
+	resp, err := client.ListExecs(ctx, &quaycrewv1.ListExecsRequest{Session: session.GetId()})
 	if err != nil {
 		return err
 	}
-	tasks := resp.GetTasks()
+	execs := resp.GetExecs()
 	if every {
-		return everyAnswer(tasks, session.GetId(), out)
+		return everyAnswer(execs, session.GetId(), out)
 	}
-	return lastAnswer(tasks, session.GetId(), out)
+	return lastAnswer(execs, session.GetId(), out)
 }
 
-// lastAnswer writes the answer of the most recent task.
+// lastAnswer writes the answer of the most recent exec.
 //
-// A task still running is refused rather than skipped. The answer of the task before it is an answer
-// to a different question, and a caller that dispatched a task and came back for its answer would
+// An exec still running is refused rather than skipped. The answer of the exec before it is an answer
+// to a different question, and a caller that dispatched an exec and came back for its answer would
 // read the older one as the new one and never know.
-func lastAnswer(tasks []*quaycrewv1.Task, session string, out io.Writer) error {
-	if len(tasks) == 0 {
-		return noLandedTask(session)
+func lastAnswer(execs []*quaycrewv1.Exec, session string, out io.Writer) error {
+	if len(execs) == 0 {
+		return noLandedExec(session)
 	}
-	last := tasks[len(tasks)-1]
+	last := execs[len(execs)-1]
 	if last.GetStatus() == statusRunning {
-		return fmt.Errorf("the task on %s is still running, so it has no answer yet"+
-			"\n\nwatch it with krewe task list %s", display.ShortID(session), display.ShortID(session))
+		return fmt.Errorf("the exec on %s is still running, so it has no answer yet"+
+			"\n\nwatch it with krewe exec list %s", display.ShortID(session), display.ShortID(session))
 	}
 	writeAnswer(out, answerOf(last))
 	if last.GetStatus() == statusFailed {
 		// Already written where an answer goes, so it is not repeated on the other stream.
-		return fmt.Errorf("%w: the task on %s failed", ErrSaid, display.ShortID(session))
+		return fmt.Errorf("%w: the exec on %s failed", ErrSaid, display.ShortID(session))
 	}
 	return nil
 }
 
 // everyAnswer writes every answer that landed, oldest first, one record per line.
-func everyAnswer(tasks []*quaycrewv1.Task, session string, out io.Writer) error {
+func everyAnswer(execs []*quaycrewv1.Exec, session string, out io.Writer) error {
 	written := 0
-	for _, task := range tasks {
-		if task.GetStatus() == statusRunning {
+	for _, exec := range execs {
+		if exec.GetStatus() == statusRunning {
 			continue
 		}
-		writeAnswer(out, answerOf(task))
+		writeAnswer(out, answerOf(exec))
 		written++
 	}
 	if written == 0 {
-		return noLandedTask(session)
+		return noLandedExec(session)
 	}
 	return nil
 }
 
-// answerOf is what a task came back with: what the model said, or what it failed with.
-func answerOf(task *quaycrewv1.Task) string {
-	if task.GetStatus() == statusFailed {
-		return task.GetFailure()
+// answerOf is what an exec came back with: what the model said, or what it failed with.
+func answerOf(exec *quaycrewv1.Exec) string {
+	if exec.GetStatus() == statusFailed {
+		return exec.GetFailure()
 	}
-	return task.GetReply()
+	return exec.GetReply()
 }
 
 // writeAnswer puts one answer on the stream with a single trailing newline, so a caller reading a
@@ -112,7 +112,7 @@ func writeAnswer(out io.Writer, answer string) {
 	fmt.Fprintln(out, strings.TrimRight(answer, "\n"))
 }
 
-func noLandedTask(session string) error {
-	return fmt.Errorf("%s has no landed task, so there is no answer to give"+
-		"\n\nstart one with krewe task %s \"...\"", display.ShortID(session), display.ShortID(session))
+func noLandedExec(session string) error {
+	return fmt.Errorf("%s has no landed exec, so there is no answer to give"+
+		"\n\nstart one with krewe exec %s \"...\"", display.ShortID(session), display.ShortID(session))
 }

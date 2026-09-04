@@ -89,7 +89,7 @@ func (m Model) readingBody() []string {
 	return lines[top:end]
 }
 
-// readingLines is the text broken to the width of the panel. What is read here is prose: a task is a
+// readingLines is the text broken to the width of the panel. What is read here is prose: an exec is a
 // paragraph and a terminal is not that wide, so a line left whole is a line cut at the border, which
 // takes the end of the sentence with it. That is the fault this panel exists to answer.
 func (m Model) readingLines() []string {

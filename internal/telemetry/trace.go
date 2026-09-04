@@ -12,11 +12,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// TraceparentEnv is the environment variable a task carries its trace context in, spelled the way
+// TraceparentEnv is the environment variable an exec carries its trace context in, spelled the way
 // the standard header is so anything that already reads one needs no translation.
 //
-// It goes on the task and never on the sandbox. A sandbox is born with its environment and is reused
-// across tasks, so a value written at birth labels every later task with the first task's span. That
+// It goes on the exec and never on the sandbox. A sandbox is born with its environment and is reused
+// across execs, so a value written at birth labels every later exec with the first exec's span. That
 // is the trap the system's own refusal message names: a capability granted after birth does not reach
 // the container that is already running, and a trace context written at birth never changes again.
 const TraceparentEnv = "QC_TRACEPARENT"
@@ -80,7 +80,7 @@ func Under(ctx context.Context, traceID, spanID string) context.Context {
 }
 
 // Traceparent is the standard trace context header for whatever span the context is inside, and
-// empty when there is none. A task carries this so anything inside the container that reads it joins
+// empty when there is none. An exec carries this so anything inside the container that reads it joins
 // the trace rather than starting a second one.
 func Traceparent(ctx context.Context) string {
 	span := trace.SpanContextFromContext(ctx)

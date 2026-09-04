@@ -13,7 +13,7 @@ func TestEveryListingNamesTheAddressItRead(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "task", "read the bill")
+	mustRun(t, client, "exec", "read the bill")
 
 	for _, listing := range []struct {
 		args  []string
@@ -40,7 +40,7 @@ func TestTheSystemWordWidensEveryListingThatNarrows(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "task", "hello")
+	mustRun(t, client, "exec", "hello")
 	mustRun(t, client, "workspace", "create", "elsewhere")
 	mustRun(t, client, "project", "create", "other")
 
@@ -56,7 +56,7 @@ func TestTheWideningAdviceIsTypeable(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "task", "hello")
+	mustRun(t, client, "exec", "hello")
 	mustRun(t, client, "workspace", "create", "elsewhere")
 	mustRun(t, client, "project", "create", "other")
 

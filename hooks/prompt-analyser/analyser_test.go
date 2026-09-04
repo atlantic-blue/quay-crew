@@ -760,7 +760,7 @@ func TestADocumentThatIsNotThereIsPassedOver(t *testing.T) {
 }
 
 // A hook that cannot write its own log still has a job to do.
-func TestTaskingOffTheLastRunFileStillLetsTheMessageThrough(t *testing.T) {
+func TestExecingOffTheLastRunFileStillLetsTheMessageThrough(t *testing.T) {
 	config := testConfig()
 	config.LastRunFile = ""
 

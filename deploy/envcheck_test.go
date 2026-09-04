@@ -35,7 +35,7 @@ func TestTheDriftCheckNamesConfigurationTheOperatorDoesNotHave(t *testing.T) {
 			file: "deploy/testdata/partial.env",
 			want: []string{"quaycrew-sandbox-claude:local", "krewe-sandbox-claude:local"},
 			because: "an upgrade never rewrites the operator's own file, so it still pins a tag the " +
-				"build stops producing, and the first task after that fails on a missing image and " +
+				"build stops producing, and the first exec after that fails on a missing image and " +
 				"reads as a broken system rather than as a rename",
 		},
 

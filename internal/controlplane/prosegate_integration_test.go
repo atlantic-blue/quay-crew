@@ -21,7 +21,7 @@ import (
 )
 
 // The whole path, with nothing standing in for anything: an operator imports the shipped prose gate
-// through the control plane, attaches it to a workspace, dispatches a task, and the gate refuses a
+// through the control plane, attaches it to a workspace, dispatches an exec, and the gate refuses a
 // long sentence inside the container the daemon actually made.
 //
 // Each half is proved elsewhere and neither says the two meet. The hook's own module says what it
@@ -46,7 +46,7 @@ func TestTheProseGateRefusesInsideTheContainerTheControlPlaneMade(t *testing.T) 
 		t.Fatalf("model runner: %v", err)
 	}
 	// A hook reaches a container as a mount, so the system needs somewhere on the host to write one.
-	// Without a data directory it writes nothing, mounts nothing and refuses nothing, and the task
+	// Without a data directory it writes nothing, mounts nothing and refuses nothing, and the exec
 	// still runs, which is the trade renderHooks makes deliberately. This test runs beside the daemon
 	// rather than inside a container, so the path this process writes and the path the daemon mounts
 	// are the same one.

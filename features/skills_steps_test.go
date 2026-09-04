@@ -264,7 +264,7 @@ func initializeSkillSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the refusal names "([^"]*)" and the secret to add to it$`, func(ctx context.Context, allowlist string) error {
 		w := worldFrom(ctx)
 		if w.lastErr == nil {
-			return fmt.Errorf("the task was allowed to run")
+			return fmt.Errorf("the exec was allowed to run")
 		}
 		for _, want := range []string{allowlist, "GH_TOKEN"} {
 			if !strings.Contains(w.lastErr.Error(), want) {
@@ -279,7 +279,7 @@ func initializeSkillSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the refusal names the binary and the image to add it to$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if w.lastErr == nil {
-			return fmt.Errorf("the task was allowed to run")
+			return fmt.Errorf("the exec was allowed to run")
 		}
 		for _, want := range []string{"gh", "quaycrew-sandbox:test"} {
 			if !strings.Contains(w.lastErr.Error(), want) {
@@ -290,13 +290,13 @@ func initializeSkillSteps(sc *godog.ScenarioContext) {
 	})
 
 	// The store, not the file: an index that reached the store is text the system now thinks somebody
-	// wrote, and it will be rendered beside the real one on every task from here. Both levels in the
+	// wrote, and it will be rendered beside the real one on every exec from here. Both levels in the
 	// outer file are checked, and the session's own, because the innermost level is where an
 	// unrecognised mark's text goes.
 	sc.Step(`^no context the system holds mentions the ([^ ]+) skill$`,
 		func(ctx context.Context, name string) error {
 			w := worldFrom(ctx)
-			current, err := w.lastTask()
+			current, err := w.lastExec()
 			if err != nil {
 				return err
 			}
@@ -342,7 +342,7 @@ func initializeSkillSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^the session's stored context is only a swept skills index$`,
 		func(ctx context.Context) error {
 			w := worldFrom(ctx)
-			current, err := w.lastTask()
+			current, err := w.lastExec()
 			if err != nil {
 				return err
 			}
@@ -351,7 +351,7 @@ func initializeSkillSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the session's context does not mention the git skill$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -565,7 +565,7 @@ func initializeImportedSkillSteps(sc *godog.ScenarioContext) {
 
 	staleness := func(ctx context.Context, want bool) error {
 		w := worldFrom(ctx)
-		last, err := w.lastTask()
+		last, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -606,7 +606,7 @@ func initializeImportedSkillSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the operator lists the session's skills$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		last, err := w.lastTask()
+		last, err := w.lastExec()
 		if err != nil {
 			return err
 		}

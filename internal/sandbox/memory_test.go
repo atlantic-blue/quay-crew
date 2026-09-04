@@ -25,7 +25,7 @@ func TestComposeLeavesOutLevelsWithNothingToSay(t *testing.T) {
 }
 
 // TestComposeAndDecomposeAreTheSameThingBothWays is what makes reading an edit back possible: a level
-// has to come out of the file as what went into it, or every task would quietly rewrite the system's
+// has to come out of the file as what went into it, or every exec would quietly rewrite the system's
 // memory.
 func TestComposeAndDecomposeAreTheSameThingBothWays(t *testing.T) {
 	scopes := []string{"system", "workspace"}

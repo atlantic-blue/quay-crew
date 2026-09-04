@@ -156,7 +156,7 @@ func runSkillAttach(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 			fmt.Fprintf(out, "it needs %s in each workspace that is to use it: %s\n",
 				secret.GetName(), secret.GetPurpose())
 		}
-		fmt.Fprintln(out, "a workspace without those secrets set is left out of this one skill, and its tasks still run")
+		fmt.Fprintln(out, "a workspace without those secrets set is left out of this one skill, and its execs still run")
 		return nil
 	}
 	located, err := locate(ctx, client, typed)

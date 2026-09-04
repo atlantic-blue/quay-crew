@@ -31,15 +31,15 @@ const SeedHooksDir = "/hooks"
 // The rule itself is already a skill every session is given, and a skill is a rule a session reads,
 // so the two halves of it a check can be exact about are held here instead. It reads only the command
 // and the change, so a workspace with no cloud credential keeps the gate, and it declares no binary,
-// so no image can refuse a task over it.
+// so no image can refuse an exec over it.
 // The process gate is here on the same rule. Ending a process this session did not start is never a
 // session's to do: the control plane, the store, the broker and the operator's terminal all run on
 // this machine, and a signal is finished before the command returns, so there is nothing to review
 // and nothing to revert. It reads only the command, so it needs no credential, and it declares no
-// binary, so no image can refuse a task over it. `krewe hook detach system process-gate` is how
+// binary, so no image can refuse an exec over it. `krewe hook detach system process-gate` is how
 // somebody decides otherwise, and KREWE_MAY_END_A_PROCESS lifts it for one session.
 // The test gate is here on the same rule, and it is the one that refuses least. It is off in every
-// session but one: the system sets a name on the task of a worker in the build stage, and the gate
+// session but one: the system sets a name on the exec of a worker in the build stage, and the gate
 // reads that name, so a session writing the tests is refused nothing and a session building against
 // them cannot change one. Changing the test a build is measured by is never a session's to do, the
 // refusal names the file and says to answer that the test is wrong instead, and

@@ -1,20 +1,18 @@
-// Package promise reads a change and says whether it keeps the two things this repository promises.
+// Package promise reads a change and says whether it keeps what this repository promises.
 //
-// CHANGELOG.md opens with "anything not listed here does not exist", and the line under it says "the
-// behaviour of each of these is written out as scenarios in features/". Both are promises to a
-// reader, and until this existed nothing asked whether a change kept either one. A change shipped 200
-// lines of new behaviour with no scenario and no changelog entry, and every check was green. Nothing
-// was wrong with the checks. They were never asked the question, so the promise held for exactly as
-// long as whoever opened the pull request remembered it.
+// The readme says the behaviour of this system is written out as scenarios in features/, and that
+// anything not in there does not exist. That is a promise to a reader, and until this existed nothing
+// asked whether a change kept it. A change shipped 200 lines of new behaviour with no scenario, and
+// every check was green. Nothing was wrong with the checks. They were never asked the question, so
+// the promise held for exactly as long as whoever opened the pull request remembered it.
 //
-// A change may legitimately carry neither, so the answer is not a rule with no way out. The way out
-// is a stated reason in the pull request body, which a reviewer reads, rather than silence, which
-// nobody sees.
+// A change may legitimately carry none, so the answer is not a rule with no way out. The way out is a
+// stated reason in the pull request body, which a reviewer reads, rather than silence, which nobody
+// sees.
 package promise
 
 import (
 	"fmt"
-	"path"
 	"strings"
 )
 
@@ -39,11 +37,8 @@ type Change struct {
 	Body  string
 }
 
-// The two promises, in the words the refusal uses and the words the body's line spells.
-const (
-	ChangelogEntry = "changelog entry"
-	Scenario       = "scenario"
-)
+// The promise, in the words the refusal uses and the words the body's line spells.
+const Scenario = "scenario"
 
 // reasonWords is the shortest a stated reason can be. "No scenario: none" is silence with a colon in
 // front, and a rule that accepts it is a rule that is never kept. Whether the sentence is a good one
@@ -52,7 +47,7 @@ const reasonWords = 3
 
 // Finding is one promise a change did not keep.
 type Finding struct {
-	// Promise is what is missing: ChangelogEntry or Scenario.
+	// Promise is what is missing, which is Scenario.
 	Promise string
 	// Because is what put this change under the rule, so a refusal names the files rather than
 	// asserting that behaviour changed.
@@ -60,9 +55,6 @@ type Finding struct {
 	// Wanted is what writing the promise looks like, and Excuse is the line that stands in for it.
 	Wanted string
 	Excuse string
-	// Note is the mistake this particular change looks like it made, when it looks like one. Empty
-	// on a change that simply has none.
-	Note string
 }
 
 // String is the refusal a person reads, which says what is missing, what made this a behaviour
@@ -76,9 +68,6 @@ func (f Finding) String() string {
 	}
 	fmt.Fprintf(&out, "\nWrite one:\n\n  %s\n", f.Wanted)
 	fmt.Fprintf(&out, "\nOr say in the pull request body why this change has none:\n\n  %s <why>\n", f.Excuse)
-	if f.Note != "" {
-		fmt.Fprintf(&out, "\n%s\n", f.Note)
-	}
 	return out.String()
 }
 
@@ -94,15 +83,6 @@ func Check(change Change) []Finding {
 	}
 
 	var findings []Finding
-	if !carries(change.Files, isChangelogEntry) && !excused(change.Body, ChangelogEntry) {
-		findings = append(findings, Finding{
-			Promise: ChangelogEntry,
-			Because: because,
-			Wanted:  "changelog.d/<issue>-<words-joined-with-hyphens>.md",
-			Excuse:  excuseLine(ChangelogEntry),
-			Note:    sharedFileNote(change.Files),
-		})
-	}
 	if !carries(change.Files, isScenario) && !excused(change.Body, Scenario) {
 		findings = append(findings, Finding{
 			Promise: Scenario,
@@ -136,17 +116,6 @@ func isBehaviour(name string) bool {
 		return false
 	}
 	return strings.HasSuffix(name, ".go") || strings.HasSuffix(name, ".proto")
-}
-
-// isChangelogEntry says whether one file is a changelog fragment this change put there. The README
-// next to them says how to write one and is not one.
-func isChangelogEntry(file File) bool {
-	if file.Status == Deleted {
-		return false
-	}
-	return strings.HasPrefix(file.Path, "changelog.d/") &&
-		strings.HasSuffix(file.Path, ".md") &&
-		path.Base(file.Path) != "README.md"
 }
 
 // isScenario says whether one file is a feature file this change wrote or added to. Deleting the last
@@ -201,19 +170,4 @@ func excused(body, promise string) bool {
 		}
 	}
 	return false
-}
-
-// sharedFileNote is what to say to an author who wrote their entry at the top of CHANGELOG.md, which
-// is where every entry went until fragments landed. Telling them they wrote no entry, when they wrote
-// one, reads as the check being wrong, and a check that reads as wrong gets turned off.
-func sharedFileNote(files []File) string {
-	for _, file := range files {
-		if file.Path != "CHANGELOG.md" || file.Status == Deleted {
-			continue
-		}
-		return "This change edits CHANGELOG.md. An entry is its own file under changelog.d now, so that\n" +
-			"two changes written at once never touch the same lines. Move it there and the release\n" +
-			"assembles it back."
-	}
-	return ""
 }

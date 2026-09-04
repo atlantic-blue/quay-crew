@@ -19,7 +19,7 @@ const StatusLineCommand = "krewe statusline"
 //
 // The system owns this file completely. The alternative was rendering into the conversation directory's
 // own settings, which the runtime writes and the operator edits, and that would mean merging on every
-// task and losing somebody's edit the first time the merge was wrong.
+// exec and losing somebody's edit the first time the merge was wrong.
 //
 // The status line is here rather than in the image for a harder reason than ownership: the system
 // mounts the workspace's own directory over the conversation directory in every sandbox, and a mount
@@ -63,7 +63,7 @@ type action struct {
 // The result is stable for the same input: events come out sorted by name, because Go marshals a map
 // that way, and within an event the matchers and the commands keep the order the hooks were written
 // in. A settings file that reordered itself between renders would be a diff nobody could review, and
-// would rewrite a file on every task for no reason.
+// would rewrite a file on every exec for no reason.
 func Settings(root string, hooks []Hook) ([]byte, error) {
 	if root == "" {
 		return nil, fmt.Errorf("hook: rendering settings needs the path the hooks are mounted at")

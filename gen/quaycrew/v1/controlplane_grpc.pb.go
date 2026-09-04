@@ -38,7 +38,7 @@ const (
 	ControlPlaneService_GetSession_FullMethodName               = "/quaycrew.v1.ControlPlaneService/GetSession"
 	ControlPlaneService_AttachSession_FullMethodName            = "/quaycrew.v1.ControlPlaneService/AttachSession"
 	ControlPlaneService_StopSession_FullMethodName              = "/quaycrew.v1.ControlPlaneService/StopSession"
-	ControlPlaneService_StopTask_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/StopTask"
+	ControlPlaneService_StopExec_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/StopExec"
 	ControlPlaneService_ReclaimSession_FullMethodName           = "/quaycrew.v1.ControlPlaneService/ReclaimSession"
 	ControlPlaneService_DrainSessions_FullMethodName            = "/quaycrew.v1.ControlPlaneService/DrainSessions"
 	ControlPlaneService_RestartSession_FullMethodName           = "/quaycrew.v1.ControlPlaneService/RestartSession"
@@ -58,7 +58,7 @@ const (
 	ControlPlaneService_ListHooks_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ListHooks"
 	ControlPlaneService_AttachHook_FullMethodName               = "/quaycrew.v1.ControlPlaneService/AttachHook"
 	ControlPlaneService_DetachHook_FullMethodName               = "/quaycrew.v1.ControlPlaneService/DetachHook"
-	ControlPlaneService_ListTasks_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ListTasks"
+	ControlPlaneService_ListExecs_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ListExecs"
 	ControlPlaneService_ListSessionEvents_FullMethodName        = "/quaycrew.v1.ControlPlaneService/ListSessionEvents"
 	ControlPlaneService_GetInfo_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/GetInfo"
 	ControlPlaneService_GetUsage_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/GetUsage"
@@ -90,9 +90,9 @@ type ControlPlaneServiceClient interface {
 	GetSession(ctx context.Context, in *GetSessionRequest, opts ...grpc.CallOption) (*GetSessionResponse, error)
 	AttachSession(ctx context.Context, in *AttachSessionRequest, opts ...grpc.CallOption) (*AttachSessionResponse, error)
 	StopSession(ctx context.Context, in *StopSessionRequest, opts ...grpc.CallOption) (*StopSessionResponse, error)
-	// StopTask halts the task a session is running and keeps the session. StopSession above puts the
-	// whole session down; this is the one an operator reaches for when a task is doing the wrong thing.
-	StopTask(ctx context.Context, in *StopTaskRequest, opts ...grpc.CallOption) (*StopTaskResponse, error)
+	// StopExec halts the exec a session is running and keeps the session. StopSession above puts the
+	// whole session down; this is the one an operator reaches for when an exec is doing the wrong thing.
+	StopExec(ctx context.Context, in *StopExecRequest, opts ...grpc.CallOption) (*StopExecResponse, error)
 	// ReclaimSession takes a settled session's container back and keeps everything else. The controller
 	// calls it; nothing an operator types does.
 	ReclaimSession(ctx context.Context, in *ReclaimSessionRequest, opts ...grpc.CallOption) (*ReclaimSessionResponse, error)
@@ -117,7 +117,7 @@ type ControlPlaneServiceClient interface {
 	ListHooks(ctx context.Context, in *ListHooksRequest, opts ...grpc.CallOption) (*ListHooksResponse, error)
 	AttachHook(ctx context.Context, in *AttachHookRequest, opts ...grpc.CallOption) (*AttachHookResponse, error)
 	DetachHook(ctx context.Context, in *DetachHookRequest, opts ...grpc.CallOption) (*DetachHookResponse, error)
-	ListTasks(ctx context.Context, in *ListTasksRequest, opts ...grpc.CallOption) (*ListTasksResponse, error)
+	ListExecs(ctx context.Context, in *ListExecsRequest, opts ...grpc.CallOption) (*ListExecsResponse, error)
 	ListSessionEvents(ctx context.Context, in *ListSessionEventsRequest, opts ...grpc.CallOption) (*ListSessionEventsResponse, error)
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
 	// GetUsage adds up what every conversation in the system has cost. It is a running total rather than
@@ -327,10 +327,10 @@ func (c *controlPlaneServiceClient) StopSession(ctx context.Context, in *StopSes
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) StopTask(ctx context.Context, in *StopTaskRequest, opts ...grpc.CallOption) (*StopTaskResponse, error) {
+func (c *controlPlaneServiceClient) StopExec(ctx context.Context, in *StopExecRequest, opts ...grpc.CallOption) (*StopExecResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(StopTaskResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_StopTask_FullMethodName, in, out, cOpts...)
+	out := new(StopExecResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_StopExec_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -527,10 +527,10 @@ func (c *controlPlaneServiceClient) DetachHook(ctx context.Context, in *DetachHo
 	return out, nil
 }
 
-func (c *controlPlaneServiceClient) ListTasks(ctx context.Context, in *ListTasksRequest, opts ...grpc.CallOption) (*ListTasksResponse, error) {
+func (c *controlPlaneServiceClient) ListExecs(ctx context.Context, in *ListExecsRequest, opts ...grpc.CallOption) (*ListExecsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListTasksResponse)
-	err := c.cc.Invoke(ctx, ControlPlaneService_ListTasks_FullMethodName, in, out, cOpts...)
+	out := new(ListExecsResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListExecs_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -602,9 +602,9 @@ type ControlPlaneServiceServer interface {
 	GetSession(context.Context, *GetSessionRequest) (*GetSessionResponse, error)
 	AttachSession(context.Context, *AttachSessionRequest) (*AttachSessionResponse, error)
 	StopSession(context.Context, *StopSessionRequest) (*StopSessionResponse, error)
-	// StopTask halts the task a session is running and keeps the session. StopSession above puts the
-	// whole session down; this is the one an operator reaches for when a task is doing the wrong thing.
-	StopTask(context.Context, *StopTaskRequest) (*StopTaskResponse, error)
+	// StopExec halts the exec a session is running and keeps the session. StopSession above puts the
+	// whole session down; this is the one an operator reaches for when an exec is doing the wrong thing.
+	StopExec(context.Context, *StopExecRequest) (*StopExecResponse, error)
 	// ReclaimSession takes a settled session's container back and keeps everything else. The controller
 	// calls it; nothing an operator types does.
 	ReclaimSession(context.Context, *ReclaimSessionRequest) (*ReclaimSessionResponse, error)
@@ -629,7 +629,7 @@ type ControlPlaneServiceServer interface {
 	ListHooks(context.Context, *ListHooksRequest) (*ListHooksResponse, error)
 	AttachHook(context.Context, *AttachHookRequest) (*AttachHookResponse, error)
 	DetachHook(context.Context, *DetachHookRequest) (*DetachHookResponse, error)
-	ListTasks(context.Context, *ListTasksRequest) (*ListTasksResponse, error)
+	ListExecs(context.Context, *ListExecsRequest) (*ListExecsResponse, error)
 	ListSessionEvents(context.Context, *ListSessionEventsRequest) (*ListSessionEventsResponse, error)
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
 	// GetUsage adds up what every conversation in the system has cost. It is a running total rather than
@@ -706,8 +706,8 @@ func (UnimplementedControlPlaneServiceServer) AttachSession(context.Context, *At
 func (UnimplementedControlPlaneServiceServer) StopSession(context.Context, *StopSessionRequest) (*StopSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StopSession not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) StopTask(context.Context, *StopTaskRequest) (*StopTaskResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method StopTask not implemented")
+func (UnimplementedControlPlaneServiceServer) StopExec(context.Context, *StopExecRequest) (*StopExecResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StopExec not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ReclaimSession(context.Context, *ReclaimSessionRequest) (*ReclaimSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReclaimSession not implemented")
@@ -766,8 +766,8 @@ func (UnimplementedControlPlaneServiceServer) AttachHook(context.Context, *Attac
 func (UnimplementedControlPlaneServiceServer) DetachHook(context.Context, *DetachHookRequest) (*DetachHookResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DetachHook not implemented")
 }
-func (UnimplementedControlPlaneServiceServer) ListTasks(context.Context, *ListTasksRequest) (*ListTasksResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListTasks not implemented")
+func (UnimplementedControlPlaneServiceServer) ListExecs(context.Context, *ListExecsRequest) (*ListExecsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListExecs not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ListSessionEvents(context.Context, *ListSessionEventsRequest) (*ListSessionEventsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSessionEvents not implemented")
@@ -1144,20 +1144,20 @@ func _ControlPlaneService_StopSession_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_StopTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(StopTaskRequest)
+func _ControlPlaneService_StopExec_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopExecRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).StopTask(ctx, in)
+		return srv.(ControlPlaneServiceServer).StopExec(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_StopTask_FullMethodName,
+		FullMethod: ControlPlaneService_StopExec_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).StopTask(ctx, req.(*StopTaskRequest))
+		return srv.(ControlPlaneServiceServer).StopExec(ctx, req.(*StopExecRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1504,20 +1504,20 @@ func _ControlPlaneService_DetachHook_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ControlPlaneService_ListTasks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListTasksRequest)
+func _ControlPlaneService_ListExecs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListExecsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ControlPlaneServiceServer).ListTasks(ctx, in)
+		return srv.(ControlPlaneServiceServer).ListExecs(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ControlPlaneService_ListTasks_FullMethodName,
+		FullMethod: ControlPlaneService_ListExecs_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ControlPlaneServiceServer).ListTasks(ctx, req.(*ListTasksRequest))
+		return srv.(ControlPlaneServiceServer).ListExecs(ctx, req.(*ListExecsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1678,8 +1678,8 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_StopSession_Handler,
 		},
 		{
-			MethodName: "StopTask",
-			Handler:    _ControlPlaneService_StopTask_Handler,
+			MethodName: "StopExec",
+			Handler:    _ControlPlaneService_StopExec_Handler,
 		},
 		{
 			MethodName: "ReclaimSession",
@@ -1758,8 +1758,8 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPlaneService_DetachHook_Handler,
 		},
 		{
-			MethodName: "ListTasks",
-			Handler:    _ControlPlaneService_ListTasks_Handler,
+			MethodName: "ListExecs",
+			Handler:    _ControlPlaneService_ListExecs_Handler,
 		},
 		{
 			MethodName: "ListSessionEvents",

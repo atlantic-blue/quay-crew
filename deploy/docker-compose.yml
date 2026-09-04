@@ -133,11 +133,11 @@ services:
       # reason the command line tool itself is pinned: an alias moves on its own and nothing records
       # that it did.
       QC_CLAUDE_MODEL: ${QC_CLAUDE_MODEL:-claude-opus-5}
-      # What a session's tasks may do when it is born: plan, edits or dangerous. Unset keeps edits,
+      # What a session's execs may do when it is born: plan, edits or dangerous. Unset keeps edits,
       # which is what every session had before this was configurable.
       QC_PERMISSION_MODE: ${QC_PERMISSION_MODE:-}
-      # How many tasks past its description a conversation goes before the system writes it again.
-      # "off" tasks it off, which a system paying for automation runs wants.
+      # How many execs past its description a conversation goes before the system writes it again.
+      # "off" turns it off, which a system paying for automation runs wants.
       QC_DESCRIBE_EVERY: ${QC_DESCRIBE_EVERY:-}
       # How long the job controller holds a job before another controller may take it.
       # Unset takes the measured default, which is a minute.
@@ -154,8 +154,8 @@ services:
       # what a sandbox, a sibling container on that daemon, can actually mount.
       QC_DATA_DIR: /var/lib/quaycrew
       QC_DATA_HOST: ${QC_DATA_HOST:-${HOME}/.krewe/data}
-      # The audit export. History is written to Postgres in the same breath as each task either way;
-      # this also puts every task on <workspace>.tasks for a second consumer. Set it to empty in your
+      # The audit export. History is written to Postgres in the same breath as each exec either way;
+      # this also puts every exec on <workspace>.execs for a second consumer. Set it to empty in your
       # own configuration to turn the export off, which loses nothing.
       QC_KAFKA_SEEDS: ${QC_KAFKA_SEEDS-redpanda:9092}
     # Both networks. The default one is where the store, the broker and the collector are, and the

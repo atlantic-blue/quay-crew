@@ -10,10 +10,10 @@ import (
 	"github.com/atlantic-blue/quay-krewe/internal/model"
 )
 
-// runMode reads or sets what a session's tasks may do without asking.
+// runMode reads or sets what a session's execs may do without asking.
 //
 // Until this existed the mode could only be changed by pressing a key in the full screen console, so
-// a task dispatched from a script, a flow or the driver was stuck with whatever it was born in, and
+// an exec dispatched from a script, a flow or the driver was stuck with whatever it was born in, and
 // a session that needed to clone a repository asked for an approval nobody was there to give.
 func runMode(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 || len(args) > 2 {
@@ -38,10 +38,10 @@ func runMode(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, a
 	if err != nil {
 		return err
 	}
-	// The mode travels with each task rather than with the container, so the next dispatch runs in it
+	// The mode travels with each exec rather than with the container, so the next dispatch runs in it
 	// and nothing has to be restarted. Said out loud because every other change to a session's
 	// capabilities does need a restart, and the difference is not guessable.
-	fmt.Fprintf(out, "%s now runs in %s, from its next task\n",
+	fmt.Fprintf(out, "%s now runs in %s, from its next exec\n",
 		display.ShortID(sessionID), spokenOf(resp.GetSession().GetPermissionMode()))
 	return nil
 }
@@ -70,7 +70,7 @@ func sayMode(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, s
 // prints one word and takes another is how the two drift.
 func spokenOf(stored string) string { return model.PermissionModeSpoken(stored) }
 
-// offeredModes lists what can be typed, in the order they widen what a task may do.
+// offeredModes lists what can be typed, in the order they widen what an exec may do.
 func offeredModes() string {
 	return "plan, edits and dangerous"
 }

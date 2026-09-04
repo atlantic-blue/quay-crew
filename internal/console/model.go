@@ -61,7 +61,7 @@ type summary struct {
 }
 
 // pending is a destructive action waiting on an answer, and the row it would act on. The row is held
-// rather than looked up again, so a refresh that reorders the list underneath cannot task a yes into
+// rather than looked up again, so a refresh that reorders the list underneath cannot exec a yes into
 // a yes to something else.
 type pending struct {
 	action Action
@@ -73,7 +73,7 @@ type pending struct {
 
 // choice is a key waiting on a pick: the action that opened it, the row it would act on, and where
 // the cursor is. The row is held rather than looked up again, for the same reason a confirmation
-// holds one: a refresh that reorders the list must not task a pick into a pick of something else.
+// holds one: a refresh that reorders the list must not exec a pick into a pick of something else.
 type choice struct {
 	action Action
 	row    Row
@@ -393,7 +393,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tickMsg:
 		// The description is refreshed with the rows now, not only at startup. It carries what the
-		// system has cost, which changes with every task, and a total from when the console opened is
+		// system has cost, which changes with every exec, and a total from when the console opened is
 		// worse than none: it looks live and is not.
 		// And what waits for a person, on the same clock. It is asked for whichever view is open,
 		// because a job waiting on somebody is not a property of the rows they happen to be reading.

@@ -49,7 +49,7 @@ Feature: The operator can find the files the model reads
     And the workspace's memory file carries "no acronyms"
 
   # An agent that writes something into its own memory has learned something. Overwriting that on the
-  # next task would make the system's memory strictly worse than a text file, so the file wins and is
+  # next exec would make the system's memory strictly worse than a text file, so the file wins and is
   # taken into the store.
   Scenario: What an agent writes into its own memory is kept
     Given a session started by dispatching "hello"

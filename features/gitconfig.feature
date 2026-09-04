@@ -1,7 +1,7 @@
 Feature: An operator's git configuration reaches a session
 
   A session commits as the operator, and until now it had no way to know who that was. Identity was
-  four environment variables set on the task's own process, so a commit made from an attached
+  four environment variables set on the exec's own process, so a commit made from an attached
   terminal, or by anything the session started for itself, had none. Git refused those commits.
 
   So the image reads the operator's own configuration. It ships a git configuration holding one
@@ -58,7 +58,7 @@ Feature: An operator's git configuration reaches a session
     And the sandbox is told to set "commit.gpgsign" to "true"
     And the sandbox is told to set "tag.gpgsign" to "true"
 
-  # gpg asks for a passphrase through pinentry, and a task nobody is watching waits forever. Batch
+  # gpg asks for a passphrase through pinentry, and an exec nobody is watching waits forever. Batch
   # mode is what makes that a failure with a message instead.
   Scenario: A gpg key with no passphrase mounted still runs unattended
     Given the workspace mounts the secret "GPG_SIGNING_KEY" holding "an exported secret key"

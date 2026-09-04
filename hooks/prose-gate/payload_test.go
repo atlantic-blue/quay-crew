@@ -71,8 +71,8 @@ func TestTheGateFindsTheProseInEachShapeThatCarriesIt(t *testing.T) {
 			input: `{"file_path":"docs/HOOKS.md","content":"` + too + `"}`,
 		},
 		{
-			name: "a changelog fragment being edited", tool: "Edit", where: "changelog.d/508-a-gate.md",
-			input: `{"file_path":"changelog.d/508-a-gate.md","new_string":"` + too + `"}`,
+			name: "a document being edited", tool: "Edit", where: "README.md",
+			input: `{"file_path":"README.md","new_string":"` + too + `"}`,
 		},
 		{
 			name: "one edit of several", tool: "MultiEdit", where: "README.md",

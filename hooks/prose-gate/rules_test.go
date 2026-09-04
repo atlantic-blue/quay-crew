@@ -43,7 +43,7 @@ func TestTheGateRefusesProseTheStandardRefuses(t *testing.T) {
 		{
 			name: "the present perfect of an irregular verb",
 			rule: "tense",
-			text: "The task has run.",
+			text: "The exec has run.",
 			says: `"has run" is the present perfect`,
 		},
 		{
@@ -61,7 +61,7 @@ func TestTheGateRefusesProseTheStandardRefuses(t *testing.T) {
 		{
 			name: "the present continuous",
 			rule: "tense",
-			text: "The task is running.",
+			text: "The exec is running.",
 			says: `"is running" is a continuous tense`,
 		},
 		{

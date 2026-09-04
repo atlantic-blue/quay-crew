@@ -50,12 +50,12 @@ type Memory struct {
 	hooks         map[string]ImportedHook
 	hooksAttached map[string]map[string]int
 	systemHooks   map[string]int
-	// tasks is a session's history, oldest first, and taskSeen is what makes writing the
+	// execs is a session's history, oldest first, and execSeen is what makes writing the
 	// same record twice harmless.
-	tasks    []*quaycrewv1.Task
-	taskSeen map[string]bool
+	execs    []*quaycrewv1.Exec
+	execSeen map[string]bool
 	// sessionEvents is what happened to each session, oldest first, and eventSeen does for them what
-	// taskSeen does for tasks.
+	// execSeen does for execs.
 	sessionEvents []*quaycrewv1.SessionEvent
 	eventSeen     map[string]bool
 }
@@ -257,9 +257,9 @@ func (m *Memory) FindOrCreateSession(_ context.Context, project, session string,
 	return clone(made), true, nil
 }
 
-// RecordTask stores the model conversation handle and status after a task. An empty handle leaves
-// the stored one alone, so a failed task cannot erase the pointer to a live conversation.
-func (m *Memory) RecordTask(_ context.Context, id, modelSessionID, status string) error {
+// RecordExec stores the model conversation handle and status after an exec. An empty handle leaves
+// the stored one alone, so a failed exec cannot erase the pointer to a live conversation.
+func (m *Memory) RecordExec(_ context.Context, id, modelSessionID, status string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	session, ok := m.sessions[id]
@@ -270,7 +270,7 @@ func (m *Memory) RecordTask(_ context.Context, id, modelSessionID, status string
 		session.ModelSessionId = modelSessionID
 	}
 	session.Status = status
-	// A task is running or has landed, so the session holds a container again and the stamp that said
+	// An exec is running or has landed, so the session holds a container again and the stamp that said
 	// the system took the last one back is no longer true.
 	session.ReclaimedAt = nil
 	session.UpdatedAt = timestamppb.New(time.Now().UTC())
@@ -444,7 +444,7 @@ func (m *Memory) RestartSession(_ context.Context, id string) error {
 	return nil
 }
 
-// SetPermissionMode records what a session's tasks may do without asking.
+// SetPermissionMode records what a session's execs may do without asking.
 func (m *Memory) SetPermissionMode(_ context.Context, id, mode string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -471,7 +471,7 @@ func (m *Memory) SetLabel(_ context.Context, id, label string) error {
 }
 
 // SetDescription records what the system observed a session to be.
-func (m *Memory) SetDescription(_ context.Context, id, description string, atTask int) error {
+func (m *Memory) SetDescription(_ context.Context, id, description string, atExec int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	session, ok := m.sessions[id]
@@ -479,18 +479,18 @@ func (m *Memory) SetDescription(_ context.Context, id, description string, atTas
 		return ErrNotFound
 	}
 	session.Description = description
-	session.DescribedAtTask = int32(atTask)
+	session.DescribedAtExec = int32(atExec)
 	session.UpdatedAt = timestamppb.New(time.Now().UTC())
 	return nil
 }
 
-// CountTasks is how many tasks a session has had.
-func (m *Memory) CountTasks(_ context.Context, session string) (int, error) {
+// CountExecs is how many execs a session has had.
+func (m *Memory) CountExecs(_ context.Context, session string) (int, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	count := 0
-	for _, task := range m.tasks {
-		if task.GetSession() == session {
+	for _, exec := range m.execs {
+		if exec.GetSession() == session {
 			count++
 		}
 	}
@@ -734,64 +734,64 @@ func (m *Memory) Close() {}
 // clone copies a message so a caller cannot mutate what the store holds.
 func clone[T proto.Message](message T) T { return proto.Clone(message).(T) }
 
-// AppendTask records a task, ignoring one it has already seen.
-func (m *Memory) AppendTask(_ context.Context, task *quaycrewv1.Task, _, _, _ string) error {
-	if task.GetId() == "" {
-		return errors.New("store: a task needs an id, so writing the same one twice leaves one task")
+// AppendExec records an exec, ignoring one it has already seen.
+func (m *Memory) AppendExec(_ context.Context, exec *quaycrewv1.Exec, _, _, _ string) error {
+	if exec.GetId() == "" {
+		return errors.New("store: an exec needs an id, so writing the same one twice leaves one exec")
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.taskSeen == nil {
-		m.taskSeen = make(map[string]bool)
+	if m.execSeen == nil {
+		m.execSeen = make(map[string]bool)
 	}
-	if m.taskSeen[task.GetId()] {
+	if m.execSeen[exec.GetId()] {
 		return nil
 	}
-	m.taskSeen[task.GetId()] = true
-	m.tasks = append(m.tasks, clone(task))
+	m.execSeen[exec.GetId()] = true
+	m.execs = append(m.execs, clone(exec))
 	return nil
 }
 
-// FinishTask closes the record a task opened when it started.
-func (m *Memory) FinishTask(_ context.Context, id, status, reply, failure string) error {
+// FinishExec closes the record an exec opened when it started.
+func (m *Memory) FinishExec(_ context.Context, id, status, reply, failure string) error {
 	if id == "" {
-		return errors.New("store: a task needs an id to be finished")
+		return errors.New("store: an exec needs an id to be finished")
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for _, task := range m.tasks {
-		if task.GetId() != id {
+	for _, exec := range m.execs {
+		if exec.GetId() != id {
 			continue
 		}
-		task.Status, task.Reply, task.Failure = status, reply, failure
+		exec.Status, exec.Reply, exec.Failure = status, reply, failure
 		return nil
 	}
 	return nil
 }
 
-// ListTasks returns a session's tasks oldest first, capped at limit, keeping the most recent when
+// ListExecs returns a session's execs oldest first, capped at limit, keeping the most recent when
 // there are more than the cap: the end of a conversation is the part somebody wants.
-func (m *Memory) ListTasks(_ context.Context, session string, limit int) ([]*quaycrewv1.Task, error) {
+func (m *Memory) ListExecs(_ context.Context, session string, limit int) ([]*quaycrewv1.Exec, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	out := make([]*quaycrewv1.Task, 0)
-	for _, task := range m.tasks {
-		if task.GetSession() == session {
-			out = append(out, clone(task))
+	out := make([]*quaycrewv1.Exec, 0)
+	for _, exec := range m.execs {
+		if exec.GetSession() == session {
+			out = append(out, clone(exec))
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		return out[i].GetOccurredAt().AsTime().Before(out[j].GetOccurredAt().AsTime())
 	})
-	if capped := TaskLimit(limit); len(out) > capped {
+	if capped := ExecLimit(limit); len(out) > capped {
 		out = out[len(out)-capped:]
 	}
 	return out, nil
 }
 
 // AppendSessionEvent records one thing that happened to a session. Writing the same event twice
-// leaves one, the way a task does.
+// leaves one, the way an exec does.
 func (m *Memory) AppendSessionEvent(_ context.Context, event *quaycrewv1.SessionEvent) error {
 	if event.GetId() == "" {
 		return errors.New("store: a session event needs an id, so writing the same one twice leaves one event")
@@ -827,7 +827,7 @@ func (m *Memory) ListSessionEvents(_ context.Context, session string, limit int)
 	sort.SliceStable(out, func(i, j int) bool {
 		return out[i].GetOccurredAt().AsTime().Before(out[j].GetOccurredAt().AsTime())
 	})
-	if capped := TaskLimit(limit); len(out) > capped {
+	if capped := ExecLimit(limit); len(out) > capped {
 		out = out[len(out)-capped:]
 	}
 	return out, nil
@@ -854,7 +854,7 @@ func (m *Memory) FindOrCreateDriver(_ context.Context, project string) (*quaycre
 		Handle:    NewID(),
 		Status:    "idle",
 		// The driver acts for the operator rather than doing job of its own, and a driver that stops
-		// to ask before every step describes the task instead of doing it. What bounds it is the
+		// to ask before every step describes the exec instead of doing it. What bounds it is the
 		// sandbox, which is the same boundary it would have either way.
 		PermissionMode: model.PermissionBypass,
 		Driver:         true,

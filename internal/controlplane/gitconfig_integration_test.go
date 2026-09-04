@@ -98,7 +98,7 @@ echo READY`)
 }
 
 // aSessionWhoseWorkspaceMounts makes a system, mounts the given configuration unless it is empty,
-// dispatches a task, and returns the name of the container the system built for it.
+// dispatches an exec, and returns the name of the container the system built for it.
 func aSessionWhoseWorkspaceMounts(ctx context.Context, t *testing.T, image, configuration string) string {
 	t.Helper()
 

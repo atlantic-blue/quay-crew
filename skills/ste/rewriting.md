@@ -33,8 +33,8 @@ After: "We received your request. The system processes it now."
 Two rules: the perfect tense, and two statements in one sentence.
 
 **A noun stack becomes a phrase.**
-Before: "the agent task queue priority handler"
-After: "the handler that sets task queue priority"
+Before: "the agent exec queue priority handler"
+After: "the handler that sets exec queue priority"
 Four words stacked is three more than a reader can hold.
 
 **A dropped subject comes back.**

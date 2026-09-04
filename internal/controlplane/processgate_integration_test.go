@@ -22,7 +22,7 @@ import (
 )
 
 // The whole path, with nothing standing in for anything: a fresh system seeds the process gate,
-// dispatches a task, and the gate refuses a command inside the container the daemon actually made.
+// dispatches an exec, and the gate refuses a command inside the container the daemon actually made.
 //
 // Each half is proved elsewhere and neither says the two meet. The hook's own module says what it
 // decides, from Go values. The scenarios in features/ run the built entry point on this machine.

@@ -106,7 +106,7 @@ func TestTheNewNameDrivesTheSystemAndTheOldOneRefuses(t *testing.T) {
 	for _, args := range [][]string{
 		{"workspace", "create", "me"},
 		{"project", "create", "house-bills"},
-		{"task", "when is the electricity bill due"},
+		{"exec", "when is the electricity bill due"},
 	} {
 		if ran := runs(t, krewe, address, home, args...); ran.exit != 0 {
 			t.Fatalf("krewe %s exited %d: %s", strings.Join(args, " "), ran.exit, ran.stderr)

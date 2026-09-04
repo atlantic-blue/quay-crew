@@ -1,7 +1,7 @@
 Feature: An answer comes back out as data
 
-  A caller starts a task, lets go of it, and comes back for the answer later. Asking waits for the
-  answer and prints it, and a dispatch lets go, so the answer to a dispatched task had no way out.
+  A caller starts an exec, lets go of it, and comes back for the answer later. Asking waits for the
+  answer and prints it, and a dispatch lets go, so the answer to a dispatched exec had no way out.
   The history listing is written for a person: it shortens a reply at 120 characters and it puts a
   clock and a speaker beside it. A caller that reads that gets a listing where the value belongs.
 
@@ -36,26 +36,26 @@ Feature: An answer comes back out as data
     When the caller asks for the answer by the handle of that session
     Then standard output is the reply and one newline
 
-  Scenario: A session with no landed task is refused, and prints nothing
+  Scenario: A session with no landed exec is refused, and prints nothing
     Given a session that was opened and never asked anything
     When the caller asks for the answer of that session
     Then standard output is empty
-    And standard error says there is no landed task
+    And standard error says there is no landed exec
     And the command fails
 
-  # A task that has not landed has no answer, and the answer of the task before it is not the answer
+  # An exec that has not landed has no answer, and the answer of the exec before it is not the answer
   # to the question the caller is asking.
-  Scenario: A task still running is not an answer
-    Given the model takes longer over a task than anybody will wait
-    And a task dispatched without waiting for it
-    And a task is under way
+  Scenario: An exec still running is not an answer
+    Given the model takes longer over an exec than anybody will wait
+    And an exec dispatched without waiting for it
+    And an exec is under way
     When the caller asks for the answer of that session
     Then standard output is empty
-    And standard error says the task is still running
+    And standard error says the exec is still running
     And the command fails
 
-  Scenario: What a task failed with is its answer
-    Given a session whose task failed
+  Scenario: What an exec failed with is its answer
+    Given a session whose exec failed
     When the caller asks for the answer of that session
     Then standard output carries what went wrong
     And the command fails
@@ -66,9 +66,9 @@ Feature: An answer comes back out as data
     Then standard output is both replies, oldest first
     And the command succeeds
 
-  Scenario: Every answer of a session with no landed task is the same refusal
+  Scenario: Every answer of a session with no landed exec is the same refusal
     Given a session that was opened and never asked anything
     When the caller asks for every answer of that session
     Then standard output is empty
-    And standard error says there is no landed task
+    And standard error says there is no landed exec
     And the command fails

@@ -14,7 +14,7 @@ func TestTheListingHasTheSameColumnsAsTheConsole(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "task", "hello")
+	mustRun(t, client, "exec", "hello")
 
 	listed := mustRun(t, client, "sessions")
 	for _, column := range display.SessionColumns() {
@@ -22,7 +22,7 @@ func TestTheListingHasTheSameColumnsAsTheConsole(t *testing.T) {
 			t.Errorf("the listing has no %q column:\n%s", column, listed)
 		}
 	}
-	// A header is what makes ten columns readable. Reading 102 as a task count rather than as input
+	// A header is what makes ten columns readable. Reading 102 as an exec count rather than as input
 	// tokens is what happens without one.
 	if !strings.HasPrefix(listed, "session ") {
 		t.Errorf("the listing has no header row:\n%s", listed)
@@ -37,10 +37,10 @@ func TestANarrowedListingSaysWhatItWasNarrowedTo(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "task", "hello")
+	mustRun(t, client, "exec", "hello")
 	mustRun(t, client, "workspace", "create", "elsewhere")
 	mustRun(t, client, "project", "create", "other")
-	mustRun(t, client, "task", "hello there")
+	mustRun(t, client, "exec", "hello there")
 
 	// Standing in the second one, so the listing is narrower than the system.
 	narrowed := mustRun(t, client, "sessions")
@@ -80,7 +80,7 @@ func TestNothingIsCutOutOfTheListing(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "a-workspace-with-a-long-name")
 	mustRun(t, client, "project", "create", "and-a-project-with-a-longer-one")
-	mustRun(t, client, "task", "hello")
+	mustRun(t, client, "exec", "hello")
 
 	listed := mustRun(t, client, "sessions")
 	for _, whole := range []string{"a-workspace-with-a-long-name", "and-a-project-with-a-longer-one"} {

@@ -96,7 +96,6 @@ func TestChangedReadsWhatABranchDid(t *testing.T) {
 
 	r.git("switch", "-q", "-c", "change")
 	r.write("internal/session/waiting.go", "what was there before\nand what the change did\n")
-	r.write("changelog.d/486-a-check.md", "**A check reads the diff.**\n")
 	r.write("docs/a note with spaces.md", "quoted in every form but -z\nand edited\n")
 	r.remove("internal/session/gone.go")
 	r.git("mv", "internal/session/old.go", "internal/session/new.go")
@@ -106,13 +105,12 @@ func TestChangedReadsWhatABranchDid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading the change: %v", err)
 	}
-	// Six, because the rename is read as two: the path it came from and the path it went to.
-	if len(files) != 6 {
-		t.Fatalf("read %d files, want 6: %+v", len(files), files)
+	// Five, because the rename is read as two: the path it came from and the path it went to.
+	if len(files) != 5 {
+		t.Fatalf("read %d files, want 5: %+v", len(files), files)
 	}
 	for path, want := range map[string]string{
 		"internal/session/waiting.go": string(Modified),
-		"changelog.d/486-a-check.md":  string(Added),
 		"docs/a note with spaces.md":  string(Modified),
 		"internal/session/gone.go":    string(Deleted),
 		"internal/session/old.go":     string(Deleted),
@@ -136,22 +134,22 @@ func TestTheWholeCheckOverARealBranch(t *testing.T) {
 		want    []string
 	}{
 		{
-			name:   "behaviour with both promises kept",
-			change: []string{"internal/session/waiting.go", "changelog.d/486-a-check.md", "features/promises.feature"},
+			name:   "behaviour with its scenario",
+			change: []string{"internal/session/waiting.go", "features/promises.feature"},
 		},
 		{
-			name:   "behaviour with neither",
+			name:   "behaviour with none",
 			change: []string{"internal/session/waiting.go"},
-			want:   []string{ChangelogEntry, Scenario},
+			want:   []string{Scenario},
 		},
 		{
 			name:   "a stated reason stands in for the scenario",
-			change: []string{"internal/session/waiting.go", "changelog.d/486-a-check.md"},
+			change: []string{"internal/session/waiting.go"},
 			body:   "No scenario: the behaviour is unchanged, this moves it between packages",
 		},
 		{
 			name:    "the change that only deletes the last scenario",
-			change:  []string{"internal/session/waiting.go", "changelog.d/486-a-check.md"},
+			change:  []string{"internal/session/waiting.go"},
 			deletes: []string{"features/promises.feature"},
 			want:    []string{Scenario},
 		},
@@ -219,7 +217,6 @@ func TestWhatTheBaseDidWhileTheChangeWasOpenIsNotTheChange(t *testing.T) {
 
 	r.git("switch", "-q", "-c", "change")
 	r.write("internal/session/waiting.go", "what the change did\n")
-	r.write("changelog.d/486-a-check.md", "**A check reads the diff.**\n")
 	r.write("features/promises.feature", "Feature: promises\n")
 	r.commit("the change")
 
@@ -235,10 +232,10 @@ func TestWhatTheBaseDidWhileTheChangeWasOpenIsNotTheChange(t *testing.T) {
 	if got := found(files, "internal/room/view.go"); got != "not there" {
 		t.Errorf("the change is blamed for internal/room/view.go, which came back %s: %+v", got, files)
 	}
-	if len(files) != 3 {
-		t.Fatalf("read %d files, want the 3 the change made: %+v", len(files), files)
+	if len(files) != 2 {
+		t.Fatalf("read %d files, want the 2 the change made: %+v", len(files), files)
 	}
 	if findings := Check(Change{Files: files}); len(findings) != 0 {
-		t.Fatalf("the check refuses a change that kept both promises: %v", missing(findings))
+		t.Fatalf("the check refuses a change that kept its promise: %v", missing(findings))
 	}
 }

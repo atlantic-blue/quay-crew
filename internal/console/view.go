@@ -105,7 +105,7 @@ func statePhrase(where string) string {
 }
 
 // secretsPhrase says where a workspace's credentials are kept, and says the cost out loud when they
-// are kept nowhere: the subscription token goes with every restart, and the task that then fails says
+// are kept nowhere: the subscription token goes with every restart, and the exec that then fails says
 // nothing about why.
 func secretsPhrase(where string) string {
 	if strings.HasPrefix(where, "memory") {
@@ -115,7 +115,7 @@ func secretsPhrase(where string) string {
 }
 
 // panelTop is the framed panel.s top edge, titled with the resource, its scope and its count, so both
-// are visible without counting rows: tasks(read the electricity bill)[3].
+// are visible without counting rows: execs(read the electricity bill)[3].
 //
 // The nearest thing drilled through, and read rather than typed: a job is addressed by its identifier
 // and this line is answering "these rows are which ones". The typeable address is the footer.s, and

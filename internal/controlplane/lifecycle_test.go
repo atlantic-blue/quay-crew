@@ -71,8 +71,8 @@ func TestReclaimingTakesTheContainerAndKeepsEverythingElse(t *testing.T) {
 	}
 }
 
-// The whole promise of reclaimed: a task sent to one starts a new container and carries on.
-func TestATaskSentToAReclaimedSessionStartsAFreshContainerAndKeepsTheHistory(t *testing.T) {
+// The whole promise of reclaimed: an exec sent to one starts a new container and carries on.
+func TestAExecSentToAReclaimedSessionStartsAFreshContainerAndKeepsTheHistory(t *testing.T) {
 	provider := &sandbox.FakeProvider{}
 	runner := &model.FakeRunner{Reply: "first"}
 	s := aSystemWithProvider(runner, provider)
@@ -93,10 +93,10 @@ func TestATaskSentToAReclaimedSessionStartsAFreshContainerAndKeepsTheHistory(t *
 	}
 
 	if again.GetReply() != "second" {
-		t.Fatalf("the reclaimed session answered %q, want the new task's answer", again.GetReply())
+		t.Fatalf("the reclaimed session answered %q, want the new exec's answer", again.GetReply())
 	}
 	if again.GetId() != session.GetId() {
-		t.Fatalf("the task landed in session %s, want the same one it was reclaimed from %s",
+		t.Fatalf("the exec landed in session %s, want the same one it was reclaimed from %s",
 			again.GetId(), session.GetId())
 	}
 	if len(provider.Configurations()) != made+1 {
@@ -104,24 +104,24 @@ func TestATaskSentToAReclaimedSessionStartsAFreshContainerAndKeepsTheHistory(t *
 			len(provider.Configurations()), made)
 	}
 	// The history is the point. A reclaim that lost it would be a stop with a friendlier word.
-	tasks, err := s.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session.GetId()})
+	execs, err := s.ListExecs(ctx, &quaycrewv1.ListExecsRequest{Session: session.GetId()})
 	if err != nil {
-		t.Fatalf("ListTasks: %v", err)
+		t.Fatalf("ListExecs: %v", err)
 	}
-	if len(tasks.GetTasks()) != 2 {
-		t.Fatalf("the session holds %d tasks after the reclaim, want both of them", len(tasks.GetTasks()))
+	if len(execs.GetExecs()) != 2 {
+		t.Fatalf("the session holds %d execs after the reclaim, want both of them", len(execs.GetExecs()))
 	}
-	if tasks.GetTasks()[0].GetPrompt() != "hello" {
-		t.Fatalf("the first task reads %q, so the history from before the reclaim is gone",
-			tasks.GetTasks()[0].GetPrompt())
+	if execs.GetExecs()[0].GetPrompt() != "hello" {
+		t.Fatalf("the first exec reads %q, so the history from before the reclaim is gone",
+			execs.GetExecs()[0].GetPrompt())
 	}
 	back, _ := s.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: session.GetId()})
 	if back.GetSession().GetReclaimedAt() != nil {
-		t.Fatal("the session still carries a reclaim stamp after a task ran in it")
+		t.Fatal("the session still carries a reclaim stamp after an exec ran in it")
 	}
 }
 
-func TestASessionWithATaskUnderWayIsNotReclaimed(t *testing.T) {
+func TestASessionWithAExecUnderWayIsNotReclaimed(t *testing.T) {
 	gate := make(chan struct{})
 	started := make(chan struct{})
 	provider := &sandbox.FakeProvider{}
@@ -139,11 +139,11 @@ func TestASessionWithATaskUnderWayIsNotReclaimed(t *testing.T) {
 	if status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("reclaiming a working session answered %v, want a refusal", err)
 	}
-	if !strings.Contains(err.Error(), "task under way") {
-		t.Fatalf("the refusal reads %q, and it has to say a task is running", err)
+	if !strings.Contains(err.Error(), "exec under way") {
+		t.Fatalf("the refusal reads %q, and it has to say an exec is running", err)
 	}
 	close(gate)
-	s.WaitForTasks(ctx)
+	s.WaitForExecs(ctx)
 }
 
 func TestAStoppedSessionIsNotReclaimed(t *testing.T) {

@@ -35,7 +35,7 @@ const (
 	// Turns is the session's own words: what it wrote, what it thought, and the calls it made. It is
 	// the category a session controls directly, so a session going in circles shows up here.
 	Turns Category = "turns"
-	// Told is what reached the session from outside a tool: the task it was given, the answers to its
+	// Told is what reached the session from outside a tool: the exec it was given, the answers to its
 	// questions, and whatever the runtime put in front of it. Anything the reader does not recognise
 	// lands here as well, so no character of the conversation is dropped on its way into a total.
 	Told Category = "told"

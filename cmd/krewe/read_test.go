@@ -30,7 +30,7 @@ func aSessionThatMadeSomething(t *testing.T, name, body string) (quaycrewv1.Cont
 	})
 	mustRun(t, client, "workspace", "create", "acme")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "task", "acme/house-bills", "make the listing sort by the clock it shows")
+	mustRun(t, client, "exec", "acme/house-bills", "make the listing sort by the clock it shows")
 
 	listed, err := client.ListSessions(context.Background(), &quaycrewv1.ListSessionsRequest{})
 	if err != nil || len(listed.GetSessions()) != 1 {

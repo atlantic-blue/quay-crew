@@ -39,7 +39,7 @@ func TestEveryRemovedWordIsRefused(t *testing.T) {
 var kreweCommand = regexp.MustCompile(`krewe ([a-z]+)`)
 
 // Advice that names another removed word sends the operator around in a circle. This is the failure
-// this repository has already had once: the turns refusal named krewe tasks, which is itself gone.
+// this repository has already had once: the turns refusal named krewe execs, which is itself gone.
 func TestEveryRemovedWordNamesSomethingTheToolStillHas(t *testing.T) {
 	client := testClient(t)
 
@@ -106,8 +106,8 @@ func TestNoFlagIsBothTakenAndRemoved(t *testing.T) {
 // removed flag that is ignored is worse than one that never existed: its value becomes the next
 // argument and the command reads as one that worked.
 //
-// Every flag is driven through `task`, because a flag no command takes is refused the same way
-// whichever word carries it, and task is the word with a value after the flag for the refusal to
+// Every flag is driven through `exec`, because a flag no command takes is refused the same way
+// whichever word carries it, and exec is the word with a value after the flag for the refusal to
 // swallow. It used to be `job create`, and job is itself refused now, so the refusal under test
 // never ran.
 func TestEveryRemovedFlagIsRefusedByNameAndNeverSwallowsItsValue(t *testing.T) {
@@ -120,7 +120,7 @@ func TestEveryRemovedFlagIsRefusedByNameAndNeverSwallowsItsValue(t *testing.T) {
 	// rather than proving the sentence mentions a material.
 	const value = "swallowed-by-the-refusal"
 	for flag := range removedFlags {
-		err := refused(t, client, "task", flag, value, "read the electricity bill")
+		err := refused(t, client, "exec", flag, value, "read the electricity bill")
 		if !strings.Contains(err.Error(), flag) {
 			t.Errorf("%s is refused with %q, which does not name the flag", flag, err)
 		}

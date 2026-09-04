@@ -68,22 +68,22 @@ func TestDispatchStartsAndContinuesSession(t *testing.T) {
 	if first.GetReply() != "done" || first.GetHandle() == "" {
 		t.Fatalf("bad dispatch response: %+v", first)
 	}
-	// The system names the conversation before the task starts, and the first task starts it rather than
-	// resuming it. Both halves matter: a first task that carried no name left the runtime to name its
-	// own conversation and tell nobody until the task was over.
+	// The system names the conversation before the exec starts, and the first exec starts it rather than
+	// resuming it. Both halves matter: a first exec that carried no name left the runtime to name its
+	// own conversation and tell nobody until the exec was over.
 	named := runner.LastReq.ModelSessionID
 	if named == "" {
-		t.Fatal("the first task carries no conversation, so the runtime names one the system cannot see")
+		t.Fatal("the first exec carries no conversation, so the runtime names one the system cannot see")
 	}
 	if runner.LastReq.ConversationStarted {
-		t.Fatal("the first task resumes a conversation nothing has written, which exits saying there is none")
+		t.Fatal("the first exec resumes a conversation nothing has written, which exits saying there is none")
 	}
 	held, err := s.GetSession(ctx, &quaycrewv1.GetSessionRequest{Id: first.GetId()})
 	if err != nil {
 		t.Fatalf("GetSession: %v", err)
 	}
 	if got := held.GetSession().GetModelSessionId(); got != named {
-		t.Fatalf("the session holds conversation %q and its task ran in %q", got, named)
+		t.Fatalf("the session holds conversation %q and its exec ran in %q", got, named)
 	}
 
 	// Continue the same session: the runner should be asked to resume the model session.
@@ -95,11 +95,11 @@ func TestDispatchStartsAndContinuesSession(t *testing.T) {
 		t.Fatalf("continue should reuse session: %q vs %q", second.GetId(), first.GetId())
 	}
 	if runner.LastReq.ModelSessionID != named {
-		t.Fatalf("the second task runs in conversation %q, want the first task's %q",
+		t.Fatalf("the second exec runs in conversation %q, want the first exec's %q",
 			runner.LastReq.ModelSessionID, named)
 	}
 	if !runner.LastReq.ConversationStarted {
-		t.Fatal("the second task starts the conversation again, which is refused as a name already in use")
+		t.Fatal("the second exec starts the conversation again, which is refused as a name already in use")
 	}
 }
 
@@ -128,13 +128,13 @@ func TestDispatchInjectsTheWorkspaceSubscriptionToken(t *testing.T) {
 	}
 
 	if got := runner.LastReq.Env[model.ClaudeCodeOAuthTokenEnv]; got != "tok-xyz" {
-		t.Fatalf("task env[%s] = %q, want tok-xyz", model.ClaudeCodeOAuthTokenEnv, got)
+		t.Fatalf("exec env[%s] = %q, want tok-xyz", model.ClaudeCodeOAuthTokenEnv, got)
 	}
 }
 
 // A session is told which session it is whatever the workspace holds, because it names its own
 // working tree in the shared volume after that. Everything else here comes from a secret, so this is
-// what a task with none carries.
+// what an exec with none carries.
 func TestDispatchWithoutASecretRunsWithNoExtraEnv(t *testing.T) {
 	runner := &model.FakeRunner{Reply: "ok"}
 	s := newServer(runner)
@@ -146,7 +146,7 @@ func TestDispatchWithoutASecretRunsWithNoExtraEnv(t *testing.T) {
 	}
 
 	if len(runner.LastReq.Env) != 1 || runner.LastReq.Env[sandbox.SessionIDEnv] == "" {
-		t.Fatalf("task env = %v, want only %s when no secret is set", runner.LastReq.Env, sandbox.SessionIDEnv)
+		t.Fatalf("exec env = %v, want only %s when no secret is set", runner.LastReq.Env, sandbox.SessionIDEnv)
 	}
 }
 
@@ -178,7 +178,7 @@ func TestSessionSandboxLifecycle(t *testing.T) {
 	wid, pid := newProject(t, s)
 	_ = wid
 
-	// Two tasks on the same session must share one sandbox (created once, not per task).
+	// Two execs on the same session must share one sandbox (created once, not per exec).
 	first, _ := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, Text: "one"})
 	if _, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: pid, Handle: first.GetHandle(), Text: "two"}); err != nil {
 		t.Fatalf("second dispatch: %v", err)
@@ -256,8 +256,8 @@ func newProject(t *testing.T, s *controlplane.Server) (workspaceID, projectID st
 	return workspace.GetWorkspace().GetId(), project.GetProject().GetId()
 }
 
-// hangsUpRunner cancels the caller's context while the task runs, which is what a client
-// disconnecting after a long task does to the dispatch path.
+// hangsUpRunner cancels the caller's context while the exec runs, which is what a client
+// disconnecting after a long exec does to the dispatch path.
 type hangsUpRunner struct {
 	model.FakeRunner
 	hangUp context.CancelFunc
@@ -274,14 +274,14 @@ type contextHonouringStore struct {
 	store.Store
 }
 
-func (s contextHonouringStore) AppendTask(ctx context.Context, task *quaycrewv1.Task, workspace, project, session string) error {
+func (s contextHonouringStore) AppendExec(ctx context.Context, exec *quaycrewv1.Exec, workspace, project, session string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return s.Store.AppendTask(ctx, task, workspace, project, session)
+	return s.Store.AppendExec(ctx, exec, workspace, project, session)
 }
 
-// A caller hanging up after a long task must not lose the record of the very task they were waiting
+// A caller hanging up after a long exec must not lose the record of the very exec they were waiting
 // on: history is written on a context detached from the request's.
 func TestHistorySurvivesTheCallerHangingUp(t *testing.T) {
 	ctx, hangUp := context.WithCancel(context.Background())
@@ -313,15 +313,15 @@ func TestHistorySurvivesTheCallerHangingUp(t *testing.T) {
 		t.Fatalf("Dispatch: %v", err)
 	}
 
-	listed, err := s.ListTasks(context.Background(), &quaycrewv1.ListTasksRequest{Session: dispatched.GetId()})
+	listed, err := s.ListExecs(context.Background(), &quaycrewv1.ListExecsRequest{Session: dispatched.GetId()})
 	if err != nil {
-		t.Fatalf("ListTasks: %v", err)
+		t.Fatalf("ListExecs: %v", err)
 	}
-	if len(listed.GetTasks()) != 1 {
-		t.Fatalf("the session has %d tasks after the caller hung up, want the 1 that ran", len(listed.GetTasks()))
+	if len(listed.GetExecs()) != 1 {
+		t.Fatalf("the session has %d execs after the caller hung up, want the 1 that ran", len(listed.GetExecs()))
 	}
-	if listed.GetTasks()[0].GetReply() != "done" {
-		t.Fatalf("the recorded task says %q, want the reply that ran", listed.GetTasks()[0].GetReply())
+	if listed.GetExecs()[0].GetReply() != "done" {
+		t.Fatalf("the recorded exec says %q, want the reply that ran", listed.GetExecs()[0].GetReply())
 	}
 }
 
@@ -349,11 +349,11 @@ func TestDispatchCarriesTheSubscriptionTokenUnderTheNameThatSurvivesIntoAHook(t 
 	}
 
 	if got := runner.LastReq.Env[model.ModelTokenEnv]; got != "tok-xyz" {
-		t.Fatalf("task env[%s] = %q, want tok-xyz, and without it a hook cannot ask a model anything",
+		t.Fatalf("exec env[%s] = %q, want tok-xyz, and without it a hook cannot ask a model anything",
 			model.ModelTokenEnv, got)
 	}
 	if got := runner.LastReq.Env[model.ClaudeCodeOAuthTokenEnv]; got != "tok-xyz" {
-		t.Fatalf("task env[%s] = %q, want tok-xyz: the second name is as well as, never instead of",
+		t.Fatalf("exec env[%s] = %q, want tok-xyz: the second name is as well as, never instead of",
 			model.ClaudeCodeOAuthTokenEnv, got)
 	}
 }
@@ -371,6 +371,6 @@ func TestAWorkspaceWithNoSubscriptionTokenCarriesNeitherName(t *testing.T) {
 	}
 
 	if got, set := runner.LastReq.Env[model.ModelTokenEnv]; set {
-		t.Fatalf("task env carries %s=%q, and nobody set a token", model.ModelTokenEnv, got)
+		t.Fatalf("exec env carries %s=%q, and nobody set a token", model.ModelTokenEnv, got)
 	}
 }

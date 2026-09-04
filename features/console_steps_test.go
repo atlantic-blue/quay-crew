@@ -391,12 +391,12 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// A session exists only once a task creates it, so a failing runner is how you get one with no
+	// A session exists only once an exec creates it, so a failing runner is how you get one with no
 	// conversation behind it.
-	sc.Step(`^a session whose first task failed$`, func(ctx context.Context) error {
+	sc.Step(`^a session whose first exec failed$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		w.runner.failNext = true
-		_ = w.dispatch(ctx, w.projectID, "", "this task fails")
+		_ = w.dispatch(ctx, w.projectID, "", "this exec fails")
 		return nil
 	})
 
@@ -418,13 +418,13 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		if c.opened == nil {
 			return fmt.Errorf("enter produced no command")
 		}
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
-		// The conversation the task ran in, read back rather than written down: the system names one
-		// before the task starts, and the name is a fresh identifier every time.
-		ran, err := w.conversationOfFirstTask()
+		// The conversation the exec ran in, read back rather than written down: the system names one
+		// before the exec starts, and the name is a fresh identifier every time.
+		ran, err := w.conversationOfFirstExec()
 		if err != nil {
 			return err
 		}
@@ -451,7 +451,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the console asks whether to stop that session$`, func(ctx context.Context) error {
 		w, c := worldFrom(ctx), consoleFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -573,7 +573,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		if err != nil {
 			return err
 		}
-		full, err := w.lastTask()
+		full, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -606,7 +606,7 @@ func initializeConsoleSteps(sc *godog.ScenarioContext) {
 		if row == "" {
 			return fmt.Errorf("no coloured row to read a status from:\n%s", view)
 		}
-		// Whichever of them the task left behind. What is being said is that the word carries the
+		// Whichever of them the exec left behind. What is being said is that the word carries the
 		// colour, not which word it is.
 		for _, coloured := range []string{"\x1b[32midle", "\x1b[33mrunning", "\x1b[33mdispatching"} {
 			if strings.Contains(row, coloured) {
@@ -807,98 +807,6 @@ func rowNamed(rows []console.Row, name string) (console.Row, bool) {
 		}
 	}
 	return console.Row{}, false
-}
-
-// initializeTasksViewSteps registers the steps for the console's exec view, which was called the
-// tasks view. They live here rather than with the other task steps because they drive the console's
-// own reducer.
-func initializeTasksViewSteps(sc *godog.ScenarioContext) {
-	sc.Step(`^the operator asks for the selected session's history$`, func(ctx context.Context) error {
-		return askForHistory(ctx, consoleFrom(ctx))
-	})
-
-	// The same key, from the view a finished run's thread ends up in. A run archives its own thread,
-	// so this is the view the history of an automation is actually read from.
-	sc.Step(`^the operator asks for the archived session's history$`, func(ctx context.Context) error {
-		c := consoleFrom(ctx)
-		if err := c.open(ctx, worldFrom(ctx).client, "archived"); err != nil {
-			return err
-		}
-		return askForHistory(ctx, c)
-	})
-
-	sc.Step(`^the console is showing what the session ran$`, func(ctx context.Context) error {
-		if got := consoleFrom(ctx).active.Name; got != "exec" {
-			return fmt.Errorf("the console is showing %q, want exec", got)
-		}
-		return nil
-	})
-
-	sc.Step(`^the history lists (\d+) tasks? saying "([^"]*)"$`, func(ctx context.Context, want int, asked string) error {
-		c := consoleFrom(ctx)
-		if len(c.rows) != want {
-			return fmt.Errorf("the history lists %d tasks, want %d", len(c.rows), want)
-		}
-		if len(c.rows) == 0 {
-			return nil
-		}
-		// Column 2 is what was asked; column 3 is what came back.
-		if got := c.rows[0].Cells[2]; got != asked {
-			return fmt.Errorf("the first task says %q was asked, want %q", got, asked)
-		}
-		if c.rows[0].Cells[3] == "" {
-			return fmt.Errorf("the first task shows nothing as the answer")
-		}
-		return nil
-	})
-
-	// Rule 46 in this repository: when a key gains a neighbour, test that the neighbour did not take
-	// its place. Enter opening the conversation is the thing this view is for.
-	sc.Step(`^enter on a session still opens its conversation rather than its history$`, func(ctx context.Context) error {
-		c := consoleFrom(ctx)
-		opens := false
-		for _, action := range c.active.Actions {
-			if !action.Bound("enter") {
-				continue
-			}
-			// Every action bound to enter, not the first one: an action added ahead of the opener
-			// would take the key, and one added behind it would be dead. Both are wrong.
-			if action.Descend != "" {
-				return fmt.Errorf("an action bound to enter descends into %q, so enter no longer means open", action.Descend)
-			}
-			if action.Shell != nil {
-				opens = true
-			}
-		}
-		if !opens {
-			return fmt.Errorf("the %s view no longer opens anything on enter", c.active.Name)
-		}
-		return nil
-	})
-}
-
-// askForHistory presses the key the current view binds to a history and descends into whatever it
-// names, which is how an operator reaches the tasks of the row they are sitting on.
-func askForHistory(ctx context.Context, c *consoleWorld) error {
-	row, err := onlyRow(c)
-	if err != nil {
-		return err
-	}
-	for _, action := range c.active.Actions {
-		if !action.Bound("t") {
-			continue
-		}
-		if action.Descend == "" {
-			return fmt.Errorf("the key bound to t on %s descends into nothing", c.active.Name)
-		}
-		resource, found := c.registry.Get(action.Descend)
-		if !found {
-			return fmt.Errorf("%s descends into %q, which is not registered", c.active.Name, action.Descend)
-		}
-		c.active = resource
-		return c.list(ctx, row.ID)
-	}
-	return fmt.Errorf("the %s view has nothing bound to t", c.active.Name)
 }
 
 // openModelOn stands the real console up and walks it to a view the way an operator does: colon, the

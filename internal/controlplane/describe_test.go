@@ -16,41 +16,41 @@ import (
 func TestWhenASessionIsWorthDescribingAgain(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
-		tasks     int
+		execs     int
 		lastAt    int
 		every     int
 		described bool
 		because   string
 	}{
 		{
-			name: "a session nobody has spoken in", tasks: 0, lastAt: 0, every: 10, described: false,
+			name: "a session nobody has spoken in", execs: 0, lastAt: 0, every: 10, described: false,
 			because: "there is no conversation to describe, and a description of nothing is worse than none",
 		},
 		{
-			name: "after the first task", tasks: 1, lastAt: 0, every: 10, described: true,
-			because: "one task is enough to say what a conversation is for, and it is what makes a listing readable at all",
+			name: "after the first exec", execs: 1, lastAt: 0, every: 10, described: true,
+			because: "one exec is enough to say what a conversation is for, and it is what makes a listing readable at all",
 		},
 		{
-			name: "the task after that", tasks: 2, lastAt: 1, every: 10, described: false,
-			because: "a call per task doubles the cost of a cheap task, and two tasks rarely change what a conversation is about",
+			name: "the exec after that", execs: 2, lastAt: 1, every: 10, described: false,
+			because: "a call per exec doubles the cost of a cheap exec, and two execs rarely change what a conversation is about",
 		},
 		{
-			name: "the conversation has moved on", tasks: 11, lastAt: 1, every: 10, described: true,
-			because: "ten tasks past the description is far enough that it is describing something else",
+			name: "the conversation has moved on", execs: 11, lastAt: 1, every: 10, described: true,
+			because: "ten execs past the description is far enough that it is describing something else",
 		},
 		{
-			name: "just short of moved on", tasks: 10, lastAt: 1, every: 10, described: false,
-			because: "the count is tasks since, not tasks total",
+			name: "just short of moved on", execs: 10, lastAt: 1, every: 10, described: false,
+			because: "the count is execs since, not execs total",
 		},
 		{
-			name: "describing is off", tasks: 5, lastAt: 0, every: 0, described: false,
-			because: "a system that turned it off pays for nothing, and off has to mean off on the first task too",
+			name: "describing is off", execs: 5, lastAt: 0, every: 0, described: false,
+			because: "a system that turned it off pays for nothing, and off has to mean off on the first exec too",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := worthDescribing(tc.tasks, tc.lastAt, tc.every); got != tc.described {
-				t.Fatalf("with %d tasks, last described at %d, every %d: %v, and %s",
-					tc.tasks, tc.lastAt, tc.every, got, tc.because)
+			if got := worthDescribing(tc.execs, tc.lastAt, tc.every); got != tc.described {
+				t.Fatalf("with %d execs, last described at %d, every %d: %v, and %s",
+					tc.execs, tc.lastAt, tc.every, got, tc.because)
 			}
 		})
 	}
@@ -101,7 +101,7 @@ func TestALongDescriptionIsCapped(t *testing.T) {
 	}
 }
 
-// The setting is read from the system's configuration, and an unreadable value must not quietly task
+// The setting is read from the system's configuration, and an unreadable value must not quietly exec
 // describing off or on.
 func TestHowOftenASessionIsDescribed(t *testing.T) {
 	for _, tc := range []struct {
@@ -126,9 +126,9 @@ func TestHowOftenASessionIsDescribed(t *testing.T) {
 	}
 }
 
-// The cases above are the decision. This one is the feature: a session that has had a task says what
+// The cases above are the decision. This one is the feature: a session that has had an exec says what
 // it is about, without anybody naming it.
-func TestASessionDescribesItselfAfterItsFirstTask(t *testing.T) {
+func TestASessionDescribesItselfAfterItsFirstExec(t *testing.T) {
 	system := describingSystemOf(t, 10)
 
 	system.dispatch(t, "help me write the blog post about the agentic harness")
@@ -138,16 +138,16 @@ func TestASessionDescribesItselfAfterItsFirstTask(t *testing.T) {
 	}
 }
 
-// A description is a convenience. A task that worked is not reported as failed because the system could
+// A description is a convenience. An exec that worked is not reported as failed because the system could
 // not think of a name for it, and the operator is not left waiting for one either.
-func TestATaskSucceedsEvenWhenDescribingFails(t *testing.T) {
+func TestAExecSucceedsEvenWhenDescribingFails(t *testing.T) {
 	system := describingSystemOf(t, 10)
 	system.runner.DescribeErr = errors.New("the model is not answering")
 
 	reply := system.dispatch(t, "help me write the blog post")
 
 	if reply == "" {
-		t.Fatal("the task itself failed because describing did")
+		t.Fatal("the exec itself failed because describing did")
 	}
 	if got := system.description(t); got != "" {
 		t.Fatalf("a failed description was kept anyway: %q", got)
@@ -196,7 +196,7 @@ func TestDescribingNeverOverwritesTheNameYouChose(t *testing.T) {
 // every session is named "Here is the start of a conversation:", which is worse in a listing than the
 // identifier it replaced.
 func TestTheQuestionComingBackIsNotADescription(t *testing.T) {
-	prompt := describePrompt([]*quaycrewv1.Task{{Prompt: "write the blog post", Reply: "ok"}})
+	prompt := describePrompt([]*quaycrewv1.Exec{{Prompt: "write the blog post", Reply: "ok"}})
 
 	for _, tc := range []struct {
 		name string

@@ -1,7 +1,7 @@
 Feature: Prose written for a person is held to the standard
 
-  Every role in this system writes prose for a person: pull request descriptions, changelog
-  fragments, issue bodies, commit messages, documentation. The standard for that prose is Simplified
+  Every role in this system writes prose for a person: pull request descriptions, issue bodies,
+  commit messages, documentation. The standard for that prose is Simplified
   Technical English, ASD-STE100. Until this, it was a sentence in a brief, which is the position the
   merge rule was in before the merge gate.
 
@@ -43,7 +43,7 @@ Feature: Prose written for a person is held to the standard
       | "One. Two things happen. Three is the count. Four comes next. Five is here. Six follows it. Seven is too many."                             |
       | "The gate has refused the command."                                                                                                        |
       | "The session had written the file before the check ran."                                                                                    |
-      | "The task is running."                                                                                                                     |
+      | "The exec is running."                                                                                                                     |
       | "The gate reads the command - then it answers."                                                                                             |
 
   # The other direction, and the one that decides whether this gate is worth attaching. A gate with

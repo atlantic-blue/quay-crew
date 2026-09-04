@@ -34,7 +34,7 @@ func identifiersFrom(ctx context.Context) *identifierWorld {
 // surfaces render a session through display, so reading it here reads what the operator reads.
 func listedSession(ctx context.Context) (*quaycrewv1.Session, []string, error) {
 	w := worldFrom(ctx)
-	current, err := w.lastTask()
+	current, err := w.lastExec()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -141,7 +141,7 @@ func initializeIdentifierSteps(sc *godog.ScenarioContext) {
 	// read the system back. What is asserted is the state the session is left in, never the call.
 	sc.Step(`^dispatch on what was copied continues that session$`, func(ctx context.Context) error {
 		w, held := worldFrom(ctx), identifiersFrom(ctx)
-		before, err := w.lastTask()
+		before, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -159,32 +159,32 @@ func initializeIdentifierSteps(sc *godog.ScenarioContext) {
 		if w.lastErr != nil {
 			return fmt.Errorf("dispatch on %q was refused: %w", held.copied, w.lastErr)
 		}
-		after, err := w.lastTask()
+		after, err := w.lastExec()
 		if err != nil {
 			return err
 		}
 		if after.sessionID != before.sessionID {
-			return fmt.Errorf("the task ran in session %s, want %s", after.sessionID, before.sessionID)
+			return fmt.Errorf("the exec ran in session %s, want %s", after.sessionID, before.sessionID)
 		}
 		return nil
 	})
 
-	sc.Step(`^tasks on what was copied lists that session's history$`, func(ctx context.Context) error {
+	sc.Step(`^execs on what was copied lists that session's history$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		session, err := reached(ctx)
 		if err != nil {
 			return err
 		}
-		resp, err := w.client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: session.GetId()})
+		resp, err := w.client.ListExecs(ctx, &quaycrewv1.ListExecsRequest{Session: session.GetId()})
 		if err != nil {
 			return err
 		}
-		if len(resp.GetTasks()) == 0 {
-			return fmt.Errorf("the history is empty, want the session's own tasks")
+		if len(resp.GetExecs()) == 0 {
+			return fmt.Errorf("the history is empty, want the session's own execs")
 		}
-		if resp.GetTasks()[0].GetPrompt() != "remember this" {
-			return fmt.Errorf("the history opens with %q, want the session's first task",
-				resp.GetTasks()[0].GetPrompt())
+		if resp.GetExecs()[0].GetPrompt() != "remember this" {
+			return fmt.Errorf("the history opens with %q, want the session's first exec",
+				resp.GetExecs()[0].GetPrompt())
 		}
 		return nil
 	})
@@ -309,18 +309,18 @@ func initializeIdentifierSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^that session was left with (\d+) task$`, func(ctx context.Context, want int) error {
+	sc.Step(`^that session was left with (\d+) exec$`, func(ctx context.Context, want int) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
-		resp, err := w.client.ListTasks(ctx, &quaycrewv1.ListTasksRequest{Session: current.sessionID})
+		resp, err := w.client.ListExecs(ctx, &quaycrewv1.ListExecsRequest{Session: current.sessionID})
 		if err != nil {
 			return err
 		}
-		if len(resp.GetTasks()) != want {
-			return fmt.Errorf("the session holds %d tasks, want %d", len(resp.GetTasks()), want)
+		if len(resp.GetExecs()) != want {
+			return fmt.Errorf("the session holds %d execs, want %d", len(resp.GetExecs()), want)
 		}
 		return nil
 	})
@@ -351,7 +351,7 @@ func initializeIdentifierSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the conversation that opened belongs to that session$`, func(ctx context.Context) error {
 		w, c := worldFrom(ctx), consoleFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -418,7 +418,7 @@ func initializeIdentifierSteps(sc *godog.ScenarioContext) {
 	// are the proof the refresh happened, and the reason above is the proof it survived.
 	sc.Step(`^the refreshed list is under it, with the reason still on the screen$`, func(ctx context.Context) error {
 		w, c := worldFrom(ctx), consoleFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -450,7 +450,7 @@ func initializeIdentifierSteps(sc *godog.ScenarioContext) {
 // nameCell is where the name sits in a session row, which is the cell the handle used to occupy.
 const nameCell = 3
 
-// typeAtDispatch runs `krewe task` over two typed words the way the command does: split them, read
+// typeAtDispatch runs `krewe exec` over two typed words the way the command does: split them, read
 // the first as a session if that is what it is, and dispatch the rest.
 func typeAtDispatch(ctx context.Context, first, second string) error {
 	w, held := worldFrom(ctx), identifiersFrom(ctx)

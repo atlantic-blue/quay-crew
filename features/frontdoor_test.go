@@ -441,7 +441,7 @@ func unreusableMarkdownIn(text string) []string {
 // Exact rather than a minimum, for the same reason the section list is: a front door that defines
 // the eight and then eight more is the sprawl this file exists to stop.
 var theResourcesTheSystemKeeps = []string{
-	"Workspaces", "Projects", "Sessions", "Tasks",
+	"Workspaces", "Projects", "Sessions", "Execs",
 	"Skills", "Hooks", "Secrets", "Context",
 }
 
@@ -451,7 +451,7 @@ const theVocabulary = "## The words"
 // theWordsFor returns everything wrong with the front door's vocabulary, or nothing.
 //
 // The confusion this answers cost real time twice, which is why it is checked rather than left to
-// whoever edits the README next. A reader who cannot tell a job from a task cannot use either.
+// whoever edits the README next. A reader who cannot tell a job from an exec cannot use either.
 func theWordsFor(frontDoor string) []string {
 	said, err := sectionOf(frontDoor, theVocabulary)
 	if err != nil {
@@ -496,7 +496,7 @@ func theWordsFor(frontDoor string) []string {
 // TestTheFrontDoorDefinesEveryResourceTheSystemKeeps.
 //
 // The vocabulary cost real time twice before it was written down. A reader who does not know what a
-// session is cannot tell it from the task they send to it.
+// session is cannot tell it from the exec they send to it.
 func TestTheFrontDoorDefinesEveryResourceTheSystemKeeps(t *testing.T) {
 	for _, wrong := range theWordsFor(frontDoor(t)) {
 		t.Error(wrong)

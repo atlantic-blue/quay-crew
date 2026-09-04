@@ -10,7 +10,7 @@ import (
 )
 
 // A caller that already knows what the session is for says so at dispatch, so the name is on the row
-// from the first second rather than after a model writes a description behind a task that has landed.
+// from the first second rather than after a model writes a description behind an exec that has landed.
 
 func TestADispatchNamesTheSessionItMakes(t *testing.T) {
 	s := newServer(&model.FakeRunner{Reply: "done"})

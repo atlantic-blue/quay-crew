@@ -50,16 +50,16 @@ VERSION := $(shell git rev-parse --short HEAD 2>/dev/null)$(shell git diff --qui
 SANDBOX_PATTERN := ^(krewe|quaycrew)-[0-9a-f]{24}$$
 
 # The default sandbox image: a container with the Claude Code CLI, built locally with `make
-# sandbox-image`. Point QC_SANDBOX_IMAGE at this and set QC_MODEL=claude-code to run real tasks.
+# sandbox-image`. Point QC_SANDBOX_IMAGE at this and set QC_MODEL=claude-code to run real execs.
 SANDBOX_IMAGE := krewe-sandbox-claude:local
 
 # RETIRED_SANDBOX_IMAGE is what that image was called before the rename. An operator's own
 # configuration file pins the tag and an upgrade never rewrites it, so the build keeps answering to
-# the old name for one release and env-check says which key to change. Without both, the first task
+# the old name for one release and env-check says which key to change. Without both, the first exec
 # after an upgrade fails on an image that is not there, which reads as a broken system.
 RETIRED_SANDBOX_IMAGE := quaycrew-sandbox-claude:local
 
-.PHONY: up start upgrade up-observability down drain logs ps proto build install tool test features lint fmt tidy sandbox-image image rebuild config env-check up-check hooks changelog promises help
+.PHONY: up start upgrade up-observability down drain logs ps proto build install tool test features lint fmt tidy sandbox-image image rebuild config env-check up-check hooks promises help
 
 # print-<name> is what a variable expands to. The tests that check where configuration lives read it
 # through this, so they see what make actually computes rather than a pattern matched over the text.
@@ -94,8 +94,8 @@ start: up
 #
 # `make install` is the one command a first run needs, so it is also the command somebody types on a
 # system that is already working. Compose replaces the services whose build moved, and the control
-# plane is one of them: a task in flight is executing inside a sandbox through that process, so
-# replacing it ends the task the way `make upgrade` ends one when it takes a container away.
+# plane is one of them: an exec in flight is executing inside a sandbox through that process, so
+# replacing it ends the exec the way `make upgrade` ends one when it takes a container away.
 #
 # Nothing else is at risk. Conversations, workspaces, secrets and the store are on disk and in
 # Postgres, and the sandbox containers are not compose's to replace.
@@ -108,7 +108,7 @@ up-check: config
 	@running="$$($(COMPOSE) ps --status running --quiet 2>/dev/null | grep -c . || true)"; \
 	if [ "$$running" = "0" ]; then exit 0; fi; \
 	echo "this system is already up, in $$running containers."; \
-	echo "Bringing it up again replaces the services this build moved. A task in flight ends with"; \
+	echo "Bringing it up again replaces the services this build moved. An exec in flight ends with"; \
 	echo "them. Conversations, workspaces, secrets and the store are untouched."; \
 	echo ""; \
 	echo "  make tool      build the command line tool only, and leave the system alone"; \
@@ -140,8 +140,7 @@ rebuild: tool hooks sandbox-image
 ## sandbox-image: build the Claude Code sandbox image (tag krewe-sandbox-claude:local)
 #
 # Tagged twice, one image. The second tag is the name this image had before the rename, and it is
-# there for the operator whose configuration file still pins it. It goes in the release named in the
-# changelog.
+# there for the operator whose configuration file still pins it, and it goes in a later release.
 sandbox-image:
 	docker build --build-arg QC_VERSION=$(VERSION) -f deploy/sandbox/claude.Dockerfile -t $(SANDBOX_IMAGE) .
 	docker tag $(SANDBOX_IMAGE) $(RETIRED_SANDBOX_IMAGE)
@@ -169,12 +168,12 @@ env-check:
 	if [ -n "$$missing" ]; then \
 		echo "note: $(ENV_FILE) does not set:$$missing"; \
 		echo "      deploy/env.example gained these after your copy was made, so the stack comes up with"; \
-		echo "      them empty and whatever they task on is off. Compare the two and add what you want."; \
+		echo "      them empty and whatever they exec on is off. Compare the two and add what you want."; \
 	fi; \
 	if grep -qE "^QC_SANDBOX_IMAGE=[[:space:]]*$(RETIRED_SANDBOX_IMAGE)[[:space:]]*$$" "$(ENV_FILE)"; then \
 		echo "note: $(ENV_FILE) pins QC_SANDBOX_IMAGE=$(RETIRED_SANDBOX_IMAGE), which is the retired name"; \
 		echo "      for the image now built as $(SANDBOX_IMAGE). make sandbox-image still tags it under both,"; \
-		echo "      and the release that stops doing that is in the changelog. Set QC_SANDBOX_IMAGE=$(SANDBOX_IMAGE)."; \
+		echo "      and a later release stops doing that. Set QC_SANDBOX_IMAGE=$(SANDBOX_IMAGE)."; \
 	fi
 
 ## upgrade: fetch the latest, rebuild the tool and the stack, and restart it
@@ -234,21 +233,21 @@ up-observability: up
 down: config
 	$(COMPOSE) down
 
-## drain: put every live session down, so nothing loses a task when the containers go
+## drain: put every live session down, so nothing loses an exec when the containers go
 #
 # `make upgrade` removes sandboxes by name from the daemon. A container removed that way takes the
-# task in flight with it, which the operator reads as "model: run exited: exit status 137, and it said
+# exec in flight with it, which the operator reads as "model: run exited: exit status 137, and it said
 # nothing about why" against a conversation they were watching. Going through the system stops each
 # session first, so the row says stopped and the sandbox is closed rather than ripped out.
 #
-# A task still working refuses this. FORCE=1 drains over it, and says whose task went.
+# An exec still working refuses this. FORCE=1 drains over it, and says whose exec went.
 #
 # A system that is not up has nothing to drain and does not stop the upgrade: the tool says what it
 # could not reach and the sweep below still clears the containers.
 drain:
 	@if ! command -v krewe >/dev/null 2>&1; then \
 		echo "note: krewe is not on your PATH, so the sessions cannot be put down cleanly."; \
-		echo "      Whatever takes their containers will end any task still working."; \
+		echo "      Whatever takes their containers will end any exec still working."; \
 		exit 0; \
 	fi; \
 	krewe drain $(if $(FORCE),anyway,) || { \
@@ -277,7 +276,7 @@ build:
 ## install: everything a first run needs, in one command: configuration, the builds, and the system up
 #
 # A first run used to be four commands, and the order mattered. Miss `make config` and compose reads
-# a file that is not there. Miss `make sandbox-image` and the first task fails on a missing image,
+# a file that is not there. Miss `make sandbox-image` and the first exec fails on a missing image,
 # which reads as a broken system rather than a missing step. So this is the whole first run, and the
 # four commands underneath it stay callable on their own for anybody rebuilding one part.
 #
@@ -307,7 +306,7 @@ install:
 	@echo "  krewe workspace create <name>"
 	@echo "  krewe project create <name>"
 	@echo "  krewe secret set CLAUDE_CODE_OAUTH_TOKEN <token from claude setup-token>"
-	@echo "  krewe task \"say pong\""
+	@echo "  krewe exec \"say pong\""
 
 ## tool: build the krewe command line tool and install it over the copy your shell runs
 #
@@ -364,16 +363,7 @@ test: hooks
 features: hooks
 	go test ./features/... -v -count=1
 
-## changelog: assemble the pending changelog fragments into one dated section
-#
-# Every change writes its entry as its own file under changelog.d, so two changes made at once never
-# write the same file. This is where they come back together. It prints, and writes nothing: paste
-# the section under the heading in CHANGELOG.md and delete the fragments in the same commit, so a
-# release is one change a person read rather than a file a command rewrote.
-changelog:
-	@go run ./cmd/changelog
-
-## promises: refuse a change that touches behaviour and carries no changelog entry and no scenario
+## promises: refuse a change that touches behaviour and carries no scenario
 #
 # The question continuous integration asks on a pull request, asked here before pushing. It reads what
 # this branch changed against origin/main. There is no pull request body on a machine, so a change

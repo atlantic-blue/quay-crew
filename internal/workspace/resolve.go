@@ -1,4 +1,4 @@
-// Package workspace tasks what an operator typed into a workspace id.
+// Package workspace execs what an operator typed into a workspace id.
 //
 // Commands take a workspace id, a twenty four character hex string that is printed once at creation
 // and is not worth carrying in your head. This package lets the same flag take a name instead. It
@@ -79,7 +79,7 @@ func (e *AmbiguousError) Error() string {
 		e.Name, len(e.IDs), what, strings.Join(e.IDs, ", "))
 }
 
-// Resolve tasks a reference into a workspace id.
+// Resolve execs a reference into a workspace id.
 //
 // An id wins. Only when the reference is not an id is it matched against workspace names, so a workspace
 // whose name happens to be another workspace's id still resolves to itself.
@@ -139,7 +139,7 @@ func namesOf[T any](items []T, name func(int) string) []string {
 	return names
 }
 
-// ResolveProject tasks a reference into a project id, the same way Resolve does for a workspace.
+// ResolveProject execs a reference into a project id, the same way Resolve does for a workspace.
 //
 // A workspace reference narrows the search, which is what makes short project names usable: two
 // workspaces may each have a project called "notes" without either being ambiguous.

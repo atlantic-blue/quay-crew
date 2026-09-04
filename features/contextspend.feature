@@ -8,7 +8,7 @@ Feature: A session says where its context went
   So every conversation is read back and split four ways. Reads is the contents of files, however the
   session opened them, with a reading tool or with a reading command in the shell. Tools is what every
   other tool returned. Turns is the session's own words, what it wrote, what it thought and the calls
-  it made. Told is what reached it from outside a tool: the task it was given and the answers to its
+  it made. Told is what reached it from outside a tool: the exec it was given and the answers to its
   questions.
 
   The count is characters, not tokens. The transcript holds text, every model counts tokens its own

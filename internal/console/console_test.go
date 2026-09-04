@@ -612,10 +612,10 @@ func TestShellActionExecsIntoTheSessionContainer(t *testing.T) {
 
 // TestAttachTellsTheOperatorWhyItCannot covers the thing that made this worthless before: the console
 // swallowed the control plane's reason and said "nothing to run", which is not something anyone can
-// act on. A session with no conversation yet is fixed by dispatching a task, and the operator has to
+// act on. A session with no conversation yet is fixed by dispatching an exec, and the operator has to
 // be told that.
 func TestAttachTellsTheOperatorWhyItCannot(t *testing.T) {
-	client := &fakeClient{attachErr: fmt.Errorf("session s1 has no conversation yet: dispatch a task to it first")}
+	client := &fakeClient{attachErr: fmt.Errorf("session s1 has no conversation yet: dispatch an exec to it first")}
 	attach := actionBoundTo(t, Sessions(client), "a")
 
 	_, err := attach.Shell(Row{ID: "s1"})
@@ -678,9 +678,9 @@ func TestEnterAndAOpenTheSameConversation(t *testing.T) {
 }
 
 // TestEnterOnASessionWithNoConversationSaysWhy: opening something that errors is worse than being
-// told to dispatch a task first.
+// told to dispatch an exec first.
 func TestEnterOnASessionWithNoConversationSaysWhy(t *testing.T) {
-	client := &fakeClient{attachErr: fmt.Errorf("session s1 has no conversation yet: dispatch a task to it first")}
+	client := &fakeClient{attachErr: fmt.Errorf("session s1 has no conversation yet: dispatch an exec to it first")}
 	model := newTestModel(t, Sessions(client))
 	model, _ = update(t, model, rowsFor(model, Row{ID: "s1", Cells: []string{"s1", "acme", "bills", "t1", "idle", "1m"}}))
 
@@ -700,7 +700,7 @@ func TestEnterOnASessionWithNoConversationSaysWhy(t *testing.T) {
 // TestAReasonEnterCouldNotOpenSurvivesTheRefresh: the reason was set and then blanked by the listing
 // that the same return asked for, so the key read as doing nothing at all.
 func TestAReasonEnterCouldNotOpenSurvivesTheRefresh(t *testing.T) {
-	client := &fakeClient{attachErr: fmt.Errorf("session s1 has no conversation yet: dispatch a task to it first")}
+	client := &fakeClient{attachErr: fmt.Errorf("session s1 has no conversation yet: dispatch an exec to it first")}
 	model := newTestModel(t, Sessions(client))
 	row := Row{ID: "s1", Cells: []string{"s1", "acme", "bills", "", "idle", "1m"}}
 	model, _ = update(t, model, rowsFor(model, row))
@@ -841,7 +841,7 @@ func TestAnUnconfirmedActionStillActsAtOnce(t *testing.T) {
 }
 
 // TestTheConfirmationSurvivesARefreshUnderneathIt: a listing arriving between the question and the
-// answer must not task a yes into a yes to a different conversation.
+// answer must not exec a yes into a yes to a different conversation.
 func TestTheConfirmationSurvivesARefreshUnderneathIt(t *testing.T) {
 	client := &fakeClient{}
 	model, _ := update(t, sessionsAt(t, client), tea.KeyMsg{Type: tea.KeyBackspace})
@@ -1442,6 +1442,33 @@ func TestNothingOpensTheFeaturesView(t *testing.T) {
 	for _, name := range registry.Names() {
 		if name == "features" {
 			t.Fatal("the switcher still lists a features view")
+		}
+	}
+}
+
+// The console shows what is running. A session's history is read at the command line, where the whole
+// of an answer fits, so no word opens a view of it and every word that did says what to type.
+func TestNothingOpensTheExecView(t *testing.T) {
+	client := &fakeClient{}
+	registry, err := NewDefaultRegistry(client)
+	if err != nil {
+		t.Fatalf("NewDefaultRegistry: %v", err)
+	}
+	for _, token := range []string{"e", "exec", "execs", "history", "h"} {
+		if resource, found := registry.Resolve(token); found {
+			t.Fatalf("Resolve(%q) opens %q, and that view is gone", token, resource.Name)
+		}
+		instead, gone := moved(token)
+		if !gone {
+			t.Fatalf("%q opens nothing and says nothing, so the bar reads as broken", token)
+		}
+		if !strings.Contains(instead, "krewe exec list") {
+			t.Fatalf("%q says %q, want it to name krewe exec list", token, instead)
+		}
+	}
+	for _, name := range registry.Names() {
+		if name == "exec" {
+			t.Fatal("the switcher still lists an exec view")
 		}
 	}
 }
@@ -2192,7 +2219,7 @@ func TestEveryWizardQuestionIsNeeded(t *testing.T) {
 }
 
 // TestTheWizardNeverShowsTheToken: a value on a screen is a value in that terminal's scrollback, and
-// this one runs every task the system makes.
+// this one runs every exec the system makes.
 func TestTheWizardNeverShowsTheToken(t *testing.T) {
 	client := &wizardClient{}
 	model := wizardAt(t, client)

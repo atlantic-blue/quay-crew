@@ -119,10 +119,10 @@ Feature: The operator sees the system from the console
     And the operator presses enter on each session in turn
     Then the conversation beside the console was that session's own each time
 
-  # A first task that failed leaves a session holding no conversation. Enter said so and stopped,
+  # A first exec that failed leaves a session holding no conversation. Enter said so and stopped,
   # which left a row in the listing nobody could open. The system names a conversation for it instead.
-  Scenario: Enter on a session whose first task failed opens a conversation the system names
-    Given a session whose first task failed
+  Scenario: Enter on a session whose first exec failed opens a conversation the system names
+    Given a session whose first exec failed
     When the operator opens the console on sessions
     And the operator presses enter on the selected session
     Then the console opens a conversation the system can name
@@ -156,49 +156,27 @@ Feature: The operator sees the system from the console
     And the archived view lists 1 session
     And the archived session still holds its conversation
 
-  # A flow run puts its own thread away when it ends, so the history of an automation is always read
-  # from the archived view. Reaching it must not need the thread restored first: nothing about
-  # reading what happened needs a container.
-  Scenario: An archived session's history is reachable without restoring it
-    Given a session started by dispatching "read the package file"
-    When the operator opens the console and archives the session
-    And the operator asks for the archived session's history
-    Then the console is showing what the session ran
-    And the history lists 1 task saying "read the package file"
-
   Scenario: Acting on a row still uses the whole identifier
     Given a session started by dispatching "hello"
     When the operator opens the console on sessions
     And the operator stops the selected session from the console
     Then the session is reported as stopped
 
-  # The history is a second key rather than a replacement: enter on a session opens the conversation,
-  # which is the thing an operator does most, so it keeps the cheapest key.
-  Scenario: The console shows a session's history
+  # The console shows what is running. What a session already ran is read at the command line, where
+  # the whole of an answer fits, so the key that opened the reading says where the reading went
+  # rather than doing nothing.
+  Scenario Outline: A key that opened a session's history says what to type instead
     Given a session started by dispatching "hello"
-    When the operator opens the console on sessions
-    And the operator asks for the selected session's history
-    Then the console is showing what the session ran
-    And the history lists 1 task saying "hello"
-
-  Scenario: Asking for a history does not open the conversation
-    Given a session started by dispatching "hello"
-    When the operator opens the console on sessions
-    Then enter on a session still opens its conversation rather than its history
-
-  # The asked column holds 34 characters, so a task row shows a fragment of a sentence. Every row used
-  # to open the same shell, so a reader could not open the task they were looking at. Enter opens the
-  # task under the cursor now, and the conversation keeps the key it already answered to.
-  Scenario: Enter opens the task under the cursor
-    Given a session started by dispatching "read the electricity bill"
-    And the operator dispatches "pay the water bill before the fourteenth of the month" to the same session
     When the operator is at the console on the "sessions" view
-    And the operator presses "t" in the console
-    And the operator presses "j" in the console
-    And the operator presses "enter" in the console
-    Then the console screen says "pay the water bill before the fourteenth of the month"
-    And the console screen does not say "read the electricity bill"
-    And the console handed the terminal to nothing
+    And the operator presses "<key>" in the console
+    Then the console screen says "krewe exec list"
+    And the console is on the "sessions" view
+
+    Examples:
+      | key |
+      | t   |
+      | l   |
+      | h   |
 
   # The wizard makes one thing. It shipped able to make only a whole new system, because the workspace
   # and the project questions were both required on the way to anything else, so adding a project to a
@@ -251,15 +229,15 @@ Feature: The operator sees the system from the console
     And the system has 1 workspace
     And the system has 1 project
 
-  # A task takes as long as the job takes, which is minutes, and the console has a screen to draw.
+  # An exec takes as long as the job takes, which is minutes, and the console has a screen to draw.
   # The wizard waited for one anyway: it held every key while it waited, gave up at thirty seconds,
   # and left behind a session with a container, a row, and no conversation in it. The operator saw a
   # frozen "making it" and then an error, and read the freeze as the container being slow to start.
   #
-  # The task is held open here rather than timed, because what is being specified is what is true
-  # while a task runs, and a scenario that waits a duration for that passes by accident.
-  Scenario: The wizard comes back before the task it started has finished
-    Given the model takes longer over a task than anybody will wait
+  # The exec is held open here rather than timed, because what is being specified is what is true
+  # while an exec runs, and a scenario that waits a duration for that passes by accident.
+  Scenario: The wizard comes back before the exec it started has finished
+    Given the model takes longer over an exec than anybody will wait
     When the operator answers the wizard with:
       | session     |
       | acme        |
@@ -268,24 +246,24 @@ Feature: The operator sees the system from the console
       | hello       |
     Then the console is asking nothing
     And the system has 1 session
-    And a task is under way
+    And an exec is under way
     And the system's one session is reported as running
-    When the model finishes the task
+    When the model finishes the exec
     Then the system's one session is reported as idle
     And the session carries what the model said
 
-  # A task runs inside the system's own process, so nothing of it survives that process going down. A
-  # row still saying running on the way up is a task that died with the last one, and left alone it
+  # An exec runs inside the system's own process, so nothing of it survives that process going down. A
+  # row still saying running on the way up is an exec that died with the last one, and left alone it
   # reads as a conversation that has been thinking since the restart.
-  Scenario: A session left mid task by a restart is settled rather than left running
-    Given the model takes longer over a task than anybody will wait
+  Scenario: A session left mid exec by a restart is settled rather than left running
+    Given the model takes longer over an exec than anybody will wait
     When the operator answers the wizard with:
       | session     |
       | acme        |
       | house-bills |
       | dangerous   |
       | hello       |
-    And a task is under way
+    And an exec is under way
     And the control plane restarts
     Then the system's one session is reported as failed
 
@@ -418,16 +396,16 @@ Feature: The operator sees the system from the console
     Then a session's row carries more than one colour
     And the row says how the session is doing in its status cell
 
-  # The word for the view that lists what a session ran changed, and fingers did not. Each spelling
-  # that opened it opens it now, because a word that quietly stopped working is how an operator
-  # learns to distrust the rest of the command bar.
-  Scenario Outline: A word the view used to be called still opens it
+  # The view that listed what a session ran is gone from the console. Every spelling that opened it is
+  # still in fingers and in notes, so each one says what to type at the command line instead. A word
+  # that quietly stopped working is how an operator learns to distrust the rest of the command bar.
+  Scenario Outline: A word that opened the history says what to type instead
     When the operator types "<typed>" into the command bar
-    Then the console is on the "exec" view
+    Then the console screen says "krewe exec list"
 
     Examples:
       | typed   |
+      | e       |
       | exec    |
-      | tasks   |
-      | task    |
+      | execs   |
       | history |

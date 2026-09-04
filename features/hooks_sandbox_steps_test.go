@@ -77,11 +77,11 @@ func initializeHookSandboxSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("nothing binds %s to %s:\n%s", name, event, body)
 		})
 
-	sc.Step(`^the task loaded the hooks settings$`, func(ctx context.Context) error {
+	sc.Step(`^the exec loaded the hooks settings$`, func(ctx context.Context) error {
 		last := worldFrom(ctx).runner.lastRequest()
 		want := sandbox.HooksPath + "/" + hook.SettingsFile
 		if last.Settings != want {
-			return fmt.Errorf("the task was told to load %q, want %q", last.Settings, want)
+			return fmt.Errorf("the exec was told to load %q, want %q", last.Settings, want)
 		}
 		return nil
 	})

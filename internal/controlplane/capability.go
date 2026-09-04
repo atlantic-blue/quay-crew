@@ -67,7 +67,7 @@ type notGiven struct {
 
 // capabilityOf answers what a session holds, in one store round trip.
 //
-// A failure reading the store is not a failure of the task: the system's skills still reach the
+// A failure reading the store is not a failure of the exec: the system's skills still reach the
 // session, and a session with one skill instead of two is better than a session that will not
 // start.
 func (s *Server) capabilityOf(ctx context.Context, session *quaycrewv1.Session) capability {
@@ -131,7 +131,7 @@ func (s *Server) heldIn(ctx context.Context, workspace string) capability {
 // sandbox born before it, and one mount root rather than two.
 //
 // A failure reading the system's skills leaves the workspace's own alone, for the same reason the
-// caller survives a failed workspace read: fewer skills is better than no task.
+// caller survives a failed workspace read: fewer skills is better than no exec.
 func (s *Server) withSystemSkills(ctx context.Context, attached []store.Imported) []store.Imported {
 	system, err := s.store.SystemSkills(ctx)
 	if err != nil || len(system) == 0 {
@@ -155,7 +155,7 @@ func (s *Server) withSystemSkills(ctx context.Context, attached []store.Imported
 // runs the command, and improvises around the failure, and the operator reads the improvisation as
 // the answer.
 //
-// Refusing the whole task was the earlier answer to that, and it makes one unusable skill enough to
+// Refusing the whole exec was the earlier answer to that, and it makes one unusable skill enough to
 // stop every conversation in the workspace. That trade only held while a skill was attached one
 // workspace at a time, deliberately, by the person who had just set its secret.
 func (s *Server) withoutUnusable(ctx context.Context, workspace string, caps capability) capability {

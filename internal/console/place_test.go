@@ -122,22 +122,21 @@ func TestAConsoleWithNothingRememberedOpensAtTheTop(t *testing.T) {
 	}
 }
 
-// The way back has to work from a resumed place too. A console that walked to the tasks of a session on the
-// way up, and then cannot come back, has stranded whoever opened it.
+// The way back has to work from a resumed place too. A console that walked to the bottom of the tree
+// on the way up, and then cannot come back, has stranded whoever opened it.
 func TestTheWayBackWorksFromAPlaceTheConsoleResumedInto(t *testing.T) {
 	client := aSystemWithOneOfEverything()
 	held := &heldPlace{}
 
 	deep := openedRemembering(t, client, held, Place{})
 	deep = step(t, step(t, deep, enter()), enter())
-	deep = step(t, deep, runes("t"))
-	if got := deep.Position(); got != "acme/house-bills/bills" {
+	if got := deep.Position(); got != "acme/house-bills" {
 		t.Fatalf("the first console ended at %q", got)
 	}
 
 	resumed := openedRemembering(t, client, held, held.where)
-	screenSays(t, resumed, "<exec>")
-	for _, want := range []string{"acme/house-bills", "acme", ""} {
+	screenSays(t, resumed, "<sessions>")
+	for _, want := range []string{"acme", ""} {
 		resumed = step(t, resumed, escape())
 		if got := resumed.Position(); got != want {
 			t.Fatalf("escape out of a resumed place left the address at %q, want %q", got, want)

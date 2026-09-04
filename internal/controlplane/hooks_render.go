@@ -18,7 +18,7 @@ import (
 // them sits beside them and has to travel too. Read only: a session that can edit the file binding
 // its own constraints is a session with no constraints.
 //
-// A failure writing is a session with fewer hooks, not a failed task, and that is a deliberate and
+// A failure writing is a session with fewer hooks, not a failed exec, and that is a deliberate and
 // uncomfortable trade. The alternative is a system where one unwritable directory stops every
 // conversation. The listing is where an operator finds out which hooks a session actually holds.
 func (s *Server) renderHooks(ctx context.Context, session *quaycrewv1.Session) (sandbox.Mount, bool) {
@@ -45,12 +45,12 @@ func (s *Server) renderHooks(ctx context.Context, session *quaycrewv1.Session) (
 	return sandbox.Mount{Source: host, Target: sandbox.HooksPath, ReadOnly: true}, true
 }
 
-// settingsFor is the settings file a task should load, and empty when there is none to load.
+// settingsFor is the settings file an exec should load, and empty when there is none to load.
 //
 // Read from the disk rather than remembered from sandbox creation, because a sandbox is adopted
-// across tasks and this process may not be the one that built it. The file itself is the question,
-// not the hooks in it: a task told to load settings that are not there does not start at all, and the
-// runtime says only "Settings file not found" before exiting. That is every task on the system, so it
+// across execs and this process may not be the one that built it. The file itself is the question,
+// not the hooks in it: an exec told to load settings that are not there does not start at all, and the
+// runtime says only "Settings file not found" before exiting. That is every exec on the system, so it
 // is worth a stat.
 func (s *Server) settingsFor(_ context.Context, session *quaycrewv1.Session) string {
 	dir, canWrite := s.storage.WorkspaceHooksDir(session.GetWorkspace())

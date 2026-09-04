@@ -30,7 +30,7 @@ func TestEveryWayOfAskingForHelpIsAnswered(t *testing.T) {
 			t.Errorf("krewe %s was refused: %v", spelling, err)
 			continue
 		}
-		if !strings.Contains(printed, "commands:") || !strings.Contains(printed, "task list <session>") {
+		if !strings.Contains(printed, "commands:") || !strings.Contains(printed, "exec list <session>") {
 			t.Errorf("krewe %s did not print the commands: %q", spelling, printed)
 		}
 	}
@@ -72,7 +72,7 @@ func TestSessionIsACommandBecauseTheToolTeachesTheWord(t *testing.T) {
 	client := testClient(t)
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "task", "hello")
+	mustRun(t, client, "exec", "hello")
 
 	listed := mustRun(t, client, "sessions")
 	for _, spelling := range []string{"session", "sessions", "session"} {

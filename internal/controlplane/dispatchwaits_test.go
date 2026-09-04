@@ -40,7 +40,7 @@ func waitingSystem(cfg controlplane.Config) *controlplane.Server {
 
 // A sandbox that never starts: the dispatch has to end, and it has to say which wait it gave up on,
 // because "the dispatch failed" sends the reader to the whole path.
-func TestASandboxThatNeverStartsFailsTheTaskByName(t *testing.T) {
+func TestASandboxThatNeverStartsFailsTheExecByName(t *testing.T) {
 	provider := &sandbox.FakeProvider{Hold: make(chan struct{})}
 	server := waitingSystem(controlplane.Config{Provider: provider})
 	_, project := newProject(t, server)
@@ -55,17 +55,17 @@ func TestASandboxThatNeverStartsFailsTheTaskByName(t *testing.T) {
 		t.Fatalf("the system said %q, and it does not say what it waited for", err)
 	}
 
-	// And the row says so too. A row left idle with no task reads as a session waiting for work.
+	// And the row says so too. A row left idle with no exec reads as a session waiting for work.
 	session := oneSession(t, server)
 	if session.GetStatus() != controlplane.StatusFailed {
 		t.Fatalf("the session reads %q, want failed", session.GetStatus())
 	}
-	tasks, err := server.ListTasks(context.Background(), &quaycrewv1.ListTasksRequest{Session: session.GetId()})
+	execs, err := server.ListExecs(context.Background(), &quaycrewv1.ListExecsRequest{Session: session.GetId()})
 	if err != nil {
-		t.Fatalf("ListTasks: %v", err)
+		t.Fatalf("ListExecs: %v", err)
 	}
-	if len(tasks.GetTasks()) != 1 || tasks.GetTasks()[0].GetFailure() == "" {
-		t.Fatalf("%d tasks recorded, and nothing says why the dispatch did not start", len(tasks.GetTasks()))
+	if len(execs.GetExecs()) != 1 || execs.GetExecs()[0].GetFailure() == "" {
+		t.Fatalf("%d execs recorded, and nothing says why the dispatch did not start", len(execs.GetExecs()))
 	}
 }
 

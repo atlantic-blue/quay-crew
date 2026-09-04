@@ -73,41 +73,41 @@ func TestDrainRefusesTheFlagSpelling(t *testing.T) {
 	}
 }
 
-// The refusal is the whole point of the plain word: an operator who cannot see whose task is working
+// The refusal is the whole point of the plain word: an operator who cannot see whose exec is working
 // cannot decide whether to wait for it.
-func TestDrainRefusesWhileATaskIsWorkingAndNamesIt(t *testing.T) {
-	client, handle := aSystemWithATaskUnderWay(t)
+func TestDrainRefusesWhileAExecIsWorkingAndNamesIt(t *testing.T) {
+	client, handle := aSystemWithAExecUnderWay(t)
 
 	var out bytes.Buffer
 	err := run(context.Background(), client, []string{"drain"}, &out, "")
 	if err == nil {
-		t.Fatalf("the drain went ahead over a task that was still working: %q", out.String())
+		t.Fatalf("the drain went ahead over an exec that was still working: %q", out.String())
 	}
 	if !strings.Contains(err.Error(), handle) {
 		t.Fatalf("the refusal does not name the session that is working: %v", err)
 	}
-	if !strings.Contains(err.Error(), "1 task is") {
-		t.Fatalf("the refusal does not count the tasks in flight: %v", err)
+	if !strings.Contains(err.Error(), "1 exec is") {
+		t.Fatalf("the refusal does not count the execs in flight: %v", err)
 	}
 }
 
 func TestDrainAnywaySaysWhatItInterrupted(t *testing.T) {
-	client, handle := aSystemWithATaskUnderWay(t)
+	client, handle := aSystemWithAExecUnderWay(t)
 
 	said := mustRun(t, client, "drain", "anyway")
 
-	if !strings.Contains(said, "was working, and that task is gone") {
-		t.Fatalf("draining anyway said nothing about the task it took: %q", said)
+	if !strings.Contains(said, "was working, and that exec is gone") {
+		t.Fatalf("draining anyway said nothing about the exec it took: %q", said)
 	}
 	if !strings.Contains(said, handle) {
-		t.Fatalf("draining anyway does not name whose task went: %q", said)
+		t.Fatalf("draining anyway does not name whose exec went: %q", said)
 	}
 }
 
-// aSystemWithATaskUnderWay is a system with one session the store calls running, which is what a task in
+// aSystemWithAExecUnderWay is a system with one session the store calls running, which is what an exec in
 // flight looks like to anything asking. The model double answers at once, so the status is set here
-// rather than by holding a task open, which a command line test has no way to do.
-func aSystemWithATaskUnderWay(t *testing.T) (quaycrewv1.ControlPlaneServiceClient, string) {
+// rather than by holding an exec open, which a command line test has no way to do.
+func aSystemWithAExecUnderWay(t *testing.T) (quaycrewv1.ControlPlaneServiceClient, string) {
 	t.Helper()
 	memory := store.NewMemory()
 	client := testClientWith(t, controlplane.Config{
@@ -116,10 +116,10 @@ func aSystemWithATaskUnderWay(t *testing.T) (quaycrewv1.ControlPlaneServiceClien
 	})
 	mustRun(t, client, "workspace", "create", "me")
 	mustRun(t, client, "project", "create", "house-bills")
-	mustRun(t, client, "task", "hello")
+	mustRun(t, client, "exec", "hello")
 
 	session := onlySession(t, client)
-	if err := memory.RecordTask(context.Background(), session.GetId(), "", "running"); err != nil {
+	if err := memory.RecordExec(context.Background(), session.GetId(), "", "running"); err != nil {
 		t.Fatalf("mark the session running: %v", err)
 	}
 	return client, session.GetHandle()[:8]
@@ -140,7 +140,7 @@ func TestDrainCarriesOnAgainstASystemFromBeforeIt(t *testing.T) {
 	}
 }
 
-// A system that is not up runs no tasks, so there is nothing to lose and nothing to refuse. Failing
+// A system that is not up runs no execs, so there is nothing to lose and nothing to refuse. Failing
 // here would stop an upgrade on a machine whose stack is simply down, which is most of them.
 func TestDrainCarriesOnWhenTheSystemIsNotUp(t *testing.T) {
 	client := clientOfASystemThatIsNotUp(t)

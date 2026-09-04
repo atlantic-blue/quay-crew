@@ -79,7 +79,7 @@ func initializeObservabilitySteps(sc *godog.ScenarioContext) {
 	// The span is ended by a gRPC stats handler on the server, and a stats handler sees the end of a
 	// call after the status has gone back to the caller. So a client that has its answer is not
 	// evidence that the span has landed, and reading once asserts on a set that may still be filling.
-	// The same shape as the exported task below, which waits for the same reason.
+	// The same shape as the exported exec below, which waits for the same reason.
 	sc.Step(`^the system records a span named "([^"]*)"$`, func(ctx context.Context, name string) error {
 		deadline := time.Now().Add(2 * time.Second)
 		for {

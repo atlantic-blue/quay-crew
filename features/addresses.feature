@@ -38,12 +38,12 @@ Feature: The system is addressed by path
     Then the address reaches that session
 
   # The operator does the next thing with it, which is the point of an address.
-  Scenario: A task is dispatched to the id the listing prints
+  Scenario: An exec is dispatched to the id the listing prints
     Given a session started by dispatching "remember this"
     And the operator labels the session "the bills"
     When the operator dispatches "and again" to the session at the id in the listing
     Then the reply is "you said: and again"
-    And both tasks ran in the same session
+    And both execs ran in the same session
 
   # A refusal that offers a value the operator's screen does not carry sends them looking for
   # something they cannot find. It offers the session column, which is what they read it off.

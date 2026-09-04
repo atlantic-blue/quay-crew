@@ -26,7 +26,7 @@ func TestAContextNothingIsTracingCarriesNoTrace(t *testing.T) {
 	if got := telemetry.SpanIDFrom(ctx); got != "" {
 		t.Fatalf("an untraced context says its span is %q", got)
 	}
-	// And it hands a task nothing rather than a header with zeros in it, which a reader would open
+	// And it hands an exec nothing rather than a header with zeros in it, which a reader would open
 	// and find nothing behind.
 	if got := telemetry.Traceparent(ctx); got != "" {
 		t.Fatalf("an untraced context offers %q as a trace context", got)
@@ -60,7 +60,7 @@ func TestAContextUnderARecordedTraceCarriesItOn(t *testing.T) {
 		t.Fatalf("the context sits under span %q", got)
 	}
 	if got := telemetry.Traceparent(ctx); got != "00-"+trace+"-"+parent+"-01" {
-		t.Fatalf("the task would be handed %q", got)
+		t.Fatalf("the exec would be handed %q", got)
 	}
 	if !parentShape.MatchString(telemetry.Traceparent(ctx)) {
 		t.Fatalf("%q is not a trace context header", telemetry.Traceparent(ctx))

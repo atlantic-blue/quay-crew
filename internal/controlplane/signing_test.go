@@ -83,7 +83,7 @@ func TestTheGPGScriptPointsGitAtTheImportedKey(t *testing.T) {
 		}
 		for _, want := range []string{"batch", "no-tty"} {
 			if !strings.Contains(string(options), want) {
-				t.Errorf("gpg was not told %q, so a task could wait on a prompt:\n%s", want, options)
+				t.Errorf("gpg was not told %q, so an exec could wait on a prompt:\n%s", want, options)
 			}
 		}
 		if got := strings.Contains(string(options), "passphrase-file"); got != withPassphrase {

@@ -160,7 +160,7 @@ func main() {
 		Provider:      provider,
 		Secrets:       credentials,
 		Storage:       storage,
-		// What a session's tasks may do when it is born, from the system's configuration.
+		// What a session's execs may do when it is born, from the system's configuration.
 		BirthPermissionMode: bornIn,
 		// Where a session dials to reach this control plane. Unset means it cannot.
 		Reachable: os.Getenv("QC_SANDBOX_CONTROL_PLANE"),
@@ -199,9 +199,9 @@ func main() {
 	// stopped, archived or deleted after this process last saw it is running for nobody.
 	server.ReapStrays(ctx)
 
-	// And what was mid task when the system went down is settled the same way: a task runs in this
-	// process, so a session the store still calls running is one whose task died with the last one.
-	server.SettleTasks(ctx)
+	// And what was mid exec when the system went down is settled the same way: an exec runs in this
+	// process, so a session the store still calls running is one whose exec died with the last one.
+	server.SettleExecs(ctx)
 
 	// A system with no skills at all is a fresh one, and it starts with the ones this build ships
 	// with rather than making every operator import them by hand. Only ever on an empty catalogue,
@@ -240,11 +240,11 @@ func main() {
 	logger.Info("shutting down")
 	grpcServer.GracefulStop()
 
-	// Draining requests is not draining tasks: a detached task is a goroutine nobody is calling, so
-	// without this the process exits mid task and the session comes back up settled as failed. Given a
-	// minute, which is a task's grace and not its length.
-	tasksCtx, doneWaiting := context.WithTimeout(context.Background(), time.Minute)
-	server.WaitForTasks(tasksCtx)
+	// Draining requests is not draining execs: a detached exec is a goroutine nobody is calling, so
+	// without this the process exits mid exec and the session comes back up settled as failed. Given a
+	// minute, which is an exec's grace and not its length.
+	execsCtx, doneWaiting := context.WithTimeout(context.Background(), time.Minute)
+	server.WaitForExecs(execsCtx)
 	doneWaiting()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -419,10 +419,10 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-// birthPermissionMode reads what a session's tasks may do when it is born.
+// birthPermissionMode reads what a session's execs may do when it is born.
 //
 // It refuses a value that is not a mode rather than falling back, because falling back is silent: a
-// system configured for "planning" would run every task in acceptEdits and look exactly like a system
+// system configured for "planning" would run every exec in acceptEdits and look exactly like a system
 // configured for acceptEdits. Startup is where the operator is standing and can fix it.
 //
 // Empty is not a refusal. It is what every system's configuration says until somebody sets this, and it

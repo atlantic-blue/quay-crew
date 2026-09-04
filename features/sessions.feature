@@ -1,7 +1,7 @@
 Feature: Sessions run in isolated sandboxes
 
   A session is a conversation with the model. It runs inside its own sandbox, a container that lives
-  across the session's tasks, so whatever the agent sets up in one task is still there in the next.
+  across the session's execs, so whatever the agent sets up in one exec is still there in the next.
 
   These scenarios drive the control plane over its real interface, the same one every channel and the
   dashboard talk to. They are the acceptance criteria for the sessions milestone.
@@ -11,27 +11,27 @@ Feature: Sessions run in isolated sandboxes
     And a workspace named "acme"
     And a project named "house-bills"
 
-  Scenario: Dispatching a task starts a session in its own sandbox
+  Scenario: Dispatching an exec starts a session in its own sandbox
     When the operator dispatches "hello" to the project
     Then the reply is "you said: hello"
     And 1 sandbox has been created
     And the sandbox belongs to the session
 
-  Scenario: A second task on the same session reuses the session and its sandbox
+  Scenario: A second exec on the same session reuses the session and its sandbox
     When the operator dispatches "hello" to the project
     And the operator dispatches "and again" to the same session
-    Then both tasks ran in the same session
+    Then both execs ran in the same session
     And 1 sandbox has been created
 
-  Scenario: A second task continues the conversation rather than starting a new one
+  Scenario: A second exec continues the conversation rather than starting a new one
     When the operator dispatches "hello" to the project
     And the operator dispatches "and again" to the same session
-    Then the second task resumed the conversation the first task started
+    Then the second exec resumed the conversation the first exec started
 
   Scenario: Separate sessions are separate sessions with separate sandboxes
     When the operator dispatches "hello" to the project
     And the operator dispatches "a different subject" to a new session
-    Then the tasks ran in different sessions
+    Then the execs ran in different sessions
     And 2 sandboxes have been created
 
   Scenario: The operator can see the sessions of a workspace
@@ -63,7 +63,7 @@ Feature: Sessions run in isolated sandboxes
     And the operator names the session archived first "the older subject"
     Then the archived listing puts the session put away last at the top
 
-  # A task cannot yet be dispatched after a restart: the control plane forgets which container each
+  # An exec cannot yet be dispatched after a restart: the control plane forgets which container each
   # session was running in, and starting a new one collides with the container still on the host.
   # Reattaching a session to its sandbox is separate job.
   Scenario: A session survives the control plane restarting
@@ -71,7 +71,7 @@ Feature: Sessions run in isolated sandboxes
     When the control plane restarts
     Then the workspace has 1 sessions
     And the session is reported as idle
-    And the session still holds the conversation the first task started
+    And the session still holds the conversation the first exec started
 
   Scenario: Workspaces survive the control plane restarting
     When the control plane restarts
@@ -84,8 +84,8 @@ Feature: Sessions run in isolated sandboxes
     Then the session is reported as stopped
     And the session's sandbox has been closed
 
-  # Restarting starts the container straight away rather than waiting for the next task, so the
-  # operator can go back into the conversation instead of dispatching a task to make the container
+  # Restarting starts the container straight away rather than waiting for the next exec, so the
+  # operator can go back into the conversation instead of dispatching an exec to make the container
   # exist. It is only safe because the conversation lives on the host now: the new sandbox is a new
   # container over the same conversation store and the same project files.
   Scenario: A stopped session restarts to idle, with a sandbox, and can be attached to
@@ -93,7 +93,7 @@ Feature: Sessions run in isolated sandboxes
     When the operator stops the session
     And the operator restarts the session
     Then the session is reported as idle
-    And the session still holds the conversation the first task started
+    And the session still holds the conversation the first exec started
     And a second sandbox has been created for that session
     And the operator asks how to attach to the session
     And the control plane names the session's sandbox
@@ -107,7 +107,7 @@ Feature: Sessions run in isolated sandboxes
     Then the session is reported as idle
     And the session's sandbox has been closed
     And a second sandbox has been created for that session
-    And the session still holds the conversation the first task started
+    And the session still holds the conversation the first exec started
 
   # An archived session's row says stopped, so a restart that only asked about the status started a
   # container for a session nobody can see.
@@ -129,7 +129,7 @@ Feature: Sessions run in isolated sandboxes
     When the operator archives the session
     Then the workspace has 0 sessions
     And the workspace has 1 archived sessions
-    And the session still holds the conversation the first task started
+    And the session still holds the conversation the first exec started
 
   Scenario: Archiving a running session stops it and closes its sandbox
     Given a session started by dispatching "hello"
@@ -137,18 +137,18 @@ Feature: Sessions run in isolated sandboxes
     Then the session is reported as stopped
     And the session's sandbox has been closed
 
-  # Archiving takes the container away while the task is still in it, so the task lands on a session
+  # Archiving takes the container away while the exec is still in it, so the exec lands on a session
   # that is already put away. Recording what it came to brought the row back to idle, or marked it
   # failed, and the archived listing then said a session nobody can reach is working.
   #
-  # The task is held open here rather than timed, because what is being specified is what happens
+  # The exec is held open here rather than timed, because what is being specified is what happens
   # while one runs, and a scenario that waits a duration for that passes by accident.
-  Scenario: A task that lands after its session was archived leaves it stopped
-    Given the model takes longer over a task than anybody will wait
-    And a task dispatched without waiting for it
-    And a task is under way
+  Scenario: An exec that lands after its session was archived leaves it stopped
+    Given the model takes longer over an exec than anybody will wait
+    And an exec dispatched without waiting for it
+    And an exec is under way
     When the operator archives the session
-    And the model finishes the task
+    And the model finishes the exec
     Then the session is reported as stopped
     And the workspace has 1 archived sessions
 
@@ -167,7 +167,7 @@ Feature: Sessions run in isolated sandboxes
     And the operator restores the session
     Then the workspace has 1 sessions
     And the workspace has 0 archived sessions
-    And the session still holds the conversation the first task started
+    And the session still holds the conversation the first exec started
 
   Scenario: A session that is not archived cannot be restored
     Given a session started by dispatching "hello"
@@ -180,22 +180,22 @@ Feature: Sessions run in isolated sandboxes
     And the operator archives the session
     Then the control plane refuses it as the wrong state
 
-  # The mode a task runs in was hardcoded, so no operator could see it or change it. It belongs to the
-  # session rather than to a task: a session started to plan something should keep planning instead of
+  # The mode an exec runs in was hardcoded, so no operator could see it or change it. It belongs to the
+  # session rather than to an exec: a session started to plan something should keep planning instead of
   # being re armed on every dispatch.
-  Scenario: A task runs in the mode its session is set to
+  Scenario: An exec runs in the mode its session is set to
     Given a session started by dispatching "hello"
-    Then the task ran in permission mode "acceptEdits"
+    Then the exec ran in permission mode "acceptEdits"
     When the session is set to permission mode "bypassPermissions"
     And the operator dispatches "and again" to the same session
-    Then the task ran in permission mode "bypassPermissions"
+    Then the exec ran in permission mode "bypassPermissions"
 
   Scenario: A session keeps its permission mode across a restart of the control plane
     Given a session started by dispatching "hello"
     When the session is set to permission mode "plan"
     And the control plane restarts
     And the operator dispatches "and again" to the same session
-    Then the task ran in permission mode "plan"
+    Then the exec ran in permission mode "plan"
 
   Scenario: A mode the model does not understand is refused rather than passed to it
     Given a session started by dispatching "hello"
@@ -203,11 +203,11 @@ Feature: Sessions run in isolated sandboxes
     Then the control plane refuses it as invalid
     And the refusal suggests "bypassPermissions"
 
-  Scenario: A task for a project that does not exist is refused
+  Scenario: An exec for a project that does not exist is refused
     When the operator dispatches "hello" to project "ghost"
     Then the control plane refuses it as not found
 
-  Scenario: An empty task is refused
+  Scenario: An empty exec is refused
     When the operator dispatches "" to the project
     Then the control plane refuses it as invalid
 
@@ -219,7 +219,7 @@ Feature: Sessions run in isolated sandboxes
     When the operator dispatches "hello" to the project
     Then the sandbox was created for the session's project and workspace
 
-  # The token is set on the sandbox at creation, not only on each task, so anything the operator
+  # The token is set on the sandbox at creation, not only on each exec, so anything the operator
   # starts inside it later is authenticated without the tool carrying a credential around.
   Scenario: The session's sandbox carries the workspace's subscription token
     Given the workspace has the subscription token "tok-xyz"
@@ -230,40 +230,40 @@ Feature: Sessions run in isolated sandboxes
     When the operator dispatches "hello" to the project
     Then the session's sandbox was created with nothing but its own identifier
 
-  Scenario: A task carries the workspace's subscription token into the sandbox
+  Scenario: An exec carries the workspace's subscription token into the sandbox
     Given the workspace has the subscription token "tok-xyz"
     When the operator dispatches "hello" to the project
-    Then the task ran with the subscription token "tok-xyz"
+    Then the exec ran with the subscription token "tok-xyz"
 
-  Scenario: A workspace with no subscription token still runs a task
+  Scenario: A workspace with no subscription token still runs an exec
     When the operator dispatches "hello" to the project
     Then the reply is "you said: hello"
-    And the task ran with nothing but the session's own identifier
+    And the exec ran with nothing but the session's own identifier
 
   # Shelling in opens the room the conversation happens in. This opens the conversation.
   Scenario: The operator can attach to a session's conversation
     Given a session started by dispatching "remember this"
     When the operator asks how to attach to the session
     Then the control plane names the session's sandbox
-    And the command resumes the conversation the task started
+    And the command resumes the conversation the exec started
     And the command runs in permission mode "acceptEdits"
     And the command runs it inside a terminal the operator can leave
     And the answer carries no credential
 
-  # Watching a task is the reason to attach, and the one moment it did not work was while a task ran,
-  # which is every moment that matters. The system passed no name on a session's first task, so the model
-  # runtime named that conversation itself and told nobody until the task was over. Attaching meanwhile
+  # Watching an exec is the reason to attach, and the one moment it did not work was while an exec ran,
+  # which is every moment that matters. The system passed no name on a session's first exec, so the model
+  # runtime named that conversation itself and told nobody until the exec was over. Attaching meanwhile
   # found nothing on the session, named a second conversation and opened that one: empty, beside the
   # work, and real enough that typing in it left two conversations in one session.
-  Scenario: The operator attaches while the first task runs and lands in the conversation doing the work
-    Given the model takes longer over a task than anybody will wait
-    And a task dispatched without waiting for it
-    And a task is under way
+  Scenario: The operator attaches while the first exec runs and lands in the conversation doing the work
+    Given the model takes longer over an exec than anybody will wait
+    And an exec dispatched without waiting for it
+    And an exec is under way
     When the operator asks how to attach to the session
-    Then the system named the conversation before the task started
-    And the command opens the conversation the task is running in
-    When the model finishes the task
-    Then the session still holds the conversation the first task started
+    Then the system named the conversation before the exec started
+    And the command opens the conversation the exec is running in
+    When the model finishes the exec
+    Then the session still holds the conversation the first exec started
 
   # Opening a session has to be the same session. One armed to skip permissions that asks anyway the
   # moment it is opened reads as the toggle not working.
@@ -338,7 +338,7 @@ Feature: Sessions run in isolated sandboxes
     Then the control plane names the session's sandbox
     And a second sandbox has been created for that session
 
-  Scenario: A task after its sandbox was removed behind the control plane's back still runs
+  Scenario: An exec after its sandbox was removed behind the control plane's back still runs
     Given a session started by dispatching "remember this"
     When the session's sandbox is removed without telling the control plane
     And the operator dispatches "and again" to the same session
@@ -354,19 +354,19 @@ Feature: Sessions run in isolated sandboxes
     When the operator stops the session
     And the operator asks how to attach to the session
     Then the control plane names the session's sandbox
-    And the command resumes the conversation the task started
+    And the command resumes the conversation the exec started
     And the session is reported as idle
 
   # And the operator can carry on. A row still saying stopped would have the next startup reap the
   # container out from under the conversation they are typing into.
-  Scenario: A session opened after it was stopped takes the next task
+  Scenario: A session opened after it was stopped takes the next exec
     Given a session started by dispatching "remember this"
     When the operator stops the session
     And the operator asks how to attach to the session
     Then the control plane names the session's sandbox
     And the operator dispatches "and again" to the same session
     And the reply is "you said: and again"
-    And both tasks ran in the same session
+    And both execs ran in the same session
 
   # Archiving sets the row to stopped as well, and the stopped answer came first, so an archived
   # session was refused with "is stopped: restart it first". Restarting an archived session is itself
@@ -376,14 +376,14 @@ Feature: Sessions run in isolated sandboxes
     When the operator archives the session
     And the operator asks how to attach to the session
     Then the control plane names the session's sandbox
-    And the command resumes the conversation the task started
+    And the command resumes the conversation the exec started
     And the workspace has 0 archived sessions
 
-  # A session exists from the moment a task is dispatched, so a first task that failed leaves one
+  # A session exists from the moment an exec is dispatched, so a first exec that failed leaves one
   # holding no conversation. It sat in the listing with no way to open it at all. The system names a
   # conversation for it, exactly as it does for the driver.
-  Scenario: A session whose first task failed opens under a conversation the system names
-    When the operator asks how to attach to a session that has never had a task
+  Scenario: A session whose first exec failed opens under a conversation the system names
+    When the operator asks how to attach to a session that has never had an exec
     Then the control plane names the session's sandbox
     And the command opens the conversation the system holds
 
@@ -393,23 +393,23 @@ Feature: Sessions run in isolated sandboxes
   #
   # These run the real model adapter over a sandbox that fails on purpose, because a double handing
   # back a canned error cannot say anything about an explanation built out of a stream.
-  Scenario: A failed task says why, in the model's own words
+  Scenario: A failed exec says why, in the model's own words
     Given the workspace has the subscription token "sk-ant-oat01-hVnQ2mXk9pLrT4wYzB7cD1fG5jH8sN0aE3iU6oP"
-    And the model refuses the task saying "Failed to authenticate. API Error: 401 Invalid bearer token"
+    And the model refuses the exec saying "Failed to authenticate. API Error: 401 Invalid bearer token"
     When the operator dispatches "hello" to the project
     Then the refusal says "401 Invalid bearer token"
 
-  # The task runs with the subscription token in its environment, so every place a failure can quote
-  # is a place the token turns up. A tool that prints one because a task failed is a worse defect
+  # The exec runs with the subscription token in its environment, so every place a failure can quote
+  # is a place the token turns up. A tool that prints one because an exec failed is a worse defect
   # than the one it is explaining.
-  Scenario: A failed task never carries the subscription token
+  Scenario: A failed exec never carries the subscription token
     Given the workspace has the subscription token "sk-ant-oat01-hVnQ2mXk9pLrT4wYzB7cD1fG5jH8sN0aE3iU6oP"
-    And the model refuses the task quoting the token back
+    And the model refuses the exec quoting the token back
     When the operator dispatches "hello" to the project
     Then the refusal carries no token
     And the refusal says something was taken out
 
-  Scenario: A task that failed before the model said anything falls back to the error stream
+  Scenario: An exec that failed before the model said anything falls back to the error stream
     Given the sandbox fails with nothing on standard output, saying "claude: command not found"
     When the operator dispatches "hello" to the project
     Then the refusal says "claude: command not found"
@@ -483,13 +483,13 @@ Feature: Sessions run in isolated sandboxes
     And the system has one driver
 
   # The driver acts for the operator rather than doing work of its own, and one that stops to ask
-  # before every step describes the task instead of doing it: asked to make a project it explained
+  # before every step describes the exec instead of doing it: asked to make a project it explained
   # how you would go about making one. What bounds it is the sandbox, which is the same boundary it
   # would have in any mode.
   Scenario: The driver is made able to act rather than to ask
     When the operator opens the driver
     And the driver is sent "make me a project"
-    Then the task ran in permission mode "bypassPermissions"
+    Then the exec ran in permission mode "bypassPermissions"
 
   # A mode set on the driver is the driver's, the same as any other session: made able to act is not
   # the same as held there.
@@ -497,7 +497,7 @@ Feature: Sessions run in isolated sandboxes
     When the operator opens the driver
     And the driver is set to permission mode "acceptEdits"
     And the driver is sent "make me a project"
-    Then the task ran in permission mode "acceptEdits"
+    Then the exec ran in permission mode "acceptEdits"
 
   # The driver opens knowing what krewe is, rather than having to be told every time. It is the system
   # describing itself: the command list the tool prints, and the behaviour specification the binary

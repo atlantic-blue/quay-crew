@@ -101,7 +101,7 @@ func (l localSandbox) Exec(ctx context.Context, spec Spec) (Process, error) {
 	}
 	cmd := exec.CommandContext(ctx, spec.Argv[0], spec.Argv[1:]...)
 	cmd.Dir = spec.Workdir
-	// The sandbox's own environment first, then the command's, so a per task value wins the way it
+	// The sandbox's own environment first, then the command's, so a per exec value wins the way it
 	// would inside a container.
 	if len(l.env) > 0 || len(spec.Env) > 0 {
 		cmd.Env = append(os.Environ(), l.env...)

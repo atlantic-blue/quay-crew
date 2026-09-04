@@ -39,7 +39,7 @@ func IsSlug(value string) bool {
 	return !previousHyphen // and a trailing one
 }
 
-// Slugify tasks what someone typed into the nearest name that would be accepted, so a refusal can
+// Slugify execs what someone typed into the nearest name that would be accepted, so a refusal can
 // suggest something rather than only saying no. It is deliberately not applied automatically:
 // quietly storing a different name than the one that was asked for is worse than refusing.
 func Slugify(value string) string {

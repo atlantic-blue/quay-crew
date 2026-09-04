@@ -69,8 +69,8 @@ message Session {
   // handle is the name a channel dispatches to: dispatch to the same handle and the conversation
   // continues. It is chosen by whoever starts the session, or minted when nobody did.
   string handle = 3;
-  // status is where the session is: "idle" when it is waiting for you, "running" while a task is under
-  // way, "failed" when the last task did not land, "reclaimed" when the system took its container back,
+  // status is where the session is: "idle" when it is waiting for you, "running" while an exec is under
+  // way, "failed" when the last exec did not land, "reclaimed" when the system took its container back,
   // and "stopped" when the session was put down.
   string status = 4;
   // model_session_id is the model's own identifier for the conversation, in the model's own word,
@@ -82,8 +82,8 @@ message Session {
   // archived_at is when the session was put away. Unset means it is live. Archiving hides a session
   // from the default listing and deletes nothing, so this is reversible by clearing it.
   google.protobuf.Timestamp archived_at = 9;
-  // permission_mode is what the model is allowed to do without asking, for this session's tasks:
-  // "plan", "acceptEdits" or "bypassPermissions". It belongs to the session rather than to a task, so
+  // permission_mode is what the model is allowed to do without asking, for this session's execs:
+  // "plan", "acceptEdits" or "bypassPermissions". It belongs to the session rather than to an exec, so
   // a session started to plan something keeps planning.
   string permission_mode = 10;
   // driver says this session drives the system rather than doing work inside it. It reaches the
@@ -102,11 +102,11 @@ message Session {
   // writes it: a name somebody picked is the one thing in a listing that is certainly right.
   string label = 14;
   // description is what the system observed the conversation to be, one line, written by the model that
-  // had the task. Empty until a task has happened. A listing prefers the label when there is one.
+  // had the exec. Empty until an exec has happened. A listing prefers the label when there is one.
   string description = 15;
-  // described_at_task is how many tasks the session had when its description was written, so a
+  // described_at_exec is how many execs the session had when its description was written, so a
   // conversation that has moved on can be described again. Zero means never described.
-  int32 described_at_task = 16;
+  int32 described_at_exec = 16;
   // context_window is how full the model's context window is. Absent where the system cannot say.
   ContextWindow context_window = 17;
   // 18 was role, the name of the role a session ran as. Roles are gone: a session holds its
@@ -114,13 +114,13 @@ message Session {
   reserved 18;
   // reclaimed_at is when the system took this session's container back. Unset means it holds one, or
   // never had one taken. The row, the conversation handle and the files on the host all stay, so the
-  // next task builds a fresh container over the same state and the conversation carries on.
+  // next exec builds a fresh container over the same state and the conversation carries on.
   //
   // It is a stamp of its own rather than a reading of updated_at, because how long a session has been
   // reclaimed is what the archive time is measured against, and updated_at moves on every write.
   google.protobuf.Timestamp reclaimed_at = 19;
   // presence is what the system found inside this session's sandbox, and it is the half of "is anything
-  // happening here" that status never knew. status only says whether a dispatched task is open, so a
+  // happening here" that status never knew. status only says whether a dispatched exec is open, so a
   // session holding a conversation somebody started by hand read idle, and idle is the word that
   // invites a restart, a drain or a reclaim.
   //
@@ -129,7 +129,7 @@ message Session {
   SessionPresence presence = 20;
   // title is the name the session was dispatched with, written when the session is made and never
   // afterwards, so a listing says which conversation is which from the first second rather than once
-  // a description is written behind a task that has landed.
+  // a description is written behind an exec that has landed.
   //
   // It is a third name rather than a second use of label, because the two are typed at different
   // moments about different things: the title names what the session was made for, and the label is
@@ -165,7 +165,7 @@ message ContextSpend {
   int64 tools = 2;
   // turns is the session's own words: what it wrote, what it thought, and the calls it made.
   int64 turns = 3;
-  // told is what reached the session from outside a tool: the task it was given, and the answers to
+  // told is what reached the session from outside a tool: the exec it was given, and the answers to
   // its questions.
   int64 told = 4;
 }
@@ -201,7 +201,7 @@ enum SessionPresence {
 // whether a conversation is still worth continuing, and it is not the same thing as what the
 // conversation has cost: cost only grows, while the window empties again when the model compacts.
 message ContextWindow {
-  // used is what the next task carries: everything sent on the last answer, including what was read
+  // used is what the next exec carries: everything sent on the last answer, including what was read
   // back from the cache, because that is the context rather than the part of it charged as new. Read
   // from the transcript the model keeps.
   int64 used = 1;
@@ -209,7 +209,7 @@ message ContextWindow {
   // model runtime last told a session in this workspace. Zero where nothing has told it yet, which a
   // listing shows as a count rather than as a guessed share.
   int64 size = 2;
-  // ceiling is the share of the window past which this workspace gives a session no new task, so a
+  // ceiling is the share of the window past which this workspace gives a session no new exec, so a
   // client says what the number means rather than working it out from a limit of its own. Zero where
   // the system did not say, and a client that reads zero marks nothing.
   int32 ceiling = 3;
@@ -218,7 +218,7 @@ message ContextWindow {
 // Usage is what a conversation has cost, in tokens.
 //
 // Four numbers rather than two. On a real conversation the input was 52 tokens and the cache read was
-// 1,723,404, because almost everything sent is the context being read again on every task: reporting
+// 1,723,404, because almost everything sent is the context being read again on every exec: reporting
 // only what was sent and what came back would show the 52 and hide the rest.
 message Usage {
   // input is what was sent and charged as new, not counting anything served from the cache.
@@ -227,7 +227,7 @@ message Usage {
   int64 output = 2;
   // cache_read is context the model read from its cache rather than being sent again.
   int64 cache_read = 3;
-  // cache_written is context put into the cache to be read on later tasks.
+  // cache_written is context put into the cache to be read on later execs.
   int64 cache_written = 4;
 }
 
@@ -342,37 +342,37 @@ message DispatchRequest {
   string project = 1;
   string handle = 2;
   string text = 3;
-  // permission_mode is what the session's tasks may do without asking, and it applies from this task
+  // permission_mode is what the session's execs may do without asking, and it applies from this exec
   // on: "plan", "acceptEdits" or "bypassPermissions". Empty leaves the session as it is, which is what
   // every caller that does not care sends.
   //
   // It travels with the dispatch that starts a session because a sandbox is born with its
   // capabilities and never drifts. Starting a session and then changing its mode costs a restart.
   string permission_mode = 4;
-  // detach answers as soon as the session exists and runs the task behind the answer. The reply comes
-  // back empty, because there is not one yet: the session reads "running" until the task lands, and
-  // its tasks say what came back.
+  // detach answers as soon as the session exists and runs the exec behind the answer. The reply comes
+  // back empty, because there is not one yet: the session reads "running" until the exec lands, and
+  // its execs say what came back.
   //
-  // It is what a surface that draws a screen needs. A task takes minutes, and a caller that waits
+  // It is what a surface that draws a screen needs. An exec takes minutes, and a caller that waits
   // for one is a caller that is not drawing anything. The console
   // waited, gave up at thirty seconds, and left a session whose conversation never happened.
   bool detach = 5;
-  // 6 was role and 7 was the job this task ran for. Both are gone with the job subsystem.
+  // 6 was role and 7 was the job this exec ran for. Both are gone with the job subsystem.
   reserved 6, 7;
   // title is what to call the session this dispatch makes, and it is read only when the session is
-  // made: a name a caller sends with every task must not overwrite what the operator has called the
+  // made: a name a caller sends with every exec must not overwrite what the operator has called the
   // conversation since.
   //
   // It is what a caller that already knows the name sends. Without it the system is handed that name
   // and drops it, which leaves a listing waiting for a description written after the work is over.
   string title = 8;
-  // 9 was the execution this task ran, which is gone with the job subsystem.
+  // 9 was the execution this exec ran, which is gone with the job subsystem.
   reserved 9;
 }
 message DispatchResponse {
   string id = 1;
   string handle = 2;
-  // reply is what the model said, and is empty when the request detached: the task is still running,
+  // reply is what the model said, and is empty when the request detached: the exec is still running,
   // so there is nothing to say yet.
   string reply = 3;
 }
@@ -429,11 +429,11 @@ message StopSessionRequest {
 message StopSessionResponse {}
 
 // DrainSessionsRequest puts every live session down, so whatever is about to take the containers
-// away finds nothing running. `make upgrade` removes them by name from the daemon, which ends a task
+// away finds nothing running. `make upgrade` removes them by name from the daemon, which ends an exec
 // in flight as "exit status 137" and leaves the row saying it was born holding skills its next
 // container will not have.
 message DrainSessionsRequest {
-  // force drains even when a task is under way. Without it a task in flight refuses the drain, and
+  // force drains even when an exec is under way. Without it an exec in flight refuses the drain, and
   // the answer names what is working so the operator can wait for it instead.
   bool force = 1;
 }
@@ -467,9 +467,9 @@ message ArchiveSessionResponse {
 //
 // It is the controller's move rather than an operator's, and it is not a stop. A stop is somebody's
 // decision and reads as one; a reclaim is the system saving memory on a session nobody is using, and
-// the next task to arrive builds a fresh container over the same conversation and the same files.
+// the next exec to arrive builds a fresh container over the same conversation and the same files.
 //
-// A session with a task under way is refused, and so is one an operator already stopped: overwriting
+// A session with an exec under way is refused, and so is one an operator already stopped: overwriting
 // a decision with bookkeeping is how a stop stops meaning anything.
 message ReclaimSessionRequest {
   string id = 1;
@@ -478,22 +478,22 @@ message ReclaimSessionResponse {
   Session session = 1;
 }
 
-// StopTaskRequest halts the task a session is running now and keeps the reason.
+// StopExecRequest halts the exec a session is running now and keeps the reason.
 //
 // The session survives: its conversation, its container and its history all stay, so the next
 // dispatch continues it. That is the difference between this and StopSession, which puts the whole
 // session down and takes its container away.
 //
-// The task reads "stopped" with the reason rather than "failed". An operator asking for a stop is
+// The exec reads "stopped" with the reason rather than "failed". An operator asking for a stop is
 // not a fault, and a stop that reports as a crash hides the real crashes.
-message StopTaskRequest {
+message StopExecRequest {
   string id = 1;
-  // reason is what to record against the task, in the operator's own words. Empty records that
+  // reason is what to record against the exec, in the operator's own words. Empty records that
   // somebody stopped it and nothing about why.
   string reason = 2;
 }
-message StopTaskResponse {
-  // stopped says whether there was a task to stop. False means nothing was running, which is not a
+message StopExecResponse {
+  // stopped says whether there was an exec to stop. False means nothing was running, which is not a
   // failure: the caller asked for a state the session is already in.
   bool stopped = 1;
   // session is the session as it now is, so the caller does not read it back.
@@ -603,7 +603,7 @@ message LocateDirectoryResponse {
 
 // SecretRef names a secret a workspace has set. It carries no value and there is no call that returns
 // one: a value the backend holds must not become readable because a client asked politely. The only
-// reader is the system itself, at the moment a task needs it.
+// reader is the system itself, at the moment an exec needs it.
 message SecretRef {
   string workspace = 1;
   // workspace_name is what to call that workspace where a human reads it.
@@ -639,7 +639,7 @@ message Skill {
   // summary says when to reach for this skill, in a sentence. It is the line a session is told.
   string summary = 3;
   // binaries are the commands the skill needs in the sandbox image. A session missing one is refused
-  // before a task runs.
+  // before an exec runs.
   repeated string binaries = 4;
   repeated SkillSecret secrets = 5;
   google.protobuf.Timestamp imported_at = 6;
@@ -647,7 +647,7 @@ message Skill {
   bool system = 8;
   // left_out says why a skill the workspace holds is not given to its sessions, and is empty when it
   // is given. A skill naming a secret the workspace has not set is held and not given, rather than
-  // refusing the task, so one unusable skill cannot stop every conversation in the workspace.
+  // refusing the exec, so one unusable skill cannot stop every conversation in the workspace.
   string left_out = 7;
 }
 
@@ -723,14 +723,14 @@ message DetachSkillResponse {}
 message Hook {
   string name = 1;
   int32 version = 2;
-  // summary is the line a listing shows. Nothing pays for it per task, because a hook is invisible
+  // summary is the line a listing shows. Nothing pays for it per exec, because a hook is invisible
   // to the model until it fires.
   string summary = 3;
   // events are what this hook fires on, in the order they were written, which is the order they are
   // rendered into a session's settings.
   repeated HookBinding events = 4;
   // binaries are the commands the hook needs in the sandbox image. A session missing one is refused
-  // before a task runs.
+  // before an exec runs.
   repeated string binaries = 5;
   repeated SkillSecret secrets = 6;
   google.protobuf.Timestamp imported_at = 7;
@@ -816,7 +816,7 @@ message ListContextsResponse {
   repeated ContextDir dirs = 1;
 }
 
-// SetSessionPermissionModeRequest changes what a session's tasks may do without asking.
+// SetSessionPermissionModeRequest changes what a session's execs may do without asking.
 message SetSessionPermissionModeRequest {
   string id = 1;
   // mode is "plan", "acceptEdits" or "bypassPermissions". An unknown one is refused rather than
@@ -846,12 +846,12 @@ message RestoreSessionResponse {
 
 // GetInfoRequest asks what this control plane is running.
 message GetInfoRequest {}
-// GetInfoResponse says what a task dispatched here would actually do.
+// GetInfoResponse says what an exec dispatched here would actually do.
 //
 // It carries configuration, never a secret and never a health verdict. The console shows it so the
 // operator can see which system they are about to act on, the way a cluster name does.
 message GetInfoResponse {
-  // model is the backend a task runs against, for example "claude-code" or "echo".
+  // model is the backend an exec runs against, for example "claude-code" or "echo".
   string model = 1;
   // sandbox is the isolation a session runs in, for example "docker" or "local".
   string sandbox = 2;
@@ -862,12 +862,12 @@ message GetInfoResponse {
   // state is where a session's conversation and files are kept, for example "host directory". Empty
   // means they are kept nowhere: they live in the container and are destroyed with it.
   string state = 4;
-  // 5 was events, the event log a task was recorded on. There is no event log: the store is the only
-  // thing a task is written to.
+  // 5 was events, the event log an exec was recorded on. There is no event log: the store is the only
+  // thing an exec is written to.
   reserved 5;
   // secrets is where a workspace's credentials are kept, for example "postgres, sealed". A system that
   // keeps them in memory loses the subscription token on every restart, which is worth seeing before
-  // wondering why a task stopped working.
+  // wondering why an exec stopped working.
   string secrets = 6;
   // sandbox_build is the build of the system the sandbox image was made from, for example "37b070b".
   // Sessions run whatever that image holds, so an image older than the tool means the system moved on
@@ -927,34 +927,34 @@ message GetUsageResponse {
   int64 sessions = 2;
 }
 
-// Task is one exchange with the model, read back from the projection of the event log.
-message Task {
+// Exec is one exchange with the model, read back from the projection of the event log.
+message Exec {
   string id = 1;
   string session = 2;
-  // prompt is what was asked, reply is what came back, empty when the task failed.
+  // prompt is what was asked, reply is what came back, empty when the exec failed.
   string prompt = 3;
   string reply = 4;
-  // status is the session's status after the task: "idle" when it worked, "failed" when it did not.
+  // status is the session's status after the exec: "idle" when it worked, "failed" when it did not.
   string status = 5;
-  // failure says what went wrong, empty on a task that worked.
+  // failure says what went wrong, empty on an exec that worked.
   string failure = 6;
   google.protobuf.Timestamp occurred_at = 7;
-  // trace_id is the trace the call that ran this task belonged to, and empty for a task nothing was
+  // trace_id is the trace the call that ran this exec belonged to, and empty for an exec nothing was
   // tracing. A reader holding it can open the trace, and it is the same value every log line written
   // under that call carries, so the two join. See issue 346.
   string trace_id = 8;
 }
 
-// ListTasksRequest asks for one session's history, most recent last, so a conversation reads the way
+// ListExecsRequest asks for one session's history, most recent last, so a conversation reads the way
 // it happened.
-message ListTasksRequest {
+message ListExecsRequest {
   string session = 1;
   // limit caps how many come back. Zero means a sensible default rather than everything, because a
   // long running session's history is unbounded and a terminal is not.
   int32 limit = 2;
 }
-message ListTasksResponse {
-  repeated Task tasks = 1;
+message ListExecsResponse {
+  repeated Exec execs = 1;
 }
 
 // ListSessionEventsRequest asks for a session's lifecycle, most recent last, the way it happened. A
@@ -992,9 +992,9 @@ service ControlPlaneService {
   rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
   rpc AttachSession(AttachSessionRequest) returns (AttachSessionResponse);
   rpc StopSession(StopSessionRequest) returns (StopSessionResponse);
-  // StopTask halts the task a session is running and keeps the session. StopSession above puts the
-  // whole session down; this is the one an operator reaches for when a task is doing the wrong thing.
-  rpc StopTask(StopTaskRequest) returns (StopTaskResponse);
+  // StopExec halts the exec a session is running and keeps the session. StopSession above puts the
+  // whole session down; this is the one an operator reaches for when an exec is doing the wrong thing.
+  rpc StopExec(StopExecRequest) returns (StopExecResponse);
   // ReclaimSession takes a settled session's container back and keeps everything else. The controller
   // calls it; nothing an operator types does.
   rpc ReclaimSession(ReclaimSessionRequest) returns (ReclaimSessionResponse);
@@ -1022,7 +1022,7 @@ service ControlPlaneService {
   rpc AttachHook(AttachHookRequest) returns (AttachHookResponse);
   rpc DetachHook(DetachHookRequest) returns (DetachHookResponse);
 
-  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+  rpc ListExecs(ListExecsRequest) returns (ListExecsResponse);
 
   // What a workspace lets its sessions declare. The operator reads and sets these; a session may do
   // neither, because a caller that could raise its own ceiling has no ceiling.

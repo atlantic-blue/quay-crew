@@ -3,7 +3,7 @@
 Holds the prose this system writes to Simplified Technical English, for the part of it a program can
 measure.
 
-Every role here writes prose for a person. A pull request description, a changelog fragment, an issue
+Every role here writes prose for a person. A pull request description, an issue
 body, a commit message, a document. The standard for that prose is ASD-STE100, at
 https://www.asd-ste100.org/. Before this hook, the standard was a sentence in a brief. That is the
 position the merge rule was in before `merge-gate`.
@@ -91,9 +91,11 @@ The issue that asked for this gate asked for one number. Run the gate across the
 and say how many paragraphs it refuses. The issue named that number the false positive rate, on the
 premise that the prose here is the standard the gate aims at.
 
-The premise is false, and the measurement says so. `corpus_test.go` runs the gate over `docs/`,
-`README.md`, `CHANGELOG.md`, `changelog.d/` and `roles/` on every test run, and prints the current
-figures. On 31 August 2026, against `aafb6e8`:
+The premise is false, and the measurement says so. `corpus_test.go` runs the gate over the prose in
+this repository on every test run, and prints the current figures. The reading below was taken on 31
+August 2026, against `aafb6e8`, when the corpus was `docs/`, `README.md`, `CHANGELOG.md`,
+`changelog.d/` and `roles/`. Those four are gone, so the current figures are whatever the test
+prints, and this one stands as the measurement the thresholds were set from:
 
     83 documents, 4143 paragraphs, 1492 refused (36 per cent)
     length 1736, paragraph 78, tense 552, dash 96
@@ -106,14 +108,13 @@ Those refusals are correct. Three measurements say so.
   refusals, 0 hold an inner full stop. `TestNoRefusalIsMadeOfTwoSentencesReadAsOne` gates on that
   number.
 - **A sample of 20 length refusals, read by hand, held 20 real sentences of more than 25 words.**
-- **The dash rule refuses nothing in `docs/` and nothing in `CHANGELOG.md`.** This repository's own
-  house style already forbids a dash. All 96 refusals sit in `roles/`, in briefs imported from
-  published agent roles, and every one is a real em dash.
+- **The dash rule refused nothing written in the house voice.** This repository's own house style
+  already forbids a dash. All 96 refusals sat in `roles/`, in briefs imported from published agent
+  roles, and every one was a real em dash.
 
-The prose here is not Simplified Technical English and it never claimed to be. `docs/` and
-`CHANGELOG.md` use the house voice, which chooses long explanatory sentences. The median sentence in
-`CHANGELOG.md` runs to 18 words and the ninetieth percentile runs to 37. A rule that allows 25 then
-refuses about a third of it, correctly.
+The prose here is not Simplified Technical English and it never claimed to be. It uses the house
+voice, which chooses long explanatory sentences. The median sentence measured was 18 words and the
+ninetieth percentile was 37. A rule that allows 25 then refuses about a third of it, correctly.
 
 So the thresholds stay at the standard's own numbers. An operator needs one thing from this section
 before attaching the gate. A session that edits `docs/` here meets a refusal on about a third of the

@@ -50,10 +50,10 @@ func dispatched(t *testing.T, server quaycrewv1.ControlPlaneServiceServer) {
 	}
 }
 
-// The one that matters. A system that recorded the mode on the session and ran the task in something
+// The one that matters. A system that recorded the mode on the session and ran the exec in something
 // else would pass any assertion made against the listing, and the operator would find out when the
 // model asked for an approval nobody was there to give.
-func TestATaskRunsInTheModeTheSystemIsConfiguredToBornSessionsIn(t *testing.T) {
+func TestAExecRunsInTheModeTheSystemIsConfiguredToBornSessionsIn(t *testing.T) {
 	for _, mode := range []string{model.PermissionPlan, model.PermissionBypass, model.PermissionAcceptEdits} {
 		t.Run(mode, func(t *testing.T) {
 			server, runner := aSystemBornIn(t, mode)
@@ -61,7 +61,7 @@ func TestATaskRunsInTheModeTheSystemIsConfiguredToBornSessionsIn(t *testing.T) {
 			dispatched(t, server)
 
 			if was := runner.LastReq.PermissionMode; was != mode {
-				t.Fatalf("the first task ran in %q, want %q, which is what the system is configured for", was, mode)
+				t.Fatalf("the first exec ran in %q, want %q, which is what the system is configured for", was, mode)
 			}
 		})
 	}
@@ -75,6 +75,6 @@ func TestASystemThatSaysNothingKeepsTheModeItAlwaysHad(t *testing.T) {
 	dispatched(t, server)
 
 	if was := runner.LastReq.PermissionMode; was != model.PermissionAcceptEdits {
-		t.Fatalf("a system with nothing configured ran its first task in %q, want %q", was, model.PermissionAcceptEdits)
+		t.Fatalf("a system with nothing configured ran its first exec in %q, want %q", was, model.PermissionAcceptEdits)
 	}
 }

@@ -213,7 +213,7 @@ func TestOpeningAConsoleInsideTheConsoleIsRefused(t *testing.T) {
 	}
 }
 
-// A command that only prints is still captured, so making the bar the way in did not task every
+// A command that only prints is still captured, so making the bar the way in did not exec every
 // listing into a screen takeover.
 func TestAPrintingCommandIsStillCaptured(t *testing.T) {
 	ran := &ranCommand{output: "acme"}
@@ -285,13 +285,13 @@ func TestKreweOnItsOwnSaysYouAreAlreadyHere(t *testing.T) {
 // The whole word still gets the list, because the bar runs a command and the list is one. Nothing an
 // operator used to read in the view is out of reach: it arrives in the output panel instead.
 func TestTheFeaturesWordRunsTheCommand(t *testing.T) {
-	ran := &ranCommand{output: "One word sends a task, and the three it replaced refuse\n"}
+	ran := &ranCommand{output: "One word sends an exec, and the three it replaced refuse\n"}
 	model := typeInto(t, openBar(t, barModel(t, ran)), "features")
 
 	if len(ran.args) != 1 || ran.args[0] != "features" {
 		t.Fatalf("the console ran %v, want the features command", ran.args)
 	}
-	if view := model.View(); !strings.Contains(view, "One word sends a task") {
+	if view := model.View(); !strings.Contains(view, "One word sends an exec") {
 		t.Fatalf("the console does not show what the command said:\n%s", view)
 	}
 }

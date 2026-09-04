@@ -6,7 +6,7 @@ import (
 )
 
 // Building is the environment variable that says this session is building against tests it did not
-// write. The system sets it on the task of a worker in the build stage, and on nothing else.
+// write. The system sets it on the exec of a worker in the build stage, and on nothing else.
 //
 // A command line that sets it is refused, whatever else it does, and so is a command line that unsets
 // it. A session that could set the variable could put itself outside the boundary, and a boundary a

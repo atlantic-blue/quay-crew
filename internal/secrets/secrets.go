@@ -54,7 +54,7 @@ type Secret struct {
 
 // Ref names a secret a workspace has set and says how it reaches a sandbox. It carries no value:
 // there is no call that returns one, because a value the backend holds must not become readable
-// because a client asked politely. The only reader is the system itself, at the moment a task needs it.
+// because a client asked politely. The only reader is the system itself, at the moment an exec needs it.
 type Ref struct {
 	Name       string
 	Projection Projection

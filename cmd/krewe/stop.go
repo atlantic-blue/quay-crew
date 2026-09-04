@@ -12,12 +12,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// runStop halts the task one session is running, and keeps the session.
+// runStop halts the exec one session is running, and keeps the session.
 //
 // There was no way to stop one session before this. `krewe drain` puts the whole system down for the
 // sake of one conversation, and what people reached for instead was killing the dispatch client,
 // which is not an interface and does not reliably end anything: on 27 August 2026 the same kill ended
-// one task at once and left another working for sixteen more minutes, merging two pull requests after
+// one exec at once and left another working for sixteen more minutes, merging two pull requests after
 // the operator believed it had stopped.
 //
 // The session survives. Its conversation, its container and its history all stay, so the next
@@ -25,7 +25,7 @@ import (
 func runStop(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) == 0 || len(args) > 2 {
 		return fmt.Errorf("usage: krewe stop <session> [<reason>]\n\n" +
-			"a session is its id, its handle, or its address. The reason is kept on the task record,\n" +
+			"a session is its id, its handle, or its address. The reason is kept on the exec record,\n" +
 			"so whoever reads it later learns why it ended. The session itself stays: its conversation,\n" +
 			"its container and its history are untouched, and the next dispatch continues it.\n\n" +
 			"to put a whole session down instead, use the console. To put the system down, krewe drain")
@@ -39,7 +39,7 @@ func runStop(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, a
 	if err != nil {
 		return err
 	}
-	resp, err := client.StopTask(ctx, &quaycrewv1.StopTaskRequest{Id: sessionID, Reason: reason})
+	resp, err := client.StopExec(ctx, &quaycrewv1.StopExecRequest{Id: sessionID, Reason: reason})
 	if err != nil {
 		if status.Code(err) == codes.Unimplemented {
 			return fmt.Errorf("this system is from before stopping one session was possible: " +
@@ -53,7 +53,7 @@ func runStop(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, a
 		fmt.Fprintf(out, "nothing is running in %s, so there was nothing to stop\n", where)
 		return nil
 	}
-	fmt.Fprintf(out, "stopped the task in %s%s\n", where, becauseOf(reason))
+	fmt.Fprintf(out, "stopped the exec in %s%s\n", where, becauseOf(reason))
 	fmt.Fprintf(out, "the session is still there: dispatch to it again to carry on\n")
 	return nil
 }

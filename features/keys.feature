@@ -18,14 +18,6 @@ Feature: The console's keys agree with vim
     And a workspace named "acme"
     And a project named "house-bills"
 
-  # The view it opens is called exec now, and the key stays on t: a key lives in fingers, and the
-  # word it was named after moved without it.
-  Scenario: The history is on the key an operator already presses
-    Given a session started by dispatching "hello"
-    When the operator is at the console on the "sessions" view
-    And the operator presses "t" in the console
-    Then the console is on the "exec" view
-
   # Each of these was in somebody's fingers. The refusal names the key to press instead, which is the
   # difference between a key that moved and a key that broke.
   Scenario Outline: A key that moved says what to press now
@@ -37,11 +29,25 @@ Feature: The console's keys agree with vim
 
     Examples:
       | pressed | instead |
-      | l       | t       |
-      | h       | t       |
       | D       | m       |
       | n       | o       |
       | N       | P       |
+
+  # These three opened a session's history, and the console has no view of it any more. There is no
+  # key to send anybody to, so each one names the command that reads it. Two of them are vim's
+  # horizontal motion keys, which is why they carried an action at all.
+  Scenario Outline: A key whose view is gone names the command that replaced it
+    Given a session started by dispatching "hello"
+    When the operator is at the console on the "sessions" view
+    And the operator presses "<pressed>" in the console
+    Then the console screen says "krewe exec list"
+    And the console is on the "sessions" view
+
+    Examples:
+      | pressed |
+      | t       |
+      | l       |
+      | h       |
 
   # g held refresh, and holding it there is what kept gg and G off the console entirely. The second
   # key is what says so, because the first is a sequence waiting for its other half.

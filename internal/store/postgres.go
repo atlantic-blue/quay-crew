@@ -29,7 +29,7 @@ func NewPostgres(ctx context.Context, databaseURL string) (*Postgres, error) {
 		return nil, fmt.Errorf("parse database url: %w", err)
 	}
 	// Every query the control plane makes is short. A connection that cannot be had quickly is a
-	// failed task, not a task that hangs.
+	// failed exec, not an exec that hangs.
 	config.ConnConfig.ConnectTimeout = 10 * time.Second
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
@@ -307,14 +307,14 @@ func (p *Postgres) FindOrCreateSession(ctx context.Context, project, session str
 	return found, tag.RowsAffected() == 1, nil
 }
 
-// RecordTask stores the model conversation handle and status after a task. An empty handle leaves
-// the stored one alone, so a failed task cannot erase the pointer to a live conversation.
-func (p *Postgres) RecordTask(ctx context.Context, id, modelSessionID, status string) error {
+// RecordExec stores the model conversation handle and status after an exec. An empty handle leaves
+// the stored one alone, so a failed exec cannot erase the pointer to a live conversation.
+func (p *Postgres) RecordExec(ctx context.Context, id, modelSessionID, status string) error {
 	tag, err := p.pool.Exec(ctx, `
 		update sessions
 		set model_session_id = case when $2 = '' then model_session_id else $2 end,
 		    status = $3,
-		    -- A task is running or has landed, so the session holds a container again and the stamp
+		    -- An exec is running or has landed, so the session holds a container again and the stamp
 		    -- that said the system took the last one back is no longer true. Left behind, the archive
 		    -- rule would go on measuring against a reclaim that a dispatch already undid.
 		    reclaimed_at = null,
@@ -322,7 +322,7 @@ func (p *Postgres) RecordTask(ctx context.Context, id, modelSessionID, status st
 		where id = $1`,
 		id, modelSessionID, status)
 	if err != nil {
-		return fmt.Errorf("record task: %w", err)
+		return fmt.Errorf("record exec: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
@@ -340,7 +340,7 @@ func (p *Postgres) GetSession(ctx context.Context, id string) (*quaycrewv1.Sessi
 // session that scans in three places and fails in the fourth.
 const sessionColumns = `id, workspace, project, handle, status, model_session_id, created_at, ` +
 	`updated_at, archived_at, reclaimed_at, permission_mode, driver, label, description, ` +
-	`described_at_task, title`
+	`described_at_exec, title`
 
 // ListSessions returns sessions, filtered to one project when set, else to one workspace when set,
 // last moved first: see sortByLastMoved for the order and why it is that one.
@@ -412,9 +412,9 @@ func (p *Postgres) ReclaimSession(ctx context.Context, id string) error {
 // touched first.
 //
 // Live, not running, not already reclaimed, and named by no job in a non terminal phase. A session
-// with a task under way is not settled, and neither is one whose job is still open even though its
-// own task has landed: the job is what says the session is wanted, and the controller is about to
-// send it another task.
+// with an exec under way is not settled, and neither is one whose job is still open even though its
+// own exec has landed: the job is what says the session is wanted, and the controller is about to
+// send it another exec.
 //
 // Sessions an operator stopped are left out. A stop is somebody's decision, and filing away what
 // somebody halted would overwrite it with bookkeeping.
@@ -511,7 +511,7 @@ func (p *Postgres) RestartSession(ctx context.Context, id string) error {
 	return nil
 }
 
-// SetPermissionMode records what a session's tasks may do without asking.
+// SetPermissionMode records what a session's execs may do without asking.
 func (p *Postgres) SetPermissionMode(ctx context.Context, id, mode string) error {
 	tag, err := p.pool.Exec(ctx,
 		`update sessions set permission_mode = $2, updated_at = now() where id = $1`, id, mode)
@@ -537,12 +537,12 @@ func (p *Postgres) SetLabel(ctx context.Context, id, label string) error {
 	return nil
 }
 
-// SetDescription records what the system observed a session to be, with the task count it was written
+// SetDescription records what the system observed a session to be, with the exec count it was written
 // at, in one statement so the two can never disagree about how current it is.
-func (p *Postgres) SetDescription(ctx context.Context, id, description string, atTask int) error {
+func (p *Postgres) SetDescription(ctx context.Context, id, description string, atExec int) error {
 	tag, err := p.pool.Exec(ctx,
-		`update sessions set description = $2, described_at_task = $3, updated_at = now() where id = $1`,
-		id, description, atTask)
+		`update sessions set description = $2, described_at_exec = $3, updated_at = now() where id = $1`,
+		id, description, atExec)
 	if err != nil {
 		return fmt.Errorf("set description: %w", err)
 	}
@@ -552,12 +552,12 @@ func (p *Postgres) SetDescription(ctx context.Context, id, description string, a
 	return nil
 }
 
-// CountTasks is how many tasks a session has had.
-func (p *Postgres) CountTasks(ctx context.Context, session string) (int, error) {
+// CountExecs is how many execs a session has had.
+func (p *Postgres) CountExecs(ctx context.Context, session string) (int, error) {
 	var count int
 	if err := p.pool.QueryRow(ctx,
-		`select count(*) from tasks where session = $1`, session).Scan(&count); err != nil {
-		return 0, fmt.Errorf("count tasks: %w", err)
+		`select count(*) from execs where session = $1`, session).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count execs: %w", err)
 	}
 	return count, nil
 }
@@ -645,11 +645,11 @@ func scanSession(rows pgx.Rows) (*quaycrewv1.Session, error) {
 		permissionMode                                         string
 		driver                                                 bool
 		label, description, title                              string
-		describedAtTask                                        int32
+		describedAtExec                                        int32
 	)
 	if err := rows.Scan(&id, &workspace, &project, &handle, &status, &modelSessionID,
 		&createdAt, &updatedAt, &archivedAt, &reclaimedAt, &permissionMode, &driver, &label,
-		&description, &describedAtTask, &title); err != nil {
+		&description, &describedAtExec, &title); err != nil {
 		return nil, fmt.Errorf("scan session: %w", err)
 	}
 	session := &quaycrewv1.Session{
@@ -665,7 +665,7 @@ func scanSession(rows pgx.Rows) (*quaycrewv1.Session, error) {
 		Driver:          driver,
 		Label:           label,
 		Description:     description,
-		DescribedAtTask: describedAtTask,
+		DescribedAtExec: describedAtExec,
 		Title:           title,
 	}
 	if archivedAt != nil {
@@ -677,76 +677,76 @@ func scanSession(rows pgx.Rows) (*quaycrewv1.Session, error) {
 	return session, nil
 }
 
-// AppendTask records a task. Writing the same one twice is harmless, which is what makes a consumer
+// AppendExec records an exec. Writing the same one twice is harmless, which is what makes a consumer
 // with at least once delivery safe to replay.
-func (p *Postgres) AppendTask(ctx context.Context, task *quaycrewv1.Task, workspace, project, session string) error {
-	if task.GetId() == "" {
-		return errors.New("store: a task needs an id, so writing the same one twice leaves one task")
+func (p *Postgres) AppendExec(ctx context.Context, exec *quaycrewv1.Exec, workspace, project, session string) error {
+	if exec.GetId() == "" {
+		return errors.New("store: an exec needs an id, so writing the same one twice leaves one exec")
 	}
 	_, err := p.pool.Exec(ctx, `
-		insert into tasks (id, session, workspace, project, handle, prompt, reply, status, failure,
+		insert into execs (id, session, workspace, project, handle, prompt, reply, status, failure,
 			trace_id, occurred_at)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		on conflict (id) do nothing`,
-		task.GetId(), task.GetSession(), workspace, project, session,
-		task.GetPrompt(), task.GetReply(), task.GetStatus(), task.GetFailure(), task.GetTraceId(),
-		task.GetOccurredAt().AsTime())
+		exec.GetId(), exec.GetSession(), workspace, project, session,
+		exec.GetPrompt(), exec.GetReply(), exec.GetStatus(), exec.GetFailure(), exec.GetTraceId(),
+		exec.GetOccurredAt().AsTime())
 	if err != nil {
-		return fmt.Errorf("append task: %w", err)
+		return fmt.Errorf("append exec: %w", err)
 	}
 	return nil
 }
 
-// FinishTask closes the record a task opened when it started. A row that is not there is left
-// alone: the task happened whatever the store holds.
-func (p *Postgres) FinishTask(ctx context.Context, id, status, reply, failure string) error {
+// FinishExec closes the record an exec opened when it started. A row that is not there is left
+// alone: the exec happened whatever the store holds.
+func (p *Postgres) FinishExec(ctx context.Context, id, status, reply, failure string) error {
 	if id == "" {
-		return errors.New("store: a task needs an id to be finished")
+		return errors.New("store: an exec needs an id to be finished")
 	}
 	_, err := p.pool.Exec(ctx, `
-		update tasks set status = $2, reply = $3, failure = $4
+		update execs set status = $2, reply = $3, failure = $4
 		where id = $1`, id, status, reply, failure)
 	if err != nil {
-		return fmt.Errorf("finish task: %w", err)
+		return fmt.Errorf("finish exec: %w", err)
 	}
 	return nil
 }
 
-// ListTasks returns a session's tasks oldest first, capped at limit.
+// ListExecs returns a session's execs oldest first, capped at limit.
 //
 // The cap takes the most recent, because the end of a conversation is the part somebody is looking
 // for, and then the result is turned back the right way round so it reads as it happened.
-func (p *Postgres) ListTasks(ctx context.Context, session string, limit int) ([]*quaycrewv1.Task, error) {
+func (p *Postgres) ListExecs(ctx context.Context, session string, limit int) ([]*quaycrewv1.Exec, error) {
 	rows, err := p.pool.Query(ctx, `
 		select id, session, prompt, reply, status, failure, trace_id, occurred_at
-		from tasks where session = $1
+		from execs where session = $1
 		order by occurred_at desc, id desc
-		limit $2`, session, TaskLimit(limit))
+		limit $2`, session, ExecLimit(limit))
 	if err != nil {
-		return nil, fmt.Errorf("list tasks: %w", err)
+		return nil, fmt.Errorf("list execs: %w", err)
 	}
 	defer rows.Close()
 
-	tasks := make([]*quaycrewv1.Task, 0)
+	execs := make([]*quaycrewv1.Exec, 0)
 	for rows.Next() {
-		var task quaycrewv1.Task
+		var exec quaycrewv1.Exec
 		var occurredAt time.Time
-		if err := rows.Scan(&task.Id, &task.Session, &task.Prompt, &task.Reply,
-			&task.Status, &task.Failure, &task.TraceId, &occurredAt); err != nil {
-			return nil, fmt.Errorf("scan task: %w", err)
+		if err := rows.Scan(&exec.Id, &exec.Session, &exec.Prompt, &exec.Reply,
+			&exec.Status, &exec.Failure, &exec.TraceId, &occurredAt); err != nil {
+			return nil, fmt.Errorf("scan exec: %w", err)
 		}
-		task.OccurredAt = timestamppb.New(occurredAt)
-		tasks = append(tasks, &task)
+		exec.OccurredAt = timestamppb.New(occurredAt)
+		execs = append(execs, &exec)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list tasks: %w", err)
+		return nil, fmt.Errorf("list execs: %w", err)
 	}
 	// Read back newest first so the limit keeps the end of the conversation; hand it over oldest
 	// first so it reads in the order it happened.
-	for i, j := 0, len(tasks)-1; i < j; i, j = i+1, j-1 {
-		tasks[i], tasks[j] = tasks[j], tasks[i]
+	for i, j := 0, len(execs)-1; i < j; i, j = i+1, j-1 {
+		execs[i], execs[j] = execs[j], execs[i]
 	}
-	return tasks, nil
+	return execs, nil
 }
 
 // AppendSessionEvent records one thing that happened to a session. The same event written twice
@@ -781,7 +781,7 @@ func (p *Postgres) ListSessionEvents(ctx context.Context, session string, limit 
 		from session_events
 		where $1 = '' or session = $1
 		order by occurred_at desc, id desc
-		limit $2`, session, TaskLimit(limit))
+		limit $2`, session, ExecLimit(limit))
 	if err != nil {
 		return nil, fmt.Errorf("list session events: %w", err)
 	}
@@ -818,7 +818,7 @@ func (p *Postgres) FindOrCreateDriver(ctx context.Context, project string) (*qua
 		return nil, err
 	}
 	// Created dangerous. The driver acts for the operator rather than doing job of its own, and a
-	// driver that stops to ask before every step describes the task instead of doing it. What bounds
+	// driver that stops to ask before every step describes the exec instead of doing it. What bounds
 	// it is the sandbox, which is the same boundary it would have either way.
 	if _, err := p.pool.Exec(ctx, `
 		insert into sessions (id, workspace, project, handle, status, driver, permission_mode)

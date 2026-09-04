@@ -46,14 +46,14 @@ func TestASessionScopedCommandTakesAnAddress(t *testing.T) {
 
 // The history command shares the resolver, so it takes the same forms. A fix that only reached mode
 // would leave the operator refused by the command that reads what a session did.
-func TestTasksTakesTheHandleAndTheAddressToo(t *testing.T) {
+func TestExecsTakesTheHandleAndTheAddressToo(t *testing.T) {
 	client, _ := aSessionWatchingTheModel(t)
 	session := onlySession(t, client)
 
 	for _, typed := range []string{session.GetId()[:8], session.GetHandle()[:8], addressOf(t, client)} {
-		said := mustRun(t, client, "task", "list", typed)
+		said := mustRun(t, client, "exec", "list", typed)
 		if !strings.Contains(said, "hello") {
-			t.Fatalf("krewe task list %s said %q, want the task that was sent", typed, said)
+			t.Fatalf("krewe exec list %s said %q, want the exec that was sent", typed, said)
 		}
 	}
 }
@@ -69,7 +69,7 @@ func TestTheOldTurnsCommandIsRefusedAndNamesTheNewOne(t *testing.T) {
 		if err == nil {
 			t.Fatalf("krewe %s was accepted, and it no longer does anything", typed)
 		}
-		if !strings.Contains(err.Error(), "krewe task list") {
+		if !strings.Contains(err.Error(), "krewe exec list") {
 			t.Fatalf("the refusal for krewe %s does not say what to type instead: %v", typed, err)
 		}
 	}
@@ -94,7 +94,7 @@ func TestTheOldThreadsCommandIsRefusedAndNamesTheNewOne(t *testing.T) {
 // The flag the address replaced keeps being refused under its old name too, for the same reason.
 func TestTheOldThreadFlagIsRefusedAndNamesTheAddress(t *testing.T) {
 	client, _ := aSessionWatchingTheModel(t)
-	err := run(context.Background(), client, []string{"task", flagDispatch, "--thread", "x", "hello"}, io.Discard, "")
+	err := run(context.Background(), client, []string{"exec", flagDispatch, "--thread", "x", "hello"}, io.Discard, "")
 	if err == nil {
 		t.Fatal("--thread was accepted, and it no longer does anything")
 	}
@@ -105,15 +105,15 @@ func TestTheOldThreadFlagIsRefusedAndNamesTheAddress(t *testing.T) {
 
 // Setting the mode through the handle has to reach the model, not only the store. Reading it back
 // from the system would pass on a command that recorded the mode and never applied it.
-func TestTheNextTaskRunsInTheModeSetThroughTheHandle(t *testing.T) {
+func TestTheNextExecRunsInTheModeSetThroughTheHandle(t *testing.T) {
 	client, runner := aSessionWatchingTheModel(t)
 	handle := onlySession(t, client).GetHandle()[:8]
 
 	mustRun(t, client, "mode", handle, "dangerous")
-	mustRun(t, client, "task", addressOf(t, client), "and again")
+	mustRun(t, client, "exec", addressOf(t, client), "and again")
 
 	if was := runner.LastReq.PermissionMode; was != "bypassPermissions" {
-		t.Fatalf("the task after the change ran in %q, want bypassPermissions", was)
+		t.Fatalf("the exec after the change ran in %q, want bypassPermissions", was)
 	}
 }
 
@@ -175,7 +175,7 @@ func TestASessionScopedCommandTakesAnAddressCarryingTheId(t *testing.T) {
 }
 
 // Dispatch is the command an operator types most, and it was the one that took neither identifier.
-// The word was not refused, it was joined to the message: `krewe task 615d48dc "and again"` sent
+// The word was not refused, it was joined to the message: `krewe exec 615d48dc "and again"` sent
 // "615d48dc and again" to a session nobody asked for. These run the real command.
 
 func TestDispatchTakesTheIdentifierTheListingPrints(t *testing.T) {
@@ -183,13 +183,13 @@ func TestDispatchTakesTheIdentifierTheListingPrints(t *testing.T) {
 	session := onlySession(t, client)
 
 	for _, typed := range []string{session.GetId()[:8], session.GetHandle()[:8], addressOf(t, client)} {
-		said := mustRun(t, client, "task", flagDispatch, typed, "and again")
+		said := mustRun(t, client, "exec", flagDispatch, typed, "and again")
 		if !strings.Contains(said, "(session "+session.GetId()+",") {
-			t.Fatalf("krewe task %s said %q, want the session the listing named", typed, said)
+			t.Fatalf("krewe exec %s said %q, want the session the listing named", typed, said)
 		}
-		history := mustRun(t, client, "task", "list", session.GetId()[:8])
+		history := mustRun(t, client, "exec", "list", session.GetId()[:8])
 		if strings.Contains(history, typed+" and again") {
-			t.Fatalf("krewe task %s put the identifier into the message:\n%s", typed, history)
+			t.Fatalf("krewe exec %s put the identifier into the message:\n%s", typed, history)
 		}
 	}
 }
@@ -201,10 +201,10 @@ func TestDispatchTakesTheIdentifierOfASessionSomebodyHasNamed(t *testing.T) {
 	session := onlySession(t, client)
 	mustRun(t, client, "label", session.GetId()[:8], "the bills")
 
-	said := mustRun(t, client, "task", flagDispatch, session.GetId()[:8], "and again")
+	said := mustRun(t, client, "exec", flagDispatch, session.GetId()[:8], "and again")
 
 	if !strings.Contains(said, "(session "+session.GetId()+",") {
-		t.Fatalf("krewe task said %q, want the session the listing named", said)
+		t.Fatalf("krewe exec said %q, want the session the listing named", said)
 	}
 }
 
@@ -214,7 +214,7 @@ func TestAnIdentifierThatNamesNoSessionIsRefusedRatherThanSent(t *testing.T) {
 	client, _ := aSessionWatchingTheModel(t)
 	session := onlySession(t, client)
 
-	err := refused(t, client, "task", flagDispatch, "ffffffffff", "and again")
+	err := refused(t, client, "exec", flagDispatch, "ffffffffff", "and again")
 
 	said := err.Error()
 	if !strings.Contains(said, session.GetId()[:8]) {
@@ -234,12 +234,12 @@ func TestAnIdentifierThatNamesNoSessionIsRefusedRatherThanSent(t *testing.T) {
 func TestAnOrdinaryFirstWordIsStillTheMessage(t *testing.T) {
 	client, _ := aSessionWatchingTheModel(t)
 
-	said := mustRun(t, client, "task", "hello", "there")
+	said := mustRun(t, client, "exec", "hello", "there")
 
 	if !strings.Contains(said, "ok") {
-		t.Fatalf("krewe task hello there said %q, want the reply to a message", said)
+		t.Fatalf("krewe exec hello there said %q, want the reply to a message", said)
 	}
 	if strings.Contains(said, "no session") {
-		t.Fatalf("krewe task hello there was read as a session: %q", said)
+		t.Fatalf("krewe exec hello there was read as a session: %q", said)
 	}
 }

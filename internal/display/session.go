@@ -132,14 +132,14 @@ func Share(used, size int64) int64 {
 // actually inside its sandbox.
 //
 // They exist because idle used to cover all four. The row's status only ever said whether a
-// dispatched task was open, so a conversation somebody opened by hand and left answering read the
+// dispatched exec was open, so a conversation somebody opened by hand and left answering read the
 // same as an empty container, and idle is the word that invites a restart, a drain or a reclaim.
 //
 // Why these words:
 //
 //   - Awake, not thinking or busy. The system reads a runtime process, which is up both while it
 //     answers and while it waits at a prompt, so thinking claims more than was measured. Busy is
-//     what running already means to an operator, and this is not a task.
+//     what running already means to an operator, and this is not an exec.
 //   - Attached, because it is what the operator typed to get there: `krewe attach`.
 //   - Unknown, because the system asked and was not told. It is not idle, and it must never read as
 //     idle: a listing that guesses empty here is the defect this set of words was written for.
@@ -155,7 +155,7 @@ const (
 //
 // It is the row's own status, except where that status is idle and the system has read the sandbox. A
 // row that says anything else is left alone: running, failed, stopped and reclaimed each carry
-// something this cannot say, and overwriting failed with awake would lose that the last task did not
+// something this cannot say, and overwriting failed with awake would lose that the last exec did not
 // land.
 //
 // A session nobody asked about reads exactly as it did before, which is what a caller that has not
@@ -310,8 +310,8 @@ func SessionName(session *quaycrewv1.Session) string {
 // wrote it.
 //
 // The title is what fills the cell while the work is happening. A label needs an operator who has
-// already looked, and a description is written behind a task that has landed, so a job, which is one
-// long task, ran to the end with a blank name cell: four running jobs and no way to tell which was
+// already looked, and a description is written behind an exec that has landed, so a job, which is one
+// long exec, ran to the end with a blank name cell: four running jobs and no way to tell which was
 // which.
 //
 // The name cell used to fall back to the handle, which put a raw identifier under the heading "name"

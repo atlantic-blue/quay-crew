@@ -110,7 +110,7 @@ func TestAFileIsAReadHoweverItWasOpened(t *testing.T) {
 		{contextspend.Shell, "cat internal/job/controller.go"},
 		{contextspend.Shell, "sed -n '1,50p' internal/job/controller.go"},
 		{contextspend.Shell, "head -50 go.mod"},
-		{contextspend.Shell, "tail -n 20 CHANGELOG.md"},
+		{contextspend.Shell, "tail -n 20 README.md"},
 		{contextspend.Shell, "/bin/cat go.mod"},
 		{contextspend.Shell, "cat go.mod | grep require"},
 	} {
@@ -179,7 +179,7 @@ func TestTheLargestCategoryIsTheAnswer(t *testing.T) {
 			want:  contextspend.Turns, cell: "turns 75%",
 		},
 		{
-			name:  "a short conversation, mostly the task it was given",
+			name:  "a short conversation, mostly the exec it was given",
 			spend: contextspend.Spend{Told: 900, Turns: 100},
 			want:  contextspend.Told, cell: "told 90%",
 		},

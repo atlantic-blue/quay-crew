@@ -39,7 +39,7 @@ func TestASessionCanMakeAnOpenPGPCommitThatVerifies(t *testing.T) {
 }
 
 // The same, for the operator who exports the key as it stands rather than making a copy with the
-// passphrase stripped off it. gpg asks for a passphrase through pinentry, and a task nobody is
+// passphrase stripped off it. gpg asks for a passphrase through pinentry, and an exec nobody is
 // watching waits forever, so the passphrase is mounted beside the key and gpg is told to read it
 // from there.
 func TestASessionSignsWithAKeyThatHasAPassphrase(t *testing.T) {
@@ -70,7 +70,7 @@ func anImageAndAKeyring(t *testing.T) (image, home string) {
 	return image, t.TempDir()
 }
 
-// aCommitSignedWith mounts the given secrets on a workspace, dispatches a task to get a sandbox, and
+// aCommitSignedWith mounts the given secrets on a workspace, dispatches an exec to get a sandbox, and
 // makes a commit in it. It answers with what git says about that commit's signature.
 //
 // Identity is set inline rather than mounted, to keep this test about the key. Where it comes from

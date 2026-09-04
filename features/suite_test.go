@@ -10,9 +10,9 @@
 //
 // The model runner and the sandbox provider are doubles, so these scenarios are fast and need no
 // Docker daemon and no subscription. They therefore prove routing, session identity, sandbox
-// lifecycle and error handling, and they deliberately do not prove that a real task executes. That
+// lifecycle and error handling, and they deliberately do not prove that a real exec executes. That
 // is the job of the dispatch smoke in continuous integration, which boots the composed stack and
-// runs a task for real, and of the gated test in internal/model that needs a live subscription.
+// runs an exec for real, and of the gated test in internal/model that needs a live subscription.
 package features_test
 
 import (
@@ -74,41 +74,41 @@ func TestFeatures(t *testing.T) {
 // scenariosRun counts the scenarios executed, so an empty run cannot pass as a green one.
 var scenariosRun atomic.Int64
 
-// recordingRunner is a model runner double that records every task it was asked to run and hands
+// recordingRunner is a model runner double that records every exec it was asked to run and hands
 // back a distinct conversation id each time, so a scenario can assert which conversation the next
-// task resumed.
+// exec resumed.
 type recordingRunner struct {
 	mu       sync.Mutex
 	requests []model.Request
-	// failNext makes the next task fail, which is how a scenario gets a session that exists but has
+	// failNext makes the next exec fail, which is how a scenario gets a session that exists but has
 	// no conversation behind it. failWith is what it fails with, and empty is the general refusal.
 	failNext bool
 	failWith string
-	// takes is how long a task pretends to take. Zero is instant, which is right for almost every
-	// scenario and wrong for any scenario about something happening while a task is under way:
+	// takes is how long an exec pretends to take. Zero is instant, which is right for almost every
+	// scenario and wrong for any scenario about something happening while an exec is under way:
 	// with an instant model a whole automation finishes before the next step runs, and a scenario
 	// about stopping one would be racing rather than specifying.
 	takes time.Duration
-	// gate holds every task open until it is closed, which is takes without the guesswork: a scenario
-	// about what is true *while* a task runs cannot be written against a clock, because the clock is
+	// gate holds every exec open until it is closed, which is takes without the guesswork: a scenario
+	// about what is true *while* an exec runs cannot be written against a clock, because the clock is
 	// a different length on every machine. Nil runs straight through.
 	gate chan struct{}
-	// started is closed when the first task begins, so a scenario can know a task is genuinely under
+	// started is closed when the first exec begins, so a scenario can know an exec is genuinely under
 	// way rather than infer it from how long a step took.
 	started chan struct{}
-	// usage, cost and usageReported are what each task reports having spent. The zero value reports
+	// usage, cost and usageReported are what each exec reports having spent. The zero value reports
 	// nothing, which is what a backend that does not say looks like.
 	usage         sandbox.Usage
 	cost          float64
 	usageReported bool
-	// onTask runs before the double answers, so a scenario can be a model that did the job rather
+	// onExec runs before the double answers, so a scenario can be a model that did the job rather
 	// than one that talked about it: wrote the file, left the room as it found it. Nil does nothing.
-	onTask func()
-	// duringTask runs before the double answers, with the task it was handed, so a scenario can be a
+	onExec func()
+	// duringExec runs before the double answers, with the exec it was handed, so a scenario can be a
 	// session that called the system rather than one that only replied. Nil does nothing.
-	duringTask func(req model.Request)
-	// says is what the double answers, one entry per task, with the last repeating once the queue
-	// runs out. Empty echoes the task, which is what almost every scenario wants.
+	duringExec func(req model.Request)
+	// says is what the double answers, one entry per exec, with the last repeating once the queue
+	// runs out. Empty echoes the exec, which is what almost every scenario wants.
 	//
 	// A queue rather than one string, because a scenario about a session being asked a second thing
 	// has to be able to say what it answers the second time. The last one repeats rather than the
@@ -116,9 +116,9 @@ type recordingRunner struct {
 	says []string
 	// exact marks the answers a scenario means literally, so the double leaves them as they are. It is
 	// how a scenario about an answer that states no outcome is written: everything else gets the line a
-	// session that read its task would have written.
+	// session that read its exec would have written.
 	exact []bool
-	// answers is a phrase against what the double answers a task carrying it, tried before the queue
+	// answers is a phrase against what the double answers an exec carrying it, tried before the queue
 	// above and first match winning.
 	//
 	// It exists because more than one conversation can be in flight at once: a job held back until a
@@ -127,7 +127,7 @@ type recordingRunner struct {
 	answers [][2]string
 }
 
-// answerFor is what the double says to the nth task, one indexed. The caller holds the lock.
+// answerFor is what the double says to the nth exec, one indexed. The caller holds the lock.
 func (r *recordingRunner) answerFor(asked int, text string) string {
 	// What was asked wins over how many have been asked, because a scenario naming a phrase is being
 	// specific and a queue by position is not.
@@ -149,7 +149,7 @@ func (r *recordingRunner) answerFor(asked int, text string) string {
 	return said
 }
 
-// hold makes every task wait, and returns the func that lets them go.
+// hold makes every exec wait, and returns the func that lets them go.
 func (r *recordingRunner) hold() func() {
 	r.mu.Lock()
 	r.gate, r.started = make(chan struct{}), make(chan struct{})
@@ -158,20 +158,20 @@ func (r *recordingRunner) hold() func() {
 	return func() { close(gate) }
 }
 
-// waitForTask blocks until a task has reached the runner, so a scenario never asserts on a session
-// whose task has not started yet.
-func (r *recordingRunner) waitForTask() error {
+// waitForExec blocks until an exec has reached the runner, so a scenario never asserts on a session
+// whose exec has not started yet.
+func (r *recordingRunner) waitForExec() error {
 	r.mu.Lock()
 	started := r.started
 	r.mu.Unlock()
 	if started == nil {
-		return fmt.Errorf("no task was held, so there is nothing to wait for")
+		return fmt.Errorf("no exec was held, so there is nothing to wait for")
 	}
 	select {
 	case <-started:
 		return nil
 	case <-time.After(10 * time.Second):
-		return fmt.Errorf("no task reached the model runner")
+		return fmt.Errorf("no exec reached the model runner")
 	}
 }
 
@@ -180,20 +180,20 @@ var _ model.Runner = (*recordingRunner)(nil)
 // Run answers what the double was told to answer, and gives up the moment its context is cancelled.
 //
 // The cancellation matters as much as the answer. The real runner runs the model as a process under
-// this context, so cancelling it ends the task, which is exactly what stopping one session does. A
+// this context, so cancelling it ends the exec, which is exactly what stopping one session does. A
 // double that blocked on regardless would be looser than the thing it stands in for, and a scenario
-// about stopping a task would hang against it while the real system stopped the task at once.
+// about stopping an exec would hang against it while the real system stopped the exec at once.
 func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.Request) (model.Response, error) {
 	r.mu.Lock()
-	takes, gate, onTask, duringTask := r.takes, r.gate, r.onTask, r.duringTask
-	// Recorded on arrival rather than on the way out. A scenario about what is true *while* a task
-	// runs, which is what attaching to a running session is, cannot read a task that is only written
+	takes, gate, onExec, duringExec := r.takes, r.gate, r.onExec, r.duringExec
+	// Recorded on arrival rather than on the way out. A scenario about what is true *while* an exec
+	// runs, which is what attaching to a running session is, cannot read an exec that is only written
 	// down once it is over.
 	r.requests = append(r.requests, req)
 	asked := len(r.requests)
 	// Closed here rather than by a sync.Once, so a scenario that holds a second time is told about
-	// the second task too. A once fires for the first task of the run and never again, which leaves
-	// a later hold waiting ten seconds for a task that already arrived.
+	// the second exec too. A once fires for the first exec of the run and never again, which leaves
+	// a later hold waiting ten seconds for an exec that already arrived.
 	if r.started != nil {
 		select {
 		case <-r.started:
@@ -203,11 +203,11 @@ func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.
 	}
 	r.mu.Unlock()
 	// Outside the lock: what the model does may ask the system something.
-	if onTask != nil {
-		onTask()
+	if onExec != nil {
+		onExec()
 	}
-	if duringTask != nil {
-		duringTask(req)
+	if duringExec != nil {
+		duringExec(req)
 	}
 	if gate != nil {
 		select {
@@ -229,7 +229,7 @@ func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.
 		said := r.failWith
 		r.failNext, r.failWith = false, ""
 		if said == "" {
-			said = "the model refused this task"
+			said = "the model refused this exec"
 		}
 		return model.Response{}, fmt.Errorf("%s", said)
 	}
@@ -237,7 +237,7 @@ func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.
 		Reply: r.answerFor(asked, req.Text),
 		// The conversation it was given comes back, which is what a runtime that honours the name does.
 		// A double that answered with a name of its own would be looser than the thing it stands in for:
-		// the system would read every task as the runtime ignoring the name it was handed.
+		// the system would read every exec as the runtime ignoring the name it was handed.
 		ModelSessionID: conversationOf(req, fmt.Sprintf("conversation-%d", asked)),
 		Usage:          r.usage,
 		CostUSD:        r.cost,
@@ -245,7 +245,7 @@ func (r *recordingRunner) Run(ctx context.Context, _ sandbox.Sandbox, req model.
 	}, nil
 }
 
-func (r *recordingRunner) task(i int) (model.Request, bool) {
+func (r *recordingRunner) exec(i int) (model.Request, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if i < 0 || i >= len(r.requests) {
@@ -254,8 +254,8 @@ func (r *recordingRunner) task(i int) (model.Request, bool) {
 	return r.requests[i], true
 }
 
-// lastRequest is the task the model was asked to run most recently, which is what a scenario about
-// what a task ran as has to look at.
+// lastRequest is the exec the model was asked to run most recently, which is what a scenario about
+// what an exec ran as has to look at.
 func (r *recordingRunner) lastRequest() model.Request {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -271,8 +271,8 @@ func (r *recordingRunner) count() int {
 	return len(r.requests)
 }
 
-// task is what the operator saw come back from one dispatch.
-type task struct {
+// dispatched is what the operator saw come back from one dispatch.
+type dispatched struct {
 	sessionID string
 	handle    string
 	reply     string
@@ -301,8 +301,8 @@ type world struct {
 	// an explanation built from a stream.
 	realRunner model.Runner
 	// alsoServing are the control planes a scenario stood up beside the world's own, over the same
-	// store. A task belongs to the process that dispatched it, so waiting for tasks has to cover all
-	// of them. serversMu guards the list, because a scenario builds one while tasks are in flight.
+	// store. An exec belongs to the process that dispatched it, so waiting for execs has to cover all
+	// of them. serversMu guards the list, because a scenario builds one while execs are in flight.
 	alsoServing []*controlplane.Server
 	serversMu   sync.Mutex
 	// reachable is the address a session is told to dial for the system, empty when it cannot reach it.
@@ -317,10 +317,10 @@ type world struct {
 	// lastDrain is what the last drain put down, kept so a scenario can ask what went rather than
 	// counting sandboxes.
 	lastDrain *quaycrewv1.DrainSessionsResponse
-	// release lets go of a task a scenario is holding open, and is nil when none is held.
+	// release lets go of an exec a scenario is holding open, and is nil when none is held.
 	release func()
 	// waited carries what a dispatch the scenario is not watching came back with. A waited dispatch
-	// does not return until its task lands, so a scenario about what is true while one runs has to
+	// does not return until its exec lands, so a scenario about what is true while one runs has to
 	// start it behind itself and pick the answer up afterwards.
 	waited chan waitedDispatch
 	// otherWorkspaceID is a second workspace, for the scenarios about what one workspace's
@@ -354,7 +354,7 @@ type world struct {
 	projectID          string
 	projectName        string
 	secondWorkspaceID  string
-	tasks              []task
+	execs              []dispatched
 	lastErr            error
 	lastSecretResponse *quaycrewv1.SetSecretResponse
 	lastSecrets        *quaycrewv1.ListSecretsResponse
@@ -400,19 +400,19 @@ func (w *world) start() error {
 	return w.serve()
 }
 
-// settled waits for every detached task to land, so a scenario asserting on what a task left behind
-// is never asserting on a task still running. The same wait the real shutdown does.
+// settled waits for every detached exec to land, so a scenario asserting on what an exec left behind
+// is never asserting on an exec still running. The same wait the real shutdown does.
 //
-// Every control plane the scenario stood up, not only the world's own. A task belongs to the process
-// that dispatched it, so waiting on one process says nothing about a task another one is running, and
+// Every control plane the scenario stood up, not only the world's own. An exec belongs to the process
+// that dispatched it, so waiting on one process says nothing about an exec another one is running, and
 // a scenario about a controller dying dispatches through a second control plane by design.
 func (w *world) settled(ctx context.Context) error {
 	waiting, giveUp := context.WithTimeout(ctx, 10*time.Second)
 	defer giveUp()
 	for _, serving := range w.everyServer() {
-		serving.WaitForTasks(waiting)
+		serving.WaitForExecs(waiting)
 		if waiting.Err() != nil {
-			return fmt.Errorf("a detached task never landed")
+			return fmt.Errorf("a detached exec never landed")
 		}
 	}
 	return nil
@@ -439,7 +439,7 @@ func (w *world) serve() error {
 	listener := bufconn.Listen(1024 * 1024)
 	w.listener = listener
 	w.server = controlplane.NewServer(controlplane.Config{
-		Store: w.systemStore(), Runner: w.taskRunner(), Provider: w.provider, Secrets: w.secrets,
+		Store: w.systemStore(), Runner: w.execRunner(), Provider: w.provider, Secrets: w.secrets,
 		Storage: w.storage, Info: w.info, Reachable: w.reachable,
 		GitAuthor: w.gitAuthor, DriverToken: w.driverToken,
 		Skills: w.skills, SkillsHost: w.skillsDir, SandboxImage: "quaycrew-sandbox:test",
@@ -454,9 +454,9 @@ func (w *world) serve() error {
 		})...,
 	)...)
 	// The way the real main starts: what strayed while the system is down is reaped on the way up, and
-	// a session the store still calls running is settled, because its task died with the last process.
+	// a session the store still calls running is settled, because its exec died with the last process.
 	w.server.ReapStrays(context.Background())
-	w.server.SettleTasks(context.Background())
+	w.server.SettleExecs(context.Background())
 	// The way the real main starts, for a scenario about what survives a restart: the shipped hooks
 	// are offered again, and a system that already holds some is left exactly as it is.
 	if w.seedHooks {
@@ -493,8 +493,8 @@ func (w *world) systemStore() store.Store {
 	return w.store
 }
 
-// taskRunner is what runs a task: the recording double, unless a scenario asked for the real one.
-func (w *world) taskRunner() model.Runner {
+// execRunner is what runs an exec: the recording double, unless a scenario asked for the real one.
+func (w *world) execRunner() model.Runner {
 	if w.realRunner != nil {
 		return w.realRunner
 	}
@@ -510,11 +510,11 @@ func (w *world) stop() {
 	}
 }
 
-func (w *world) lastTask() (task, error) {
-	if len(w.tasks) == 0 {
-		return task{}, fmt.Errorf("no task has been dispatched yet")
+func (w *world) lastExec() (dispatched, error) {
+	if len(w.execs) == 0 {
+		return dispatched{}, fmt.Errorf("no exec has been dispatched yet")
 	}
-	return w.tasks[len(w.tasks)-1], nil
+	return w.execs[len(w.execs)-1], nil
 }
 
 // orderedSessions is the workspace's listing as the system hands it over, with the two things an
@@ -539,16 +539,16 @@ func (w *world) orderedSessions(ctx context.Context, archived bool) ([]*quaycrew
 	return listed, nil
 }
 
-// conversationOfFirstTask is the conversation the session's first task ran in. The system names a
-// conversation before the task starts and the name is a fresh identifier each time, so a scenario
-// reads it back from the task rather than expecting a name it could write down.
-func (w *world) conversationOfFirstTask() (string, error) {
-	first, found := w.runner.task(0)
+// conversationOfFirstExec is the conversation the session's first exec ran in. The system names a
+// conversation before the exec starts and the name is a fresh identifier each time, so a scenario
+// reads it back from the exec rather than expecting a name it could write down.
+func (w *world) conversationOfFirstExec() (string, error) {
+	first, found := w.runner.exec(0)
 	if !found {
-		return "", fmt.Errorf("no task has reached the model runner, so no conversation was named")
+		return "", fmt.Errorf("no exec has reached the model runner, so no conversation was named")
 	}
 	if first.ModelSessionID == "" {
-		return "", fmt.Errorf("the first task ran in no conversation the system could name")
+		return "", fmt.Errorf("the first exec ran in no conversation the system could name")
 	}
 	return first.ModelSessionID, nil
 }
@@ -562,7 +562,7 @@ func conversationOf(req model.Request, fallback string) string {
 	return fallback
 }
 
-// dispatch runs one task and records either the result or the error, so a Then step can assert on
+// dispatch runs one exec and records either the result or the error, so a Then step can assert on
 // whichever the scenario is about.
 func (w *world) dispatch(ctx context.Context, project, session, text string) error {
 	resp, err := w.client.Dispatch(ctx, &quaycrewv1.DispatchRequest{Project: project, Handle: session, Text: text})
@@ -570,7 +570,7 @@ func (w *world) dispatch(ctx context.Context, project, session, text string) err
 	if err != nil {
 		return nil
 	}
-	w.tasks = append(w.tasks, task{sessionID: resp.GetId(), handle: resp.GetHandle(), reply: resp.GetReply()})
+	w.execs = append(w.execs, dispatched{sessionID: resp.GetId(), handle: resp.GetHandle(), reply: resp.GetReply()})
 	return w.keepConversation(ctx, resp.GetId())
 }
 
@@ -602,7 +602,7 @@ func (w *world) keepConversation(ctx context.Context, sessionID string) error {
 // sandboxesMadeFor counts the sandboxes genuinely made for the current session, which is not the same
 // as the times the provider was asked: adopting one that already exists makes nothing.
 func (w *world) sandboxesMadeFor(want int) error {
-	current, err := w.lastTask()
+	current, err := w.lastExec()
 	if err != nil {
 		return err
 	}
@@ -669,14 +669,13 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializeSessionEventsSteps(sc)
 	initializeObservabilitySteps(sc)
 	initializeMetricsSteps(sc)
-	initializeTasksSteps(sc)
+	initializeExecsSteps(sc)
 	initializeToolSteps(sc)
 	initializeAnswerSteps(sc)
-	initializeTaskWordSteps(sc)
+	initializeExecWordSteps(sc)
 	initializeLevelWordSteps(sc)
 	initializeDirectorySteps(sc)
 	initializeVersionSteps(sc)
-	initializeTasksViewSteps(sc)
 	initializeAttachSteps(sc)
 	initializeContextSteps(sc)
 	initializeContextSizeSteps(sc)
@@ -722,7 +721,6 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	initializePresenceToolSteps(sc)
 	initializePresenceToolReadingSteps(sc)
 	initializeToolNameSteps(sc)
-	initializeChangelogSteps(sc)
 	initializePromisesSteps(sc)
 	// Tear the control plane down. The scenario's own failure is already recorded, so this returns
 	// nil rather than the incoming error, which would be reported a second time as a hook failure.
@@ -802,7 +800,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 	sc.Step(`^the operator dispatches "([^"]*)" to the same session$`, func(ctx context.Context, text string) error {
 		w := worldFrom(ctx)
-		previous, err := w.lastTask()
+		previous, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -820,7 +818,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 	sc.Step(`^the operator stops the session$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -830,7 +828,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	// A refusal is the point of two of these scenarios, so the error is recorded rather than returned.
 	sc.Step(`^the operator restarts the session$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -839,7 +837,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 	sc.Step(`^the session is set to permission mode "([^"]*)"$`, func(ctx context.Context, mode string) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -847,17 +845,17 @@ func initializeScenario(sc *godog.ScenarioContext) {
 			&quaycrewv1.SetSessionPermissionModeRequest{Id: current.sessionID, Mode: mode})
 		return nil
 	})
-	sc.Step(`^the task ran in permission mode "([^"]*)"$`, func(ctx context.Context, want string) error {
+	sc.Step(`^the exec ran in permission mode "([^"]*)"$`, func(ctx context.Context, want string) error {
 		w := worldFrom(ctx)
 		got := w.runner.lastRequest().PermissionMode
 		if got != want {
-			return fmt.Errorf("the task ran as %q, want %q", got, want)
+			return fmt.Errorf("the exec ran as %q, want %q", got, want)
 		}
 		return nil
 	})
 	sc.Step(`^the operator archives the session$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -866,10 +864,10 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 	sc.Step(`^the operator dispatches "([^"]*)" to the session started first$`, func(ctx context.Context, text string) error {
 		w := worldFrom(ctx)
-		if len(w.tasks) == 0 {
+		if len(w.execs) == 0 {
 			return fmt.Errorf("no session has been started yet")
 		}
-		return w.dispatch(ctx, w.projectID, w.tasks[0].handle, text)
+		return w.dispatch(ctx, w.projectID, w.execs[0].handle, text)
 	})
 	// The listing's last column says how long ago each session moved, and the listing is ordered on
 	// that same stamp, so the column reads down the page and the session somebody was last in is at
@@ -877,7 +875,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	// and used an hour ago below one made yesterday and untouched since.
 	sc.Step(`^the listing puts the session last worked in at the top$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -901,17 +899,17 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	// be in the right order if it was ordered by when each session was put away.
 	sc.Step(`^the operator names the session archived first "([^"]*)"$`, func(ctx context.Context, label string) error {
 		w := worldFrom(ctx)
-		if len(w.tasks) == 0 {
+		if len(w.execs) == 0 {
 			return fmt.Errorf("no session has been started yet")
 		}
 		_, err := w.client.SetSessionLabel(ctx, &quaycrewv1.SetSessionLabelRequest{
-			Id: w.tasks[0].sessionID, Label: label,
+			Id: w.execs[0].sessionID, Label: label,
 		})
 		return err
 	})
 	sc.Step(`^the archived listing puts the session put away last at the top$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -927,7 +925,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 	sc.Step(`^the operator restores the session$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -950,7 +948,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	// matters here is that nobody hands out a container name without asking whether it is there.
 	sc.Step(`^the control plane asked for that session's sandbox$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -996,7 +994,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	sc.Step(`^the session's row says stopped while its container still runs$`,
 		func(ctx context.Context) error {
 			w := worldFrom(ctx)
-			current, err := w.lastTask()
+			current, err := w.lastExec()
 			if err != nil {
 				return err
 			}
@@ -1031,9 +1029,9 @@ func initializeScenario(sc *godog.ScenarioContext) {
 			return nil
 		})
 
-	// Then: tasks and replies.
+	// Then: execs and replies.
 	sc.Step(`^the reply is "([^"]*)"$`, func(ctx context.Context, want string) error {
-		current, err := worldFrom(ctx).lastTask()
+		current, err := worldFrom(ctx).lastExec()
 		if err != nil {
 			return err
 		}
@@ -1042,46 +1040,46 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
-	sc.Step(`^both tasks ran in the same session$`, func(ctx context.Context) error {
+	sc.Step(`^both execs ran in the same session$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		if len(w.tasks) != 2 {
-			return fmt.Errorf("expected 2 tasks, got %d", len(w.tasks))
+		if len(w.execs) != 2 {
+			return fmt.Errorf("expected 2 execs, got %d", len(w.execs))
 		}
-		if w.tasks[0].sessionID != w.tasks[1].sessionID {
-			return fmt.Errorf("tasks ran in different sessions: %q and %q", w.tasks[0].sessionID, w.tasks[1].sessionID)
+		if w.execs[0].sessionID != w.execs[1].sessionID {
+			return fmt.Errorf("execs ran in different sessions: %q and %q", w.execs[0].sessionID, w.execs[1].sessionID)
 		}
 		return nil
 	})
-	sc.Step(`^the tasks ran in different sessions$`, func(ctx context.Context) error {
+	sc.Step(`^the execs ran in different sessions$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		if len(w.tasks) != 2 {
-			return fmt.Errorf("expected 2 tasks, got %d", len(w.tasks))
+		if len(w.execs) != 2 {
+			return fmt.Errorf("expected 2 execs, got %d", len(w.execs))
 		}
-		if w.tasks[0].sessionID == w.tasks[1].sessionID {
-			return fmt.Errorf("both tasks ran in session %q, expected different sessions", w.tasks[0].sessionID)
+		if w.execs[0].sessionID == w.execs[1].sessionID {
+			return fmt.Errorf("both execs ran in session %q, expected different sessions", w.execs[0].sessionID)
 		}
 		return nil
 	})
-	sc.Step(`^the second task resumed the conversation the first task started$`, func(ctx context.Context) error {
+	sc.Step(`^the second exec resumed the conversation the first exec started$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		if w.runner.count() != 2 {
-			return fmt.Errorf("expected the runner to have run 2 tasks, got %d", w.runner.count())
+			return fmt.Errorf("expected the runner to have run 2 execs, got %d", w.runner.count())
 		}
-		first, _ := w.runner.task(0)
-		second, _ := w.runner.task(1)
+		first, _ := w.runner.exec(0)
+		second, _ := w.runner.exec(1)
 		if first.ModelSessionID == "" {
-			return fmt.Errorf("the first task ran in no conversation the system could name")
+			return fmt.Errorf("the first exec ran in no conversation the system could name")
 		}
 		if first.ConversationStarted {
-			return fmt.Errorf("the first task resumed a conversation nothing had written yet, "+
+			return fmt.Errorf("the first exec resumed a conversation nothing had written yet, "+
 				"which exits saying there is no conversation found: %q", first.ModelSessionID)
 		}
 		if second.ModelSessionID != first.ModelSessionID {
-			return fmt.Errorf("the second task ran in conversation %q and the first in %q",
+			return fmt.Errorf("the second exec ran in conversation %q and the first in %q",
 				second.ModelSessionID, first.ModelSessionID)
 		}
 		if !second.ConversationStarted {
-			return fmt.Errorf("the second task started conversation %q again rather than continuing it",
+			return fmt.Errorf("the second exec started conversation %q again rather than continuing it",
 				second.ModelSessionID)
 		}
 		return nil
@@ -1097,7 +1095,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 	sc.Step(`^the sandbox belongs to the session$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -1123,9 +1121,9 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
-	sc.Step(`^the session still holds the conversation the first task started$`, func(ctx context.Context) error {
+	sc.Step(`^the session still holds the conversation the first exec started$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -1135,12 +1133,12 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		}
 		// The name points at a conversation the model keeps on its own disk. Lose it and that
 		// conversation still exists but can never be reached again.
-		ran, err := w.conversationOfFirstTask()
+		ran, err := w.conversationOfFirstExec()
 		if err != nil {
 			return err
 		}
 		if got := resp.GetSession().GetModelSessionId(); got != ran {
-			return fmt.Errorf("the session holds conversation %q and its first task ran in %q", got, ran)
+			return fmt.Errorf("the session holds conversation %q and its first exec ran in %q", got, ran)
 		}
 		return nil
 	})
@@ -1170,7 +1168,7 @@ func initializeScenario(sc *godog.ScenarioContext) {
 	})
 	sc.Step(`^the session is reported as (\w+)$`, func(ctx context.Context, want string) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -1194,26 +1192,26 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	// Then: the task's environment.
-	sc.Step(`^the task ran with the subscription token "([^"]*)"$`, func(ctx context.Context, want string) error {
+	// Then: the exec's environment.
+	sc.Step(`^the exec ran with the subscription token "([^"]*)"$`, func(ctx context.Context, want string) error {
 		w := worldFrom(ctx)
-		last, ok := w.runner.task(w.runner.count() - 1)
+		last, ok := w.runner.exec(w.runner.count() - 1)
 		if !ok {
-			return fmt.Errorf("no task reached the model runner")
+			return fmt.Errorf("no exec reached the model runner")
 		}
 		if got := last.Env[model.ClaudeCodeOAuthTokenEnv]; got != want {
-			return fmt.Errorf("the task ran with %s=%q, want %q", model.ClaudeCodeOAuthTokenEnv, got, want)
+			return fmt.Errorf("the exec ran with %s=%q, want %q", model.ClaudeCodeOAuthTokenEnv, got, want)
 		}
 		return nil
 	})
 	// Its own identifier is not extra: every session is told which session it is, so it can name what
 	// it puts in the volume it shares with the sessions beside it. Anything else here is a credential
 	// or an address nobody asked for.
-	sc.Step(`^the task ran with nothing but the session's own identifier$`, func(ctx context.Context) error {
+	sc.Step(`^the exec ran with nothing but the session's own identifier$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		last, ok := w.runner.task(w.runner.count() - 1)
+		last, ok := w.runner.exec(w.runner.count() - 1)
 		if !ok {
-			return fmt.Errorf("no task reached the model runner")
+			return fmt.Errorf("no exec reached the model runner")
 		}
 		for key, value := range last.Env {
 			if key == sandbox.SessionIDEnv && value != "" {
@@ -1224,10 +1222,10 @@ func initializeScenario(sc *godog.ScenarioContext) {
 			if key == telemetry.TraceparentEnv {
 				continue
 			}
-			return fmt.Errorf("the task ran with %s=%q, which it was not given", key, value)
+			return fmt.Errorf("the exec ran with %s=%q, which it was not given", key, value)
 		}
 		if last.Env[sandbox.SessionIDEnv] == "" {
-			return fmt.Errorf("the task ran without %s, so it cannot name a working tree of its own", sandbox.SessionIDEnv)
+			return fmt.Errorf("the exec ran without %s, so it cannot name a working tree of its own", sandbox.SessionIDEnv)
 		}
 		return nil
 	})

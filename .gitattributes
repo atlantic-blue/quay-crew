@@ -1,8 +1,0 @@
-# The changelog is the one file every change used to write, so two changes made at once collided in
-# it by construction. An entry now goes in its own file under changelog.d, and this covers what is
-# left: the release commit, and any branch cut before that convention existed. Union keeps both sides
-# of a conflicting hunk, which is the resolution this file always had.
-#
-# It reaches the merge git performs in a checkout. It does not reach the merge GitHub performs on the
-# button, so it helps the branch rather than the merge, and changelog.d is what fixes the merge.
-CHANGELOG.md merge=union

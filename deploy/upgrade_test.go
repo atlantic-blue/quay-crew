@@ -124,7 +124,7 @@ func prerequisites(t *testing.T, name string) string {
 // TestUpgradePutsTheSessionsDownBeforeTakingTheirContainers.
 //
 // The upgrade removes every sandbox container by name from the daemon. A container removed that way
-// takes the task in flight with it, and the operator reads "model: run exited: exit status 137, and
+// takes the exec in flight with it, and the operator reads "model: run exited: exit status 137, and
 // it said nothing about why" against a conversation they were watching. Draining first asks the system
 // to stop each session, so the row says stopped and the sandbox is closed rather than ripped out.
 //
@@ -134,7 +134,7 @@ func TestUpgradePutsTheSessionsDownBeforeTakingTheirContainers(t *testing.T) {
 
 	drain := strings.Index(recipe, "--no-print-directory drain")
 	if drain < 0 {
-		t.Fatalf("make upgrade never drains, so it takes tasks away from under sessions:\n%s", recipe)
+		t.Fatalf("make upgrade never drains, so it takes execs away from under sessions:\n%s", recipe)
 	}
 	sweep := strings.Index(recipe, "docker rm -f")
 	if sweep < 0 {
@@ -162,7 +162,7 @@ func TestDrainingRefusesTheUpgradeAndSaysHowToGoOverIt(t *testing.T) {
 		t.Fatalf("the drain target does not ask the system to put anything down:\n%s", recipe)
 	}
 	if !strings.Contains(recipe, "FORCE") {
-		t.Errorf("a refused drain does not say how to upgrade over a task in flight:\n%s", recipe)
+		t.Errorf("a refused drain does not say how to upgrade over an exec in flight:\n%s", recipe)
 	}
 	// A machine with no krewe on its path cannot drain, and stopping the upgrade over that would leave
 	// it with no way to upgrade at all.

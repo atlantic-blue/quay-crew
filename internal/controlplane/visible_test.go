@@ -10,22 +10,22 @@ import (
 	"github.com/atlantic-blue/quay-krewe/internal/model"
 )
 
-// A task was recorded only when it ended, so for the minutes or the hours it ran there was nothing to
+// An exec was recorded only when it ended, so for the minutes or the hours it ran there was nothing to
 // see: the listing said idle and the history said the session had been asked nothing. Three sessions
 // worked for over half an hour each and every one of them read that way. These are the cases that
 // stop it coming back, on the path the operator's own terminal takes.
 
-// tasksOf reads a session's history the way every surface reads it.
-func tasksOf(t *testing.T, server *Server, session string) []*quaycrewv1.Task {
+// execsOf reads a session's history the way every surface reads it.
+func execsOf(t *testing.T, server *Server, session string) []*quaycrewv1.Exec {
 	t.Helper()
-	resp, err := server.ListTasks(context.Background(), &quaycrewv1.ListTasksRequest{Session: session})
+	resp, err := server.ListExecs(context.Background(), &quaycrewv1.ListExecsRequest{Session: session})
 	if err != nil {
-		t.Fatalf("ListTasks: %v", err)
+		t.Fatalf("ListExecs: %v", err)
 	}
-	return resp.GetTasks()
+	return resp.GetExecs()
 }
 
-// waitFor blocks until a channel closes, so a test never asserts on a task that has not started.
+// waitFor blocks until a channel closes, so a test never asserts on an exec that has not started.
 func waitFor(t *testing.T, started <-chan struct{}, what string) {
 	t.Helper()
 	select {
@@ -35,9 +35,9 @@ func waitFor(t *testing.T, started <-chan struct{}, what string) {
 	}
 }
 
-// The defect itself. The caller waits, which is what `krewe task` does, so nothing about this
-// task is detached and nothing about it was visible either.
-func TestAWaitedTaskIsVisibleWhileItRuns(t *testing.T) {
+// The defect itself. The caller waits, which is what `krewe exec` does, so nothing about this
+// exec is detached and nothing about it was visible either.
+func TestAWaitedExecIsVisibleWhileItRuns(t *testing.T) {
 	runner := &model.FakeRunner{
 		Reply: "it is a control plane",
 		Gate:  make(chan struct{}), Started: make(chan struct{}),
@@ -56,7 +56,7 @@ func TestAWaitedTaskIsVisibleWhileItRuns(t *testing.T) {
 		}
 		answered <- resp
 	}()
-	waitFor(t, runner.Started, "the task")
+	waitFor(t, runner.Started, "the exec")
 
 	sessions, err := server.ListSessions(context.Background(), &quaycrewv1.ListSessionsRequest{})
 	if err != nil {
@@ -67,18 +67,18 @@ func TestAWaitedTaskIsVisibleWhileItRuns(t *testing.T) {
 	}
 	working := sessions.GetSessions()[0]
 	if working.GetStatus() != StatusRunning {
-		t.Fatalf("a session with a task in it reads %q, want %q", working.GetStatus(), StatusRunning)
+		t.Fatalf("a session with an exec in it reads %q, want %q", working.GetStatus(), StatusRunning)
 	}
 
-	running := tasksOf(t, server, working.GetId())
+	running := execsOf(t, server, working.GetId())
 	if len(running) != 1 {
-		t.Fatalf("%d tasks are recorded while one runs, want 1", len(running))
+		t.Fatalf("%d execs are recorded while one runs, want 1", len(running))
 	}
 	if running[0].GetPrompt() != "read the repository and tell me what it does" {
-		t.Fatalf("the recorded task says %q was asked", running[0].GetPrompt())
+		t.Fatalf("the recorded exec says %q was asked", running[0].GetPrompt())
 	}
 	if running[0].GetStatus() != StatusRunning {
-		t.Fatalf("the recorded task reads %q, want %q", running[0].GetStatus(), StatusRunning)
+		t.Fatalf("the recorded exec reads %q, want %q", running[0].GetStatus(), StatusRunning)
 	}
 
 	close(runner.Gate)
@@ -87,25 +87,25 @@ func TestAWaitedTaskIsVisibleWhileItRuns(t *testing.T) {
 		t.Fatal("the dispatch failed")
 	}
 
-	// The same task, closed. Two rows would mean the operator reads their own prompt twice.
-	landed := tasksOf(t, server, resp.GetId())
+	// The same exec, closed. Two rows would mean the operator reads their own prompt twice.
+	landed := execsOf(t, server, resp.GetId())
 	if len(landed) != 1 {
-		t.Fatalf("%d tasks are recorded after one ran, want 1", len(landed))
+		t.Fatalf("%d execs are recorded after one ran, want 1", len(landed))
 	}
 	if landed[0].GetId() != running[0].GetId() {
-		t.Fatalf("the task that landed is not the one that started: %s then %s", running[0].GetId(), landed[0].GetId())
+		t.Fatalf("the exec that landed is not the one that started: %s then %s", running[0].GetId(), landed[0].GetId())
 	}
 	if landed[0].GetStatus() != StatusIdle || landed[0].GetReply() != "it is a control plane" {
-		t.Fatalf("the landed task came back as %+v", landed[0])
+		t.Fatalf("the landed exec came back as %+v", landed[0])
 	}
 	if got := sessionByID(t, server, resp.GetId()).GetStatus(); got != StatusIdle {
-		t.Fatalf("the session reads %q once its task landed, want %q", got, StatusIdle)
+		t.Fatalf("the session reads %q once its exec landed, want %q", got, StatusIdle)
 	}
 }
 
 // The detached path marked the session running and still recorded nothing, so the console could say a
 // session was working and not say what it was working on.
-func TestADetachedTaskSaysWhatItWasAskedWhileItRuns(t *testing.T) {
+func TestADetachedExecSaysWhatItWasAskedWhileItRuns(t *testing.T) {
 	runner := &model.FakeRunner{
 		Reply: "done", Gate: make(chan struct{}), Started: make(chan struct{}),
 	}
@@ -117,23 +117,23 @@ func TestADetachedTaskSaysWhatItWasAskedWhileItRuns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dispatch: %v", err)
 	}
-	waitFor(t, runner.Started, "the detached task")
+	waitFor(t, runner.Started, "the detached exec")
 
-	running := tasksOf(t, server, resp.GetId())
+	running := execsOf(t, server, resp.GetId())
 	if len(running) != 1 || running[0].GetPrompt() != "order the bulbs" {
-		t.Fatalf("the running task is not in the history: %+v", running)
+		t.Fatalf("the running exec is not in the history: %+v", running)
 	}
 
 	close(runner.Gate)
-	server.tasking.Wait()
-	if landed := tasksOf(t, server, resp.GetId()); len(landed) != 1 || landed[0].GetReply() != "done" {
-		t.Fatalf("the landed task came back as %+v", landed)
+	server.runningExecs.Wait()
+	if landed := execsOf(t, server, resp.GetId()); len(landed) != 1 || landed[0].GetReply() != "done" {
+		t.Fatalf("the landed exec came back as %+v", landed)
 	}
 }
 
-// A task that dies with the process leaves its row open. Closing that row says which task died,
-// rather than that some task did.
-func TestARestartSaysWhichTaskDiedWithIt(t *testing.T) {
+// An exec that dies with the process leaves its row open. Closing that row says which exec died,
+// rather than that some exec did.
+func TestARestartSaysWhichExecDiedWithIt(t *testing.T) {
 	runner := &model.FakeRunner{
 		Reply: "done", Gate: make(chan struct{}), Started: make(chan struct{}),
 	}
@@ -145,21 +145,21 @@ func TestARestartSaysWhichTaskDiedWithIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dispatch: %v", err)
 	}
-	waitFor(t, runner.Started, "the detached task")
+	waitFor(t, runner.Started, "the detached exec")
 
-	server.SettleTasks(context.Background())
+	server.SettleExecs(context.Background())
 
-	settled := tasksOf(t, server, resp.GetId())
+	settled := execsOf(t, server, resp.GetId())
 	if len(settled) != 1 {
-		t.Fatalf("%d tasks are recorded after settling one, want 1", len(settled))
+		t.Fatalf("%d execs are recorded after settling one, want 1", len(settled))
 	}
 	if settled[0].GetPrompt() != "migrate the database" {
-		t.Fatalf("the settled task does not say what died: %+v", settled[0])
+		t.Fatalf("the settled exec does not say what died: %+v", settled[0])
 	}
 	if !strings.Contains(settled[0].GetFailure(), "restarted") {
-		t.Fatalf("the settled task does not say the system restarted: %+v", settled[0])
+		t.Fatalf("the settled exec does not say the system restarted: %+v", settled[0])
 	}
 
 	close(runner.Gate)
-	server.tasking.Wait()
+	server.runningExecs.Wait()
 }

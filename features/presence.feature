@@ -1,7 +1,7 @@
 Feature: A listing says what is inside a session's sandbox
 
-  A session running a conversation read idle. The word only ever meant "no dispatched task is open",
-  and an interactive conversation is not a dispatched task, so a container answering somebody's
+  A session running a conversation read idle. The word only ever meant "no dispatched exec is open",
+  and an interactive conversation is not a dispatched exec, so a container answering somebody's
   question looked exactly like an empty one. Eighteen sandboxes were read on 28 August 2026 and six
   held a running model runtime. Every one of the six listed as idle.
 
@@ -19,7 +19,7 @@ Feature: A listing says what is inside a session's sandbox
 
   What this does not do: the drain and the reclaim are unchanged. The reclaim already asks whether
   somebody is attached and leaves those containers alone; the drain reads the row's own status, so it
-  still refuses over a dispatched task and still puts down a session holding a conversation nobody
+  still refuses over a dispatched exec and still puts down a session holding a conversation nobody
   dispatched. Making the drain refuse over that is its own change.
 
   Background:
@@ -49,21 +49,21 @@ Feature: A listing says what is inside a session's sandbox
     Then the listing says the session is "unknown"
     And the listing does not say the session is idle
 
-  # A dispatched task keeps its own word. Running is what a drain refuses on, and reading the sandbox
+  # A dispatched exec keeps its own word. Running is what a drain refuses on, and reading the sandbox
   # must not overwrite it.
-  Scenario: A task under way still reads running
-    Given the model takes longer over a task than anybody will wait
-    And a task dispatched without waiting for it
-    And a task is under way
+  Scenario: An exec under way still reads running
+    Given the model takes longer over an exec than anybody will wait
+    And an exec dispatched without waiting for it
+    And an exec is under way
     When the operator lists the sessions
     Then the listing says the session is "running"
 
   # The cost rule. One question per row that would otherwise read idle, and nothing at all for a row
   # that already says something is happening. A console redraws every three seconds.
   Scenario: A listing asks nothing about a session that is not idle
-    Given the model takes longer over a task than anybody will wait
-    And a task dispatched without waiting for it
-    And a task is under way
+    Given the model takes longer over an exec than anybody will wait
+    And an exec dispatched without waiting for it
+    And an exec is under way
     When the operator lists the sessions
     Then no sandbox was asked what is inside it
 

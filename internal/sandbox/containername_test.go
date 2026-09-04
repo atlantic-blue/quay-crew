@@ -31,7 +31,7 @@ func TestTheNameTheSystemWritesIsTheFirstOneItReads(t *testing.T) {
 // TestASandboxStartedBeforeTheRenameIsStillItsSessions is the way off the old name, which is the half
 // nobody writes. An operator upgrades with sessions up. Every one of those containers carries the
 // retired name, and a system that could not read it would not drain them, would not remove them, and
-// would start a second container beside each one on the next task.
+// would start a second container beside each one on the next exec.
 func TestASandboxStartedBeforeTheRenameIsStillItsSessions(t *testing.T) {
 	for name, container := range map[string]string{
 		"started by this build":        "krewe-0123456789abcdef01234567",

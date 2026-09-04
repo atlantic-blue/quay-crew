@@ -15,7 +15,7 @@ const Separator = "/"
 // Path is an address into the system: a workspace, optionally a project inside it, optionally a session
 // inside that. "me", "me/house-bills" and "me/house-bills/3cb04bf5" are all paths.
 //
-// It says what the operator typed, not what it points at. Tasking it into identifiers is Resolve's
+// It says what the operator typed, not what it points at. Turning it into identifiers is Resolve's
 // job, because that needs the control plane.
 type Path struct {
 	Workspace string
@@ -80,10 +80,10 @@ type Location struct {
 	SessionID   string
 }
 
-// HasProject reports whether the location reaches a project, which is what a task needs.
+// HasProject reports whether the location reaches a project, which is what an exec needs.
 func (l Location) HasProject() bool { return l.ProjectID != "" }
 
-// ResolvePath tasks an address into identifiers, one level at a time, so a failure names the level
+// ResolvePath execs an address into identifiers, one level at a time, so a failure names the level
 // that failed rather than the whole address.
 //
 // The workspace narrows the project, which is what makes short project names usable: two workspaces
@@ -121,7 +121,7 @@ func ResolvePath(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	return located, nil
 }
 
-// resolveSession tasks a session reference into a session id within one project. Listings shorten
+// resolveSession execs a session reference into a session id within one project. Listings shorten
 // identifiers, so the thing on the operator's screen is a prefix and typing it back has to work.
 //
 // Both identifiers reach the session. A listing prints the id in its own column and the handle in the
@@ -151,7 +151,7 @@ func resolveSession(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 		return "", &NotFoundError{
 			What: "session", Name: reference,
 			Have: identifiersOf(resp.GetSessions()),
-			Make: `start one with krewe task "..."`,
+			Make: `start one with krewe exec "..."`,
 		}
 	case 1:
 		return matches[0].GetHandle(), nil

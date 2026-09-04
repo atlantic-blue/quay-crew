@@ -93,7 +93,7 @@ func measuredDuring(ctx context.Context, name string, want map[string]string) (f
 	return totalOf(now, name, want) - totalOf(metricsFrom(ctx).before, name, want), nil
 }
 
-// initializeMetricsSteps registers the steps for what a task spent.
+// initializeMetricsSteps registers the steps for what an exec spent.
 func initializeMetricsSteps(sc *godog.ScenarioContext) {
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		before, err := recorded()
@@ -143,32 +143,32 @@ func initializeMetricsSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the system counts one task, which failed$`, func(ctx context.Context) error {
+	sc.Step(`^the system counts one exec, which failed$`, func(ctx context.Context) error {
 		if err := worldFrom(ctx).settled(ctx); err != nil {
 			return err
 		}
-		got, err := measuredDuring(ctx, telemetry.TasksMetric, map[string]string{
+		got, err := measuredDuring(ctx, telemetry.ExecsMetric, map[string]string{
 			telemetry.StatusAttribute: "failed",
 		})
 		if err != nil {
 			return err
 		}
 		if got != 1 {
-			return fmt.Errorf("the system counted %v failed tasks, want 1", got)
+			return fmt.Errorf("the system counted %v failed execs, want 1", got)
 		}
 		return nil
 	})
 
-	sc.Step(`^the system counts one task$`, func(ctx context.Context) error {
+	sc.Step(`^the system counts one exec$`, func(ctx context.Context) error {
 		if err := worldFrom(ctx).settled(ctx); err != nil {
 			return err
 		}
-		got, err := measuredDuring(ctx, telemetry.TasksMetric, nil)
+		got, err := measuredDuring(ctx, telemetry.ExecsMetric, nil)
 		if err != nil {
 			return err
 		}
 		if got != 1 {
-			return fmt.Errorf("the system counted %v tasks, want 1", got)
+			return fmt.Errorf("the system counted %v execs, want 1", got)
 		}
 		return nil
 	})
@@ -179,14 +179,14 @@ func initializeMetricsSteps(sc *godog.ScenarioContext) {
 			return err
 		}
 		if tokens != 0 {
-			return fmt.Errorf("the system measured %v tokens for a task that reported none, want none", tokens)
+			return fmt.Errorf("the system measured %v tokens for an exec that reported none, want none", tokens)
 		}
 		cost, err := measuredDuring(ctx, telemetry.CostMetric, nil)
 		if err != nil {
 			return err
 		}
 		if cost != 0 {
-			return fmt.Errorf("the system measured %v of cost for a task that reported none, want none", cost)
+			return fmt.Errorf("the system measured %v of cost for an exec that reported none, want none", cost)
 		}
 		return nil
 	})

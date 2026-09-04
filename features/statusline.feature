@@ -3,13 +3,13 @@ Feature: An attached operator sees how much of the model's context window is use
   Attaching to a session puts you in the conversation, talking to the model directly. Everything the
   system knows about that conversation is on the other screen, and one number decides whether the
   conversation is still worth continuing: how much of the model's context window it has filled. It was
-  nowhere. Not in the console, not in the panel's header, and asking the model for it costs a task and
+  nowhere. Not in the console, not in the panel's header, and asking the model for it costs an exec and
   fills a little more of the window to answer.
 
   So the session says it itself. The model runtime keeps a line under the prompt and redraws it every
   time the conversation moves, and the sandbox image points that line at krewe. The line is always
   there, it costs nothing, and from thirty per cent it stops being information and starts being a
-  warning: what an operator does about a full window, finishing the task, compacting, or opening a
+  warning: what an operator does about a full window, finishing the exec, compacting, or opening a
   fresh session, is much cheaper decided at thirty than at ninety.
 
   The window's size is the runtime's to say rather than this build's to remember. A runtime that does

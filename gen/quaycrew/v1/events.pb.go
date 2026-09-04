@@ -24,18 +24,18 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// TaskEvent is written to the event log every time a task runs, whether it worked or not.
+// ExecEvent is written to the event log every time an exec runs, whether it worked or not.
 //
 // This is the audit record: the store keeps the current state of a session, and the log keeps what
 // happened to it, in order. A projection reads these back into a queryable read model, which is why
 // the event carries enough to rebuild a conversation without reading anything else.
-type TaskEvent struct {
+type ExecEvent struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// id identifies this record. Delivery from the log is at least once, so a consumer sees the same
 	// record more than once and needs something to recognise it by: the projection writes it as the
 	// primary key and lets a repeat collide harmlessly.
 	Id string `protobuf:"bytes,10,opt,name=id,proto3" json:"id,omitempty"`
-	// session is the session the task ran in, and the key the record is published under, so one
+	// session is the session the exec ran in, and the key the record is published under, so one
 	// session's events stay in order on one partition.
 	Session string `protobuf:"bytes,1,opt,name=session,proto3" json:"session,omitempty"`
 	// workspace and project are where the session sits, denormalised deliberately: a consumer must not
@@ -44,18 +44,18 @@ type TaskEvent struct {
 	Project   string `protobuf:"bytes,3,opt,name=project,proto3" json:"project,omitempty"`
 	// handle is the channel's own name for the conversation.
 	Handle string `protobuf:"bytes,4,opt,name=handle,proto3" json:"handle,omitempty"`
-	// prompt is what was asked. reply is what came back, empty when the task failed.
+	// prompt is what was asked. reply is what came back, empty when the exec failed.
 	Prompt string `protobuf:"bytes,5,opt,name=prompt,proto3" json:"prompt,omitempty"`
 	Reply  string `protobuf:"bytes,6,opt,name=reply,proto3" json:"reply,omitempty"`
-	// status is the session's status after the task: "idle" when it worked, "failed" when it did not.
+	// status is the session's status after the exec: "idle" when it worked, "failed" when it did not.
 	Status string `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"`
-	// failure says what went wrong, empty on a task that worked. It is the operator's sentence, not a
-	// stack trace, and it never carries the contents of the environment a task ran with.
+	// failure says what went wrong, empty on an exec that worked. It is the operator's sentence, not a
+	// stack trace, and it never carries the contents of the environment an exec ran with.
 	Failure string `protobuf:"bytes,8,opt,name=failure,proto3" json:"failure,omitempty"`
-	// occurred_at is when the task finished.
+	// occurred_at is when the exec finished.
 	OccurredAt *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
-	// trace_id is the trace the call that ran this task belonged to, 32 hexadecimal characters, and
-	// empty for a task nothing was tracing. It is the one value that joins this record to the trace
+	// trace_id is the trace the call that ran this exec belonged to, 32 hexadecimal characters, and
+	// empty for an exec nothing was tracing. It is the one value that joins this record to the trace
 	// and to every log line written under it, because the system's correlation id is the trace id
 	// rather than a second identifier beside it. Without it the durable record of what the system did
 	// links to neither, and weeks later the logs are gone and the row is all that is left. See
@@ -65,20 +65,20 @@ type TaskEvent struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *TaskEvent) Reset() {
-	*x = TaskEvent{}
+func (x *ExecEvent) Reset() {
+	*x = ExecEvent{}
 	mi := &file_quaycrew_v1_events_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *TaskEvent) String() string {
+func (x *ExecEvent) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*TaskEvent) ProtoMessage() {}
+func (*ExecEvent) ProtoMessage() {}
 
-func (x *TaskEvent) ProtoReflect() protoreflect.Message {
+func (x *ExecEvent) ProtoReflect() protoreflect.Message {
 	mi := &file_quaycrew_v1_events_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -90,82 +90,82 @@ func (x *TaskEvent) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use TaskEvent.ProtoReflect.Descriptor instead.
-func (*TaskEvent) Descriptor() ([]byte, []int) {
+// Deprecated: Use ExecEvent.ProtoReflect.Descriptor instead.
+func (*ExecEvent) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_events_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *TaskEvent) GetId() string {
+func (x *ExecEvent) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *TaskEvent) GetSession() string {
+func (x *ExecEvent) GetSession() string {
 	if x != nil {
 		return x.Session
 	}
 	return ""
 }
 
-func (x *TaskEvent) GetWorkspace() string {
+func (x *ExecEvent) GetWorkspace() string {
 	if x != nil {
 		return x.Workspace
 	}
 	return ""
 }
 
-func (x *TaskEvent) GetProject() string {
+func (x *ExecEvent) GetProject() string {
 	if x != nil {
 		return x.Project
 	}
 	return ""
 }
 
-func (x *TaskEvent) GetHandle() string {
+func (x *ExecEvent) GetHandle() string {
 	if x != nil {
 		return x.Handle
 	}
 	return ""
 }
 
-func (x *TaskEvent) GetPrompt() string {
+func (x *ExecEvent) GetPrompt() string {
 	if x != nil {
 		return x.Prompt
 	}
 	return ""
 }
 
-func (x *TaskEvent) GetReply() string {
+func (x *ExecEvent) GetReply() string {
 	if x != nil {
 		return x.Reply
 	}
 	return ""
 }
 
-func (x *TaskEvent) GetStatus() string {
+func (x *ExecEvent) GetStatus() string {
 	if x != nil {
 		return x.Status
 	}
 	return ""
 }
 
-func (x *TaskEvent) GetFailure() string {
+func (x *ExecEvent) GetFailure() string {
 	if x != nil {
 		return x.Failure
 	}
 	return ""
 }
 
-func (x *TaskEvent) GetOccurredAt() *timestamppb.Timestamp {
+func (x *ExecEvent) GetOccurredAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.OccurredAt
 	}
 	return nil
 }
 
-func (x *TaskEvent) GetTraceId() string {
+func (x *ExecEvent) GetTraceId() string {
 	if x != nil {
 		return x.TraceId
 	}
@@ -303,7 +303,7 @@ var File_quaycrew_v1_events_proto protoreflect.FileDescriptor
 const file_quaycrew_v1_events_proto_rawDesc = "" +
 	"\n" +
 	"\x18quaycrew/v1/events.proto\x12\vquaycrew.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xbd\x02\n" +
-	"\tTaskEvent\x12\x0e\n" +
+	"\tExecEvent\x12\x0e\n" +
 	"\x02id\x18\n" +
 	" \x01(\tR\x02id\x12\x18\n" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x1c\n" +
@@ -343,12 +343,12 @@ func file_quaycrew_v1_events_proto_rawDescGZIP() []byte {
 
 var file_quaycrew_v1_events_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_quaycrew_v1_events_proto_goTypes = []any{
-	(*TaskEvent)(nil),             // 0: quaycrew.v1.TaskEvent
+	(*ExecEvent)(nil),             // 0: quaycrew.v1.ExecEvent
 	(*SessionEvent)(nil),          // 1: quaycrew.v1.SessionEvent
 	(*timestamppb.Timestamp)(nil), // 2: google.protobuf.Timestamp
 }
 var file_quaycrew_v1_events_proto_depIdxs = []int32{
-	2, // 0: quaycrew.v1.TaskEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	2, // 0: quaycrew.v1.ExecEvent.occurred_at:type_name -> google.protobuf.Timestamp
 	2, // 1: quaycrew.v1.SessionEvent.occurred_at:type_name -> google.protobuf.Timestamp
 	2, // [2:2] is the sub-list for method output_type
 	2, // [2:2] is the sub-list for method input_type

@@ -71,12 +71,12 @@ func TestBuildArgsResumeAndMode(t *testing.T) {
 }
 
 // The pair. A conversation the runtime has never seen is started under the name the system gave it, and
-// one it has seen is resumed by that name. Both, because getting either wrong fails the task: resuming
+// one it has seen is resumed by that name. Both, because getting either wrong fails the exec: resuming
 // a name with nothing behind it prints "No conversation found" and exits, and starting a name that is
 // already there is refused as one in use.
 //
-// The first of the two is the defect this pair exists for. A first task carried no name at all, so the
-// runtime named its own conversation and told nobody until the task was over, and anybody opening the
+// The first of the two is the defect this pair exists for. A first exec carried no name at all, so the
+// runtime named its own conversation and told nobody until the exec was over, and anybody opening the
 // session while it worked opened an empty conversation beside the job.
 func TestBuildArgsStartsAConversationTheRuntimeHasNotSeenAndResumesOneItHas(t *testing.T) {
 	for _, tc := range []struct {
@@ -89,12 +89,12 @@ func TestBuildArgsStartsAConversationTheRuntimeHasNotSeenAndResumesOneItHas(t *t
 		{
 			name: "the system has named it and nothing has opened it", started: false,
 			want: "--session-id sess-1", absent: "--resume",
-			because: "the task is what makes the name true, and there is no transcript to resume",
+			because: "the exec is what makes the name true, and there is no transcript to resume",
 		},
 		{
 			name: "the runtime has opened it already", started: true,
 			want: "--resume sess-1", absent: "--session-id",
-			because: "it is the same conversation and the task continues it",
+			because: "it is the same conversation and the exec continues it",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -102,23 +102,23 @@ func TestBuildArgsStartsAConversationTheRuntimeHasNotSeenAndResumesOneItHas(t *t
 				Text: "go on", ModelSessionID: "sess-1", ConversationStarted: tc.started,
 			}, ""), " ")
 			if !strings.Contains(got, tc.want) {
-				t.Errorf("the task is %q, want it to carry %q, because %s", got, tc.want, tc.because)
+				t.Errorf("the exec is %q, want it to carry %q, because %s", got, tc.want, tc.because)
 			}
 			if strings.Contains(got, tc.absent) {
-				t.Errorf("the task is %q, and it must not carry %q, because %s", got, tc.absent, tc.because)
+				t.Errorf("the exec is %q, and it must not carry %q, because %s", got, tc.absent, tc.because)
 			}
 		})
 	}
 }
 
-// A task with no conversation at all names none, which leaves the runtime to name its own. It is what
-// a system that could not name one falls back to, and it must stay a fallback: nothing that runs a task
+// An exec with no conversation at all names none, which leaves the runtime to name its own. It is what
+// a system that could not name one falls back to, and it must stay a fallback: nothing that runs an exec
 // through the control plane arrives here, because the system names the conversation first.
 func TestBuildArgsNamesNoConversationWhenItHasNone(t *testing.T) {
 	got := strings.Join(buildArgs(Request{Text: "go on"}, ""), " ")
 	for _, absent := range []string{"--session-id", "--resume"} {
 		if strings.Contains(got, absent) {
-			t.Fatalf("the task is %q, and it names a conversation nobody chose with %q", got, absent)
+			t.Fatalf("the exec is %q, and it names a conversation nobody chose with %q", got, absent)
 		}
 	}
 }
@@ -157,20 +157,20 @@ func TestConversationCheckSpeaksUpOnlyWhenTheRuntimeIgnoredTheName(t *testing.T)
 	}
 }
 
-// A task says which model it wants, and a task that has not been told says nothing rather than
+// An exec says which model it wants, and an exec that has not been told says nothing rather than
 // guessing. The command line tool picks Sonnet when nobody says, which is how every session came to
 // run Sonnet while the system was configured for Claude Code and nothing anywhere was wrong.
 func TestBuildArgsNamesTheModel(t *testing.T) {
 	got := strings.Join(buildArgs(Request{Text: "do a thing"}, "claude-opus-5"), " ")
 	if !strings.Contains(got, "--model claude-opus-5") {
-		t.Fatalf("the task does not name the model: %q", got)
+		t.Fatalf("the exec does not name the model: %q", got)
 	}
 }
 
 func TestBuildArgsLeavesTheModelToTheToolWhenUnset(t *testing.T) {
 	got := strings.Join(buildArgs(Request{Text: "do a thing"}, ""), " ")
 	if strings.Contains(got, "--model") {
-		t.Fatalf("the task names a model nobody chose: %q", got)
+		t.Fatalf("the exec names a model nobody chose: %q", got)
 	}
 }
 
@@ -315,15 +315,15 @@ func (s failingSandbox) Exec(context.Context, sandbox.Spec) (sandbox.Process, er
 }
 func (failingSandbox) Close(context.Context) error { return nil }
 
-// realRefusal is the result event a task actually produced against a rejected subscription token,
+// realRefusal is the result event an exec actually produced against a rejected subscription token,
 // captured from a sandbox on 5 August 2026 and trimmed to the fields this reads. It is here rather
 // than invented because the whole defect was that nobody had looked at what the model says.
 const realRefusal = `{"type":"result","is_error":true,"api_error_status":401,` +
 	`"result":"Failed to authenticate. API Error: 401 Invalid bearer token","session_id":"b47db557"}`
 
-// TestAFailedTaskSaysWhy: every model failure read "run exited: exit status 1", which is the same
+// TestAFailedExecSaysWhy: every model failure read "run exited: exit status 1", which is the same
 // sentence for an expired token, a network failure, a missing binary and the model refusing.
-func TestAFailedTaskSaysWhy(t *testing.T) {
+func TestAFailedExecSaysWhy(t *testing.T) {
 	for _, test := range []struct {
 		name   string
 		proc   failingProcess
@@ -341,7 +341,7 @@ func TestAFailedTaskSaysWhy(t *testing.T) {
 			wants: []string{"claude: command not found", "exit status 127"},
 		},
 		{
-			// Captured on 6 August 2026 by dispatching a task at a sandbox with no model in its
+			// Captured on 6 August 2026 by dispatching an exec at a sandbox with no model in its
 			// image. The Docker command line puts this on standard output, not on the error stream,
 			// so it arrived where a stream event was expected and was discarded as noise.
 			name: "what the daemon said on standard output, when the model never ran at all",
@@ -362,7 +362,7 @@ func TestAFailedTaskSaysWhy(t *testing.T) {
 			runner := NewClaudeCodeRunner()
 			_, err := runner.Run(context.Background(), failingSandbox{proc: test.proc}, Request{Text: "hello"})
 			if err == nil {
-				t.Fatal("the task reported success")
+				t.Fatal("the exec reported success")
 			}
 			for _, want := range test.wants {
 				if !strings.Contains(err.Error(), want) {
@@ -373,9 +373,9 @@ func TestAFailedTaskSaysWhy(t *testing.T) {
 	}
 }
 
-// TestAFailedTaskNeverCarriesTheToken. The task runs with the subscription token in its environment,
+// TestAFailedExecNeverCarriesTheToken. The exec runs with the subscription token in its environment,
 // so every place a failure can quote is a place the token turns up. An error is a thing people paste.
-func TestAFailedTaskNeverCarriesTheToken(t *testing.T) {
+func TestAFailedExecNeverCarriesTheToken(t *testing.T) {
 	const token = "sk-ant-oat01-hVnQ2mXk9pLrT4wYzB7cD1fG5jH8sN0aE3iU6oP"
 	for _, test := range []struct {
 		name string
@@ -397,7 +397,7 @@ func TestAFailedTaskNeverCarriesTheToken(t *testing.T) {
 				Env:  map[string]string{ClaudeCodeOAuthTokenEnv: token},
 			})
 			if err == nil {
-				t.Fatal("the task reported success")
+				t.Fatal("the exec reported success")
 			}
 			if strings.Contains(err.Error(), token) {
 				t.Fatalf("the failure carries the token: %q", err)
@@ -443,27 +443,27 @@ type exited struct{ status int }
 func (e exited) Error() string { return fmt.Sprintf("exit status %d", e.status) }
 func (e exited) ExitCode() int { return e.status }
 
-// TestATaskKilledForMemorySaysSoRatherThanShowingAnExitStatus.
+// TestAExecKilledForMemorySaysSoRatherThanShowingAnExitStatus.
 //
 // Nothing killed with signal 9 gets to say why: no last line on either stream, and the kernel log is
 // not readable from inside a container. So the operator read "run exited: exit status 137, and it
 // said nothing about why" and could not tell a session that ran out of memory from a session whose
 // container was taken away by an upgrade. Both are named now, and the command that answers which one
 // it was is named with them.
-func TestATaskKilledForMemorySaysSoRatherThanShowingAnExitStatus(t *testing.T) {
+func TestAExecKilledForMemorySaysSoRatherThanShowingAnExitStatus(t *testing.T) {
 	runner := NewClaudeCodeRunner()
 	_, err := runner.Run(context.Background(),
 		failingSandbox{proc: failingProcess{exit: exited{status: 137}}}, Request{Text: "hello"})
 	if err == nil {
-		t.Fatal("a killed task reported success")
+		t.Fatal("a killed exec reported success")
 	}
 	for _, want := range []string{"a kill rather than a failure", "krewe room", "container went away"} {
 		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("a task killed for memory says %q, want it to say %q", err, want)
+			t.Fatalf("an exec killed for memory says %q, want it to say %q", err, want)
 		}
 	}
 	if strings.Contains(err.Error(), "said nothing about why") {
-		t.Fatalf("a killed task is still reported as saying nothing: %q", err)
+		t.Fatalf("a killed exec is still reported as saying nothing: %q", err)
 	}
 }
 

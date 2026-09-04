@@ -83,7 +83,7 @@ type dir struct {
 // read the conversation of the session that wrote it, and the memory file in that directory is the
 // workspace's own, read by every session in it: a role given no context would have to blank a file
 // that is not its to blank. Its own directory answers both. What it costs is that a role session's
-// conversation cannot be resumed from another project, which is not something a sub task does.
+// conversation cannot be resumed from another project, which is not something a sub exec does.
 func layout(cfg Config) []dir {
 	conversation := []string{"workspaces", cfg.Workspace, "claude"}
 	if cfg.Role != "" {

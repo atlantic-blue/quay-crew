@@ -44,7 +44,7 @@ func initializeAddressSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the operator addresses the session by its first eight characters$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -63,7 +63,7 @@ func initializeAddressSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the operator labels the session "([^"]*)"$`, func(ctx context.Context, label string) error {
 		w := worldFrom(ctx)
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -98,7 +98,7 @@ func initializeAddressSteps(sc *godog.ScenarioContext) {
 		if a.err == nil {
 			return fmt.Errorf("the address resolved, expected a refusal")
 		}
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -138,7 +138,7 @@ func initializeAddressSteps(sc *godog.ScenarioContext) {
 			return fmt.Errorf("it reached workspace %q, want %q", a.located.WorkspaceID, w.workspaceID)
 		}
 		if a.located.HasProject() {
-			return fmt.Errorf("it reached project %q, want none: a workspace is not somewhere a task runs", a.located.ProjectID)
+			return fmt.Errorf("it reached project %q, want none: a workspace is not somewhere an exec runs", a.located.ProjectID)
 		}
 		return nil
 	})
@@ -148,7 +148,7 @@ func initializeAddressSteps(sc *godog.ScenarioContext) {
 		if a.err != nil {
 			return fmt.Errorf("the address did not resolve: %w", a.err)
 		}
-		current, err := w.lastTask()
+		current, err := w.lastExec()
 		if err != nil {
 			return err
 		}
@@ -186,7 +186,7 @@ func initializeAddressSteps(sc *godog.ScenarioContext) {
 // workspace, the project, and the shortened id from the first column.
 func addressAtTheListedID(ctx context.Context) (string, error) {
 	w := worldFrom(ctx)
-	current, err := w.lastTask()
+	current, err := w.lastExec()
 	if err != nil {
 		return "", err
 	}
