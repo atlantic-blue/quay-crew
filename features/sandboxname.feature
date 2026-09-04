@@ -9,7 +9,7 @@ Feature: A sandbox is named after the command, and the name it had before is sti
   sessions up, and every container they already have carries the old one. A system that reads only the
   new name does not drain those, does not remove them, and starts a second container beside each one on
   the next exec, while the first keeps running and keeps the machine's memory. So the system writes one
-  name and reads both, until the release the changelog names.
+  name and reads both.
 
   The exact shape is the whole of the safety. The stack the system runs in is a compose project called
   quaycrew, so its own store, broker and dashboards carry the retired prefix too, and a reader looser

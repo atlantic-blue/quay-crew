@@ -206,8 +206,7 @@ const ContainerPrefix = "krewe-"
 // RetiredContainerPrefix is what a sandbox that started before the rename is called. Every reader
 // takes both for one release, because a container the system cannot see is one it cannot drain, cannot
 // remove and cannot adopt: the next start of that session puts a second container beside the first,
-// and the memory the first holds is never given back. The release that stops reading it is named in
-// the changelog.
+// and the memory the first holds is never given back.
 const RetiredContainerPrefix = "quaycrew-"
 
 // SessionIDLength is how many characters a session identifier has, which is what tells a sandbox

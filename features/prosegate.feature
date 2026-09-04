@@ -1,7 +1,7 @@
 Feature: Prose written for a person is held to the standard
 
-  Every role in this system writes prose for a person: pull request descriptions, changelog
-  fragments, issue bodies, commit messages, documentation. The standard for that prose is Simplified
+  Every role in this system writes prose for a person: pull request descriptions, issue bodies,
+  commit messages, documentation. The standard for that prose is Simplified
   Technical English, ASD-STE100. Until this, it was a sentence in a brief, which is the position the
   merge rule was in before the merge gate.
 

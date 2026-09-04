@@ -1,9 +1,8 @@
 // prose-gate holds the prose this system writes to Simplified Technical English, for the part of it
 // that is measurable.
 //
-// Every role here writes prose for a person: pull request descriptions, changelog fragments, issue
-// bodies, commit messages, documentation. The standard for that prose is ASD-STE100, and until this
-// hook it was a sentence in a brief, which is the position the merge rule was in before merge-gate.
+// Every role here writes prose for a person: pull request descriptions, issue bodies, commit
+// messages, documentation. The standard for that prose is ASD-STE100, and until this hook it was a sentence in a brief, which is the position the merge rule was in before merge-gate.
 //
 // A hook can hold part of it. Not all of it, and being honest about which part is the whole design.
 // The rules in rules.go are the part a program can measure exactly. The approved vocabulary and the

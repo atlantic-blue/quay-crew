@@ -12,7 +12,7 @@ import (
 )
 
 // The promises scenarios touch the control plane nowhere. What they prove is a property of this
-// repository: a change that touches behaviour carries a changelog entry and a scenario, or says in
+// repository: a change that touches behaviour carries a scenario, or says in
 // the pull request body why it has neither. So they build a real git repository per scenario, make a
 // real change on a branch of it, and run the real command continuous integration runs.
 
@@ -234,20 +234,6 @@ func initializePromisesSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^it also edits "([^"]*)"$`, func(ctx context.Context, path string) error {
-		p := promisesFrom(ctx)
-		p.ops = append(p.ops, changeOp{path: path, what: "edits"})
-		return nil
-	})
-
-	sc.Step(`^it says an entry is its own file now$`, func(ctx context.Context) error {
-		p := promisesFrom(ctx)
-		if !strings.Contains(p.said, "CHANGELOG.md") || !strings.Contains(p.said, "its own file under changelog.d") {
-			return fmt.Errorf("it never says where an entry goes now:\n%s", p.said)
-		}
-		return nil
-	})
-
 	sc.Step(`^the pull request body shows the reason as a fenced example$`, func(ctx context.Context) error {
 		p := promisesFrom(ctx)
 		p.body = "**What.** The check reads the diff. The way out of the scenario looks like this:\n\n" +
@@ -257,7 +243,7 @@ func initializePromisesSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^it prints the line that would say why there is none$`, func(ctx context.Context) error {
 		p := promisesFrom(ctx)
-		if !strings.Contains(p.said, "No changelog entry:") {
+		if !strings.Contains(p.said, "No scenario:") {
 			return fmt.Errorf("it refused without saying how to say why:\n%s", p.said)
 		}
 		return nil

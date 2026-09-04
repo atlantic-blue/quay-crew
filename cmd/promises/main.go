@@ -1,8 +1,8 @@
-// Command promises refuses a change that touches behaviour and carries neither a changelog entry nor
+// Command promises refuses a change that touches behaviour and carries neither
 // a scenario, unless the pull request body says why it has none.
 //
 // It reads the diff, which is the thing no other check reads. Continuous integration proves the code
-// runs; it does not know this repository promises a reader an entry in CHANGELOG.md and a scenario in
+// runs; it does not know this repository promises a reader a scenario in
 // features/ for every behaviour, so that promise held for exactly as long as whoever opened the pull
 // request remembered it.
 //
@@ -10,8 +10,8 @@
 //
 //	make promises
 //
-// It is a repository tool rather than a system capability, for the same reason cmd/changelog is: an
-// operator's system has no changelog.d and no features directory, and a command that cannot work
+// It is a repository tool rather than a system capability: an operator's system has no features
+// directory, and a command that cannot work
 // anywhere but here does not belong in the binary they install.
 package main
 
@@ -71,7 +71,7 @@ func run(repo, base, head, body string) error {
 func say(files []promise.File) {
 	behaviour := promise.Behaviour(files)
 	if len(behaviour) == 0 {
-		fmt.Printf("read %d changed files, and none of them is behaviour, so this change is asked for neither a changelog entry nor a scenario\n", len(files))
+		fmt.Printf("read %d changed files, and none of them is behaviour, so this change is asked for no scenario\n", len(files))
 		return
 	}
 	fmt.Printf("read %d changed files, %d of them behaviour, and this change carries what it promises\n", len(files), len(behaviour))

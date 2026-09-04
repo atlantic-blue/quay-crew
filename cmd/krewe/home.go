@@ -13,7 +13,7 @@ const HomeEnv = "KREWE_HOME"
 
 // RetiredHomeEnv is what that variable was called before the rename. It is read for one release, so a
 // shell profile, a script or a service file that sets it still points at the same directory rather
-// than sending the system to a fresh one. The release that stops reading it is in the changelog.
+// than sending the system to a fresh one.
 const RetiredHomeEnv = "QUAY_HOME"
 
 // HomeDir is the directory itself, under the operator's home, and RetiredHomeDir is what it was called

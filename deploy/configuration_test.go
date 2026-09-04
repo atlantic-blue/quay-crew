@@ -57,9 +57,6 @@ func TestTheConfigurationPathIsOutsideTheCheckout(t *testing.T) {
 // purpose are the ones that refuse it, and they name only that one. Exempting a whole file instead
 // would stop it being scanned for the others: the tool has to keep naming ~/.quaycrew in its
 // refusal, and still must never send anybody back to a checkout env file.
-//
-// The changelog is exempt from all of them. It records what shipped on the day it shipped, and
-// rewriting it would make it a worse record.
 func TestNothingSendsTheOperatorToARetiredLocation(t *testing.T) {
 	home := filepath.Join("cmd", "krewe", "home.go")
 	homeTest := filepath.Join("cmd", "krewe", "home_test.go")
@@ -67,9 +64,7 @@ func TestNothingSendsTheOperatorToARetiredLocation(t *testing.T) {
 
 	// The directory, not the product's name: com.quaycrew.build is a docker label and stays.
 	oneSystemDirectory := []string{home, homeTest, itself}
-	// The plan keeps naming the directory that went, the way the changelog does: it is the record of
-	// the move rather than an instruction to a reader.
-	theRecordOfTheMove := append([]string{"docs/RENAME.md"}, oneSystemDirectory...)
+	theRecordOfTheMove := oneSystemDirectory
 	// The retired variable is read on purpose, for one release, so a shell profile that exports it
 	// still points the stack at the operator's own directory. The makefile reads it, the scenario that
 	// proves an operator who exports it still lands in their own system sets it, and the entry that
@@ -77,7 +72,6 @@ func TestNothingSendsTheOperatorToARetiredLocation(t *testing.T) {
 	readsTheRetiredOne := append([]string{
 		"Makefile",
 		filepath.Join("features", "systemdirectory_steps_test.go"),
-		filepath.Join("changelog.d", "517-the-system-keeps-its-things-in-krewe.md"),
 	}, theRecordOfTheMove...)
 	retired := []struct {
 		path    string
@@ -110,7 +104,7 @@ func TestNothingSendsTheOperatorToARetiredLocation(t *testing.T) {
 	}
 
 	for _, path := range strings.Split(strings.TrimSpace(string(tracked)), "\n") {
-		if path == "" || path == "CHANGELOG.md" || strings.HasPrefix(path, "gen/") {
+		if path == "" || strings.HasPrefix(path, "gen/") {
 			continue
 		}
 		body, err := os.ReadFile(filepath.Join("..", path))

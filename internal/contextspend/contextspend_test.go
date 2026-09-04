@@ -110,7 +110,7 @@ func TestAFileIsAReadHoweverItWasOpened(t *testing.T) {
 		{contextspend.Shell, "cat internal/job/controller.go"},
 		{contextspend.Shell, "sed -n '1,50p' internal/job/controller.go"},
 		{contextspend.Shell, "head -50 go.mod"},
-		{contextspend.Shell, "tail -n 20 CHANGELOG.md"},
+		{contextspend.Shell, "tail -n 20 README.md"},
 		{contextspend.Shell, "/bin/cat go.mod"},
 		{contextspend.Shell, "cat go.mod | grep require"},
 	} {

@@ -59,7 +59,7 @@ SANDBOX_IMAGE := krewe-sandbox-claude:local
 # after an upgrade fails on an image that is not there, which reads as a broken system.
 RETIRED_SANDBOX_IMAGE := quaycrew-sandbox-claude:local
 
-.PHONY: up start upgrade up-observability down drain logs ps proto build install tool test features lint fmt tidy sandbox-image image rebuild config env-check up-check hooks changelog promises help
+.PHONY: up start upgrade up-observability down drain logs ps proto build install tool test features lint fmt tidy sandbox-image image rebuild config env-check up-check hooks promises help
 
 # print-<name> is what a variable expands to. The tests that check where configuration lives read it
 # through this, so they see what make actually computes rather than a pattern matched over the text.
@@ -140,8 +140,7 @@ rebuild: tool hooks sandbox-image
 ## sandbox-image: build the Claude Code sandbox image (tag krewe-sandbox-claude:local)
 #
 # Tagged twice, one image. The second tag is the name this image had before the rename, and it is
-# there for the operator whose configuration file still pins it. It goes in the release named in the
-# changelog.
+# there for the operator whose configuration file still pins it, and it goes in a later release.
 sandbox-image:
 	docker build --build-arg QC_VERSION=$(VERSION) -f deploy/sandbox/claude.Dockerfile -t $(SANDBOX_IMAGE) .
 	docker tag $(SANDBOX_IMAGE) $(RETIRED_SANDBOX_IMAGE)
@@ -174,7 +173,7 @@ env-check:
 	if grep -qE "^QC_SANDBOX_IMAGE=[[:space:]]*$(RETIRED_SANDBOX_IMAGE)[[:space:]]*$$" "$(ENV_FILE)"; then \
 		echo "note: $(ENV_FILE) pins QC_SANDBOX_IMAGE=$(RETIRED_SANDBOX_IMAGE), which is the retired name"; \
 		echo "      for the image now built as $(SANDBOX_IMAGE). make sandbox-image still tags it under both,"; \
-		echo "      and the release that stops doing that is in the changelog. Set QC_SANDBOX_IMAGE=$(SANDBOX_IMAGE)."; \
+		echo "      and a later release stops doing that. Set QC_SANDBOX_IMAGE=$(SANDBOX_IMAGE)."; \
 	fi
 
 ## upgrade: fetch the latest, rebuild the tool and the stack, and restart it
@@ -364,16 +363,7 @@ test: hooks
 features: hooks
 	go test ./features/... -v -count=1
 
-## changelog: assemble the pending changelog fragments into one dated section
-#
-# Every change writes its entry as its own file under changelog.d, so two changes made at once never
-# write the same file. This is where they come back together. It prints, and writes nothing: paste
-# the section under the heading in CHANGELOG.md and delete the fragments in the same commit, so a
-# release is one change a person read rather than a file a command rewrote.
-changelog:
-	@go run ./cmd/changelog
-
-## promises: refuse a change that touches behaviour and carries no changelog entry and no scenario
+## promises: refuse a change that touches behaviour and carries no scenario
 #
 # The question continuous integration asks on a pull request, asked here before pushing. It reads what
 # this branch changed against origin/main. There is no pull request body on a machine, so a change
