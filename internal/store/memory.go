@@ -41,6 +41,9 @@ type Memory struct {
 	// steps is each project's path, keyed by project and held in number order. A project with no
 	// entry has no path, which is the normal state.
 	steps map[string][]*quaycrewv1.Step
+	// features is each project's narrowed parts, keyed by project and held in number order. A project
+	// with no entry has no feature, which is the normal state.
+	features map[string][]*quaycrewv1.Feature
 	// repositories are the repositories each workspace works in, in the order they were added.
 	// skills is every revision the system holds, keyed by name and version, and attached is which
 	// version of which skill each workspace pinned.
@@ -750,6 +753,122 @@ func copySteps(steps []*quaycrewv1.Step) []*quaycrewv1.Step {
 		copied = append(copied, proto.Clone(step).(*quaycrewv1.Step))
 	}
 	return copied
+}
+
+// The narrowed parts of a project: the listing, the add that gives the number, and the one line
+// saying what a feature narrows to.
+
+// ListFeatures returns a project's features in number order, or every project's when it names none.
+//
+// A deleted project's features are left out for every project as well as for one, for the reason
+// ListSteps leaves out its path: a project here is deleted by a stamp, so nothing cascades, and a
+// listing that read the map alone would answer with the features of a project nobody can reach.
+func (m *Memory) ListFeatures(_ context.Context, project string) ([]*quaycrewv1.Feature, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if project != "" {
+		if _, err := m.getProjectLocked(project); err != nil {
+			return nil, err
+		}
+		return copyFeatures(m.features[project]), nil
+	}
+
+	live := make([]string, 0, len(m.features))
+	for held := range m.features {
+		if _, err := m.getProjectLocked(held); err != nil {
+			continue
+		}
+		live = append(live, held)
+	}
+	sort.Strings(live)
+
+	every := make([]*quaycrewv1.Feature, 0)
+	for _, held := range live {
+		every = append(every, copyFeatures(m.features[held])...)
+	}
+	return every, nil
+}
+
+// AddFeature gives a project one more narrowed part of itself, numbered the highest number in that
+// project plus one.
+//
+// The read of the highest number and the write happen under the one lock, because Postgres reads it
+// in the statement that inserts and the two stores have to answer the same thing to two callers
+// adding at one moment.
+//
+// The state word is written here rather than left absent, because Postgres writes it from the
+// column's own default and the two stores have to agree about a fresh feature.
+func (m *Memory) AddFeature(_ context.Context, project, title string) (*quaycrewv1.Feature, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, err := m.getProjectLocked(project); err != nil {
+		return nil, err
+	}
+	if m.features == nil {
+		m.features = make(map[string][]*quaycrewv1.Feature)
+	}
+	// Over every state, so a feature that stopped keeps its number and the next one is higher.
+	var highest int32
+	for _, held := range m.features[project] {
+		if held.GetNumber() > highest {
+			highest = held.GetNumber()
+		}
+	}
+	now := time.Now().UTC()
+	feature := &quaycrewv1.Feature{
+		Id:        NewID(),
+		Project:   project,
+		Number:    highest + 1,
+		Title:     title,
+		State:     FeatureOpen,
+		CreatedAt: timestamppb.New(now),
+		UpdatedAt: timestamppb.New(now),
+	}
+	m.features[project] = append(m.features[project], feature)
+	return copyFeature(feature), nil
+}
+
+// SetFeatureIntention records which part of the project a feature narrows to, and touches nothing
+// else on the row.
+func (m *Memory) SetFeatureIntention(_ context.Context, feature, intention string) (*quaycrewv1.Feature, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	held, err := m.featureLocked(feature)
+	if err != nil {
+		return nil, err
+	}
+	held.Intention = intention
+	held.UpdatedAt = timestamppb.New(time.Now().UTC())
+	return copyFeature(held), nil
+}
+
+// featureLocked is one feature by its identifier, and ErrNotFound when no live project holds it. The
+// caller holds the lock.
+func (m *Memory) featureLocked(feature string) (*quaycrewv1.Feature, error) {
+	for project, held := range m.features {
+		if _, err := m.getProjectLocked(project); err != nil {
+			continue
+		}
+		for _, one := range held {
+			if one.GetId() == feature {
+				return one, nil
+			}
+		}
+	}
+	return nil, ErrNotFound
+}
+
+// copyFeatures hands the caller its own messages, for the reason copySteps does.
+func copyFeatures(features []*quaycrewv1.Feature) []*quaycrewv1.Feature {
+	copied := make([]*quaycrewv1.Feature, 0, len(features))
+	for _, feature := range features {
+		copied = append(copied, copyFeature(feature))
+	}
+	return copied
+}
+
+func copyFeature(feature *quaycrewv1.Feature) *quaycrewv1.Feature {
+	return proto.Clone(feature).(*quaycrewv1.Feature)
 }
 
 // ImportSkill takes a skill into the system, refusing a version that already exists carrying something

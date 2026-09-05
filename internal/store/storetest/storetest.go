@@ -1727,6 +1727,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	runDesignConformance(t, newDataset)
 	runPathConformance(t, newDataset)
 	runTakeConformance(t, newDataset)
+	runFeatureConformance(t, newDataset)
 }
 
 // runDesignConformance holds both stores to the same answers about what a project is for and what
@@ -2481,4 +2482,231 @@ func runTakeConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("TakeStep on a missing project answered %v, want ErrNotFound", err)
 		}
 	})
+}
+
+// runFeatureConformance holds both stores to the same answers about the narrowed parts of a project.
+func runFeatureConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
+	t.Helper()
+
+	t.Run("a project with no feature answers with nothing, and it is not an error", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		features, err := s.ListFeatures(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("ListFeatures on a project with no feature: %v", err)
+		}
+		if len(features) != 0 {
+			t.Fatalf("a project nobody gave a feature answered %d features", len(features))
+		}
+	})
+
+	// The store gives the number, so the first feature of a project is 1 and the next is 2 whatever
+	// the caller says.
+	t.Run("the store numbers the features of a project from one", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		first, err := s.AddFeature(ctx, project.GetId(), "authentication")
+		if err != nil {
+			t.Fatalf("AddFeature: %v", err)
+		}
+		if first.GetNumber() != 1 {
+			t.Fatalf("the first feature took number %d, want 1", first.GetNumber())
+		}
+		second, err := s.AddFeature(ctx, project.GetId(), "payment")
+		if err != nil {
+			t.Fatalf("AddFeature: %v", err)
+		}
+		if second.GetNumber() != 2 {
+			t.Fatalf("the second feature took number %d, want 2", second.GetNumber())
+		}
+		if first.GetId() == second.GetId() || first.GetId() == "" {
+			t.Fatalf("the two features are identified %q and %q", first.GetId(), second.GetId())
+		}
+		read, err := s.ListFeatures(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("ListFeatures: %v", err)
+		}
+		if got := featureNumbersOf(read); !slices.Equal(got, []int32{1, 2}) {
+			t.Fatalf("the project reads back features %v, want 1, 2 in order", got)
+		}
+	})
+
+	// Numbers restart in each project, which is what makes the number the thing a person types.
+	t.Run("a second project starts its features at one again", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		first := newProject(t, s, "acme", "house-bills")
+		second := newProject(t, s, "acme", "the-website")
+
+		if _, err := s.AddFeature(ctx, first.GetId(), "authentication"); err != nil {
+			t.Fatalf("AddFeature: %v", err)
+		}
+		if _, err := s.AddFeature(ctx, first.GetId(), "payment"); err != nil {
+			t.Fatalf("AddFeature: %v", err)
+		}
+		started, err := s.AddFeature(ctx, second.GetId(), "authentication")
+		if err != nil {
+			t.Fatalf("AddFeature on the second project: %v", err)
+		}
+		if started.GetNumber() != 1 {
+			t.Fatalf("the second project's first feature took number %d, want 1", started.GetNumber())
+		}
+	})
+
+	// Everything the system owns reads as a feature nobody has touched. A column added to one store
+	// and not the other reads as a zero rather than as a failure, so every field is named here.
+	t.Run("a fresh feature is born open with an empty intention", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		added, err := s.AddFeature(ctx, project.GetId(), "authentication")
+		if err != nil {
+			t.Fatalf("AddFeature: %v", err)
+		}
+		for where, feature := range map[string]*quaycrewv1.Feature{"the write": added} {
+			if feature.GetProject() != project.GetId() {
+				t.Errorf("%s names project %q, want %q", where, feature.GetProject(), project.GetId())
+			}
+			if feature.GetTitle() != "authentication" {
+				t.Errorf("%s is titled %q, want authentication", where, feature.GetTitle())
+			}
+			if feature.GetIntention() != "" {
+				t.Errorf("%s says its intention is %q, and nobody has set one", where, feature.GetIntention())
+			}
+			if feature.GetState() != store.FeatureOpen {
+				t.Errorf("%s reads as %q, want open", where, feature.GetState())
+			}
+			if feature.GetCreatedAt() == nil || feature.GetUpdatedAt() == nil {
+				t.Errorf("%s is stamped created %v, updated %v", where, feature.GetCreatedAt(), feature.GetUpdatedAt())
+			}
+		}
+	})
+
+	t.Run("an intention is written, read back and cleared", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		added, err := s.AddFeature(ctx, project.GetId(), "authentication")
+		if err != nil {
+			t.Fatalf("AddFeature: %v", err)
+		}
+		written, err := s.SetFeatureIntention(ctx, added.GetId(), "sign up, sign in, reset, sessions")
+		if err != nil {
+			t.Fatalf("SetFeatureIntention: %v", err)
+		}
+		if written.GetIntention() != "sign up, sign in, reset, sessions" {
+			t.Fatalf("the write answered %q", written.GetIntention())
+		}
+		// The write touches that column and nothing else.
+		if written.GetNumber() != added.GetNumber() || written.GetTitle() != added.GetTitle() ||
+			written.GetState() != added.GetState() {
+			t.Fatalf("the write answered feature %d %q in state %q, want %d %q in state %q",
+				written.GetNumber(), written.GetTitle(), written.GetState(),
+				added.GetNumber(), added.GetTitle(), added.GetState())
+		}
+		read, err := s.ListFeatures(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("ListFeatures: %v", err)
+		}
+		if len(read) != 1 || read[0].GetIntention() != "sign up, sign in, reset, sessions" {
+			t.Fatalf("the listing reads %v", read)
+		}
+		// An empty intention is kept, so a feature that says nothing yet is a state and not an error.
+		cleared, err := s.SetFeatureIntention(ctx, added.GetId(), "")
+		if err != nil {
+			t.Fatalf("SetFeatureIntention with nothing: %v", err)
+		}
+		if cleared.GetIntention() != "" {
+			t.Fatalf("clearing the intention left %q", cleared.GetIntention())
+		}
+	})
+
+	t.Run("one project's features are not another's", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		first := newProject(t, s, "acme", "house-bills")
+		second := newProject(t, s, "acme", "the-website")
+
+		if _, err := s.AddFeature(ctx, first.GetId(), "authentication"); err != nil {
+			t.Fatalf("AddFeature: %v", err)
+		}
+		if _, err := s.AddFeature(ctx, second.GetId(), "payment"); err != nil {
+			t.Fatalf("AddFeature: %v", err)
+		}
+		read, err := s.ListFeatures(ctx, first.GetId())
+		if err != nil {
+			t.Fatalf("ListFeatures: %v", err)
+		}
+		if len(read) != 1 || read[0].GetTitle() != "authentication" {
+			t.Fatalf("the first project reads back %d features, the first titled %q",
+				len(read), read[0].GetTitle())
+		}
+		every, err := s.ListFeatures(ctx, "")
+		if err != nil {
+			t.Fatalf("ListFeatures for every project: %v", err)
+		}
+		if len(every) != 2 {
+			t.Fatalf("every project answered %d features, want 2", len(every))
+		}
+	})
+
+	// A project here is deleted by a stamp rather than by removing the row, so the foreign key
+	// cascade never fires for one. Both stores have to hide its features anyway, or a listing answers
+	// with the features of a project nobody can reach.
+	t.Run("a deleted project's features leave every listing", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		added, err := s.AddFeature(ctx, project.GetId(), "authentication")
+		if err != nil {
+			t.Fatalf("AddFeature: %v", err)
+		}
+		if err := s.DeleteProject(ctx, project.GetId()); err != nil {
+			t.Fatalf("DeleteProject: %v", err)
+		}
+		if _, err := s.ListFeatures(ctx, project.GetId()); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("ListFeatures on a deleted project answered %v, want ErrNotFound", err)
+		}
+		every, err := s.ListFeatures(ctx, "")
+		if err != nil {
+			t.Fatalf("ListFeatures for every project: %v", err)
+		}
+		if len(every) != 0 {
+			t.Fatalf("a deleted project left %d features in the listing", len(every))
+		}
+		if _, err := s.SetFeatureIntention(ctx, added.GetId(), "anything"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("SetFeatureIntention on a deleted project's feature answered %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("a feature added to a project that does not exist is not found", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+
+		if _, err := s.AddFeature(ctx, "no-such-project", "authentication"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("AddFeature on a missing project answered %v, want ErrNotFound", err)
+		}
+		if _, err := s.ListFeatures(ctx, "no-such-project"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("ListFeatures on a missing project answered %v, want ErrNotFound", err)
+		}
+		if _, err := s.SetFeatureIntention(ctx, "no-such-feature", "anything"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("SetFeatureIntention on a missing feature answered %v, want ErrNotFound", err)
+		}
+	})
+}
+
+// featureNumbersOf is a project's feature numbers, in the order the store answered with.
+func featureNumbersOf(features []*quaycrewv1.Feature) []int32 {
+	numbers := make([]int32, 0, len(features))
+	for _, feature := range features {
+		numbers = append(numbers, feature.GetNumber())
+	}
+	return numbers
 }

@@ -911,6 +911,122 @@ func (p *Postgres) TakeStep(ctx context.Context, project string, number int32, s
 	return step, nil
 }
 
+// The narrowed parts of a project: the listing, the add that gives the number, and the one line
+// saying what a feature narrows to.
+
+// featureColumns is what every feature read selects, in the order scanFeature reads them. The two are
+// written next to each other because a column added to one and not the other reads as a zero rather
+// than as a failure.
+//
+// Qualified, because every read joins the project and its workspace to hide a deleted project's
+// features, and an unqualified name would be one the join could make ambiguous later.
+const featureColumns = `f.id, f.project, f.number, f.title, f.intention, f.state, ` +
+	`f.created_at, f.updated_at`
+
+// scanFeature reads one feature row.
+func scanFeature(row pgx.Row) (*quaycrewv1.Feature, error) {
+	var (
+		id, project, title, intention, state string
+		number                               int32
+		createdAt, updatedAt                 time.Time
+	)
+	if err := row.Scan(&id, &project, &number, &title, &intention, &state,
+		&createdAt, &updatedAt); err != nil {
+		return nil, err
+	}
+	return &quaycrewv1.Feature{
+		Id:        id,
+		Project:   project,
+		Number:    number,
+		Title:     title,
+		Intention: intention,
+		State:     state,
+		CreatedAt: timestamppb.New(createdAt),
+		UpdatedAt: timestamppb.New(updatedAt),
+	}, nil
+}
+
+// ListFeatures returns a project's features in number order, or every project's when it names none.
+//
+// The join is the one ListSteps uses, and it is there for the same reason: a project here is deleted
+// by a stamp rather than by removing the row, so the foreign key cascade never fires for one, and a
+// read that only matched on the project identifier would answer with the features of a project
+// nobody can reach.
+func (p *Postgres) ListFeatures(ctx context.Context, project string) ([]*quaycrewv1.Feature, error) {
+	if project != "" {
+		if err := p.projectExists(ctx, project); err != nil {
+			return nil, err
+		}
+	}
+	rows, err := p.pool.Query(ctx, `
+		select `+featureColumns+` from features f
+		join projects p on p.id = f.project
+		join workspaces w on w.id = p.workspace
+		where ($1 = '' or f.project = $1)
+		  and p.deleted_at is null and w.deleted_at is null
+		order by f.project, f.number`, project)
+	if err != nil {
+		return nil, fmt.Errorf("list features: %w", err)
+	}
+	defer rows.Close()
+
+	features := make([]*quaycrewv1.Feature, 0)
+	for rows.Next() {
+		feature, err := scanFeature(rows)
+		if err != nil {
+			return nil, fmt.Errorf("read feature: %w", err)
+		}
+		features = append(features, feature)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list features: %w", err)
+	}
+	return features, nil
+}
+
+// AddFeature gives a project one more narrowed part of itself.
+//
+// The highest number is read in the statement that inserts, so two callers adding at one moment
+// cannot both be handed the same number, and the unique constraint on (project, number) is what
+// stands behind it. A select with an aggregate answers one row over an empty table, so the first
+// feature of a project takes 1 without a branch for the empty case.
+//
+// The count is over every state, so a feature that stopped keeps its number and the next one is
+// higher: numbers are never reused.
+func (p *Postgres) AddFeature(ctx context.Context, project, title string) (*quaycrewv1.Feature, error) {
+	if err := p.projectExists(ctx, project); err != nil {
+		return nil, err
+	}
+	feature, err := scanFeature(p.pool.QueryRow(ctx, `
+		insert into features as f (id, project, number, title)
+		select $1, $2, coalesce(max(number), 0) + 1, $3 from features where project = $2
+		returning `+featureColumns, NewID(), project, title))
+	if err != nil {
+		return nil, fmt.Errorf("add feature: %w", err)
+	}
+	return feature, nil
+}
+
+// SetFeatureIntention records which part of the project a feature narrows to.
+//
+// The join is the one every other feature read makes, so a feature of a deleted project is not found
+// rather than written to.
+func (p *Postgres) SetFeatureIntention(ctx context.Context, feature, intention string) (*quaycrewv1.Feature, error) {
+	written, err := scanFeature(p.pool.QueryRow(ctx, `
+		update features f set intention = $2, updated_at = now()
+		from projects p join workspaces w on w.id = p.workspace
+		where f.id = $1 and p.id = f.project
+		  and p.deleted_at is null and w.deleted_at is null
+		returning `+featureColumns, feature, intention))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("set feature intention: %w", err)
+	}
+	return written, nil
+}
+
 // sessionBy reads the single session matching a where clause.
 func (p *Postgres) sessionBy(ctx context.Context, where string, args ...any) (*quaycrewv1.Session, error) {
 	rows, err := p.pool.Query(ctx, `

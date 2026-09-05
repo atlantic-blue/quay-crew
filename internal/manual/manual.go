@@ -133,6 +133,15 @@ commands:
                                           approval, because approval is a statement about one text
   design approve [<address>]              say the design as it stands is the one to build from. It
                                           is the operator's word: a session is refused this call
+  feature [<address>]                     the narrowed parts of a project, in number order, with the
+                                          state of each one, how many of its steps are done, and what
+                                          it narrows to. A project delivers several features at once,
+                                          and none of them waits for another
+  feature add [<address>] "<title>"       add one narrowed part to a project. The number is the
+                                          system's to give, so two adds at one moment cannot take the
+                                          same one
+  feature intention [<address>]           say which part of the project one feature narrows to, in
+    <feature> "<text>"                    one line. A second line is refused
   path [<address>]                        the steps a design was broken into, in number order, with
                                           the state of each one and the session holding it
   path set [<address>] --file <path>      write the path from a document. Each step is a heading

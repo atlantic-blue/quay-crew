@@ -85,6 +85,11 @@ const StepReady = "ready"
 // StepReady is: both stores write the word directly and must not disagree about it.
 const StepTaken = "taken"
 
+// FeatureOpen is the state a feature is born in, and the same word the table's own default writes. It
+// is here for the reason StepReady is: the memory store writes it directly and must not disagree with
+// the column.
+const FeatureOpen = "open"
+
 // StatusReclaimed is the session status this store writes when the system takes a container back. The
 // control plane owns the whole vocabulary; this one is here because two queries below are written in
 // terms of it and the store must not depend on the package that calls it.
@@ -297,6 +302,23 @@ type Store interface {
 	// Several steps of one path may be taken at once: nothing here refuses a second take on a
 	// different step.
 	TakeStep(ctx context.Context, project string, number int32, session string) (*quaycrewv1.Step, error)
+
+	// ListFeatures returns a project's features in number order, or every project's when the
+	// identifier is empty, ordered by project and then by number. A project with no feature is an
+	// empty slice and not an error, the way a project with no path is. Every state comes back:
+	// filtering to the open ones is the caller's question.
+	ListFeatures(ctx context.Context, project string) ([]*quaycrewv1.Feature, error)
+	// AddFeature gives a project one more narrowed part of itself, numbered the highest number in
+	// that project plus one, and returns it.
+	//
+	// The store gives the number and a caller never chooses one. The read of the highest number and
+	// the insert are one statement, so two callers at one moment cannot take the same number, and a
+	// number is never reused: a feature that stopped keeps it.
+	AddFeature(ctx context.Context, project string, title string) (*quaycrewv1.Feature, error)
+	// SetFeatureIntention records which part of the project a feature narrows to, in one line, and
+	// returns the feature after the write. It touches no other column. An empty intention is kept: a
+	// feature that says nothing yet is the normal state.
+	SetFeatureIntention(ctx context.Context, feature string, intention string) (*quaycrewv1.Feature, error)
 
 	// ImportSkill takes a skill into the system at the version its manifest declares.
 	//

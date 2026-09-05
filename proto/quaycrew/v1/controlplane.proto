@@ -663,6 +663,54 @@ message TakeStepResponse {
   repeated string warnings = 4;
 }
 
+// Feature is one narrowed part of a project. A project delivers several at the same time, each with
+// its own milestones, and none of them waits for another.
+//
+// It carries no approval field, because an approval belongs to the project: a step taken in any
+// feature reads the one approval on the project's design.
+message Feature {
+  string id = 1;
+  string project = 2;
+  // number is where in the project this feature sits, counting from one. The server gives it, and a
+  // number is never reused.
+  int32 number = 3;
+  // title is one line.
+  string title = 4;
+  // intention is one line saying which part of the project this feature narrows to.
+  string intention = 5;
+  // state is one of open, done, stopped.
+  string state = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+// ListFeaturesRequest reads a project's features, or every project's when it names none.
+message ListFeaturesRequest {
+  string project = 1;
+}
+message ListFeaturesResponse {
+  repeated Feature features = 1;
+}
+
+// AddFeatureRequest adds one narrowed part to a project. The caller never chooses the number.
+message AddFeatureRequest {
+  string project = 1;
+  string title = 2;
+}
+message AddFeatureResponse {
+  Feature feature = 1;
+}
+
+// SetFeatureIntentionRequest says which part of the project a feature narrows to, in one line.
+message SetFeatureIntentionRequest {
+  string feature = 1;
+  string intention = 2;
+}
+message SetFeatureIntentionResponse {
+  Feature feature = 1;
+  repeated string warnings = 2;
+}
+
 // SessionWorkEntry is one thing in a session's work: a file or a directory, with the size of a file.
 message SessionWorkEntry {
   string name = 1;
@@ -1155,6 +1203,13 @@ service ControlPlaneService {
   // The refusal an unapproved design earns is the gate, and it is on the operator's own command as
   // much as on this one.
   rpc TakeStep(TakeStepRequest) returns (TakeStepResponse);
+
+  // The narrowed parts of a project. The driver may call all three: a design session reads what
+  // features exist and names the ones it is about to write paths for, and naming one grants it
+  // nothing that dispatching would not.
+  rpc ListFeatures(ListFeaturesRequest) returns (ListFeaturesResponse);
+  rpc AddFeature(AddFeatureRequest) returns (AddFeatureResponse);
+  rpc SetFeatureIntention(SetFeatureIntentionRequest) returns (SetFeatureIntentionResponse);
   // Reads a file, or a listing, out of the work a session left behind, without attaching to it.
   rpc ReadSessionWork(ReadSessionWorkRequest) returns (ReadSessionWorkResponse);
   // Says where an address is on the machine, so a person can put a file in it by hand. It reads the
