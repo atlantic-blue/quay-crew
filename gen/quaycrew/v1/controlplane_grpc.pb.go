@@ -43,6 +43,7 @@ const (
 	ControlPlaneService_DrainSessions_FullMethodName            = "/quaycrew.v1.ControlPlaneService/DrainSessions"
 	ControlPlaneService_RestartSession_FullMethodName           = "/quaycrew.v1.ControlPlaneService/RestartSession"
 	ControlPlaneService_ArchiveSession_FullMethodName           = "/quaycrew.v1.ControlPlaneService/ArchiveSession"
+	ControlPlaneService_ArchiveProjectSessions_FullMethodName   = "/quaycrew.v1.ControlPlaneService/ArchiveProjectSessions"
 	ControlPlaneService_RestoreSession_FullMethodName           = "/quaycrew.v1.ControlPlaneService/RestoreSession"
 	ControlPlaneService_SetSessionPermissionMode_FullMethodName = "/quaycrew.v1.ControlPlaneService/SetSessionPermissionMode"
 	ControlPlaneService_SetSessionLabel_FullMethodName          = "/quaycrew.v1.ControlPlaneService/SetSessionLabel"
@@ -109,6 +110,7 @@ type ControlPlaneServiceClient interface {
 	DrainSessions(ctx context.Context, in *DrainSessionsRequest, opts ...grpc.CallOption) (*DrainSessionsResponse, error)
 	RestartSession(ctx context.Context, in *RestartSessionRequest, opts ...grpc.CallOption) (*RestartSessionResponse, error)
 	ArchiveSession(ctx context.Context, in *ArchiveSessionRequest, opts ...grpc.CallOption) (*ArchiveSessionResponse, error)
+	ArchiveProjectSessions(ctx context.Context, in *ArchiveProjectSessionsRequest, opts ...grpc.CallOption) (*ArchiveProjectSessionsResponse, error)
 	RestoreSession(ctx context.Context, in *RestoreSessionRequest, opts ...grpc.CallOption) (*RestoreSessionResponse, error)
 	SetSessionPermissionMode(ctx context.Context, in *SetSessionPermissionModeRequest, opts ...grpc.CallOption) (*SetSessionPermissionModeResponse, error)
 	SetSessionLabel(ctx context.Context, in *SetSessionLabelRequest, opts ...grpc.CallOption) (*SetSessionLabelResponse, error)
@@ -407,6 +409,16 @@ func (c *controlPlaneServiceClient) ArchiveSession(ctx context.Context, in *Arch
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ArchiveSessionResponse)
 	err := c.cc.Invoke(ctx, ControlPlaneService_ArchiveSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ArchiveProjectSessions(ctx context.Context, in *ArchiveProjectSessionsRequest, opts ...grpc.CallOption) (*ArchiveProjectSessionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ArchiveProjectSessionsResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ArchiveProjectSessions_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -747,6 +759,7 @@ type ControlPlaneServiceServer interface {
 	DrainSessions(context.Context, *DrainSessionsRequest) (*DrainSessionsResponse, error)
 	RestartSession(context.Context, *RestartSessionRequest) (*RestartSessionResponse, error)
 	ArchiveSession(context.Context, *ArchiveSessionRequest) (*ArchiveSessionResponse, error)
+	ArchiveProjectSessions(context.Context, *ArchiveProjectSessionsRequest) (*ArchiveProjectSessionsResponse, error)
 	RestoreSession(context.Context, *RestoreSessionRequest) (*RestoreSessionResponse, error)
 	SetSessionPermissionMode(context.Context, *SetSessionPermissionModeRequest) (*SetSessionPermissionModeResponse, error)
 	SetSessionLabel(context.Context, *SetSessionLabelRequest) (*SetSessionLabelResponse, error)
@@ -882,6 +895,9 @@ func (UnimplementedControlPlaneServiceServer) RestartSession(context.Context, *R
 }
 func (UnimplementedControlPlaneServiceServer) ArchiveSession(context.Context, *ArchiveSessionRequest) (*ArchiveSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ArchiveSession not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ArchiveProjectSessions(context.Context, *ArchiveProjectSessionsRequest) (*ArchiveProjectSessionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ArchiveProjectSessions not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) RestoreSession(context.Context, *RestoreSessionRequest) (*RestoreSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RestoreSession not implemented")
@@ -1422,6 +1438,24 @@ func _ControlPlaneService_ArchiveSession_Handler(srv interface{}, ctx context.Co
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ControlPlaneServiceServer).ArchiveSession(ctx, req.(*ArchiveSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ArchiveProjectSessions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ArchiveProjectSessionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ArchiveProjectSessions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ArchiveProjectSessions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ArchiveProjectSessions(ctx, req.(*ArchiveProjectSessionsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2068,6 +2102,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ArchiveSession",
 			Handler:    _ControlPlaneService_ArchiveSession_Handler,
+		},
+		{
+			MethodName: "ArchiveProjectSessions",
+			Handler:    _ControlPlaneService_ArchiveProjectSessions_Handler,
 		},
 		{
 			MethodName: "RestoreSession",

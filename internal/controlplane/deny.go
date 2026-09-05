@@ -37,6 +37,10 @@ import (
 // has produced a text somebody still has to read. A session that could approve its own text would be
 // agreeing with itself, and the gate would be a step in a script rather than a person's judgement.
 //
+// Archiving is refused on both its calls. It is the operator's word about the record: a session that
+// could put sessions away could hide the evidence of what it did, and the sweep over a project could
+// do it to every finished session at once. Restoring stays open, because it hides nothing.
+//
 // Everything the driver exists to do stays open: workspaces, projects, sessions, dispatch, starting
 // context at the workspace and project scopes, and reading or writing a design.
 func DeniedToDriver(fullMethod string, request any) error {
@@ -51,6 +55,8 @@ func DeniedToDriver(fullMethod string, request any) error {
 		quaycrewv1.ControlPlaneService_AttachHook_FullMethodName,
 		quaycrewv1.ControlPlaneService_DetachHook_FullMethodName,
 		quaycrewv1.ControlPlaneService_SetSessionPermissionMode_FullMethodName,
+		quaycrewv1.ControlPlaneService_ArchiveSession_FullMethodName,
+		quaycrewv1.ControlPlaneService_ArchiveProjectSessions_FullMethodName,
 		quaycrewv1.ControlPlaneService_ApproveDesign_FullMethodName:
 		return refusedToDriver(fullMethod)
 	case quaycrewv1.ControlPlaneService_SetContext_FullMethodName:

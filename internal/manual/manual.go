@@ -70,8 +70,10 @@ commands:
                                           closing the terminal does not take the work with it
   exec list <session>                     what a session was asked to do, and what came back
   sessions [<address>|system]             list sessions, which session and sessions also do. It
-                                          reads where you are standing and says so; system reads
-                                          every workspace. The
+    [--archived]                          reads where you are standing and says so; system reads
+                                          every workspace. --archived lists the sessions put away
+                                          instead of the live ones, never both, and either listing
+                                          ends by saying how many the other one holds. The
                                           status column says what is inside each sandbox: awake is a
                                           conversation running with nobody watching it, attached is
                                           somebody in it, idle is an empty container, and unknown is
@@ -81,6 +83,18 @@ commands:
                                           the session's own words, and told is what it was given.
                                           Last moved first, so the session you were last working in
                                           is at the top and the age column reads down the list
+  archive [<address>] [<session>]         put a session away, so the finished ones stop burying the
+                                          live ones. A session is put away on its own; an address
+                                          naming a workspace and a project puts away every session
+                                          in it that holds no container, and says how many it left.
+                                          A session holding an exec that is still running is
+                                          refused, because archiving takes the container away and
+                                          the answer with it: end the exec with krewe stop first.
+                                          Nothing is deleted. The conversation, the exec history and
+                                          the files all stay, and krewe read still answers for it
+  unarchive <session>                     put a session back in the listing. It reads stopped and
+                                          holds no container: the next exec builds a fresh one over
+                                          the same conversation and the same files
   read <session> [<path>]                 what a session made, out of the directory the system keeps
                                           for it. With no path it lists what is there and names the
                                           directory on the machine; with one it prints that file, so

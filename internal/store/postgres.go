@@ -564,8 +564,75 @@ func (p *Postgres) CountExecs(ctx context.Context, session string) (int, error) 
 
 // ArchiveSession stamps a session as put away. Nothing is deleted, which is the whole point: the row,
 // the conversation handle and the files on the host are all untouched, so restoring is one update.
+//
+// The status is a condition on the update rather than a read before it. A read then a write lets an
+// exec start between the two, and the session is then put away with an open exec in it.
 func (p *Postgres) ArchiveSession(ctx context.Context, id string) error {
-	return p.stampArchived(ctx, id, `archived_at = now(), skills_fingerprint = ''`)
+	tag, err := p.pool.Exec(ctx,
+		`update sessions set archived_at = now(), skills_fingerprint = '', updated_at = now()
+		  where id = $1 and archived_at is null and status <> $2`, id, StatusRunning)
+	if err != nil {
+		return fmt.Errorf("archive session: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return p.whyNotArchived(ctx, id)
+	}
+	return nil
+}
+
+// whyNotArchived says which of the two a zero row update was. It runs only after the write refused,
+// so it decides the wording rather than the outcome: nothing it reads can turn a refusal into an
+// archive.
+func (p *Postgres) whyNotArchived(ctx context.Context, id string) error {
+	var held string
+	err := p.pool.QueryRow(ctx, `select status from sessions where id = $1`, id).Scan(&held)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("archive session: %w", err)
+	}
+	if held == StatusRunning {
+		return ErrSessionHoldsAnExec
+	}
+	// The row is there and was not stamped, so it was stamped already. A caller that reads the row
+	// first says the plainer thing; this one has nothing left to distinguish.
+	return ErrNotFound
+}
+
+// ArchiveProjectSessions puts away every session of one project that holds no container.
+//
+// One statement, so a dispatch landing during the sweep either runs before it and keeps its session
+// out, or runs after it. The stamps it writes are all the same instant, so ordering what came back by
+// the stamp and then by the identifier is the order the archived listing draws them in.
+func (p *Postgres) ArchiveProjectSessions(ctx context.Context, project string) ([]string, error) {
+	if _, err := p.GetProject(ctx, project); err != nil {
+		return nil, err
+	}
+	rows, err := p.pool.Query(ctx, `
+		with put_away as (
+			update sessions set archived_at = now(), skills_fingerprint = '', updated_at = now()
+			where project = $1 and archived_at is null and status = any($2)
+			returning id, archived_at
+		)
+		select id from put_away order by archived_at desc, id`, project, settledStatuses())
+	if err != nil {
+		return nil, fmt.Errorf("archive project sessions: %w", err)
+	}
+	defer rows.Close()
+
+	archived := make([]string, 0)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("archive project sessions: %w", err)
+		}
+		archived = append(archived, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("archive project sessions: %w", err)
+	}
+	return archived, nil
 }
 
 // RestoreSession clears the stamp, bringing the session back into the default listing.
@@ -573,8 +640,8 @@ func (p *Postgres) RestoreSession(ctx context.Context, id string) error {
 	return p.stampArchived(ctx, id, `archived_at = null`)
 }
 
-// stampArchived is the one update both of those are. The clause is a constant from the two callers
-// above and never carries a value, so nothing here is built from input.
+// stampArchived is the update restoring is. The clause is a constant from the caller above and never
+// carries a value, so nothing here is built from input.
 func (p *Postgres) stampArchived(ctx context.Context, id, clause string) error {
 	tag, err := p.pool.Exec(ctx,
 		`update sessions set `+clause+`, updated_at = now() where id = $1`, id)
