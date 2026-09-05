@@ -140,6 +140,11 @@ commands:
                                           changes, what it touches, what proves it and which step it
                                           waits for. A step that names no predecessor waits for the
                                           number below it
+  step take [<address>] <number>          start a session on one step, and let go of it. The session
+                                          is given that step whole: what changes, what it touches and
+                                          what proves it. It is refused while the design carries no
+                                          approval, and while somebody already holds the step, and
+                                          a refusal starts nothing
   attach <session>                         open a session's conversation, with its history
   secret set [<workspace>] <key>          set a workspace secret from standard input, so the value
                                           never reaches your shell history: pipe it in, or redirect

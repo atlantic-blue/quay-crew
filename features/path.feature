@@ -459,3 +459,201 @@ Feature: A project holds a numbered path of steps
     When the operator dispatches "hello" to the project
     Then the design section is under 400 characters
     And the session's memory file carries "The whole path is in .krewe/path.md."
+
+  # Taking a step starts a session on it, and the system composes what that session is given: the
+  # step whole, where it sits in the path, and what to do with it. The command line sends a number
+  # and the control plane sends the words, so the console cannot send different ones.
+
+  Scenario: Taking a step dispatches a session whose text names the step and its title
+    Given the project's design is "# Bills\n"
+    And the operator approved the project's design
+    And the project's path is:
+      """
+      ## 1. The store holds a project's brief
+
+      What changes and why
+      The design has nowhere to live, so a project cannot carry one.
+
+      What this touches
+      internal/store/store.go
+
+      What proves it
+      The operator sets a brief and reads it back.
+
+      The scenario that proves it
+      a project carries a brief
+
+      ## 2. The store holds a project's design
+      ## 3. The control plane serves the design
+      """
+    When the operator takes step 1
+    Then the step text carries "Step 1 of 3 on the path for house-bills."
+    And the step text carries "The store holds a project's brief"
+    And the step text carries "The design has nowhere to live, so a project cannot carry one."
+    And the step text carries "internal/store/store.go"
+    And the step text carries "The scenario that proves it is named: a project carries a brief"
+    And the session was asked exactly what the take composed
+    And step 1 is held by that session
+
+  # The count is of the steps in the path and never of the highest number, so a path running 1, 2, 5
+  # reads "of 3".
+  Scenario: The count is the steps in the path and not the numbers
+    Given the project's design is "# Bills\n"
+    And the operator approved the project's design
+    And the project's path is:
+      """
+      ## 1. The store holds a project's brief
+      ## 2. The store holds a project's design
+      ## 5. The command line reads it back
+      """
+    When the operator takes step 5
+    Then the step text carries "Step 5 of 3 on the path for house-bills."
+
+  Scenario: The text tells the session to build this step only
+    Given the project's design is "# Bills\n"
+    And the operator approved the project's design
+    And the project's path is:
+      """
+      ## 1. The store holds a project's brief
+      """
+    When the operator takes step 1
+    Then the step text carries "The design is in .krewe/design.md. The whole path is in .krewe/path.md. Read both."
+    And the step text carries "Build this step only. Do not take work from another step."
+
+  # A label with nothing under it is text the model has to read for nothing.
+  Scenario: A step with no proof produces text with no proof label in it
+    Given the project's design is "# Bills\n"
+    And the operator approved the project's design
+    And the project's path is:
+      """
+      ## 1. The store holds a project's brief
+
+      What changes and why
+      The design has nowhere to live, so a project cannot carry one.
+      """
+    When the operator takes step 1
+    Then the step text carries "What changes and why"
+    And the step text does not carry "What proves it"
+    And the step text does not carry "The scenario that proves it"
+    And the step text does not carry "What this touches"
+
+  # One step is one session's. Two takes that both passed would put two sessions on one change.
+  Scenario: Taking a step somebody already holds is refused, naming the session
+    Given the project's design is "# Bills\n"
+    And the operator approved the project's design
+    And the project's path is:
+      """
+      ## 1. The store holds a project's brief
+      """
+    And the operator took step 1
+    When the operator takes step 1
+    Then the control plane refuses it as the wrong state
+    And the refusal names the session holding step 1
+    And 1 session was started
+
+  # Gate 1. No code exists before the operator approves the path, so this refusal comes before every
+  # other check, costs one line of output, and starts nothing.
+  Scenario: Taking a step on a design nobody approved is refused and starts nothing
+    Given the project's design is "# Bills\n"
+    And the project's path is:
+      """
+      ## 1. The store holds a project's brief
+      """
+    When the operator takes step 1
+    Then the control plane refuses it as the wrong state
+    And the refusal suggests "krewe design approve"
+    And 0 sessions were started
+    And the operator reads the path
+    And step 1 is ready
+
+  Scenario: A design approved and then rewritten refuses the take again
+    Given the project's design is "# Bills\n"
+    And the operator approved the project's design
+    And the project's path is:
+      """
+      ## 1. The store holds a project's brief
+      """
+    And the operator writes the project's design as "# Bills, rewritten\n"
+    When the operator takes step 1
+    Then the control plane refuses it as the wrong state
+    And 0 sessions were started
+
+  Scenario: Taking a step the path does not hold is refused, saying how many it has
+    Given the project's design is "# Bills\n"
+    And the operator approved the project's design
+    And the project's path is:
+      """
+      ## 1. The store holds a project's brief
+      ## 2. The store holds a project's design
+      """
+    When the operator takes step 7
+    Then the control plane refuses it as not found
+    And the refusal suggests "it has 2 steps"
+    And 0 sessions were started
+
+  Scenario: Taking a step numbered below one is refused
+    Given the project's design is "# Bills\n"
+    And the operator approved the project's design
+    When the operator takes step 0
+    Then the control plane refuses it as invalid
+    And the refusal suggests "counts from one"
+
+  # The session reads which step it is on in the design section of its own memory file, which it
+  # reads on every exec.
+  Scenario: The session that took a step reads which step it is on
+    Given the project's design is "# Bills\n"
+    And the operator approved the project's design
+    And the project's path is:
+      """
+      ## 1. The store holds a project's brief
+      ## 2. The store holds a project's design
+      ## 3. The control plane serves the design
+      """
+    When the operator takes step 2
+    Then the session's memory file carries "You are on step 2 of 3: The store holds a project's design"
+    And the design section is under 400 characters
+
+  # A session nobody gave a step to is most sessions, and the line costs context on every one of them.
+  Scenario: A session that took no step reads no step line
+    Given the project's design is "# Bills\n"
+    And the project's path is:
+      """
+      ## 1. The store holds a project's brief
+      """
+    When the operator dispatches "hello" to the project
+    Then the session's memory file does not carry "You are on step"
+
+  # These scenarios run the command line tool as a caller runs it: its own process, its own standard
+  # output, its own exit status.
+
+  Scenario: The operator takes a step and reads what the session was asked to do
+    Given the system listens on an address the tool can dial
+    And the project's design is "# Bills\n"
+    And the operator approved the project's design
+    And the project's path is:
+      """
+      ## 1. The store holds a project's brief
+      """
+    When the caller takes step 1
+    Then standard output carries "step 1 of house-bills is taken: The store holds a project's brief"
+    And standard output carries "Step 1 of 1 on the path for house-bills."
+    And standard output carries "Build this step only."
+    And the command succeeds
+
+  Scenario: The tool prints one line of refusal for a design nobody approved
+    Given the system listens on an address the tool can dial
+    And the project's design is "# Bills\n"
+    And the project's path is:
+      """
+      ## 1. The store holds a project's brief
+      """
+    When the caller takes step 1
+    Then standard error says "krewe design approve"
+    And standard error says "nothing was started"
+    And the command fails
+
+  Scenario: Taking a step without saying which one is refused
+    Given the system listens on an address the tool can dial
+    When the caller takes a step without saying which one
+    Then standard error says "usage: krewe step take"
+    And the command fails
