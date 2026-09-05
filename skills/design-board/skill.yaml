@@ -1,0 +1,6 @@
+name: design-board
+version: 1
+summary: Publish a project's design to a GitHub project board, and refresh the board after the work moves.
+binaries: [gh]
+secrets:
+  GH_TOKEN: a token with repo scope and project scope, set with `krewe secret set <workspace> GH_TOKEN`. The project scope is the one people forget, and without it every board write fails after the issues already exist.
