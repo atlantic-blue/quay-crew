@@ -371,8 +371,20 @@ features: hooks
 promises:
 	@go run ./cmd/promises -base origin/$(UPGRADE_BRANCH)
 
+## constant-branches: refuse a branch whose condition is a boolean literal
+#
+# No linter here reports one. staticcheck is enabled through the standard set and passes `if false`,
+# and so does every other linter golangci-lint carries with its optional checks turned on, measured at
+# version 2.12.2. This guard is the answer instead.
+#
+# It parses the source rather than matching text, so the words in a comment and the words in a test
+# fixture string are not findings. It reads the literal form only: a condition that is always false
+# through a variable still needs a person to see it.
+constant-branches:
+	@go run ./cmd/constantbranches
+
 ## lint: run buf and golangci-lint (generated code is not linted)
-lint:
+lint: constant-branches
 	buf lint
 	golangci-lint run ./internal/... ./cmd/... ./features/...
 	@for dir in $$(find hooks -maxdepth 2 -name go.mod -exec dirname {} \;); do \

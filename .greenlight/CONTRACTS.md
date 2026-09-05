@@ -222,31 +222,54 @@ Verification: auto
 The reason: the removed branch was unreachable, so a green suite fully proves the removal. The
 existing directories scenarios cover the paths.
 
-### REMOVE-3: the linter refuses an always false branch
+### REMOVE-3: the lint gate refuses a branch on a boolean literal
 
 Boundary: repository to continuous integration.
 
-Input: the Go source of this module.
+Input: the Go source of this module, except `gen/` and the hook modules.
 
-Output: a `golangci-lint run` that reports an always false condition and an assigned but unused
-value.
+Output: a `make constant-branches` run. It names every branch whose condition is the bare word
+`true` or `false`. It gives the file and the line of each one.
+
+This contract was measured and corrected. It said `staticcheck` joins the enabled set and then
+refuses the branch. Both halves were false. `default: standard` already enables `staticcheck`, and
+`golangci-lint linters` lists it. Naming it again changes nothing.
+
+Nothing in golangci-lint 2.12.2 reports the branch. An `if false` in a live path passed the
+repository's own configuration. It also passed every linter enabled at once, with the optional
+checks of `gocritic`, `revive` and `staticcheck` turned on. The other half of the old output needs
+no work. An assigned but unused value is already reported by `ineffassign`, which the standard set
+enables.
+
+So the guard is a command in this repository, not a linter entry.
 
 Errors:
-- A finding anywhere in the module fails the lint job. The slice that adds the linter fixes every
-  finding it raises, or the linter entry does not go in.
+- A branch on a boolean literal fails the lint job. The refusal names the file, the line and what to
+  write instead.
+- Reading no Go source fails too. A guard over a moved or empty tree reports the same silence as a
+  guard over clean source. Only one of the two means anything.
 
 Invariants:
-- `.golangci.yml` names `staticcheck` in its enabled set.
-- `make lint` reports zero issues after the change.
-- The linter is added after REMOVE-1, never before. Added first, it turns the build red on code that
+- `make constant-branches` reads the module. It refuses a branch whose condition is `true` or
+  `false`, in an `if` and in an `else if`.
+- It parses the source, and does not match text. The words in a comment are not a finding. An
+  identifier such as `falsePositive` is not a finding. The words inside a string are not a finding.
+- A test of the guard may therefore hold the forbidden source as an ordinary string. No directory of
+  tests is excluded.
+- `lint` depends on `constant-branches`. The lint step of `.github/workflows/ci.yml` calls the same
+  target, so a machine and the pipeline cannot drift.
+- It reads the literal form only. A condition that is always false through a variable still needs a
+  person to see it. That is the shape the dead role path had.
+- The guard is added after REMOVE-1, never before. Added first, it turns the build red on code that
   goes away anyway.
 
 Verification: verify
 Acceptance criteria:
-- `make lint` reports zero issues.
-- The linter refuses a deliberately added `if false` branch.
+- `make constant-branches` passes on a clean tree. It names the count of files it read.
+- It refuses a deliberately added `if false` branch, and names its file and line.
+- It refuses a tree it read no Go source in.
 Steps:
-- Run `make lint` and read the count it prints.
+- Run `make constant-branches` and read what it prints.
 
 ## TABLE: the tables, at field level
 

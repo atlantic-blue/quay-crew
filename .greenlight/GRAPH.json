@@ -53,7 +53,7 @@
     {
       "id": "S-2",
       "milestone": 1,
-      "name": "The linter refuses an always false branch",
+      "name": "The lint gate refuses a branch on a boolean literal",
       "intention": "Make the class of defect S-1 removed impossible to add back.",
       "user_actions": [],
       "depends_on": [
@@ -63,11 +63,16 @@
         "REMOVE-3"
       ],
       "touches": [
-        ".golangci.yml"
+        "Makefile",
+        ".github/workflows/ci.yml",
+        "cmd/constantbranches/main.go",
+        "internal/constantbranches/constantbranches.go",
+        "internal/constantbranches/constantbranches_test.go",
+        ".greenlight/CONTRACTS.md"
       ],
-      "changes": "staticcheck joins the enabled linter set, so an always false condition and an assigned but unused value fail the lint job.",
-      "proves": "make lint reports zero issues.",
-      "risk": "staticcheck may report findings elsewhere in the module. This slice fixes every finding it raises, or the linter entry does not go in. A finding whose fix touches a .go file needs a scenario, or the pull request body carries a No scenario line with a reason.",
+      "changes": "A guard in this repository, make constant-branches, reads the module and refuses a branch whose condition is the bare word true or false. lint depends on it and the lint step of the workflow calls the same target. staticcheck was measured and does not report the branch, and it is already enabled by default: standard, so no linter entry goes in.",
+      "proves": "make constant-branches names the count of files it read and passes on a clean tree, refuses a deliberately added if false branch by file and line, and refuses a tree it read no Go source in.",
+      "risk": "The guard reads the literal form only. A condition that is always false through a variable, which is the shape the dead role path had, still needs a person to see it.",
       "why_after_s1": "Added before S-1, it turns the build red on code that goes away anyway."
     },
     {
