@@ -3,8 +3,13 @@ Feature: A project holds a numbered path of steps
   A design says what to build. It does not say what to build first, and a project had nowhere to keep
   the answer, so the atomised changes lived in whoever wrote them down.
 
-  The path is that list, kept on the project. Each step carries one intention, the files it writes,
-  what proves it, and the name of the scenario krewe runs to check it.
+  The path is that list, and it belongs to one feature of the project. A project delivers several
+  features at once and each one has a path of its own, so writing one leaves the others whole and two
+  features may each hold a step 3. Each step carries one intention, the files it writes, what proves
+  it, and the name of the scenario krewe runs to check it.
+
+  A step is named as one token, <feature>.<number>. A bare number was the whole address before the
+  path belonged to a feature, so it is refused rather than guessed at.
 
   The control plane parses the document rather than the caller, so the console and the command line
   send the same words and cannot drift on the grammar.
@@ -288,17 +293,65 @@ Feature: A project holds a numbered path of steps
       """
     Then the path write warns about nothing
 
-  Scenario: A project with no path answers with nothing
+  Scenario: A feature with no path answers with nothing
     When the operator reads the path
     Then the path holds 0 steps
 
-  Scenario: The path of a project that does not exist is refused
-    When the operator reads the path of a project that does not exist
+  Scenario: The path of a feature that does not exist is refused
+    When the operator reads the path of a feature that does not exist
     Then the control plane refuses it as not found
 
-  Scenario: A path written for no project at all is refused
-    When the operator sets a path without saying which project
+  Scenario: A path written for no feature at all is refused
+    When the operator sets a path without saying which feature
     Then the control plane refuses it as invalid
+
+  # The whole reason the key moved down to the feature. Keyed by the project, the second write wiped
+  # the first, so a project could only ever be building one thing.
+  Scenario: Setting the path of feature 2 leaves the path of feature 1 whole
+    Given the project's feature "authentication"
+    And the project's feature "payment"
+    When the operator sets the path of feature 1 to:
+      """
+      ## 1. Sign up
+      ## 2. Sign in
+      """
+    And the operator sets the path of feature 2 to:
+      """
+      ## 1. Checkout
+      """
+    And the operator reads the path of feature 1
+    Then the path holds 2 steps
+    And the path reads 1, 2 in that order
+    And step 1 is titled "Sign up"
+
+  # Step 3 of one feature and step 3 of another are two steps. Keyed by the project they were one,
+  # and a project could not run two features at once without them colliding.
+  Scenario: Two features each hold a step 3, and taking one leaves the other ready
+    Given the project's design is "# Bills\n"
+    And the operator approved the project's design
+    And the project's feature "authentication"
+    And the project's feature "payment"
+    And the operator sets the path of feature 1 to:
+      """
+      ## 3. Reset the password
+
+      After
+      """
+    And the operator sets the path of feature 2 to:
+      """
+      ## 3. Refund a payment
+
+      After
+      """
+    When the operator takes step 3 of feature 1
+    And the operator reads the path of feature 2
+    Then step 3 is ready
+    And the operator reads the path of feature 1
+    And step 3 is titled "Reset the password"
+
+  Scenario: Taking a step of a feature that does not exist is refused
+    When the operator takes a step of a feature that does not exist
+    Then the control plane refuses it as not found
 
   # A design session writes the path. Writing one grants it nothing it could not reach by dispatching,
   # so it is not one of the calls the operator keeps.
@@ -341,12 +394,88 @@ Feature: A project holds a numbered path of steps
     Then standard output lists 5 steps in number order
     And the command succeeds
 
-  Scenario: A project with no path tells the caller how to write one
+  Scenario: A project with no feature tells the caller to add one
     Given the system listens on an address the tool can dial
     When the caller reads the path
-    Then standard output carries "has no path yet"
+    Then standard output carries "has no feature yet"
+    And standard output carries "krewe feature add"
+    And the command succeeds
+
+  Scenario: A feature with no path tells the caller how to write one
+    Given the system listens on an address the tool can dial
+    And the project's feature "authentication"
+    When the caller reads the path
+    Then standard output carries "this feature has no path yet"
     And standard output carries "krewe path set"
     And the command succeeds
+
+  # A path belongs to a feature, so reading the project prints every open feature's path and the
+  # heading above each one says which path is on the screen.
+  Scenario: Two features print their paths under their own headings
+    Given the system listens on an address the tool can dial
+    And the project's feature "authentication"
+    And the project's feature "payment"
+    And the operator sets the path of feature 1 to:
+      """
+      ## 1. Sign up
+      """
+    And the operator sets the path of feature 2 to:
+      """
+      ## 1. Checkout
+      """
+    When the caller reads the path
+    Then standard output carries "feature 1: authentication"
+    And standard output carries "Sign up"
+    And standard output carries "feature 2: payment"
+    And standard output carries "Checkout"
+    And the command succeeds
+
+  Scenario: Reading one feature prints that feature's path and no other
+    Given the system listens on an address the tool can dial
+    And the project's feature "authentication"
+    And the project's feature "payment"
+    And the operator sets the path of feature 1 to:
+      """
+      ## 1. Sign up
+      """
+    And the operator sets the path of feature 2 to:
+      """
+      ## 1. Checkout
+      """
+    When the caller reads the path of feature 2
+    Then standard output carries "Checkout"
+    And standard output does not carry "Sign up"
+    And the command succeeds
+
+  Scenario: Writing one feature's path leaves another feature's path whole
+    Given the system listens on an address the tool can dial
+    And the project's feature "authentication"
+    And the project's feature "payment"
+    And the operator sets the path of feature 1 to:
+      """
+      ## 1. Sign up
+      """
+    And a path file saying:
+      """
+      ## 1. Checkout
+      """
+    When the caller writes the path of feature 2 from that file
+    Then standard output carries "feature 2 of house-bills has a path of 1 steps"
+    And the caller reads the path of feature 1
+    And standard output carries "Sign up"
+    And the command succeeds
+
+  Scenario: A feature number that names no feature is refused, naming the numbers that exist
+    Given the system listens on an address the tool can dial
+    And the project's feature "authentication"
+    And a path file saying:
+      """
+      ## 1. Checkout
+      """
+    When the caller writes the path of feature 9 from that file
+    Then standard error says "has no feature 9"
+    And standard error says "it has 1"
+    And the command fails
 
   Scenario: A file with a duplicate step number is refused and nothing is written
     Given the system listens on an address the tool can dial
@@ -365,6 +494,16 @@ Feature: A project holds a numbered path of steps
   Scenario: Writing a path without saying which file is refused
     Given the system listens on an address the tool can dial
     When the caller writes the path without naming a file
+    Then standard error says "usage: krewe path set"
+    And the command fails
+
+  Scenario: Writing a path without saying which feature is refused
+    Given the system listens on an address the tool can dial
+    And a path file saying:
+      """
+      ## 1. Checkout
+      """
+    When the caller writes the path without saying which feature
     Then standard error says "usage: krewe path set"
     And the command fails
 
@@ -613,6 +752,49 @@ Feature: A project holds a numbered path of steps
     Then the session's memory file carries "You are on step 2 of 3: The store holds a project's design"
     And the design section is under 400 characters
 
+  # A session works in a project and its step may sit in any feature of it, so the search for the
+  # step it holds is across the whole project. Narrowed to one feature, a session on a step of the
+  # second one reads no step line at all.
+  #
+  # The count beside it is the other half. It is the step's own feature's path, because a path
+  # belongs to a feature and "step 1 of 2" is a sentence about one path. The two features here hold
+  # different numbers of steps, so a count taken across the project says 5.
+  Scenario: A session on a step of the second feature reads which step it is on
+    Given the project's design is "# Bills\n"
+    And the operator approved the project's design
+    And the project's feature "authentication"
+    And the project's feature "payment"
+    And the operator sets the path of feature 1 to:
+      """
+      ## 1. Sign up
+      ## 2. Sign in
+      ## 3. Reset the password
+      """
+    And the operator sets the path of feature 2 to:
+      """
+      ## 1. Checkout
+      ## 2. Refund a payment
+      """
+    When the operator takes step 1 of feature 2
+    Then the session's memory file carries "You are on step 1 of 2: Checkout"
+
+  # The session reads the whole project in its working directory, because it works in the project
+  # rather than in one feature of it.
+  Scenario: The session's path file carries every feature's path
+    Given the project's feature "authentication"
+    And the project's feature "payment"
+    And the operator sets the path of feature 1 to:
+      """
+      ## 1. Sign up
+      """
+    And the operator sets the path of feature 2 to:
+      """
+      ## 1. Checkout
+      """
+    When the operator dispatches "hello" to the project
+    Then the session's path file carries "## 1. Sign up"
+    And the session's path file carries "## 1. Checkout"
+
   # A session nobody gave a step to is most sessions, and the line costs context on every one of them.
   Scenario: A session that took no step reads no step line
     Given the project's design is "# Bills\n"
@@ -634,11 +816,89 @@ Feature: A project holds a numbered path of steps
       """
       ## 1. The store holds a project's brief
       """
-    When the caller takes step 1
-    Then standard output carries "step 1 of house-bills is taken: The store holds a project's brief"
+    When the caller takes step "1.1"
+    Then standard output carries "step 1.1 of house-bills is taken: The store holds a project's brief"
     And standard output carries "Step 1 of 1 on the path for house-bills."
     And standard output carries "Build this step only."
     And the command succeeds
+
+  # A step is named as <feature>.<number>, so 2.3 is step 3 of feature 2 and nothing else.
+  Scenario: The caller takes step 3 of feature 2
+    Given the system listens on an address the tool can dial
+    And the project's design is "# Bills\n"
+    And the operator approved the project's design
+    And the project's feature "authentication"
+    And the project's feature "payment"
+    And the operator sets the path of feature 2 to:
+      """
+      ## 3. Refund a payment
+
+      After
+      """
+    When the caller takes step "2.3"
+    Then standard output carries "step 2.3 of house-bills is taken: Refund a payment"
+    And the command succeeds
+
+  # The way off the old form. A bare number was a whole step address before the path belonged to a
+  # feature, so it is in somebody's notes and in their shell history. It names nothing now, and it
+  # says so rather than being guessed at.
+  Scenario: A bare step number is refused, and the refusal names the form and the features
+    Given the system listens on an address the tool can dial
+    And the project's design is "# Bills\n"
+    And the operator approved the project's design
+    And the project's feature "authentication"
+    And the project's feature "payment"
+    When the caller takes step "3"
+    Then standard error says "name a step as <feature>.<number>, for example 2.3"
+    And standard error says "1. authentication"
+    And standard error says "2. payment"
+    And the command fails
+
+  # Refused even here, where there is only one feature it could mean. A guess that is right today is
+  # wrong the moment a second feature is added, and it would be wrong silently.
+  Scenario: A bare step number is refused on a project with exactly one feature
+    Given the system listens on an address the tool can dial
+    And the project's design is "# Bills\n"
+    And the operator approved the project's design
+    And the project's feature "authentication"
+    And the operator sets the path of feature 1 to:
+      """
+      ## 1. Sign up
+      """
+    When the caller takes step "1"
+    Then standard error says "name a step as <feature>.<number>, for example 2.3"
+    And standard error says "1. authentication"
+    And the command fails
+
+  Scenario: A step token whose feature part names no feature is refused, naming the number
+    Given the system listens on an address the tool can dial
+    And the project's design is "# Bills\n"
+    And the operator approved the project's design
+    And the project's feature "authentication"
+    When the caller takes step "9.1"
+    Then standard error says "has no feature 9"
+    And standard error says "it has 1"
+    And the command fails
+
+  Scenario: A step token with a part that is not a number is refused, naming the token
+    Given the system listens on an address the tool can dial
+    And the project's design is "# Bills\n"
+    And the operator approved the project's design
+    And the project's feature "authentication"
+    When the caller takes step "1.one"
+    Then standard error says "is not a step: the number after the full stop reads"
+    And standard error says "1.one"
+    And the command fails
+
+  Scenario: A step token whose feature part is not a number is refused, naming the token
+    Given the system listens on an address the tool can dial
+    And the project's design is "# Bills\n"
+    And the operator approved the project's design
+    And the project's feature "authentication"
+    When the caller takes step "one.1"
+    Then standard error says "is not a feature number"
+    And standard error says "one"
+    And the command fails
 
   Scenario: The tool prints one line of refusal for a design nobody approved
     Given the system listens on an address the tool can dial
@@ -647,7 +907,7 @@ Feature: A project holds a numbered path of steps
       """
       ## 1. The store holds a project's brief
       """
-    When the caller takes step 1
+    When the caller takes step "1.1"
     Then standard error says "krewe design approve"
     And standard error says "nothing was started"
     And the command fails
@@ -770,14 +1030,31 @@ Feature: A project holds a numbered path of steps
     Then standard output lists 2 features in number order
     And the command succeeds
 
-  # The count is of the feature's own steps. No step belongs to a feature yet, so every feature reads
-  # none of none, and the count becomes true when the steps arrive under it. Counting the project's
-  # steps instead would print one project wide number against every feature of it.
+  # The count is of the feature's own steps. Counting the project's steps instead would print one
+  # project wide number against every feature of it and say nothing about any of them.
   Scenario: A feature counts the steps under it, and holds none yet
     Given the system listens on an address the tool can dial
     And the project's feature "authentication"
     When the caller reads the features
     Then standard output carries "0/0"
+    And the command succeeds
+
+  Scenario: Each feature counts its own steps and not the project's
+    Given the system listens on an address the tool can dial
+    And the project's feature "authentication"
+    And the project's feature "payment"
+    And the operator sets the path of feature 1 to:
+      """
+      ## 1. Sign up
+      ## 2. Sign in
+      """
+    And the operator sets the path of feature 2 to:
+      """
+      ## 1. Checkout
+      """
+    When the caller reads the features
+    Then standard output carries "0/2"
+    And standard output carries "0/1"
     And the command succeeds
 
   Scenario: Setting an intention shows it on the next reading

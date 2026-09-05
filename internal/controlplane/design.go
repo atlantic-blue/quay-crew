@@ -176,25 +176,61 @@ func (s *Server) renderDesign(ctx context.Context, session *quaycrewv1.Session, 
 	return designSummary(project.GetName(), design, hasBody, hasPath, on, inThePath)
 }
 
-// stepThisSessionHolds is the step this session took and how many steps the path has, and nil for a
-// session that took none. Most sessions took none: an ordinary exec into a project is not a step.
+// stepThisSessionHolds is the step this session took and how many steps that step's path has, and
+// nil for a session that took none. Most sessions took none: an ordinary exec into a project is not
+// a step.
+//
+// The two reads are at two levels and that is the point. A session works in a project and its step
+// may sit in any feature of it, so the search for it is across the whole project. The count beside
+// it is the step's own feature's path, because a path belongs to a feature and "step 3 of 5" is a
+// sentence about one path.
 //
 // The path is read again here rather than handed down from the render beside it, because the summary
 // and the path document are written by two calls and neither owns the other's read.
 func (s *Server) stepThisSessionHolds(ctx context.Context, session *quaycrewv1.Session) (*quaycrewv1.Step, int) {
-	steps, err := s.store.ListSteps(ctx, session.GetProject())
-	if err != nil {
-		return nil, 0
-	}
+	steps := s.stepsOfProject(ctx, session.GetProject())
 	for _, step := range steps {
 		if step.GetState() != store.StepTaken {
 			continue
 		}
 		if step.GetSession() == session.GetHandle() || step.GetSession() == session.GetId() {
-			return step, len(steps)
+			return step, inTheSamePath(steps, step.GetFeature())
 		}
 	}
-	return nil, len(steps)
+	return nil, 0
+}
+
+// stepsOfProject is every step of every feature of one project, in feature and then number order.
+//
+// A session works in a project rather than in a feature, so which step it holds is a question about
+// the whole project. The read goes through the project's features and never through one of them: a
+// read narrowed to a single feature is the query the new key invites and it is the wrong one, since
+// it cannot see the work the project's other features are doing.
+func (s *Server) stepsOfProject(ctx context.Context, project string) []*quaycrewv1.Step {
+	features, err := s.store.ListFeatures(ctx, project)
+	if err != nil {
+		return nil
+	}
+	every := make([]*quaycrewv1.Step, 0)
+	for _, feature := range features {
+		steps, err := s.store.ListSteps(ctx, feature.GetId())
+		if err != nil {
+			continue
+		}
+		every = append(every, steps...)
+	}
+	return every
+}
+
+// inTheSamePath counts the steps of one feature out of a project wide listing.
+func inTheSamePath(steps []*quaycrewv1.Step, feature string) int {
+	held := 0
+	for _, step := range steps {
+		if step.GetFeature() == feature {
+			held++
+		}
+	}
+	return held
 }
 
 // writeSessionFile puts a rendered document where the model can open it, and says whether it is
@@ -604,22 +640,25 @@ func whatTheStepDoesNotSay(step store.Step) []string {
 	return missing
 }
 
-// SetPath replaces a project's path with the steps the document declares.
+// SetPath replaces one feature's path with the steps the document declares.
 //
 // A refused document changes nothing, because the parse runs before the write. There is no way to
 // empty a path: a document with no step heading is refused, so a wrong file path cannot take
 // somebody's path away.
+//
+// It writes one feature's path and leaves every other feature of the project alone, which is what
+// lets two features of one project be built at the same time.
 func (s *Server) SetPath(ctx context.Context, req *quaycrewv1.SetPathRequest) (*quaycrewv1.SetPathResponse, error) {
-	if req.GetProject() == "" {
-		return nil, status.Error(codes.InvalidArgument, "which project: say where with an address")
+	if req.GetFeature() == "" {
+		return nil, status.Error(codes.InvalidArgument, "which feature: a path belongs to one, so say its number")
 	}
 	steps, warnings, err := parsePath(req.GetDocument())
 	if err != nil {
 		return nil, err
 	}
-	written, err := s.store.SetPath(ctx, req.GetProject(), steps)
+	written, err := s.store.SetPath(ctx, req.GetFeature(), steps)
 	if err != nil {
-		return nil, storeError(err, "project")
+		return nil, storeError(err, "feature")
 	}
 	return &quaycrewv1.SetPathResponse{Steps: written, Warnings: warnings}, nil
 }
@@ -633,13 +672,28 @@ func (s *Server) SetPath(ctx context.Context, req *quaycrewv1.SetPathRequest) (*
 // renderPath puts the project's path where the model can open it, and says whether it is there to
 // open. A project with no path has no file: a file that exists and says nothing costs a read.
 //
+// Every feature of the project goes in, one whole path after another, because the session reads this
+// as what the project is building and it works in the project rather than in one feature of it. Each
+// feature's steps are written together rather than merged into one run of numbers, since two
+// features each start at step 1 and a merged list would read as one path with the numbers repeating.
+//
 // Nothing here fails an exec, for the same reason renderDesign fails none.
 func (s *Server) renderPath(ctx context.Context, project, dir string) bool {
-	steps, err := s.store.ListSteps(ctx, project)
+	features, err := s.store.ListFeatures(ctx, project)
 	if err != nil {
 		return false
 	}
-	return s.writeSessionFile(dir, pathFile, "path", pathDocument(steps))
+	paths := make([]string, 0, len(features))
+	for _, feature := range features {
+		steps, err := s.store.ListSteps(ctx, feature.GetId())
+		if err != nil {
+			continue
+		}
+		if document := pathDocument(steps); document != "" {
+			paths = append(paths, document)
+		}
+	}
+	return s.writeSessionFile(dir, pathFile, "path", strings.Join(paths, "\n"))
 }
 
 // pathDocument writes the steps back out in the grammar they were read in, one block each.
@@ -690,14 +744,14 @@ func stepBlock(step *quaycrewv1.Step) string {
 	return strings.Join(lines, "\n")
 }
 
-// ListSteps reads a project's path, or every project's when it names none.
+// ListSteps reads a feature's path, or every feature's when it names none.
 //
-// A project with no path answers with an empty list rather than an error, because nothing written is
+// A feature with no path answers with an empty list rather than an error, because nothing written is
 // the normal state. Reading records nothing.
 func (s *Server) ListSteps(ctx context.Context, req *quaycrewv1.ListStepsRequest) (*quaycrewv1.ListStepsResponse, error) {
-	steps, err := s.store.ListSteps(ctx, req.GetProject())
+	steps, err := s.store.ListSteps(ctx, req.GetFeature())
 	if err != nil {
-		return nil, storeError(err, "project")
+		return nil, storeError(err, "feature")
 	}
 	return &quaycrewv1.ListStepsResponse{Steps: steps}, nil
 }
@@ -708,20 +762,28 @@ func (s *Server) ListSteps(ctx context.Context, req *quaycrewv1.ListStepsRequest
 // The gate reads first and starts nothing. A refusal costs one line of output, and the point of it is
 // that no code exists before the operator approves the path.
 
-// TakeStep gives one step of a project's path to a session, and dispatches that session with the step.
+// TakeStep gives one step of a feature's path to a session, and dispatches that session with the step.
+//
+// The step is addressed by its feature and the design is the project's, so the feature is read first
+// to say which project this is. There is one approval for a project, and a step taken in any feature
+// of it reads that one.
 //
 // The order is the whole design of this call. The approval is read before anything else, so a project
 // whose design nobody approved never reaches the store, never mints a session and never starts a
 // container. The store's own write is what refuses a step somebody already holds, because a read here
 // followed by a write there would let two takes of one step both pass.
 func (s *Server) TakeStep(ctx context.Context, req *quaycrewv1.TakeStepRequest) (*quaycrewv1.TakeStepResponse, error) {
-	if req.GetProject() == "" {
-		return nil, status.Error(codes.InvalidArgument, "which project: say where with an address")
+	if req.GetFeature() == "" {
+		return nil, status.Error(codes.InvalidArgument, "which feature: a step belongs to one, so say its number")
 	}
 	if req.GetNumber() < 1 {
 		return nil, status.Error(codes.InvalidArgument, "a step number counts from one")
 	}
-	design, err := s.store.GetDesign(ctx, req.GetProject())
+	feature, err := s.store.GetFeature(ctx, req.GetFeature())
+	if err != nil {
+		return nil, storeError(err, "feature")
+	}
+	design, err := s.store.GetDesign(ctx, feature.GetProject())
 	if err != nil {
 		return nil, storeError(err, "project")
 	}
@@ -733,9 +795,9 @@ func (s *Server) TakeStep(ctx context.Context, req *quaycrewv1.TakeStepRequest) 
 
 	// The whole path, because the text says which step of how many this is, and because a refusal
 	// about a step nobody wrote has to say how many the path holds.
-	steps, err := s.store.ListSteps(ctx, req.GetProject())
+	steps, err := s.store.ListSteps(ctx, req.GetFeature())
 	if err != nil {
-		return nil, storeError(err, "project")
+		return nil, storeError(err, "feature")
 	}
 	held := stepNumbered(steps, req.GetNumber())
 	if held == nil {
@@ -746,7 +808,7 @@ func (s *Server) TakeStep(ctx context.Context, req *quaycrewv1.TakeStepRequest) 
 	// write that moves the state. The name is a handle, which is what a dispatch is addressed by, so
 	// the session the store names is the session the dispatch continues.
 	handle := store.NewID()
-	taken, err := s.store.TakeStep(ctx, req.GetProject(), req.GetNumber(), handle)
+	taken, err := s.store.TakeStep(ctx, req.GetFeature(), req.GetNumber(), handle)
 	if errors.Is(err, store.ErrStepNotReady) {
 		return nil, status.Error(codes.FailedPrecondition, whoHoldsIt(held))
 	}
@@ -754,9 +816,9 @@ func (s *Server) TakeStep(ctx context.Context, req *quaycrewv1.TakeStepRequest) 
 		return nil, storeError(err, "step")
 	}
 
-	text := takeText(taken, len(steps), s.projectName(ctx, req.GetProject()))
+	text := takeText(taken, len(steps), s.projectName(ctx, feature.GetProject()))
 	dispatched, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{
-		Project: req.GetProject(), Handle: handle, Text: text, Detach: true,
+		Project: feature.GetProject(), Handle: handle, Text: text, Detach: true,
 	})
 	if err != nil {
 		return nil, err
@@ -783,8 +845,8 @@ func stepNumbered(steps []*quaycrewv1.Step, number int32) *quaycrewv1.Step {
 func noSuchStep(number int32, held int) error {
 	if held == 0 {
 		return status.Errorf(codes.NotFound,
-			"this project has no path, so there is no step %d to take: "+
-				"write one with krewe path set [<address>] --file <path>", number)
+			"this feature has no path, so there is no step %d to take: "+
+				"write one with krewe path set [<address>] <feature> --file <path>", number)
 	}
 	return status.Errorf(codes.NotFound, "this path has no step %d: it has %d steps", number, held)
 }

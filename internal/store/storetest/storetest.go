@@ -2077,23 +2077,27 @@ func assertTarget(t *testing.T, where string, got *quaycrewv1.DeployTarget, want
 
 // runPathConformance holds both stores to the same answers about the steps a design was broken into.
 //
+// A path belongs to a feature, so every one of these writes and reads one. What that buys is the two
+// subtests at the end: one feature's path is not another's, and step 3 of one feature is a different
+// step from step 3 of the next.
+//
 // The store keeps what it is given: whether a number is unique and whether `after` names a step that
 // exists are the control plane's questions, because the document is where a person can be told which
 // line is wrong. What is proved here is order, replacement, and what a fresh step reads as.
 func runPathConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Helper()
 
-	t.Run("a project with no path answers with nothing, and it is not an error", func(t *testing.T) {
+	t.Run("a feature with no path answers with nothing, and it is not an error", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		project := newProject(t, s, "acme", "house-bills")
+		feature := newFeature(t, s, newProject(t, s, "acme", "house-bills"), "the bills")
 
-		steps, err := s.ListSteps(ctx, project.GetId())
+		steps, err := s.ListSteps(ctx, feature.GetId())
 		if err != nil {
-			t.Fatalf("ListSteps on a project with no path: %v", err)
+			t.Fatalf("ListSteps on a feature with no path: %v", err)
 		}
 		if len(steps) != 0 {
-			t.Fatalf("a project nobody gave a path answered %d steps", len(steps))
+			t.Fatalf("a feature nobody gave a path answered %d steps", len(steps))
 		}
 	})
 
@@ -2101,9 +2105,9 @@ func runPathConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Run("a path is written whole and read back in number order", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		project := newProject(t, s, "acme", "house-bills")
+		feature := newFeature(t, s, newProject(t, s, "acme", "house-bills"), "the bills")
 
-		written, err := s.SetPath(ctx, project.GetId(), []store.Step{
+		written, err := s.SetPath(ctx, feature.GetId(), []store.Step{
 			{Number: 3, Title: "the third", After: 2},
 			{Number: 1, Title: "the first"},
 			{Number: 2, Title: "the second", After: 1},
@@ -2114,7 +2118,7 @@ func runPathConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		if got := numbersOf(written); !slices.Equal(got, []int32{1, 2, 3}) {
 			t.Fatalf("the write answered steps %v, want 1, 2, 3 in order", got)
 		}
-		read, err := s.ListSteps(ctx, project.GetId())
+		read, err := s.ListSteps(ctx, feature.GetId())
 		if err != nil {
 			t.Fatalf("ListSteps: %v", err)
 		}
@@ -2127,16 +2131,16 @@ func runPathConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Run("a path with gaps in its numbers is kept as it is", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		project := newProject(t, s, "acme", "house-bills")
+		feature := newFeature(t, s, newProject(t, s, "acme", "house-bills"), "the bills")
 
-		if _, err := s.SetPath(ctx, project.GetId(), []store.Step{
+		if _, err := s.SetPath(ctx, feature.GetId(), []store.Step{
 			{Number: 1, Title: "the first"},
 			{Number: 2, Title: "the second", After: 1},
 			{Number: 5, Title: "the fifth", After: 2},
 		}); err != nil {
 			t.Fatalf("SetPath: %v", err)
 		}
-		read, err := s.ListSteps(ctx, project.GetId())
+		read, err := s.ListSteps(ctx, feature.GetId())
 		if err != nil {
 			t.Fatalf("ListSteps: %v", err)
 		}
@@ -2151,9 +2155,9 @@ func runPathConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Run("a step keeps what it was given and is born ready", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		project := newProject(t, s, "acme", "house-bills")
+		feature := newFeature(t, s, newProject(t, s, "acme", "house-bills"), "the bills")
 
-		written, err := s.SetPath(ctx, project.GetId(), []store.Step{{
+		written, err := s.SetPath(ctx, feature.GetId(), []store.Step{{
 			Number:        1,
 			Title:         "the store holds a project's brief",
 			Intention:     "The design has nowhere to live.",
@@ -2169,8 +2173,8 @@ func runPathConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("the write answered %d steps, want 1", len(written))
 		}
 		step := written[0]
-		if step.GetProject() != project.GetId() {
-			t.Errorf("the step names project %q, want %q", step.GetProject(), project.GetId())
+		if step.GetFeature() != feature.GetId() {
+			t.Errorf("the step names feature %q, want %q", step.GetFeature(), feature.GetId())
 		}
 		if step.GetTitle() != "the store holds a project's brief" {
 			t.Errorf("the step is titled %q", step.GetTitle())
@@ -2206,16 +2210,16 @@ func runPathConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Run("writing a path again replaces the one that was there", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		project := newProject(t, s, "acme", "house-bills")
+		feature := newFeature(t, s, newProject(t, s, "acme", "house-bills"), "the bills")
 
-		if _, err := s.SetPath(ctx, project.GetId(), []store.Step{
+		if _, err := s.SetPath(ctx, feature.GetId(), []store.Step{
 			{Number: 1, Title: "the first"},
 			{Number: 2, Title: "the second", After: 1},
 			{Number: 3, Title: "the third", After: 2},
 		}); err != nil {
 			t.Fatalf("SetPath: %v", err)
 		}
-		written, err := s.SetPath(ctx, project.GetId(), []store.Step{
+		written, err := s.SetPath(ctx, feature.GetId(), []store.Step{
 			{Number: 1, Title: "the first, rewritten"},
 			{Number: 3, Title: "the third", After: 1},
 		})
@@ -2233,11 +2237,44 @@ func runPathConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	// The whole reason the key moved down to the feature. Keyed by the project, the second write
+	// wiped the first, so a project could only ever be building one thing.
+	t.Run("setting one feature's path leaves another feature's path whole", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+		first := newFeature(t, s, project, "authentication")
+		second := newFeature(t, s, project, "payment")
+
+		if _, err := s.SetPath(ctx, first.GetId(), []store.Step{
+			{Number: 1, Title: "sign up"},
+			{Number: 2, Title: "sign in", After: 1},
+		}); err != nil {
+			t.Fatalf("SetPath for authentication: %v", err)
+		}
+		if _, err := s.SetPath(ctx, second.GetId(), []store.Step{
+			{Number: 1, Title: "checkout"},
+		}); err != nil {
+			t.Fatalf("SetPath for payment: %v", err)
+		}
+
+		read, err := s.ListSteps(ctx, first.GetId())
+		if err != nil {
+			t.Fatalf("ListSteps for authentication: %v", err)
+		}
+		if got := numbersOf(read); !slices.Equal(got, []int32{1, 2}) {
+			t.Fatalf("authentication holds steps %v after payment was written, want 1 and 2", got)
+		}
+		if read[0].GetTitle() != "sign up" {
+			t.Fatalf("authentication's step 1 is titled %q", read[0].GetTitle())
+		}
+	})
+
 	t.Run("one project's path is not another's", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		bills := newProject(t, s, "acme", "house-bills")
-		garden := newProject(t, s, "acme", "the-garden")
+		bills := newFeature(t, s, newProject(t, s, "acme", "house-bills"), "the bills")
+		garden := newFeature(t, s, newProject(t, s, "acme", "the-garden"), "the garden")
 
 		if _, err := s.SetPath(ctx, bills.GetId(), []store.Step{{Number: 1, Title: "pay the water"}}); err != nil {
 			t.Fatalf("SetPath for house-bills: %v", err)
@@ -2257,61 +2294,62 @@ func runPathConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			t.Fatalf("house-bills holds %d steps, and the first is %q", len(read), read[0].GetTitle())
 		}
 
-		// Every project at once, ordered by project and then by number.
+		// Every feature at once, ordered by feature and then by number.
 		every, err := s.ListSteps(ctx, "")
 		if err != nil {
-			t.Fatalf("ListSteps for every project: %v", err)
+			t.Fatalf("ListSteps for every feature: %v", err)
 		}
 		if len(every) != 3 {
-			t.Fatalf("every project holds %d steps, want 3", len(every))
+			t.Fatalf("every feature holds %d steps, want 3", len(every))
 		}
 		for at := 1; at < len(every); at++ {
 			before, now := every[at-1], every[at]
-			if before.GetProject() > now.GetProject() {
-				t.Fatalf("the listing goes from project %q to %q, so it is not in project order",
-					before.GetProject(), now.GetProject())
+			if before.GetFeature() > now.GetFeature() {
+				t.Fatalf("the listing goes from feature %q to %q, so it is not in feature order",
+					before.GetFeature(), now.GetFeature())
 			}
-			if before.GetProject() == now.GetProject() && before.GetNumber() >= now.GetNumber() {
-				t.Fatalf("one project's steps read %d then %d", before.GetNumber(), now.GetNumber())
+			if before.GetFeature() == now.GetFeature() && before.GetNumber() >= now.GetNumber() {
+				t.Fatalf("one feature's steps read %d then %d", before.GetNumber(), now.GetNumber())
 			}
 		}
 	})
 
 	// A project here is deleted by a stamp rather than by removing the row, so the foreign key
-	// cascade never fires for one. Both stores have to hide its path anyway, or a listing answers
-	// with the path of a project nobody can reach.
+	// cascade never fires for one. Both stores have to hide the paths of its features anyway, or a
+	// listing answers with the path of a project nobody can reach.
 	t.Run("a deleted project's path leaves every listing", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house-bills")
+		feature := newFeature(t, s, project, "the bills")
 
-		if _, err := s.SetPath(ctx, project.GetId(), []store.Step{{Number: 1, Title: "pay the water"}}); err != nil {
+		if _, err := s.SetPath(ctx, feature.GetId(), []store.Step{{Number: 1, Title: "pay the water"}}); err != nil {
 			t.Fatalf("SetPath: %v", err)
 		}
 		if err := s.DeleteProject(ctx, project.GetId()); err != nil {
 			t.Fatalf("DeleteProject: %v", err)
 		}
-		if _, err := s.ListSteps(ctx, project.GetId()); !errors.Is(err, store.ErrNotFound) {
-			t.Fatalf("ListSteps on a deleted project answered %v, want ErrNotFound", err)
+		if _, err := s.ListSteps(ctx, feature.GetId()); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("ListSteps on a deleted project's feature answered %v, want ErrNotFound", err)
 		}
 		every, err := s.ListSteps(ctx, "")
 		if err != nil {
-			t.Fatalf("ListSteps for every project: %v", err)
+			t.Fatalf("ListSteps for every feature: %v", err)
 		}
 		if len(every) != 0 {
 			t.Fatalf("a deleted project left %d steps in the listing", len(every))
 		}
 	})
 
-	t.Run("a path written for a project that does not exist is not found", func(t *testing.T) {
+	t.Run("a path written for a feature that does not exist is not found", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 
-		if _, err := s.SetPath(ctx, "no-such-project", []store.Step{{Number: 1, Title: "the first"}}); !errors.Is(err, store.ErrNotFound) {
-			t.Fatalf("SetPath on a missing project answered %v, want ErrNotFound", err)
+		if _, err := s.SetPath(ctx, "no-such-feature", []store.Step{{Number: 1, Title: "the first"}}); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("SetPath on a missing feature answered %v, want ErrNotFound", err)
 		}
-		if _, err := s.ListSteps(ctx, "no-such-project"); !errors.Is(err, store.ErrNotFound) {
-			t.Fatalf("ListSteps on a missing project answered %v, want ErrNotFound", err)
+		if _, err := s.ListSteps(ctx, "no-such-feature"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("ListSteps on a missing feature answered %v, want ErrNotFound", err)
 		}
 	})
 }
@@ -2325,6 +2363,16 @@ func numbersOf(steps []*quaycrewv1.Step) []int32 {
 	return numbers
 }
 
+// newFeature gives a project one narrowed part of itself, which is what a path hangs off.
+func newFeature(t *testing.T, s store.Store, project *quaycrewv1.Project, title string) *quaycrewv1.Feature {
+	t.Helper()
+	feature, err := s.AddFeature(context.Background(), project.GetId(), title)
+	if err != nil {
+		t.Fatalf("AddFeature: %v", err)
+	}
+	return feature
+}
+
 // runTakeConformance holds both stores to the same answers about giving one step to a session.
 func runTakeConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Helper()
@@ -2332,9 +2380,9 @@ func runTakeConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Run("one step of a path is read back whole", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		project := newProject(t, s, "acme", "house-bills")
+		feature := newFeature(t, s, newProject(t, s, "acme", "house-bills"), "the bills")
 
-		if _, err := s.SetPath(ctx, project.GetId(), []store.Step{
+		if _, err := s.SetPath(ctx, feature.GetId(), []store.Step{
 			{Number: 1, Title: "the first"},
 			{Number: 2, Title: "the second", Intention: "The second thing.",
 				Touches: "internal/store/store.go", Proof: "It reads back.",
@@ -2342,7 +2390,7 @@ func runTakeConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}); err != nil {
 			t.Fatalf("SetPath: %v", err)
 		}
-		step, err := s.GetStep(ctx, project.GetId(), 2)
+		step, err := s.GetStep(ctx, feature.GetId(), 2)
 		if err != nil {
 			t.Fatalf("GetStep: %v", err)
 		}
@@ -2362,33 +2410,33 @@ func runTakeConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
-	// A number nobody wrote and a project nobody made both answer the same way: neither is the step
+	// A number nobody wrote and a feature nobody made both answer the same way: neither is the step
 	// that was asked for.
 	t.Run("a step the path does not hold is not found", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		project := newProject(t, s, "acme", "house-bills")
+		feature := newFeature(t, s, newProject(t, s, "acme", "house-bills"), "the bills")
 
-		if _, err := s.SetPath(ctx, project.GetId(), []store.Step{{Number: 1, Title: "the first"}}); err != nil {
+		if _, err := s.SetPath(ctx, feature.GetId(), []store.Step{{Number: 1, Title: "the first"}}); err != nil {
 			t.Fatalf("SetPath: %v", err)
 		}
-		if _, err := s.GetStep(ctx, project.GetId(), 7); !errors.Is(err, store.ErrNotFound) {
+		if _, err := s.GetStep(ctx, feature.GetId(), 7); !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("GetStep on a step nobody wrote answered %v, want ErrNotFound", err)
 		}
-		if _, err := s.GetStep(ctx, "no-such-project", 1); !errors.Is(err, store.ErrNotFound) {
-			t.Fatalf("GetStep on a missing project answered %v, want ErrNotFound", err)
+		if _, err := s.GetStep(ctx, "no-such-feature", 1); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("GetStep on a missing feature answered %v, want ErrNotFound", err)
 		}
 	})
 
 	t.Run("taking a ready step records the session and the moment", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		project := newProject(t, s, "acme", "house-bills")
+		feature := newFeature(t, s, newProject(t, s, "acme", "house-bills"), "the bills")
 
-		if _, err := s.SetPath(ctx, project.GetId(), []store.Step{{Number: 1, Title: "the first"}}); err != nil {
+		if _, err := s.SetPath(ctx, feature.GetId(), []store.Step{{Number: 1, Title: "the first"}}); err != nil {
 			t.Fatalf("SetPath: %v", err)
 		}
-		taken, err := s.TakeStep(ctx, project.GetId(), 1, "session-one")
+		taken, err := s.TakeStep(ctx, feature.GetId(), 1, "session-one")
 		if err != nil {
 			t.Fatalf("TakeStep: %v", err)
 		}
@@ -2403,7 +2451,7 @@ func runTakeConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 		// Read again, because a write that answered well and stored nothing reads the same to its
 		// caller and to nobody else.
-		read, err := s.GetStep(ctx, project.GetId(), 1)
+		read, err := s.GetStep(ctx, feature.GetId(), 1)
 		if err != nil {
 			t.Fatalf("GetStep after the take: %v", err)
 		}
@@ -2417,18 +2465,18 @@ func runTakeConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Run("taking a step somebody already holds is refused, and the holder keeps it", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		project := newProject(t, s, "acme", "house-bills")
+		feature := newFeature(t, s, newProject(t, s, "acme", "house-bills"), "the bills")
 
-		if _, err := s.SetPath(ctx, project.GetId(), []store.Step{{Number: 1, Title: "the first"}}); err != nil {
+		if _, err := s.SetPath(ctx, feature.GetId(), []store.Step{{Number: 1, Title: "the first"}}); err != nil {
 			t.Fatalf("SetPath: %v", err)
 		}
-		if _, err := s.TakeStep(ctx, project.GetId(), 1, "session-one"); err != nil {
+		if _, err := s.TakeStep(ctx, feature.GetId(), 1, "session-one"); err != nil {
 			t.Fatalf("TakeStep: %v", err)
 		}
-		if _, err := s.TakeStep(ctx, project.GetId(), 1, "session-two"); !errors.Is(err, store.ErrStepNotReady) {
+		if _, err := s.TakeStep(ctx, feature.GetId(), 1, "session-two"); !errors.Is(err, store.ErrStepNotReady) {
 			t.Fatalf("taking a step twice answered %v, want ErrStepNotReady", err)
 		}
-		read, err := s.GetStep(ctx, project.GetId(), 1)
+		read, err := s.GetStep(ctx, feature.GetId(), 1)
 		if err != nil {
 			t.Fatalf("GetStep after the refusal: %v", err)
 		}
@@ -2441,21 +2489,21 @@ func runTakeConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	t.Run("two steps of one path are taken at once", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
-		project := newProject(t, s, "acme", "house-bills")
+		feature := newFeature(t, s, newProject(t, s, "acme", "house-bills"), "the bills")
 
-		if _, err := s.SetPath(ctx, project.GetId(), []store.Step{
+		if _, err := s.SetPath(ctx, feature.GetId(), []store.Step{
 			{Number: 1, Title: "the first"},
 			{Number: 2, Title: "the second", After: 1},
 		}); err != nil {
 			t.Fatalf("SetPath: %v", err)
 		}
-		if _, err := s.TakeStep(ctx, project.GetId(), 1, "session-one"); err != nil {
+		if _, err := s.TakeStep(ctx, feature.GetId(), 1, "session-one"); err != nil {
 			t.Fatalf("TakeStep on step 1: %v", err)
 		}
-		if _, err := s.TakeStep(ctx, project.GetId(), 2, "session-two"); err != nil {
+		if _, err := s.TakeStep(ctx, feature.GetId(), 2, "session-two"); err != nil {
 			t.Fatalf("TakeStep on step 2: %v", err)
 		}
-		read, err := s.ListSteps(ctx, project.GetId())
+		read, err := s.ListSteps(ctx, feature.GetId())
 		if err != nil {
 			t.Fatalf("ListSteps: %v", err)
 		}
@@ -2467,19 +2515,49 @@ func runTakeConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
-	t.Run("taking a step nothing holds is not found", func(t *testing.T) {
+	// Step 3 of one feature and step 3 of another are two steps. Keyed by the project they were one,
+	// and a project could not have run two features at once without them colliding.
+	t.Run("two features each hold a step 3, and taking one leaves the other ready", func(t *testing.T) {
 		s := newDataset(t)(t)
 		ctx := context.Background()
 		project := newProject(t, s, "acme", "house-bills")
+		first := newFeature(t, s, project, "authentication")
+		second := newFeature(t, s, project, "payment")
 
-		if _, err := s.SetPath(ctx, project.GetId(), []store.Step{{Number: 1, Title: "the first"}}); err != nil {
+		for _, feature := range []string{first.GetId(), second.GetId()} {
+			if _, err := s.SetPath(ctx, feature, []store.Step{{Number: 3, Title: "the third"}}); err != nil {
+				t.Fatalf("SetPath: %v", err)
+			}
+		}
+		if _, err := s.TakeStep(ctx, first.GetId(), 3, "session-one"); err != nil {
+			t.Fatalf("TakeStep on authentication's step 3: %v", err)
+		}
+		read, err := s.GetStep(ctx, second.GetId(), 3)
+		if err != nil {
+			t.Fatalf("GetStep on payment's step 3: %v", err)
+		}
+		if read.GetState() != store.StepReady {
+			t.Fatalf("payment's step 3 reads as %q after authentication's was taken, want ready",
+				read.GetState())
+		}
+		if read.GetSession() != "" {
+			t.Fatalf("payment's step 3 names session %q, and nobody took it", read.GetSession())
+		}
+	})
+
+	t.Run("taking a step nothing holds is not found", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		feature := newFeature(t, s, newProject(t, s, "acme", "house-bills"), "the bills")
+
+		if _, err := s.SetPath(ctx, feature.GetId(), []store.Step{{Number: 1, Title: "the first"}}); err != nil {
 			t.Fatalf("SetPath: %v", err)
 		}
-		if _, err := s.TakeStep(ctx, project.GetId(), 7, "session-one"); !errors.Is(err, store.ErrNotFound) {
+		if _, err := s.TakeStep(ctx, feature.GetId(), 7, "session-one"); !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("TakeStep on a step nobody wrote answered %v, want ErrNotFound", err)
 		}
-		if _, err := s.TakeStep(ctx, "no-such-project", 1, "session-one"); !errors.Is(err, store.ErrNotFound) {
-			t.Fatalf("TakeStep on a missing project answered %v, want ErrNotFound", err)
+		if _, err := s.TakeStep(ctx, "no-such-feature", 1, "session-one"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("TakeStep on a missing feature answered %v, want ErrNotFound", err)
 		}
 	})
 }
@@ -2499,6 +2577,36 @@ func runFeatureConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 		if len(features) != 0 {
 			t.Fatalf("a project nobody gave a feature answered %d features", len(features))
+		}
+	})
+
+	// One feature by its identifier, which is the read that takes a step call from the feature it
+	// names to the project whose design carries the approval.
+	t.Run("one feature is read back by its identifier", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+		added := newFeature(t, s, project, "authentication")
+
+		read, err := s.GetFeature(ctx, added.GetId())
+		if err != nil {
+			t.Fatalf("GetFeature: %v", err)
+		}
+		if read.GetProject() != project.GetId() || read.GetNumber() != 1 {
+			t.Fatalf("the feature reads project %q and number %d, want %q and 1",
+				read.GetProject(), read.GetNumber(), project.GetId())
+		}
+		if read.GetTitle() != "authentication" || read.GetState() != store.FeatureOpen {
+			t.Fatalf("the feature is titled %q and reads as %q", read.GetTitle(), read.GetState())
+		}
+		if _, err := s.GetFeature(ctx, "no-such-feature"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("GetFeature on a feature nobody made answered %v, want ErrNotFound", err)
+		}
+		if err := s.DeleteProject(ctx, project.GetId()); err != nil {
+			t.Fatalf("DeleteProject: %v", err)
+		}
+		if _, err := s.GetFeature(ctx, added.GetId()); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("GetFeature on a deleted project's feature answered %v, want ErrNotFound", err)
 		}
 	})
 

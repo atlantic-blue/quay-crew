@@ -281,33 +281,42 @@ type Store interface {
 	// and moves the moment.
 	ApproveProjectDesign(ctx context.Context, project string) (*quaycrewv1.Design, error)
 
-	// SetPath replaces the project's path and returns the whole path after the write, in number
+	// SetPath replaces one feature's path and returns the whole path after the write, in number
 	// order. The steps are what a caller may set; the rest of each row belongs to the system.
+	//
+	// It touches no other feature of the same project, in any case, refusal included. Keyed by the
+	// project, a second path wiped the first.
 	//
 	// The store keeps what it is given. Whether a number is unique, whether `after` names a step
 	// that exists, and whether a title says anything are the control plane's questions, because the
 	// document is where a person can be told which line is wrong.
-	SetPath(ctx context.Context, project string, steps []Step) ([]*quaycrewv1.Step, error)
-	// ListSteps returns a project's path in number order, or every project's when the identifier is
-	// empty, ordered by project and then by number. A project with no path is an empty slice and not
+	SetPath(ctx context.Context, feature string, steps []Step) ([]*quaycrewv1.Step, error)
+	// ListSteps returns a feature's path in number order, or every feature's when the identifier is
+	// empty, ordered by feature and then by number. A feature with no path is an empty slice and not
 	// an error, the way a project with no design is.
-	ListSteps(ctx context.Context, project string) ([]*quaycrewv1.Step, error)
-	// GetStep returns one step of a project's path, whole. A project that does not exist and a path
+	ListSteps(ctx context.Context, feature string) ([]*quaycrewv1.Step, error)
+	// GetStep returns one step of a feature's path, whole. A feature that does not exist and a path
 	// that holds no step of that number are both ErrNotFound: neither answers the question asked.
-	GetStep(ctx context.Context, project string, number int32) (*quaycrewv1.Step, error)
+	GetStep(ctx context.Context, feature string, number int32) (*quaycrewv1.Step, error)
 	// TakeStep gives a ready step to a session and returns the step after the write. A step that is
 	// not ready is ErrStepNotReady, and the caller reads the step to say who holds it.
 	//
 	// The state check and the write are one statement, so two callers cannot both take one step.
-	// Several steps of one path may be taken at once: nothing here refuses a second take on a
-	// different step.
-	TakeStep(ctx context.Context, project string, number int32, session string) (*quaycrewv1.Step, error)
+	// Several steps may be taken at once, in one feature or across the features of one project:
+	// nothing here refuses a second take on a different step.
+	TakeStep(ctx context.Context, feature string, number int32, session string) (*quaycrewv1.Step, error)
 
 	// ListFeatures returns a project's features in number order, or every project's when the
 	// identifier is empty, ordered by project and then by number. A project with no feature is an
 	// empty slice and not an error, the way a project with no path is. Every state comes back:
 	// filtering to the open ones is the caller's question.
 	ListFeatures(ctx context.Context, project string) ([]*quaycrewv1.Feature, error)
+	// GetFeature returns one feature, whole. A feature that does not exist, and one of a deleted
+	// project, are both ErrNotFound.
+	//
+	// The step calls take a feature and the design, its approval and the cap all belong to the
+	// project, so something has to say which project a feature sits in. This is it.
+	GetFeature(ctx context.Context, feature string) (*quaycrewv1.Feature, error)
 	// AddFeature gives a project one more narrowed part of itself, numbered the highest number in
 	// that project plus one, and returns it.
 	//

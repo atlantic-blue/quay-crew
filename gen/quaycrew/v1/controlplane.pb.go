@@ -3982,13 +3982,16 @@ func (x *ApproveDesignResponse) GetDesign() *Design {
 	return nil
 }
 
-// Step is one step of a project's path: one atomised change, with what proves it.
+// Step is one step of a feature's path: one atomised change, with what proves it.
 //
 // The field numbers follow the order the slices add them, not the order the design document lists
 // them. A field number is fixed once it ships, so a later change appends rather than renumbers.
 type Step struct {
-	state   protoimpl.MessageState `protogen:"open.v1"`
-	Project string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// feature is the feature this step's path belongs to. Field 1 held the project before the key
+	// moved down to the feature, and it keeps the number: the type does not change, and no message
+	// shipped.
+	Feature string `protobuf:"bytes,1,opt,name=feature,proto3" json:"feature,omitempty"`
 	// number is where in the path this step sits, counting from one. Numbers need not run without
 	// gaps, so a path may go 1, 2, 5.
 	Number int32 `protobuf:"varint,2,opt,name=number,proto3" json:"number,omitempty"`
@@ -4047,9 +4050,9 @@ func (*Step) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{66}
 }
 
-func (x *Step) GetProject() string {
+func (x *Step) GetFeature() string {
 	if x != nil {
-		return x.Project
+		return x.Feature
 	}
 	return ""
 }
@@ -4143,7 +4146,7 @@ func (x *Step) GetProofScenario() string {
 // words and cannot drift.
 type SetPathRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Project       string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	Feature       string                 `protobuf:"bytes,1,opt,name=feature,proto3" json:"feature,omitempty"`
 	Document      string                 `protobuf:"bytes,2,opt,name=document,proto3" json:"document,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -4179,9 +4182,9 @@ func (*SetPathRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{67}
 }
 
-func (x *SetPathRequest) GetProject() string {
+func (x *SetPathRequest) GetFeature() string {
 	if x != nil {
-		return x.Project
+		return x.Feature
 	}
 	return ""
 }
@@ -4245,10 +4248,10 @@ func (x *SetPathResponse) GetWarnings() []string {
 	return nil
 }
 
-// ListStepsRequest reads a project's path, or every project's when it names none.
+// ListStepsRequest reads a feature's path, or every feature's when it names none.
 type ListStepsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Project       string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	Feature       string                 `protobuf:"bytes,1,opt,name=feature,proto3" json:"feature,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4283,9 +4286,9 @@ func (*ListStepsRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{69}
 }
 
-func (x *ListStepsRequest) GetProject() string {
+func (x *ListStepsRequest) GetFeature() string {
 	if x != nil {
-		return x.Project
+		return x.Feature
 	}
 	return ""
 }
@@ -4334,10 +4337,10 @@ func (x *ListStepsResponse) GetSteps() []*Step {
 	return nil
 }
 
-// TakeStepRequest gives one step of a project's path to a session that starts now.
+// TakeStepRequest gives one step of a feature's path to a session that starts now.
 type TakeStepRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Project       string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	Feature       string                 `protobuf:"bytes,1,opt,name=feature,proto3" json:"feature,omitempty"`
 	Number        int32                  `protobuf:"varint,2,opt,name=number,proto3" json:"number,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -4373,9 +4376,9 @@ func (*TakeStepRequest) Descriptor() ([]byte, []int) {
 	return file_quaycrew_v1_controlplane_proto_rawDescGZIP(), []int{71}
 }
 
-func (x *TakeStepRequest) GetProject() string {
+func (x *TakeStepRequest) GetFeature() string {
 	if x != nil {
-		return x.Project
+		return x.Feature
 	}
 	return ""
 }
@@ -8004,7 +8007,7 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"\x15ApproveDesignResponse\x12+\n" +
 	"\x06design\x18\x01 \x01(\v2\x13.quaycrew.v1.DesignR\x06design\"\x95\x03\n" +
 	"\x04Step\x12\x18\n" +
-	"\aproject\x18\x01 \x01(\tR\aproject\x12\x16\n" +
+	"\afeature\x18\x01 \x01(\tR\afeature\x12\x16\n" +
 	"\x06number\x18\x02 \x01(\x05R\x06number\x12\x14\n" +
 	"\x05title\x18\x03 \x01(\tR\x05title\x12\x1c\n" +
 	"\tintention\x18\x04 \x01(\tR\tintention\x12\x18\n" +
@@ -8020,17 +8023,17 @@ const file_quaycrew_v1_controlplane_proto_rawDesc = "" +
 	"finishedAt\x12%\n" +
 	"\x0eproof_scenario\x18\r \x01(\tR\rproofScenario\"F\n" +
 	"\x0eSetPathRequest\x12\x18\n" +
-	"\aproject\x18\x01 \x01(\tR\aproject\x12\x1a\n" +
+	"\afeature\x18\x01 \x01(\tR\afeature\x12\x1a\n" +
 	"\bdocument\x18\x02 \x01(\tR\bdocument\"V\n" +
 	"\x0fSetPathResponse\x12'\n" +
 	"\x05steps\x18\x01 \x03(\v2\x11.quaycrew.v1.StepR\x05steps\x12\x1a\n" +
 	"\bwarnings\x18\x02 \x03(\tR\bwarnings\",\n" +
 	"\x10ListStepsRequest\x12\x18\n" +
-	"\aproject\x18\x01 \x01(\tR\aproject\"<\n" +
+	"\afeature\x18\x01 \x01(\tR\afeature\"<\n" +
 	"\x11ListStepsResponse\x12'\n" +
 	"\x05steps\x18\x01 \x03(\v2\x11.quaycrew.v1.StepR\x05steps\"C\n" +
 	"\x0fTakeStepRequest\x12\x18\n" +
-	"\aproject\x18\x01 \x01(\tR\aproject\x12\x16\n" +
+	"\afeature\x18\x01 \x01(\tR\afeature\x12\x16\n" +
 	"\x06number\x18\x02 \x01(\x05R\x06number\"\x99\x01\n" +
 	"\x10TakeStepResponse\x12%\n" +
 	"\x04step\x18\x01 \x01(\v2\x11.quaycrew.v1.StepR\x04step\x12.\n" +

@@ -26,6 +26,44 @@ type pathWorld struct {
 	// take is what came back from the last take: the step, the session that took it, and the text
 	// that session was given. Kept so an assertion reads the answer the caller got.
 	take *quaycrewv1.TakeStepResponse
+	// feature is the one the scenarios that name no feature are about. A path belongs to a feature,
+	// and most of these scenarios are about the path rather than about which feature holds it.
+	feature *quaycrewv1.Feature
+}
+
+// theFeature is the feature a scenario means when it names none.
+//
+// The first step that needs one adds it, rather than the background adding it to every scenario:
+// the scenarios about features count from one, and a feature added under all of them would move
+// every number they assert.
+func theFeature(ctx context.Context) (*quaycrewv1.Feature, error) {
+	w, p := worldFrom(ctx), pathFrom(ctx)
+	if p.feature != nil {
+		return p.feature, nil
+	}
+	resp, err := w.client.AddFeature(ctx, &quaycrewv1.AddFeatureRequest{
+		Project: w.projectID, Title: "the bills"})
+	if err != nil {
+		return nil, err
+	}
+	p.feature = resp.GetFeature()
+	return p.feature, nil
+}
+
+// featureOfProject is the feature of a number, read from the project now rather than from whatever
+// listing a scenario last asked for.
+func featureOfProject(ctx context.Context, number int32) (*quaycrewv1.Feature, error) {
+	w := worldFrom(ctx)
+	resp, err := w.client.ListFeatures(ctx, &quaycrewv1.ListFeaturesRequest{Project: w.projectID})
+	if err != nil {
+		return nil, err
+	}
+	for _, feature := range resp.GetFeatures() {
+		if feature.GetNumber() == number {
+			return feature, nil
+		}
+	}
+	return nil, fmt.Errorf("the project has no feature %d", number)
 }
 
 type pathKey struct{}
@@ -65,18 +103,32 @@ func initializePathSteps(sc *godog.ScenarioContext) {
 		return setPath(ctx, document.Content)
 	})
 
+	// The scenarios that are about two features name them, so the feature a path is written to is
+	// read from the project rather than assumed.
+	sc.Step(`^the operator sets the path of feature (\d+) to:$`,
+		func(ctx context.Context, number int, document *godog.DocString) error {
+			held, err := featureOfProject(ctx, int32(number))
+			if err != nil {
+				return err
+			}
+			return setPathOf(ctx, held.GetId(), document.Content)
+		})
+
 	// The driver's own token, which is what a session inside a sandbox presents. A design session is
 	// what writes a path, so this call is not one the operator keeps.
 	sc.Step(`^the driver sets the path to:$`, func(ctx context.Context, document *godog.DocString) error {
-		w := worldFrom(ctx)
+		held, err := theFeature(ctx)
+		if err != nil {
+			return err
+		}
 		return asDriver(ctx, func(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) error {
 			_, err := client.SetPath(ctx, &quaycrewv1.SetPathRequest{
-				Project: w.projectID, Document: document.Content})
+				Feature: held.GetId(), Document: document.Content})
 			return err
 		})
 	})
 
-	sc.Step(`^the operator sets a path without saying which project$`, func(ctx context.Context) error {
+	sc.Step(`^the operator sets a path without saying which feature$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		_, w.lastErr = w.client.SetPath(ctx, &quaycrewv1.SetPathRequest{
 			Document: "## 1. The store holds a project's brief"})
@@ -84,19 +136,24 @@ func initializePathSteps(sc *godog.ScenarioContext) {
 	})
 
 	sc.Step(`^the operator reads the path$`, func(ctx context.Context) error {
-		w, p := worldFrom(ctx), pathFrom(ctx)
-		resp, err := w.client.ListSteps(ctx, &quaycrewv1.ListStepsRequest{Project: w.projectID})
-		w.lastErr = err
+		held, err := theFeature(ctx)
 		if err != nil {
-			return nil
+			return err
 		}
-		p.steps = resp.GetSteps()
-		return nil
+		return readPath(ctx, held.GetId())
 	})
 
-	sc.Step(`^the operator reads the path of a project that does not exist$`, func(ctx context.Context) error {
+	sc.Step(`^the operator reads the path of feature (\d+)$`, func(ctx context.Context, number int) error {
+		held, err := featureOfProject(ctx, int32(number))
+		if err != nil {
+			return err
+		}
+		return readPath(ctx, held.GetId())
+	})
+
+	sc.Step(`^the operator reads the path of a feature that does not exist$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
-		_, w.lastErr = w.client.ListSteps(ctx, &quaycrewv1.ListStepsRequest{Project: "no-such-project"})
+		_, w.lastErr = w.client.ListSteps(ctx, &quaycrewv1.ListStepsRequest{Feature: "no-such-feature"})
 		return nil
 	})
 
@@ -121,13 +178,17 @@ func initializePathSteps(sc *godog.ScenarioContext) {
 	})
 
 	sc.Step(`^the project has no path$`, func(ctx context.Context) error {
+		held, err := theFeature(ctx)
+		if err != nil {
+			return err
+		}
 		w := worldFrom(ctx)
-		resp, err := w.client.ListSteps(ctx, &quaycrewv1.ListStepsRequest{Project: w.projectID})
+		resp, err := w.client.ListSteps(ctx, &quaycrewv1.ListStepsRequest{Feature: held.GetId()})
 		if err != nil {
 			return err
 		}
 		if got := len(resp.GetSteps()); got != 0 {
-			return fmt.Errorf("the project holds %d steps, and the document was refused", got)
+			return fmt.Errorf("the feature holds %d steps, and the document was refused", got)
 		}
 		return nil
 	})
@@ -219,7 +280,27 @@ func initializePathSteps(sc *godog.ScenarioContext) {
 	// land before it reads what the session was given.
 
 	sc.Step(`^the operator (?:takes|took) step (\d+)$`, func(ctx context.Context, number int) error {
-		return takeStep(ctx, int32(number))
+		held, err := theFeature(ctx)
+		if err != nil {
+			return err
+		}
+		return takeStep(ctx, held.GetId(), int32(number))
+	})
+
+	sc.Step(`^the operator (?:takes|took) step (\d+) of feature (\d+)$`,
+		func(ctx context.Context, number, feature int) error {
+			held, err := featureOfProject(ctx, int32(feature))
+			if err != nil {
+				return err
+			}
+			return takeStep(ctx, held.GetId(), int32(number))
+		})
+
+	sc.Step(`^the operator takes a step of a feature that does not exist$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		_, w.lastErr = w.client.TakeStep(ctx, &quaycrewv1.TakeStepRequest{
+			Feature: "no-such-feature", Number: 1})
+		return nil
 	})
 
 	sc.Step(`^the step text carries "([^"]*)"$`, func(ctx context.Context, want string) error {
@@ -264,7 +345,11 @@ func initializePathSteps(sc *godog.ScenarioContext) {
 		if p.take == nil {
 			return fmt.Errorf("no step was taken, so nothing holds one")
 		}
-		resp, err := w.client.ListSteps(ctx, &quaycrewv1.ListStepsRequest{Project: w.projectID})
+		held, err := theFeature(ctx)
+		if err != nil {
+			return err
+		}
+		resp, err := w.client.ListSteps(ctx, &quaycrewv1.ListStepsRequest{Feature: held.GetId()})
 		if err != nil {
 			return err
 		}
@@ -315,8 +400,10 @@ func initializePathSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
-	sc.Step(`^the caller takes step (\d+)$`, func(ctx context.Context, number int) error {
-		return runTool(ctx, "step", "take", whereTheProjectIs(ctx), strconv.Itoa(number))
+	// The token as a person types it, whatever is in it, because the refusals are about the shape of
+	// what somebody typed.
+	sc.Step(`^the caller takes step "([^"]*)"$`, func(ctx context.Context, said string) error {
+		return runTool(ctx, "step", "take", whereTheProjectIs(ctx), said)
 	})
 
 	sc.Step(`^the caller takes a step without saying which one$`, func(ctx context.Context) error {
@@ -378,15 +465,34 @@ func initializePathSteps(sc *godog.ScenarioContext) {
 	})
 
 	sc.Step(`^the caller (?:writes|wrote) the path from that file$`, func(ctx context.Context) error {
-		return runTool(ctx, "path", "set", whereTheProjectIs(ctx), "--file", pathFrom(ctx).file)
+		held, err := theFeature(ctx)
+		if err != nil {
+			return err
+		}
+		return runTool(ctx, "path", "set", whereTheProjectIs(ctx),
+			strconv.FormatInt(int64(held.GetNumber()), 10), "--file", pathFrom(ctx).file)
 	})
 
+	sc.Step(`^the caller (?:writes|wrote) the path of feature (\d+) from that file$`,
+		func(ctx context.Context, number int) error {
+			return runTool(ctx, "path", "set", whereTheProjectIs(ctx),
+				strconv.Itoa(number), "--file", pathFrom(ctx).file)
+		})
+
 	sc.Step(`^the caller writes the path without naming a file$`, func(ctx context.Context) error {
-		return runTool(ctx, "path", "set", whereTheProjectIs(ctx))
+		return runTool(ctx, "path", "set", whereTheProjectIs(ctx), "1")
+	})
+
+	sc.Step(`^the caller writes the path without saying which feature$`, func(ctx context.Context) error {
+		return runTool(ctx, "path", "set", whereTheProjectIs(ctx), "--file", pathFrom(ctx).file)
 	})
 
 	sc.Step(`^the caller reads the path$`, func(ctx context.Context) error {
 		return runTool(ctx, "path", whereTheProjectIs(ctx))
+	})
+
+	sc.Step(`^the caller reads the path of feature (\d+)$`, func(ctx context.Context, number int) error {
+		return runTool(ctx, "path", whereTheProjectIs(ctx), strconv.Itoa(number))
 	})
 
 	// Counted off the printed lines rather than asked of the system again, because what this proves
@@ -395,7 +501,8 @@ func initializePathSteps(sc *godog.ScenarioContext) {
 		var numbers []string
 		for _, line := range strings.Split(toolFrom(ctx).stdout, "\n") {
 			fields := strings.Fields(line)
-			if len(fields) == 0 || fields[0] == "STEP" {
+			// The heading naming the feature the path belongs to is not a step of it.
+			if len(fields) == 0 || fields[0] == "STEP" || fields[0] == "feature" {
 				continue
 			}
 			numbers = append(numbers, fields[0])
@@ -416,10 +523,10 @@ func initializePathSteps(sc *godog.ScenarioContext) {
 // takeStep gives one step to a session and waits for that session's exec to land, because the take
 // lets go of it: an assertion about what the session was given, or about the file it reads, would
 // otherwise run while the exec was still starting.
-func takeStep(ctx context.Context, number int32) error {
+func takeStep(ctx context.Context, feature string, number int32) error {
 	w, p := worldFrom(ctx), pathFrom(ctx)
 	resp, err := w.client.TakeStep(ctx, &quaycrewv1.TakeStepRequest{
-		Project: w.projectID, Number: number,
+		Feature: feature, Number: number,
 	})
 	w.lastErr = err
 	if err != nil {
@@ -442,18 +549,39 @@ func takenText(ctx context.Context) (string, error) {
 	return p.take.GetText(), nil
 }
 
-// setPath writes the document and keeps what came back, so a later step reads the same answer the
-// caller got rather than asking again.
+// setPath writes the document to the feature a scenario means when it names none.
 func setPath(ctx context.Context, document string) error {
+	held, err := theFeature(ctx)
+	if err != nil {
+		return err
+	}
+	return setPathOf(ctx, held.GetId(), document)
+}
+
+// setPathOf writes the document to one feature and keeps what came back, so a later step reads the
+// same answer the caller got rather than asking again.
+func setPathOf(ctx context.Context, feature, document string) error {
 	w, p := worldFrom(ctx), pathFrom(ctx)
 	resp, err := w.client.SetPath(ctx, &quaycrewv1.SetPathRequest{
-		Project: w.projectID, Document: document,
+		Feature: feature, Document: document,
 	})
 	w.lastErr = err
 	if err != nil {
 		return nil
 	}
 	p.steps, p.warnings = resp.GetSteps(), resp.GetWarnings()
+	return nil
+}
+
+// readPath reads one feature's path into the world the assertions go through.
+func readPath(ctx context.Context, feature string) error {
+	w, p := worldFrom(ctx), pathFrom(ctx)
+	resp, err := w.client.ListSteps(ctx, &quaycrewv1.ListStepsRequest{Feature: feature})
+	w.lastErr = err
+	if err != nil {
+		return nil
+	}
+	p.steps = resp.GetSteps()
 	return nil
 }
 
