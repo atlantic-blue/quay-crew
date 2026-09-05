@@ -2,6 +2,7 @@
 
 Written 2026-09-04, and written again the same day after the design was revised three times.
 Amended 2026-09-05, after the operator settled the four levels.
+Amended again on 2026-09-05, after the session listing was measured.
 
 The source is `.greenlight/DESIGN.md`, `.greenlight/DECISIONS.md` and the code the design touches.
 
@@ -97,6 +98,29 @@ Identifiers survive again. Nothing was renamed. The revision added `LEVEL-1`, `L
 `COMMAND-24` to `COMMAND-30`. It widened `TABLE-1`, `TABLE-2`, `STORE-5`, `STORE-6`,
 `STORE-8`, `WIRE-1`, `WIRE-2`, `WIRE-7`, `WIRE-8`, `GRAMMAR-1`, `FLIGHT-2`, `FLIGHT-3`,
 `RENDER-2`, `RENDER-3`, `RENDER-4`, `COMMAND-7` and `COMMAND-8`.
+
+## What the archive amendment changed, 2026-09-05
+
+The session listing was measured on 2026-09-05. `krewe sessions system` reported 296 sessions and
+printed 298 lines. 282 of those sessions read `stopped`, 9 read `idle`, 3 read `awake` and 2 read
+`running`. So 282 rows of finished work buried the four rows a person wanted. Fourteen session
+containers stood behind the 296 rows, so the cost was the listing and not the disk.
+
+The amendment adds one slice, S-44, and one milestone, 22. Four things are worth stating before the
+contracts.
+
+1. The stamp exists. Migration `0004_archive_sessions` added `archived_at` on 2026-04-11, with the
+   partial index `sessions_live_idx`. The store, the wire calls and the console view exist too. This
+   amendment adds no column and no migration.
+2. What is missing is the command line. A person can archive from the console and from nowhere else.
+   `krewe sessions` already hides an archived session, and it says nothing about how many it hid.
+3. One behaviour is replaced rather than added. `ArchiveSession` stops a session of any status today
+   and archives it. It refuses a session that holds an open exec from this slice on.
+4. The archive is a stamp, never a state word. The eight status words stay as they are.
+
+Identifiers survive again. Nothing was renamed. The amendment added `TABLE-5`, `STORE-24`,
+`STORE-25`, `WIRE-26`, `WIRE-27`, `WIRE-28` and `COMMAND-31` to `COMMAND-33`. It widened no
+contract, because it touches no contract the path work states.
 
 ## Decisions the architect took, beyond the design
 
@@ -797,6 +821,48 @@ Acceptance criteria:
 - A path document with three milestone headings writes three rows, in number order.
 - Deleting a feature leaves no rows in `milestones` for it.
 
+### TABLE-5: table `sessions`, the archive stamp
+
+Boundary: store to Postgres.
+
+This contract states one column of an old table, and the two reads that use it. It states no other
+column, because this design changes no other column.
+
+The column exists already. Migration `0004_archive_sessions` added it on 2026-04-11, and it reads:
+
+- `archived_at` timestamptz, null while the session is in the default listing.
+
+The same migration added the index that serves the default read:
+
+- `sessions_live_idx on sessions (project) where archived_at is null`.
+
+This slice adds no column and no migration. It reads the stamp that is there.
+
+The stamp is not a state word. A session keeps its own status. The listing draws that status from
+the row and from the sandbox: `running`, `idle`, `awake`, `attached`, `unknown`, `failed`,
+`stopped` and `reclaimed`. An archived session keeps the word it ended on, because a reader still
+wants to know how the session finished. TABLE-5 never writes a status.
+
+Errors:
+- An update naming a session that does not exist changes no row, and the store maps that to
+  `store.ErrNotFound`.
+
+Invariants:
+- Archiving writes `archived_at` and clears `skills_fingerprint`. The sandbox goes with the archive,
+  so the fingerprint of the skills that sandbox was born with describes nothing.
+- Archiving deletes nothing. The row, the conversation handle, the conversation store on the host,
+  the exec history and the project files all stay where they are.
+- Restoring sets `archived_at` back to null. Nothing else on the row moves.
+- A listing reads the live sessions or the archived ones, never both. `store.SessionFilter` carries
+  the choice as one boolean.
+- Deleting a project deletes its sessions, archived or not, through the cascade that exists today.
+
+Verification: verify
+Acceptance criteria:
+- A fresh session reads back with a null stamp.
+- Archiving a session, then restoring it, leaves every other column as it was.
+- An archived session keeps the status word it ended on.
+
 ## STORE: the methods on the one `Store` interface
 
 Every method here runs against both implementations through the conformance suite in
@@ -1443,6 +1509,68 @@ Acceptance criteria:
 - Setting a contracts document on a project with no design row makes the row.
 - The body reads back whole, at 140,000 characters.
 
+### STORE-24: `ArchiveSession`, widened
+
+Signature: `ArchiveSession(ctx context.Context, id string) error`
+
+The method exists. This slice adds one refusal to it.
+
+Input: a session identifier.
+
+Output: nothing, or an error.
+
+Errors:
+- `store.ErrNotFound` when the session does not exist.
+- `store.ErrSessionHoldsAnExec`, a new sentinel, when the session's status is `running`. The control
+  plane turns it into the refusal COMMAND-31 states.
+
+Invariants:
+- The refusal is one statement, not a read and then a write. The update carries the condition
+  `status <> 'running'`, and zero rows changed means the refusal. A read followed by a write lets an
+  exec start between the two, and the session is then archived with an open exec in it. Architect
+  decision 5 puts `operator_agreed` in the store for the same reason.
+- The store keeps what it is given, and this is the stated exception. The rule needs one atomic
+  write, so it lives here.
+- Archiving a session that is archived already changes no row and returns `store.ErrNotFound`. The
+  control plane reads the row first and says the plainer thing, which it does today.
+- The write clears `skills_fingerprint`, which TABLE-5 states.
+
+Verification: verify
+Acceptance criteria:
+- Archiving a session whose status is `stopped` writes the stamp.
+- Archiving a session whose status is `running` is refused, and the row is unchanged.
+- The conformance suite proves both stores agree on the refusal.
+
+### STORE-25: `ArchiveProjectSessions`
+
+Signature:
+`ArchiveProjectSessions(ctx context.Context, project string) ([]string, error)`
+
+Input: a project identifier.
+
+Output: the identifiers of the sessions this call stamped, in the order the listing draws them.
+
+Errors:
+- `store.ErrNotFound` when the project does not exist or is deleted.
+
+Invariants:
+- It stamps every session of the project that holds no container: the ones whose status is
+  `stopped`, `failed` or `reclaimed`. It leaves the others alone and reports nothing about them.
+- A session that holds a container is skipped rather than refused. The single form of the command
+  refuses one session. The whole project form is a sweep. A sweep that stops at the first live
+  session finishes nothing.
+- It is one statement, for the reason STORE-24 gives. A dispatch that lands during the sweep either
+  runs before the statement and keeps its session out of it, or runs after it.
+- A session that is archived already is not stamped again and is not returned.
+- It writes no status. An archived session keeps the word it ended on.
+
+Verification: verify
+Acceptance criteria:
+- A project holding two stopped sessions and one idle session returns two identifiers.
+- The idle session stays in the default listing.
+- Running it twice returns the two identifiers, then none.
+- The conformance suite proves both stores agree.
+
 ## WIRE: the protobuf messages and the service methods
 
 All of it lands in `proto/quaycrew/v1/controlplane.proto` and regenerates through `make proto`.
@@ -1451,6 +1579,9 @@ All of it lands in `proto/quaycrew/v1/controlplane.proto` and regenerates throug
 
 Two messages and sixteen service methods. Section 9 of the design says twelve and then names
 sixteen. These contracts carry the sixteen it names.
+
+The archive amendment adds one more call, `ArchiveProjectSessions`. It widens two things that exist
+already: the `ArchiveSession` call and the `ListSessionsResponse` message.
 
 ### WIRE-1: message `Design`
 
@@ -2218,6 +2349,101 @@ Acceptance criteria:
 - Setting a contracts document leaves an approved design approved.
 - The body reads back whole through `GetDesign`.
 
+### WIRE-26: `ArchiveSession`, widened
+
+Request: `ArchiveSessionRequest { string id = 1; }`
+Response: `ArchiveSessionResponse { Session session = 1; }`
+
+The call exists. This slice adds one refusal and removes one behaviour.
+
+Input: a session identifier.
+
+Output: the session after the write.
+
+Errors:
+- `InvalidArgument` when `id` is empty.
+- `NotFound` when the session does not exist.
+- `FailedPrecondition` when the session is archived already, which the call answers today.
+- `FailedPrecondition` when the session's status is `running`. The message names the exec the
+  session holds, by its identifier and the time it started. It names `krewe stop` as the way to end
+  it.
+
+Invariants:
+- The refusal replaces a behaviour. Today the call stops a session of any status and archives it.
+  From this slice it archives a session that holds no open exec, and it refuses the one that does.
+  An operator who archives a session mid exec loses the answer, and the answer is the work.
+- The console inherits the refusal. Its `Archive` action calls this method, so the key reports what
+  the command line reports. Rule 46 of this repository asks for the way off a behaviour. So a
+  scenario drives the console key against a session whose status is `running`.
+- A session that holds a container and no open exec is still stopped first, and its sandbox is
+  closed. Fourteen containers stood behind 296 sessions on 2026-09-05, so the disk is not the cost.
+  The leak this guards is a container nobody can see.
+- The driver may not call it. Archiving is the operator's word about the record.
+
+Verification: verify
+Acceptance criteria:
+- Archiving an idle session stops it, closes its sandbox and writes the stamp.
+- Archiving a session whose status is `running` is refused, and the refusal names the exec.
+- The console key on that session shows the same refusal.
+
+### WIRE-27: `ArchiveProjectSessions`
+
+Request: `ArchiveProjectSessionsRequest { string project = 1; }`
+Response: `ArchiveProjectSessionsResponse { repeated string archived = 1; int32 skipped = 2; }`
+
+Input: a project identifier.
+
+Output: the identifiers this call archived, and how many sessions it left alone.
+
+Errors:
+- `InvalidArgument` when `project` is empty.
+- `NotFound` when the project does not exist or is deleted.
+
+Invariants:
+- It archives the sessions of one project that hold no container, which STORE-25 states. It never
+  reaches a second project, and there is no form of it that reads the whole system.
+- `skipped` counts the sessions it left in the listing, so the caller says what it did and what it
+  did not do. A sweep that reports only what it took reads as a sweep that took everything.
+- It emits one `session.archived` event per session it archived, exactly as WIRE-26 emits one.
+- The driver may not call it.
+
+Verification: verify
+Acceptance criteria:
+- A project with three stopped sessions and one idle session answers with three identifiers and a
+  skipped count of one.
+- A project whose sessions are all live answers with no identifier, and the command says so.
+
+### WIRE-28: `ListSessionsResponse`, widened
+
+```protobuf
+message ListSessionsResponse {
+  repeated Session sessions = 1;
+  int32 hidden = 2;
+}
+```
+
+Input: `ListSessionsRequest`, unchanged.
+
+Output: the sessions of the listing that was asked for, and how many the other listing holds.
+
+Errors: none. A count is not a refusal.
+
+Invariants:
+- `hidden` counts the sessions the same filter finds with `archived` flipped. On a default listing
+  it is the archived count. On an archived listing it is the live count.
+- The server reads the count with a second store read under the same workspace and project filter.
+  `GetInfo` counts both listings that way today.
+- A listing of a project counts that project only. A listing of the system counts the system.
+- The count is a number, never a row. No archived session reaches a default listing, which is the
+  rule `store.SessionFilter` holds.
+
+Verification: verify
+Acceptance criteria:
+- A system holding four live sessions and 282 archived ones answers four rows and a hidden count of
+  282.
+- The same call with `archived` set answers 282 rows and a hidden count of four.
+- A project with no archived session answers a hidden count of 0.
+
 ## GRAMMAR: the path document
 
 ### GRAMMAR-1: the format `SetPath` reads
@@ -2700,8 +2926,8 @@ Invariants:
 - The pointer to it is in the take text of RENDER-4, and not in the memory file of RENDER-1. The
   memory file is read on every exec of every session in the project, and it is capped at 400
   characters. A fourth pointer there would eat the brief. Architect decision 21 records this.
-- It is a second body beside the design, and it is large. This project carries 118 contracts across
-  43 slices, which is why it is a file the model opens and not text in a memory file.
+- It is a second body beside the design, and it is large. This project carries 127 contracts across
+  44 slices, which is why it is a file the model opens and not text in a memory file.
 
 Verification: verify
 Acceptance criteria:
@@ -3089,9 +3315,10 @@ Acceptance criteria:
 
 ## COMMAND: the command line verbs
 
-Six new words become taken: `design`, `path`, `step`, `trust`, `commands` and `feature`. None of
-them is in `removedCommands` or `removedFlags`, so no refusal table is made to lie. Nothing is
-removed from the command line, so no entry is added to either table.
+Eight new words become taken: `design`, `path`, `step`, `trust`, `commands`, `feature`, `archive`
+and `unarchive`. One new flag becomes taken, `--archived` on `krewe sessions`. None of them is in
+`removedCommands` or `removedFlags`, so no refusal table is made to lie. Nothing is removed from the
+command line, so no entry is added to either table.
 
 One form is replaced rather than added. A step used to be named by one bare number. It is named by
 `<feature>.<number>` now. LEVEL-2 states the refusal that meets the old form, and it names what to
@@ -3843,6 +4070,108 @@ Acceptance criteria:
 - Setting a contracts document on an approved design leaves the design approved.
 - Reading it back prints the whole document.
 - Reading a project with no contracts document says so.
+
+### COMMAND-31: `krewe archive [<address>] [<session>]`
+
+Input: one of two forms.
+
+- A session, which archives that session.
+- An address naming a workspace and a project, which archives every session of that project that
+  holds no container.
+
+With no argument it reads where the operator stands. Standing in a project archives that project's
+finished sessions. Standing in a session archives that session.
+
+Output, for one session: a line naming the session and saying the record is kept.
+
+Output, for a project: a line counting what it archived, a line counting what it left, and the
+command that shows the archived ones.
+
+Errors:
+- The shared address refusals.
+- A session identifier that names no session.
+- The `FailedPrecondition` of WIRE-26 for a session whose status is `running`. The refusal names the
+  exec, and names `krewe stop` as the way to end it.
+- A session that is archived already, which says so and names `krewe unarchive`.
+
+Invariants:
+- The two forms are one word, because a person archives one session and a project's sessions for the
+  same reason. The address decides which, exactly as `krewe exec` and `krewe sessions` decide.
+- The project form skips a live session and never refuses one. WIRE-27 states that rule.
+- It deletes nothing. The output says so, because a word that reads like a delete stops a person
+  from using it.
+- The word `archive` is new. It is not in `removedCommands` and it is not in `removedFlags`, so no
+  refusal table is made to lie.
+- It joins `internal/manual.Commands`, or the tool has a command its own help does not name.
+
+Verification: verify
+Acceptance criteria:
+- `krewe archive <session>` on a stopped session takes it out of `krewe sessions`.
+- The archived session still answers `krewe exec list`, which it does today.
+- `krewe archive <workspace>/<project>` on a project holding three stopped sessions and one idle
+  session archives three and says it left one.
+- `krewe archive` on a session whose status is `running` is refused, and the refusal names the exec.
+
+### COMMAND-32: `krewe unarchive <session>`
+
+Input: a session, or nothing when the operator stands in one.
+
+Output: a line saying the session is back in the listing, and a line saying it holds no container.
+
+Errors:
+- The shared address refusals.
+- A session identifier that names no session.
+- The `FailedPrecondition` of `RestoreSession` for a session that is not archived.
+
+Invariants:
+- The container does not come back. Archiving closed it, and the next exec builds a fresh one over
+  the same conversation and the same files. The second line of the output says that, because an
+  operator who expects the old container back finds a session that answers nothing.
+- The session comes back with the status it was archived with, which is `stopped` for every session
+  archived by COMMAND-31.
+- It calls `RestoreSession`, which exists and does not change.
+- Archiving is never one way. A wrong address hides work that a person then cannot find, so the way
+  back ships in the same slice as the way in. Rule 46 of this repository asks for that.
+- The word `unarchive` is new, and it is in neither refusal table.
+
+Verification: verify
+Acceptance criteria:
+- Unarchiving a session puts it back in `krewe sessions`.
+- The session reads `stopped`, and an exec on it starts a new container.
+- Unarchiving a session that is not archived is refused, and the refusal says which session.
+
+### COMMAND-33: `krewe sessions [<address>] [--archived]`
+
+The command exists. This slice adds one flag and one line.
+
+Input: an optional address, and an optional flag.
+
+Output: one row per session, then the count line the command prints today, then one more line saying
+how many sessions the other listing holds.
+
+The new line reads `282 archived and hidden. krewe sessions system --archived lists them.` With the
+flag set it reads `4 live and hidden. krewe sessions system lists them.` It is left out when the
+count is zero.
+
+Errors:
+- The shared address refusals, unchanged.
+- `--archived` with a value is refused. It is a flag and not a setting.
+
+Invariants:
+- The default listing hides an archived session, which it does today. The flag lists the archived
+  ones instead of the live ones, never both. `store.SessionFilter` holds that rule and the console
+  draws the two as two views for the same reason.
+- The count comes from `hidden` on the response, which WIRE-28 adds. The command makes one call.
+- The count line is why the flag is worth having. A listing that falls from 296 rows to 4 with no
+  explanation reads as lost data. A person who reads it as lost data stops archiving.
+- The flag narrows to the address the same way the rows do.
+- `--archived` is a new flag. It is not in `removedFlags`.
+
+Verification: verify
+Acceptance criteria:
+- A system with four live sessions and 282 archived ones prints four rows and the hidden line.
+- The same command with `--archived` prints 282 rows and a hidden line naming four.
+- A system with no archived session prints no hidden line.
 
 ## CONSOLE: the views
 

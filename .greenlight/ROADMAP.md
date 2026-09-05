@@ -2,6 +2,7 @@
 
 Written 2026-09-04, revised the same day after the operator read the first version.
 Amended 2026-09-05, after the operator settled the four levels.
+Amended again on 2026-09-05, after the session listing was measured.
 
 Status: proposed. Nothing starts before the operator approves it.
 
@@ -35,7 +36,11 @@ flowchart LR
   M13 --> M15["15 krewe writes the slash commands, with init and design"]
   M15 --> M16["16 the status and trust commands"]
   M12 --> M16
+  M22["22 a session is archived, and the listing hides it"]
 ```
+
+Milestone 22 stands on its own in the diagram, with no edge into it and none out of it. It depends
+on nothing, and nothing depends on it.
 
 The diagram renders through the mermaid command line tool.
 
@@ -45,7 +50,7 @@ Each milestone is one intention. The graph splits it into slices, and a slice is
 request. A slice is revertable on its own.
 
 Each milestone names the files it touches, what it changes, what proves it, and what it depends on.
-`.greenlight/GRAPH.json` holds the slices. Fifteen of the twenty one milestones hold more than one.
+`.greenlight/GRAPH.json` holds the slices. Fifteen of the twenty two milestones hold more than one.
 
 Milestones 17 to 21 came later than milestones 6 to 16, and they are built before them. The number
 says when it was written. The order comes from the graph.
@@ -164,7 +169,7 @@ explain it, it is a note and not a milestone.
 
 **Milestone 20. A project carries a contracts document.**
 - A second body beside the design, rendered into the session's working directory the same way. This
-  project holds 118 contracts across 43 slices, which is too large for a memory file.
+  project holds 127 contracts across 44 slices, which is too large for a memory file.
 - Touches: a migration pair for the `contracts` column on `project_designs`; `SetContracts`;
   `internal/controlplane/design.go`; `krewe design contracts`.
 - Writing it does not clear the approval. The approval is the operator's word about the design body,
@@ -310,6 +315,36 @@ explain it, it is a note and not a milestone.
   manual carries, and a scenario reads the manual to prove that.
 - Depends on: milestone 12 for the trust record, and milestone 15 for the install.
 
+**Milestone 22. A session is archived, and the listing hides it.**
+- The measurement, taken on 2026-09-05. `krewe sessions system` reported 296 sessions and printed
+  298 lines. 282 of those sessions read `stopped`, 9 read `idle`, 3 read `awake` and 2 read
+  `running`. So 282 rows of finished work buried the four rows a person wanted.
+- Fourteen session containers stood behind those 296 rows. The other 282 sessions released theirs
+  already, so the cost is the listing and not the disk.
+- What exists. The stamp `archived_at` is on the sessions table from migration
+  `0004_archive_sessions`, dated 2026-04-11. The store methods, the two wire calls and the console
+  view all exist. `krewe sessions` already hides an archived session.
+- What is missing. A person can archive from the console and from nowhere else. The listing says
+  nothing about how many sessions it hid, and there is no way to see them from the command line.
+- Touches: `internal/store/store.go`, `postgres.go`, `memory.go` and `storetest/`;
+  `proto/quaycrew/v1/controlplane.proto`; `internal/controlplane/server.go`;
+  `cmd/krewe/archive.go` (new); `cmd/krewe/quay.go`; `internal/manual/manual.go`.
+- The words: `krewe archive <session>`, `krewe archive <address>`, `krewe unarchive <session>`, and
+  the flag `--archived` on `krewe sessions`. The listing gains one line saying how many are hidden.
+- One behaviour is replaced. `ArchiveSession` stops a session of any status today and archives it.
+  It refuses a session that holds an open exec from this milestone on, and the refusal names that
+  exec. The console key inherits the refusal, so a scenario drives the key as well as the command.
+- No migration. The column is there, so this milestone reads it.
+- Proves it: `features/sessions.feature`. Archiving keeps the conversation, the exec history and the
+  files. The hidden count appears under the listing. The flag lists the archived sessions and never
+  mixes the two. Archiving a project skips every session that holds a container and says how many it
+  left. Unarchiving puts a session back, reading `stopped`, and the next exec builds a fresh
+  container.
+- Depends on: nothing.
+- The one real constraint. It is independent by dependency and not by file. It shares at least one
+  file with 34 of the other 43 slices. So the file collision check refuses to take it beside almost
+  any of them. Take it alone.
+
 ## The order, and why
 
 Milestone 1 clears a trap before anybody falls in it, and before milestone 8 puts a live mark beside
@@ -348,6 +383,11 @@ Milestone 14 is the surface. It reads what the earlier milestones write and adds
 
 Milestones 15 and 16 put krewe in the operator's own terminal. They come last because each command
 runs the command line tool, so every command it names has to exist first.
+
+Milestone 22 sits outside that order. It answers a different question: the session listing, not the
+design and the path. It depends on nothing, and nothing depends on it, so the operator can take it
+at any point. It is written last because it was measured last. The file collision check is what
+decides when it runs, and the milestone states that.
 
 ## What this roadmap does not carry
 
