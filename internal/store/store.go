@@ -54,6 +54,13 @@ var ErrNotFound = errors.New("store: not found")
 // then a write would let a design emptied between the two come back approved.
 var ErrNothingToApprove = errors.New("store: there is no design to approve")
 
+// ErrStepNotReady is returned when a step somebody asks for is not in state ready.
+//
+// The check and the write are one statement, for the reason ErrNothingToApprove is one: a read of
+// the state followed by a write would let two callers both take one step, and each would be told a
+// session holds it that is not the session it started.
+var ErrStepNotReady = errors.New("store: the step is not ready to be taken")
+
 // Step is what a caller may set about one step of a path.
 //
 // The rest of the row belongs to the system: the state, the session that took it, the result and the
@@ -73,6 +80,10 @@ type Step struct {
 // here for the reason StatusReclaimed is: the memory store writes it directly and must not disagree
 // with the column, and the store cannot depend on the package that owns the vocabulary.
 const StepReady = "ready"
+
+// StepTaken is the state a step moves to when a session takes it, and it is here for the reason
+// StepReady is: both stores write the word directly and must not disagree about it.
+const StepTaken = "taken"
 
 // StatusReclaimed is the session status this store writes when the system takes a container back. The
 // control plane owns the whole vocabulary; this one is here because two queries below are written in
@@ -276,6 +287,16 @@ type Store interface {
 	// empty, ordered by project and then by number. A project with no path is an empty slice and not
 	// an error, the way a project with no design is.
 	ListSteps(ctx context.Context, project string) ([]*quaycrewv1.Step, error)
+	// GetStep returns one step of a project's path, whole. A project that does not exist and a path
+	// that holds no step of that number are both ErrNotFound: neither answers the question asked.
+	GetStep(ctx context.Context, project string, number int32) (*quaycrewv1.Step, error)
+	// TakeStep gives a ready step to a session and returns the step after the write. A step that is
+	// not ready is ErrStepNotReady, and the caller reads the step to say who holds it.
+	//
+	// The state check and the write are one statement, so two callers cannot both take one step.
+	// Several steps of one path may be taken at once: nothing here refuses a second take on a
+	// different step.
+	TakeStep(ctx context.Context, project string, number int32, session string) (*quaycrewv1.Step, error)
 
 	// ImportSkill takes a skill into the system at the version its manifest declares.
 	//

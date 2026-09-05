@@ -694,6 +694,55 @@ func (m *Memory) ListSteps(_ context.Context, project string) ([]*quaycrewv1.Ste
 	return every, nil
 }
 
+// GetStep returns one step of a project's path. A path that holds no step of that number is not
+// found, the way a project that is not there is: neither answers the question asked.
+func (m *Memory) GetStep(_ context.Context, project string, number int32) (*quaycrewv1.Step, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, err := m.getProjectLocked(project); err != nil {
+		return nil, err
+	}
+	held, err := m.stepLocked(project, number)
+	if err != nil {
+		return nil, err
+	}
+	return proto.Clone(held).(*quaycrewv1.Step), nil
+}
+
+// TakeStep gives a ready step to a session.
+//
+// The whole read and write happen under the one lock, because Postgres reads the state in the
+// statement that writes it and the two stores have to answer the same thing to two callers racing
+// for one step.
+func (m *Memory) TakeStep(_ context.Context, project string, number int32, session string) (*quaycrewv1.Step, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, err := m.getProjectLocked(project); err != nil {
+		return nil, err
+	}
+	held, err := m.stepLocked(project, number)
+	if err != nil {
+		return nil, err
+	}
+	if held.GetState() != StepReady {
+		return nil, ErrStepNotReady
+	}
+	held.State = StepTaken
+	held.Session = session
+	held.TakenAt = timestamppb.New(time.Now().UTC())
+	return proto.Clone(held).(*quaycrewv1.Step), nil
+}
+
+// stepLocked is one step of a project's path, or ErrNotFound. The caller holds the lock.
+func (m *Memory) stepLocked(project string, number int32) (*quaycrewv1.Step, error) {
+	for _, step := range m.steps[project] {
+		if step.GetNumber() == number {
+			return step, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
 // copySteps hands the caller its own messages, for the reason copyDesign does.
 func copySteps(steps []*quaycrewv1.Step) []*quaycrewv1.Step {
 	copied := make([]*quaycrewv1.Step, 0, len(steps))

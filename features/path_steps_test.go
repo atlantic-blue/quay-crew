@@ -6,9 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
 	"github.com/cucumber/godog"
 )
 
@@ -18,6 +20,9 @@ type pathWorld struct {
 	steps    []*quaycrewv1.Step
 	warnings []string
 	file     string
+	// take is what came back from the last take: the step, the session that took it, and the text
+	// that session was given. Kept so an assertion reads the answer the caller got.
+	take *quaycrewv1.TakeStepResponse
 }
 
 type pathKey struct{}
@@ -206,6 +211,114 @@ func initializePathSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// Taking a step. The take dispatches and lets go, so every one of these waits for the exec to
+	// land before it reads what the session was given.
+
+	sc.Step(`^the operator (?:takes|took) step (\d+)$`, func(ctx context.Context, number int) error {
+		return takeStep(ctx, int32(number))
+	})
+
+	sc.Step(`^the step text carries "([^"]*)"$`, func(ctx context.Context, want string) error {
+		text, err := takenText(ctx)
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(text, unescape(want)) {
+			return fmt.Errorf("the step text does not carry %q: %q", unescape(want), text)
+		}
+		return nil
+	})
+
+	sc.Step(`^the step text does not carry "([^"]*)"$`, func(ctx context.Context, unwanted string) error {
+		text, err := takenText(ctx)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(text, unescape(unwanted)) {
+			return fmt.Errorf("the step text carries %q, and it should not: %q", unescape(unwanted), text)
+		}
+		return nil
+	})
+
+	// Read off the model rather than off the answer, because what the take composed and what the
+	// session was actually asked are two different claims, and only the second one is the feature.
+	sc.Step(`^the session was asked exactly what the take composed$`, func(ctx context.Context) error {
+		text, err := takenText(ctx)
+		if err != nil {
+			return err
+		}
+		if asked := worldFrom(ctx).runner.lastRequest().Text; asked != text {
+			return fmt.Errorf("the session was asked %q, and the take answered with %q", asked, text)
+		}
+		return nil
+	})
+
+	// The step names the session in the same write that moved its state, so a take that dispatched
+	// and recorded nobody leaves a step nothing can be read back from.
+	sc.Step(`^step (\d+) is held by that session$`, func(ctx context.Context, number int) error {
+		w, p := worldFrom(ctx), pathFrom(ctx)
+		if p.take == nil {
+			return fmt.Errorf("no step was taken, so nothing holds one")
+		}
+		resp, err := w.client.ListSteps(ctx, &quaycrewv1.ListStepsRequest{Project: w.projectID})
+		if err != nil {
+			return err
+		}
+		for _, step := range resp.GetSteps() {
+			if step.GetNumber() != int32(number) {
+				continue
+			}
+			if step.GetState() != "taken" {
+				return fmt.Errorf("step %d reads as %q after a take", number, step.GetState())
+			}
+			started := p.take.GetSession()
+			if step.GetSession() != started.GetHandle() && step.GetSession() != started.GetId() {
+				return fmt.Errorf("step %d names session %q, and the session that took it is %q",
+					number, step.GetSession(), started.GetId())
+			}
+			return nil
+		}
+		return fmt.Errorf("the path has no step %d", number)
+	})
+
+	sc.Step(`^the refusal names the session holding step (\d+)$`, func(ctx context.Context, number int) error {
+		w, p := worldFrom(ctx), pathFrom(ctx)
+		if w.lastErr == nil {
+			return fmt.Errorf("nothing was refused")
+		}
+		if p.take == nil {
+			return fmt.Errorf("no step was taken, so no session holds one")
+		}
+		held := display.ShortID(p.take.GetSession().GetHandle())
+		if !strings.Contains(w.lastErr.Error(), held) {
+			return fmt.Errorf("the refusal is %q, and it names neither step %d's session %q nor where to find it",
+				w.lastErr.Error(), number, held)
+		}
+		return nil
+	})
+
+	// Counted rather than looked for, because a refusal that started a session anyway is exactly what
+	// gate 1 exists to stop, and a check that one session exists passes against two.
+	sc.Step(`^(\d+) sessions? (?:was|were) started$`, func(ctx context.Context, want int) error {
+		w := worldFrom(ctx)
+		listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{Workspace: w.workspaceID})
+		if err != nil {
+			return err
+		}
+		if got := len(listed.GetSessions()); got != want {
+			return fmt.Errorf("the workspace holds %d sessions, want %d", got, want)
+		}
+		return nil
+	})
+
+	sc.Step(`^the caller takes step (\d+)$`, func(ctx context.Context, number int) error {
+		return runTool(ctx, "step", "take", whereTheProjectIs(ctx), strconv.Itoa(number))
+	})
+
+	sc.Step(`^the caller takes a step without saying which one$`, func(ctx context.Context) error {
+		return runTool(ctx, "step", "take")
+	})
+
 	// The warnings. None of them refuses a document, so every one of these reads the path back too.
 
 	sc.Step(`^the path write warns that step (\d+) says nothing under "([^"]*)"$`,
@@ -294,6 +407,35 @@ func initializePathSteps(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+}
+
+// takeStep gives one step to a session and waits for that session's exec to land, because the take
+// lets go of it: an assertion about what the session was given, or about the file it reads, would
+// otherwise run while the exec was still starting.
+func takeStep(ctx context.Context, number int32) error {
+	w, p := worldFrom(ctx), pathFrom(ctx)
+	resp, err := w.client.TakeStep(ctx, &quaycrewv1.TakeStepRequest{
+		Project: w.projectID, Number: number,
+	})
+	w.lastErr = err
+	if err != nil {
+		return nil
+	}
+	p.take = resp
+	// Written down the way a dispatch is, so the steps that read the session's own working directory
+	// find the session the take started.
+	w.execs = append(w.execs, dispatched{
+		sessionID: resp.GetSession().GetId(), handle: resp.GetSession().GetHandle()})
+	return w.settled(ctx)
+}
+
+// takenText is what the last take composed, and a refusal to assert on nothing when no take landed.
+func takenText(ctx context.Context) (string, error) {
+	p := pathFrom(ctx)
+	if p.take == nil {
+		return "", fmt.Errorf("no step was taken, so no session was given any text")
+	}
+	return p.take.GetText(), nil
 }
 
 // setPath writes the document and keeps what came back, so a later step reads the same answer the
