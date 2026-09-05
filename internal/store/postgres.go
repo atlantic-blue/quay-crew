@@ -745,6 +745,123 @@ func (p *Postgres) ApproveProjectDesign(ctx context.Context, project string) (*q
 	return design, nil
 }
 
+// stepColumns is what every path read selects, in the order scanStep reads them. The two are written
+// next to each other because a column added to one and not the other reads as a zero rather than as
+// a failure.
+//
+// Qualified, because every read joins the project and its workspace to hide a deleted project's
+// path, and an unqualified name would be one the join could make ambiguous later.
+const stepColumns = `s.project, s.number, s.title, s.intention, s.touches, s.proof, ` +
+	`s.proof_scenario, s.after, s.state, s.session, s.result, s.taken_at, s.finished_at`
+
+// scanStep reads one step row.
+func scanStep(row pgx.Row) (*quaycrewv1.Step, error) {
+	var (
+		project, title, intention, touches, proof string
+		scenario, state, session, result          string
+		number, after                             int32
+		takenAt, finishedAt                       *time.Time
+	)
+	if err := row.Scan(&project, &number, &title, &intention, &touches, &proof,
+		&scenario, &after, &state, &session, &result, &takenAt, &finishedAt); err != nil {
+		return nil, err
+	}
+	step := &quaycrewv1.Step{
+		Project:       project,
+		Number:        number,
+		Title:         title,
+		Intention:     intention,
+		Touches:       touches,
+		Proof:         proof,
+		ProofScenario: scenario,
+		After:         after,
+		State:         state,
+		Session:       session,
+		Result:        result,
+	}
+	if takenAt != nil {
+		step.TakenAt = timestamppb.New(*takenAt)
+	}
+	if finishedAt != nil {
+		step.FinishedAt = timestamppb.New(*finishedAt)
+	}
+	return step, nil
+}
+
+// SetPath replaces the project's path with the steps given.
+//
+// The whole write is one transaction, so a refused write changes nothing and no reader ever sees
+// half a path. The rows are read back through ListSteps rather than returned from the inserts,
+// because number order is what a caller is promised and the insert order is whatever the document
+// happened to be written in.
+func (p *Postgres) SetPath(ctx context.Context, project string, steps []Step) ([]*quaycrewv1.Step, error) {
+	if err := p.projectExists(ctx, project); err != nil {
+		return nil, err
+	}
+	transaction, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin the path: %w", err)
+	}
+	defer func() { _ = transaction.Rollback(ctx) }()
+
+	if _, err := transaction.Exec(ctx,
+		`delete from project_steps where project = $1`, project); err != nil {
+		return nil, fmt.Errorf("clear the path: %w", err)
+	}
+	for _, step := range steps {
+		if _, err := transaction.Exec(ctx, `
+			insert into project_steps
+				(project, number, title, intention, touches, proof, proof_scenario, after)
+			values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			project, step.Number, step.Title, step.Intention, step.Touches, step.Proof,
+			step.ProofScenario, step.After); err != nil {
+			return nil, fmt.Errorf("write step %d: %w", step.Number, err)
+		}
+	}
+	if err := transaction.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit the path: %w", err)
+	}
+	return p.ListSteps(ctx, project)
+}
+
+// ListSteps returns a project's path in number order, or every project's when it names none.
+//
+// The join is the same one projectExists asks, both conditions and all. A project here is deleted by
+// a stamp rather than by removing the row, so the foreign key cascade never fires for one, and a
+// read that only matched on the project identifier would keep answering with the path of a project
+// nobody can reach.
+func (p *Postgres) ListSteps(ctx context.Context, project string) ([]*quaycrewv1.Step, error) {
+	if project != "" {
+		if err := p.projectExists(ctx, project); err != nil {
+			return nil, err
+		}
+	}
+	rows, err := p.pool.Query(ctx, `
+		select `+stepColumns+` from project_steps s
+		join projects p on p.id = s.project
+		join workspaces w on w.id = p.workspace
+		where ($1 = '' or s.project = $1)
+		  and p.deleted_at is null and w.deleted_at is null
+		order by s.project, s.number`, project)
+	if err != nil {
+		return nil, fmt.Errorf("list steps: %w", err)
+	}
+	defer rows.Close()
+
+	steps := make([]*quaycrewv1.Step, 0)
+	for rows.Next() {
+		step, err := scanStep(rows)
+		if err != nil {
+			return nil, fmt.Errorf("read step: %w", err)
+		}
+		steps = append(steps, step)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list steps: %w", err)
+	}
+	return steps, nil
+}
+
 // sessionBy reads the single session matching a where clause.
 func (p *Postgres) sessionBy(ctx context.Context, where string, args ...any) (*quaycrewv1.Session, error) {
 	rows, err := p.pool.Query(ctx, `

@@ -54,6 +54,26 @@ var ErrNotFound = errors.New("store: not found")
 // then a write would let a design emptied between the two come back approved.
 var ErrNothingToApprove = errors.New("store: there is no design to approve")
 
+// Step is what a caller may set about one step of a path.
+//
+// The rest of the row belongs to the system: the state, the session that took it, the result and the
+// stamps are written by taking, finishing and stopping a step, never by the document that declares
+// the path. A caller that could set them would be declaring work it had not done.
+type Step struct {
+	Number        int32
+	Title         string
+	Intention     string
+	Touches       string
+	Proof         string
+	ProofScenario string
+	After         int32
+}
+
+// StepReady is the state a step is born in, and the same word the table's own default writes. It is
+// here for the reason StatusReclaimed is: the memory store writes it directly and must not disagree
+// with the column, and the store cannot depend on the package that owns the vocabulary.
+const StepReady = "ready"
+
 // StatusReclaimed is the session status this store writes when the system takes a container back. The
 // control plane owns the whole vocabulary; this one is here because two queries below are written in
 // terms of it and the store must not depend on the package that calls it.
@@ -244,6 +264,18 @@ type Store interface {
 	// design with no body as ErrNothingToApprove. Approving one that is already approved is allowed
 	// and moves the moment.
 	ApproveProjectDesign(ctx context.Context, project string) (*quaycrewv1.Design, error)
+
+	// SetPath replaces the project's path and returns the whole path after the write, in number
+	// order. The steps are what a caller may set; the rest of each row belongs to the system.
+	//
+	// The store keeps what it is given. Whether a number is unique, whether `after` names a step
+	// that exists, and whether a title says anything are the control plane's questions, because the
+	// document is where a person can be told which line is wrong.
+	SetPath(ctx context.Context, project string, steps []Step) ([]*quaycrewv1.Step, error)
+	// ListSteps returns a project's path in number order, or every project's when the identifier is
+	// empty, ordered by project and then by number. A project with no path is an empty slice and not
+	// an error, the way a project with no design is.
+	ListSteps(ctx context.Context, project string) ([]*quaycrewv1.Step, error)
 
 	// ImportSkill takes a skill into the system at the version its manifest declares.
 	//

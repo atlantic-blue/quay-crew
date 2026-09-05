@@ -595,6 +595,58 @@ message ApproveDesignResponse {
   Design design = 1;
 }
 
+// Step is one step of a project's path: one atomised change, with what proves it.
+//
+// The field numbers follow the order the slices add them, not the order the design document lists
+// them. A field number is fixed once it ships, so a later change appends rather than renumbers.
+message Step {
+  string project = 1;
+  // number is where in the path this step sits, counting from one. Numbers need not run without
+  // gaps, so a path may go 1, 2, 5.
+  int32 number = 2;
+  // title is one line, one intention.
+  string title = 3;
+  // intention is what changes and why, in the words a stranger needs.
+  string intention = 4;
+  // touches is the files this step writes, one per line.
+  string touches = 5;
+  // proof is what proves it, and the value it delivers, in prose.
+  string proof = 6;
+  // after is the step number this one waits for. Zero means nothing blocks it.
+  int32 after = 7;
+  // state is one of ready, taken, done, stopped.
+  string state = 8;
+  // session is the session that took it, empty until somebody takes it.
+  string session = 9;
+  // result is what somebody wrote that the step produced, or why it stopped.
+  string result = 10;
+  google.protobuf.Timestamp taken_at = 11;
+  google.protobuf.Timestamp finished_at = 12;
+  // proof_scenario is the exact name of the scenario that proves it, as the feature file writes it.
+  // This is what krewe runs.
+  string proof_scenario = 13;
+}
+
+// SetPathRequest carries the path document, in the grammar the control plane parses. The document is
+// sent whole rather than parsed by the caller, so the console and the command line send the same
+// words and cannot drift.
+message SetPathRequest {
+  string project = 1;
+  string document = 2;
+}
+message SetPathResponse {
+  repeated Step steps = 1;
+  repeated string warnings = 2;
+}
+
+// ListStepsRequest reads a project's path, or every project's when it names none.
+message ListStepsRequest {
+  string project = 1;
+}
+message ListStepsResponse {
+  repeated Step steps = 1;
+}
+
 // SessionWorkEntry is one thing in a session's work: a file or a directory, with the size of a file.
 message SessionWorkEntry {
   string name = 1;
@@ -1074,6 +1126,14 @@ service ControlPlaneService {
   // The operator's word on a design, and the driver is refused it. A session that could approve its
   // own design would be agreeing with itself, which is the whole thing this gate exists to stop.
   rpc ApproveDesign(ApproveDesignRequest) returns (ApproveDesignResponse);
+
+  // The path a design was broken into. The control plane parses the document, so the command line
+  // and the console send the same words and cannot drift on the grammar.
+  //
+  // The driver may call both: a design session is what writes a path, and writing one grants it
+  // nothing that dispatching would not.
+  rpc SetPath(SetPathRequest) returns (SetPathResponse);
+  rpc ListSteps(ListStepsRequest) returns (ListStepsResponse);
   // Reads a file, or a listing, out of the work a session left behind, without attaching to it.
   rpc ReadSessionWork(ReadSessionWorkRequest) returns (ReadSessionWorkResponse);
   // Says where an address is on the machine, so a person can put a file in it by hand. It reads the

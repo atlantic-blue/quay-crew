@@ -38,6 +38,9 @@ type Memory struct {
 	// designs is what each project is for and what was designed for it, keyed by project. A project
 	// with no entry has no design, which is the normal state.
 	designs map[string]*quaycrewv1.Design
+	// steps is each project's path, keyed by project and held in number order. A project with no
+	// entry has no path, which is the normal state.
+	steps map[string][]*quaycrewv1.Step
 	// repositories are the repositories each workspace works in, in the order they were added.
 	// skills is every revision the system holds, keyed by name and version, and attached is which
 	// version of which skill each workspace pinned.
@@ -625,6 +628,79 @@ func (m *Memory) writeDesign(project string, change func(*quaycrewv1.Design)) (*
 // it was given would be editing the store.
 func copyDesign(design *quaycrewv1.Design) *quaycrewv1.Design {
 	return proto.Clone(design).(*quaycrewv1.Design)
+}
+
+// SetPath replaces the project's path with the steps given, and returns the whole path in number
+// order.
+//
+// The state word is written here rather than left absent, because Postgres writes it from the
+// column's own default and the two stores have to answer the same thing about a fresh step.
+func (m *Memory) SetPath(_ context.Context, project string, steps []Step) ([]*quaycrewv1.Step, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, err := m.getProjectLocked(project); err != nil {
+		return nil, err
+	}
+	if m.steps == nil {
+		m.steps = make(map[string][]*quaycrewv1.Step)
+	}
+	written := make([]*quaycrewv1.Step, 0, len(steps))
+	for _, step := range steps {
+		written = append(written, &quaycrewv1.Step{
+			Project:       project,
+			Number:        step.Number,
+			Title:         step.Title,
+			Intention:     step.Intention,
+			Touches:       step.Touches,
+			Proof:         step.Proof,
+			ProofScenario: step.ProofScenario,
+			After:         step.After,
+			State:         StepReady,
+		})
+	}
+	sort.SliceStable(written, func(i, j int) bool { return written[i].GetNumber() < written[j].GetNumber() })
+	m.steps[project] = written
+	return copySteps(written), nil
+}
+
+// ListSteps returns a project's path in number order, or every project's when it names none.
+//
+// A deleted project's path is left out for every project as well as for one, because a project here
+// is deleted by a stamp rather than by removing it, so nothing cascades and a listing that read the
+// map alone would answer with the path of a project nobody can reach.
+func (m *Memory) ListSteps(_ context.Context, project string) ([]*quaycrewv1.Step, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if project != "" {
+		if _, err := m.getProjectLocked(project); err != nil {
+			return nil, err
+		}
+		return copySteps(m.steps[project]), nil
+	}
+
+	live := make([]string, 0, len(m.steps))
+	for held := range m.steps {
+		if _, err := m.getProjectLocked(held); err != nil {
+			continue
+		}
+		live = append(live, held)
+	}
+	sort.Strings(live)
+
+	every := make([]*quaycrewv1.Step, 0)
+	for _, held := range live {
+		every = append(every, copySteps(m.steps[held])...)
+	}
+	return every, nil
+}
+
+// copySteps hands the caller its own messages, for the reason copyDesign does.
+func copySteps(steps []*quaycrewv1.Step) []*quaycrewv1.Step {
+	copied := make([]*quaycrewv1.Step, 0, len(steps))
+	for _, step := range steps {
+		copied = append(copied, proto.Clone(step).(*quaycrewv1.Step))
+	}
+	return copied
 }
 
 // ImportSkill takes a skill into the system, refusing a version that already exists carrying something
