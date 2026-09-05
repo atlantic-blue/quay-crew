@@ -843,3 +843,84 @@ func proofBlock(step *quaycrewv1.Step) string {
 	}
 	return block + "\n" + named
 }
+
+// The narrowed parts of a project: the listing, the add that gives the number, and the one line
+// saying what a feature narrows to.
+//
+// A project delivers several features at the same time, each with its own milestones, and none of
+// them waits for another. A feature carries no design and no approval of its own: those belong to
+// the project, so gate 1 reads the project's design whichever feature a step sits in.
+
+// featureTitleCap is the length past which a title is refused. A title is one line in a listing, and
+// a paragraph in that column is a listing nobody can read.
+//
+// featureIntentionMark is the length past which an intention is long enough to say so. It refuses
+// nothing: no length cap refuses text a person wrote, and the line is kept whole either way.
+const (
+	featureTitleCap      = 200
+	featureIntentionMark = 200
+)
+
+// ListFeatures reads a project's features, or every project's when it names none.
+//
+// A project with no feature answers with an empty list rather than an error, because nothing written
+// is the normal state. Every state comes back: filtering to the open ones is the caller's question,
+// because a closed feature is what the record of the work looks like.
+func (s *Server) ListFeatures(ctx context.Context, req *quaycrewv1.ListFeaturesRequest) (*quaycrewv1.ListFeaturesResponse, error) {
+	features, err := s.store.ListFeatures(ctx, req.GetProject())
+	if err != nil {
+		return nil, storeError(err, "project")
+	}
+	return &quaycrewv1.ListFeaturesResponse{Features: features}, nil
+}
+
+// AddFeature gives a project one more narrowed part of itself.
+//
+// The number is the store's to give, in the statement that writes the row, so two adds at one moment
+// cannot take the same one. Nothing here reads the highest number, because a read here followed by a
+// write there is exactly the race the store's single statement exists to close.
+func (s *Server) AddFeature(ctx context.Context, req *quaycrewv1.AddFeatureRequest) (*quaycrewv1.AddFeatureResponse, error) {
+	if req.GetProject() == "" {
+		return nil, status.Error(codes.InvalidArgument, "which project: say where with an address")
+	}
+	title := req.GetTitle()
+	if strings.TrimSpace(title) == "" {
+		return nil, status.Error(codes.InvalidArgument,
+			"this feature has no title, and a feature with no title says nothing in a listing")
+	}
+	if length := utf8.RuneCountInString(title); length > featureTitleCap {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"this title is %d characters, over the %d a title holds. A title is one line naming the part of the project this feature narrows to",
+			length, featureTitleCap)
+	}
+	feature, err := s.store.AddFeature(ctx, req.GetProject(), title)
+	if err != nil {
+		return nil, storeError(err, "project")
+	}
+	return &quaycrewv1.AddFeatureResponse{Feature: feature}, nil
+}
+
+// SetFeatureIntention records which part of the project a feature narrows to.
+//
+// One line, so a second line is refused rather than kept: the intention is read beside the title in a
+// listing, and a paragraph there is a design in the wrong column. Length is a warning and never a
+// refusal, because the text only exists in the call being made.
+func (s *Server) SetFeatureIntention(ctx context.Context, req *quaycrewv1.SetFeatureIntentionRequest) (*quaycrewv1.SetFeatureIntentionResponse, error) {
+	if req.GetFeature() == "" {
+		return nil, status.Error(codes.InvalidArgument, "which feature: say its number")
+	}
+	intention := req.GetIntention()
+	if strings.Contains(intention, "\n") {
+		return nil, status.Error(codes.InvalidArgument,
+			"an intention is one line, and this one holds a line break. Say what the feature narrows to in one line, and write the rest in the design")
+	}
+	feature, err := s.store.SetFeatureIntention(ctx, req.GetFeature(), intention)
+	if err != nil {
+		return nil, storeError(err, "feature")
+	}
+	return &quaycrewv1.SetFeatureIntentionResponse{
+		Feature: feature,
+		Warnings: overMark("feature intention", utf8.RuneCountInString(intention), featureIntentionMark,
+			"one line saying which part of the project the feature narrows to"),
+	}, nil
+}

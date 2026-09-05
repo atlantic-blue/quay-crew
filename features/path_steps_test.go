@@ -8,10 +8,13 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/display"
 	"github.com/cucumber/godog"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // pathWorld is the last path written or read, the warnings that came with the write, and the file a
@@ -49,6 +52,7 @@ func stepNumbered(ctx context.Context, number int32) (*quaycrewv1.Step, error) {
 }
 
 func initializePathSteps(sc *godog.ScenarioContext) {
+	initializeFeatureSteps(sc)
 	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
 		return context.WithValue(ctx, pathKey{}, &pathWorld{}), nil
 	})
@@ -551,4 +555,339 @@ func initializePathRenderSteps(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+}
+
+// The narrowed parts of a project, which the path will hang off once the step key moves down to
+// them. They live beside the path's own steps because a feature is what a path belongs to.
+
+// featureWorld is the features last read, the warnings that came with the last write, the feature the
+// last add answered with, and the second project a numbering scenario needs.
+type featureWorld struct {
+	features []*quaycrewv1.Feature
+	warnings []string
+	added    *quaycrewv1.Feature
+	beside   string
+}
+
+type featureKey struct{}
+
+func featuresFrom(ctx context.Context) *featureWorld {
+	f, _ := ctx.Value(featureKey{}).(*featureWorld)
+	return f
+}
+
+// featureNumbered finds one feature of the listing last read. It is the read the assertions go
+// through, so a missing feature reports which numbers are there rather than an index out of range.
+func featureNumbered(ctx context.Context, number int32) (*quaycrewv1.Feature, error) {
+	f := featuresFrom(ctx)
+	for _, feature := range f.features {
+		if feature.GetNumber() == number {
+			return feature, nil
+		}
+	}
+	var held []string
+	for _, feature := range f.features {
+		held = append(held, fmt.Sprintf("%d", feature.GetNumber()))
+	}
+	return nil, fmt.Errorf("the project has no feature %d, it holds %s", number, strings.Join(held, ", "))
+}
+
+// aLineOf is a line of text of a stated length, for the scenarios about what a length warns about.
+func aLineOf(length int) string {
+	return strings.Repeat("a", length)
+}
+
+func initializeFeatureSteps(sc *godog.ScenarioContext) {
+	sc.Before(func(ctx context.Context, _ *godog.Scenario) (context.Context, error) {
+		return context.WithValue(ctx, featureKey{}, &featureWorld{}), nil
+	})
+
+	sc.Step(`^the operator adds the feature "([^"]*)"$`, func(ctx context.Context, title string) error {
+		return addFeature(ctx, worldFrom(ctx).projectID, title)
+	})
+
+	sc.Step(`^the project's feature "([^"]*)"$`, func(ctx context.Context, title string) error {
+		if err := addFeature(ctx, worldFrom(ctx).projectID, title); err != nil {
+			return err
+		}
+		return worldFrom(ctx).lastErr
+	})
+
+	sc.Step(`^the operator adds a feature with no title$`, func(ctx context.Context) error {
+		return addFeature(ctx, worldFrom(ctx).projectID, "")
+	})
+
+	// The driver's own token, which is what a session inside a sandbox presents. A design session
+	// names the features it is about to write paths for.
+	sc.Step(`^the driver adds the feature "([^"]*)"$`, func(ctx context.Context, title string) error {
+		w := worldFrom(ctx)
+		return asDriver(ctx, func(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) error {
+			_, err := client.AddFeature(ctx, &quaycrewv1.AddFeatureRequest{
+				Project: w.projectID, Title: title})
+			return err
+		})
+	})
+
+	sc.Step(`^a project named "([^"]*)" beside it$`, func(ctx context.Context, name string) error {
+		w, f := worldFrom(ctx), featuresFrom(ctx)
+		resp, err := w.client.CreateProject(ctx, &quaycrewv1.CreateProjectRequest{
+			Workspace: w.workspaceID, Name: name})
+		if err != nil {
+			return err
+		}
+		// The background's project is the one the other steps mean, so this one is kept apart.
+		f.beside = resp.GetProject().GetId()
+		return nil
+	})
+
+	sc.Step(`^the operator adds the feature "([^"]*)" to the project beside it$`,
+		func(ctx context.Context, title string) error {
+			f := featuresFrom(ctx)
+			if f.beside == "" {
+				return fmt.Errorf("no project was made beside it")
+			}
+			return addFeature(ctx, f.beside, title)
+		})
+
+	sc.Step(`^the operator reads the features$`, func(ctx context.Context) error {
+		return readFeatures(ctx, worldFrom(ctx).projectID)
+	})
+
+	sc.Step(`^the operator reads the features of the project beside it$`, func(ctx context.Context) error {
+		f := featuresFrom(ctx)
+		if f.beside == "" {
+			return fmt.Errorf("no project was made beside it")
+		}
+		return readFeatures(ctx, f.beside)
+	})
+
+	sc.Step(`^the operator reads the features of a project that does not exist$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		_, w.lastErr = w.client.ListFeatures(ctx, &quaycrewv1.ListFeaturesRequest{Project: "no-such-project"})
+		return nil
+	})
+
+	// Order is what the control plane promises, so it is asserted as an order and not as a set: a
+	// check that every number is present passes against a listing drawn in the wrong order.
+	sc.Step(`^the features read ([\d, ]+) in that order$`, func(ctx context.Context, wanted string) error {
+		var got []string
+		for _, feature := range featuresFrom(ctx).features {
+			got = append(got, fmt.Sprintf("%d", feature.GetNumber()))
+		}
+		if reads := strings.Join(got, ", "); reads != wanted {
+			return fmt.Errorf("the features read %s, want %s", reads, wanted)
+		}
+		return nil
+	})
+
+	sc.Step(`^the project holds no feature$`, func(ctx context.Context) error {
+		if got := len(featuresFrom(ctx).features); got != 0 {
+			return fmt.Errorf("the project holds %d features, and the add was refused", got)
+		}
+		return nil
+	})
+
+	sc.Step(`^feature (\d+) is titled "([^"]*)"$`, func(ctx context.Context, number int, want string) error {
+		feature, err := featureNumbered(ctx, int32(number))
+		if err != nil {
+			return err
+		}
+		if got := feature.GetTitle(); got != want {
+			return fmt.Errorf("feature %d is titled %q, want %q", number, got, want)
+		}
+		return nil
+	})
+
+	sc.Step(`^feature (\d+) is open$`, func(ctx context.Context, number int) error {
+		feature, err := featureNumbered(ctx, int32(number))
+		if err != nil {
+			return err
+		}
+		if got := feature.GetState(); got != "open" {
+			return fmt.Errorf("feature %d reads as %q, and nobody has closed it", number, got)
+		}
+		return nil
+	})
+
+	sc.Step(`^feature (\d+) narrows to "([^"]*)"$`, func(ctx context.Context, number int, want string) error {
+		feature, err := featureNumbered(ctx, int32(number))
+		if err != nil {
+			return err
+		}
+		if got := feature.GetIntention(); got != unescape(want) {
+			return fmt.Errorf("feature %d narrows to %q, want %q", number, got, unescape(want))
+		}
+		return nil
+	})
+
+	sc.Step(`^feature (\d+)'s intention is (\d+) characters$`, func(ctx context.Context, number, want int) error {
+		feature, err := featureNumbered(ctx, int32(number))
+		if err != nil {
+			return err
+		}
+		if got := utf8.RuneCountInString(feature.GetIntention()); got != want {
+			return fmt.Errorf("feature %d's intention is %d characters, want %d kept whole", number, got, want)
+		}
+		return nil
+	})
+
+	// The number is the system's to give, so a scenario reads it off the answer to the add rather
+	// than off a later listing: what the caller was told is the claim being made.
+	sc.Step(`^the feature that was added took number (\d+)$`, func(ctx context.Context, want int) error {
+		f := featuresFrom(ctx)
+		if f.added == nil {
+			return fmt.Errorf("no feature was added, so nothing took a number")
+		}
+		if got := f.added.GetNumber(); got != int32(want) {
+			return fmt.Errorf("the add answered with number %d, want %d", got, want)
+		}
+		return nil
+	})
+
+	sc.Step(`^the feature that was added carries an identifier of its own$`, func(ctx context.Context) error {
+		f := featuresFrom(ctx)
+		if f.added == nil {
+			return fmt.Errorf("no feature was added, so nothing carries an identifier")
+		}
+		if f.added.GetId() == "" || f.added.GetId() == f.added.GetProject() {
+			return fmt.Errorf("the feature is identified %q, and its project is %q",
+				f.added.GetId(), f.added.GetProject())
+		}
+		return nil
+	})
+
+	sc.Step(`^the operator sets feature (\d+)'s intention to "([^"]*)"$`,
+		func(ctx context.Context, number int, text string) error {
+			return setFeatureIntention(ctx, int32(number), unescape(text))
+		})
+
+	sc.Step(`^the operator sets feature (\d+)'s intention to (\d+) characters$`,
+		func(ctx context.Context, number, length int) error {
+			return setFeatureIntention(ctx, int32(number), aLineOf(length))
+		})
+
+	sc.Step(`^the feature write warns "([^"]*)"$`, func(ctx context.Context, want string) error {
+		f := featuresFrom(ctx)
+		for _, warning := range f.warnings {
+			if strings.Contains(warning, want) {
+				return nil
+			}
+		}
+		return fmt.Errorf("the write warned %q, and none of it says %q", f.warnings, want)
+	})
+
+	// Deleting a project takes its features with it. A project here is deleted by a stamp, so the
+	// check is that nothing answers with them rather than that a row went.
+	sc.Step(`^no feature of that project is left anywhere$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		resp, err := w.client.ListFeatures(ctx, &quaycrewv1.ListFeaturesRequest{})
+		if err != nil {
+			return err
+		}
+		for _, feature := range resp.GetFeatures() {
+			if feature.GetProject() == w.projectID {
+				return fmt.Errorf("feature %d of the deleted project is still listed", feature.GetNumber())
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^reading its features is refused as not found$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		_, err := w.client.ListFeatures(ctx, &quaycrewv1.ListFeaturesRequest{Project: w.projectID})
+		if status.Code(err) != codes.NotFound {
+			return fmt.Errorf("reading a deleted project's features answered %v, want not found", err)
+		}
+		return nil
+	})
+
+	// The steps that drive the real command line tool, as a caller runs it.
+
+	sc.Step(`^the caller reads the features$`, func(ctx context.Context) error {
+		return runTool(ctx, "feature", whereTheProjectIs(ctx))
+	})
+
+	sc.Step(`^the caller adds the feature "([^"]*)"$`, func(ctx context.Context, title string) error {
+		return runTool(ctx, "feature", "add", whereTheProjectIs(ctx), title)
+	})
+
+	sc.Step(`^the caller sets feature (\d+)'s intention to "([^"]*)"$`,
+		func(ctx context.Context, number int, text string) error {
+			return runTool(ctx, "feature", "intention", whereTheProjectIs(ctx),
+				strconv.Itoa(number), text)
+		})
+
+	sc.Step(`^the caller sets an intention without saying which feature$`, func(ctx context.Context) error {
+		return runTool(ctx, "feature", "intention", whereTheProjectIs(ctx))
+	})
+
+	// Counted off the printed lines rather than asked of the system again, because what this proves
+	// is what the operator is looking at.
+	sc.Step(`^standard output lists (\d+) features in number order$`, func(ctx context.Context, want int) error {
+		var numbers []string
+		for _, line := range strings.Split(toolFrom(ctx).stdout, "\n") {
+			fields := strings.Fields(line)
+			if len(fields) == 0 || fields[0] == "FEATURE" {
+				continue
+			}
+			numbers = append(numbers, fields[0])
+		}
+		if len(numbers) != want {
+			return fmt.Errorf("standard output lists %d features, want %d: %q",
+				len(numbers), want, toolFrom(ctx).stdout)
+		}
+		for at := 1; at < len(numbers); at++ {
+			if numbers[at-1] >= numbers[at] {
+				return fmt.Errorf("the listing reads %s, which is not number order", strings.Join(numbers, ", "))
+			}
+		}
+		return nil
+	})
+}
+
+// addFeature adds one narrowed part to a project and keeps what came back, so a later step reads the
+// answer the caller got rather than asking again.
+func addFeature(ctx context.Context, project, title string) error {
+	w, f := worldFrom(ctx), featuresFrom(ctx)
+	resp, err := w.client.AddFeature(ctx, &quaycrewv1.AddFeatureRequest{Project: project, Title: title})
+	w.lastErr = err
+	if err != nil {
+		return nil
+	}
+	f.added = resp.GetFeature()
+	return nil
+}
+
+// readFeatures reads one project's features into the world the assertions go through.
+func readFeatures(ctx context.Context, project string) error {
+	w, f := worldFrom(ctx), featuresFrom(ctx)
+	resp, err := w.client.ListFeatures(ctx, &quaycrewv1.ListFeaturesRequest{Project: project})
+	w.lastErr = err
+	if err != nil {
+		return nil
+	}
+	f.features = resp.GetFeatures()
+	return nil
+}
+
+// setFeatureIntention says what one feature narrows to. The number is resolved against the project's
+// listing, because the call takes the feature's identifier and the number is what a person types.
+func setFeatureIntention(ctx context.Context, number int32, text string) error {
+	w, f := worldFrom(ctx), featuresFrom(ctx)
+	if err := readFeatures(ctx, w.projectID); err != nil {
+		return err
+	}
+	held, err := featureNumbered(ctx, number)
+	if err != nil {
+		return err
+	}
+	resp, err := w.client.SetFeatureIntention(ctx, &quaycrewv1.SetFeatureIntentionRequest{
+		Feature: held.GetId(), Intention: text,
+	})
+	w.lastErr = err
+	if err != nil {
+		return nil
+	}
+	f.warnings = resp.GetWarnings()
+	return nil
 }

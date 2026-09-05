@@ -279,6 +279,8 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runContext(ctx, client, args[1:], out)
 	case "design":
 		return runDesign(ctx, client, args[1:], out)
+	case "feature":
+		return runFeature(ctx, client, args[1:], out)
 	case "path":
 		return runPath(ctx, client, args[1:], out)
 	case "step":

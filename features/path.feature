@@ -657,3 +657,150 @@ Feature: A project holds a numbered path of steps
     When the caller takes a step without saying which one
     Then standard error says "usage: krewe step take"
     And the command fails
+
+  # A project delivers several features at the same time. A website runs an authentication feature
+  # and a payment feature at once: authentication ships sign up, then sign in, then reset, and
+  # payment ships checkout, then refunds. Two paths, and neither waits for the other. A feature is
+  # where each narrowed part of the project lives.
+  #
+  # A feature carries no design, no contracts document and no approval. Those belong to the project,
+  # so gate 1 reads the project's design whichever feature a step sits in.
+
+  Scenario: Adding two features to a project gives them the numbers 1 and 2
+    When the operator adds the feature "authentication"
+    And the operator adds the feature "payment"
+    And the operator reads the features
+    Then the features read 1, 2 in that order
+    And feature 1 is titled "authentication"
+    And feature 2 is titled "payment"
+
+  # Feature numbers restart in each project, which is what makes the number the thing a person types.
+  Scenario: A second project starts its features at one again
+    Given a project named "the-website" beside it
+    When the operator adds the feature "authentication"
+    And the operator adds the feature "payment"
+    And the operator adds the feature "checkout" to the project beside it
+    And the operator reads the features of the project beside it
+    Then the features read 1 in that order
+    And feature 1 is titled "checkout"
+
+  # The operator never chooses the number, so two adds at one moment cannot take the same one.
+  Scenario: The number comes from the system and not from the caller
+    When the operator adds the feature "authentication"
+    Then the feature that was added took number 1
+    And the feature that was added carries an identifier of its own
+
+  Scenario: A feature with no title is refused
+    When the operator adds a feature with no title
+    Then the control plane refuses it as invalid
+    And the operator reads the features
+    And the project holds no feature
+
+  Scenario: A fresh feature reads back open with an empty intention
+    When the operator adds the feature "authentication"
+    And the operator reads the features
+    Then feature 1 is open
+    And feature 1 narrows to ""
+
+  Scenario: An intention reads back on the feature
+    Given the project's feature "authentication"
+    When the operator sets feature 1's intention to "sign up, sign in, reset, sessions"
+    And the operator reads the features
+    Then feature 1 narrows to "sign up, sign in, reset, sessions"
+
+  # One line, because the intention is read beside the title in a listing. The rest goes in the
+  # design.
+  Scenario: An intention of two lines is refused
+    Given the project's feature "authentication"
+    When the operator sets feature 1's intention to "sign up\nsign in"
+    Then the control plane refuses it as invalid
+    And the operator reads the features
+    And feature 1 narrows to ""
+
+  # No length cap refuses text a person wrote. The line is kept whole and a person decides.
+  Scenario: An intention past 200 characters warns and is kept
+    Given the project's feature "authentication"
+    When the operator sets feature 1's intention to 250 characters
+    Then the feature write warns "over the 200 characters mark"
+    And the operator reads the features
+    And feature 1's intention is 250 characters
+
+  Scenario: The features of a project that does not exist are refused
+    When the operator reads the features of a project that does not exist
+    Then the control plane refuses it as not found
+
+  # A design session names the features it is about to write paths for, and naming one grants it
+  # nothing it could not reach by dispatching.
+  Scenario: A design session may add a feature
+    When the driver adds the feature "authentication"
+    And the operator reads the features
+    Then the features read 1 in that order
+
+  Scenario: Deleting a project leaves no feature of it anywhere
+    Given the project's feature "authentication"
+    When the operator deletes the project
+    Then no feature of that project is left anywhere
+    And reading its features is refused as not found
+
+  # These scenarios run the command line tool as a caller runs it: its own process, its own standard
+  # output, its own exit status.
+
+  Scenario: A project with no feature tells the caller how to add one
+    Given the system listens on an address the tool can dial
+    When the caller reads the features
+    Then standard output carries "has no feature yet"
+    And standard output carries "krewe feature add"
+    And the command succeeds
+
+  Scenario: The caller adds a feature and reads it back
+    Given the system listens on an address the tool can dial
+    When the caller adds the feature "authentication"
+    Then standard output carries "has feature 1: authentication"
+    And standard output carries "krewe feature intention"
+    And the caller reads the features
+    And standard output carries "authentication"
+    And standard output carries "open"
+    And the command succeeds
+
+  Scenario: Two features print in number order
+    Given the system listens on an address the tool can dial
+    And the project's feature "authentication"
+    And the project's feature "payment"
+    When the caller reads the features
+    Then standard output lists 2 features in number order
+    And the command succeeds
+
+  # The count is of the feature's own steps. No step belongs to a feature yet, so every feature reads
+  # none of none, and the count becomes true when the steps arrive under it. Counting the project's
+  # steps instead would print one project wide number against every feature of it.
+  Scenario: A feature counts the steps under it, and holds none yet
+    Given the system listens on an address the tool can dial
+    And the project's feature "authentication"
+    When the caller reads the features
+    Then standard output carries "0/0"
+    And the command succeeds
+
+  Scenario: Setting an intention shows it on the next reading
+    Given the system listens on an address the tool can dial
+    And the project's feature "authentication"
+    When the caller sets feature 1's intention to "sign up, sign in, reset, sessions"
+    Then standard output carries "narrows to: sign up, sign in, reset, sessions"
+    And the caller reads the features
+    And standard output carries "sign up, sign in, reset, sessions"
+    And the command succeeds
+
+  # A number nobody wrote and a number one past the end read the same to whoever typed it.
+  Scenario: A feature number that names no feature is refused, naming the numbers that exist
+    Given the system listens on an address the tool can dial
+    And the project's feature "authentication"
+    And the project's feature "payment"
+    When the caller sets feature 9's intention to "sign up, sign in"
+    Then standard error says "has no feature 9"
+    And standard error says "it has 1, 2"
+    And the command fails
+
+  Scenario: Setting an intention without saying which feature is refused
+    Given the system listens on an address the tool can dial
+    When the caller sets an intention without saying which feature
+    Then standard error says "usage: krewe feature intention"
+    And the command fails
