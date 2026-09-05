@@ -371,8 +371,28 @@ features: hooks
 promises:
 	@go run ./cmd/promises -base origin/$(UPGRADE_BRANCH)
 
+## constant-branches: refuse a branch whose condition is a boolean literal
+#
+# No linter here reports one. staticcheck is enabled through the standard set and passes `if false`,
+# and so does every other linter golangci-lint carries, with their optional checks turned on. A grep
+# is the guard instead.
+#
+# It reads the literal form only. A condition that is always false through a variable still needs a
+# person to see it.
+constant-branches:
+	@found=$$(grep -rnE --include="*.go" --exclude-dir=gen \
+		'(^|[^[:alnum:]_.])if[[:space:]]+(true|false)[[:space:]]*[{]' . \
+		| grep -vE '^[^:]*:[0-9]+:[[:space:]]*//' || true); \
+	if [ -n "$$found" ]; then \
+		echo "$$found"; \
+		echo; \
+		echo "A branch above tests a boolean literal, so one side of it never runs."; \
+		echo "Delete the branch. Keep the side that runs."; \
+		exit 1; \
+	fi
+
 ## lint: run buf and golangci-lint (generated code is not linted)
-lint:
+lint: constant-branches
 	buf lint
 	golangci-lint run ./internal/... ./cmd/... ./features/...
 	@for dir in $$(find hooks -maxdepth 2 -name go.mod -exec dirname {} \;); do \

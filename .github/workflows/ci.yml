@@ -75,6 +75,11 @@ jobs:
       - name: Behaviour specifications
         run: go test ./features/... -v -count=1
 
+      # No linter reports a branch that tests a boolean literal, so a grep is the guard. The Makefile
+      # holds the one copy of it.
+      - name: Constant branches
+        run: make constant-branches
+
       - name: Lint
         run: |
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
