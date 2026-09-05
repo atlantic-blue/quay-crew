@@ -186,7 +186,11 @@ var helpSpellings = map[string]bool{
 var takenFlags = map[string]map[string]bool{
 	"exec":   {flagDispatch: true},
 	"answer": {allAnswers: true},
-	"target": targetFlagsTaken(),
+	// Which of the two listings the word reads. It says what comes back rather than where anything
+	// is, which is the only kind of flag left here.
+	"sessions": {flagArchived: true},
+	"session":  {flagArchived: true},
+	"target":   targetFlagsTaken(),
 	// A design body is a document, so it is named as a path rather than piped: the file is the thing
 	// being kept, and a path in the command is what makes the write repeatable.
 	"design": {flagFile: true},
@@ -267,6 +271,10 @@ func run(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args 
 		return runBareConsole(ctx, client, args[1:], addr)
 	case "sessions", "session":
 		return runSessions(ctx, client, args[1:], out)
+	case "archive":
+		return runArchive(ctx, client, args[1:], out)
+	case "unarchive":
+		return runUnarchive(ctx, client, args[1:], out)
 	case "stop":
 		return runStop(ctx, client, args[1:], out)
 	case "drain":
@@ -1323,19 +1331,40 @@ func runContextEdit(ctx context.Context, client quaycrewv1.ControlPlaneServiceCl
 	return nil
 }
 
+// flagArchived asks the listing for the sessions that were put away instead of the live ones. The two
+// are never mixed: a default listing that quietly grew back the sessions somebody hid would be worse
+// than no archive at all.
+const flagArchived = "--archived"
+
 func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
-	if len(args) > 1 {
-		return fmt.Errorf("usage: krewe sessions [<address>]")
+	archived := false
+	named := make([]string, 0, 1)
+	for _, arg := range args {
+		// A flag, not a setting, so it takes no value. Reading --archived=false as "the live ones"
+		// would give one command two spellings and one of them would drift.
+		if name, value, given := strings.Cut(arg, "="); name == flagArchived {
+			if given {
+				return fmt.Errorf("%s takes no value, and %q is one: krewe sessions %s lists the "+
+					"sessions put away, and krewe sessions on its own lists the live ones",
+					flagArchived, value, flagArchived)
+			}
+			archived = true
+			continue
+		}
+		named = append(named, arg)
+	}
+	if len(named) > 1 {
+		return fmt.Errorf("usage: krewe sessions [<address>] [%s]", flagArchived)
 	}
 	typed := ""
-	if len(args) == 1 {
-		typed = args[0]
+	if len(named) == 1 {
+		typed = named[0]
 	}
 
 	// Presence, because this listing is what an operator reads before they stop, restart or drain
 	// something. It costs a question to each idle session's sandbox and it is what tells a
 	// conversation running with nobody watching it from an empty container.
-	request := &quaycrewv1.ListSessionsRequest{Presence: true}
+	request := &quaycrewv1.ListSessionsRequest{Presence: true, Archived: archived}
 	// An address typed in wins; otherwise the operator's own place narrows the listing. Standing
 	// nowhere lists everything, because then the question was about the system rather than a place,
 	// and so does the word system, which is how somebody standing somewhere widens it again.
@@ -1367,6 +1396,7 @@ func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	}
 	if len(resp.GetSessions()) == 0 {
 		where.nothing(out)
+		alsoHolds(out, typed, archived, resp.GetHidden())
 		return nil
 	}
 	// Names, not identifiers: a listing of hex says nothing about what any of it is.
@@ -1378,5 +1408,27 @@ func runSessions(ctx context.Context, client quaycrewv1.ControlPlaneServiceClien
 	}
 	fmt.Fprint(out, display.Rows(display.SessionColumns(), rows))
 	where.counted(out, len(rows))
+	alsoHolds(out, typed, archived, resp.GetHidden())
 	return nil
+}
+
+// alsoHolds says how many sessions the other listing holds, and names the command that shows them.
+//
+// It is why the flag is worth having. A listing that falls from 296 rows to 4 with no explanation
+// reads as lost data, and a person who reads it as lost data stops archiving. Left out at zero,
+// because a system with nothing put away has nothing to explain.
+func alsoHolds(out io.Writer, typed string, archived bool, hidden int32) {
+	if hidden <= 0 {
+		return
+	}
+	where := strings.TrimSpace(typed)
+	if where == "" {
+		where = systemScope
+	}
+	if archived {
+		fmt.Fprintf(out, "%d live and hidden. krewe sessions %s lists them.\n", hidden, where)
+		return
+	}
+	fmt.Fprintf(out, "%d archived and hidden. krewe sessions %s %s lists them.\n",
+		hidden, where, flagArchived)
 }

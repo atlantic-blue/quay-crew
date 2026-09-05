@@ -403,6 +403,10 @@ message ListSessionsRequest {
 }
 message ListSessionsResponse {
   repeated Session sessions = 1;
+  // hidden is how many sessions the other listing holds: the archived ones under a default listing,
+  // the live ones under an archived one. A listing that falls from 296 rows to 4 with no explanation
+  // reads as lost data, and a person who reads it as lost data stops archiving.
+  int32 hidden = 2;
 }
 message GetSessionRequest {
   string id = 1;
@@ -454,13 +458,32 @@ message RestartSessionResponse {
   Session session = 1;
 }
 
-// ArchiveSessionRequest puts a session away: stops it if it is running, hides it from the default
-// listing, and keeps everything.
+// ArchiveSessionRequest puts a session away: stops it if it holds a container, hides it from the
+// default listing, and keeps everything.
+//
+// A session holding an open exec is refused rather than put away. An operator who archives a session
+// mid exec loses the answer, and the answer is the work.
 message ArchiveSessionRequest {
   string id = 1;
 }
 message ArchiveSessionResponse {
   Session session = 1;
+}
+
+// ArchiveProjectSessionsRequest puts away every session of one project that holds no container.
+//
+// A sweep rather than a refusal: the single form refuses one live session, because the operator named
+// that one. This form names a project, so it leaves the live ones and says how many it left. A sweep
+// that stops at the first live session finishes nothing.
+message ArchiveProjectSessionsRequest {
+  string project = 1;
+}
+message ArchiveProjectSessionsResponse {
+  // archived is what this call put away, so the count and the list cannot disagree.
+  repeated string archived = 1;
+  // skipped is how many sessions it left in the listing, because a sweep that reports only what it
+  // took reads as a sweep that took everything.
+  int32 skipped = 2;
 }
 
 // ReclaimSessionRequest takes a settled session's container back and leaves everything else.
@@ -1179,6 +1202,7 @@ service ControlPlaneService {
   rpc DrainSessions(DrainSessionsRequest) returns (DrainSessionsResponse);
   rpc RestartSession(RestartSessionRequest) returns (RestartSessionResponse);
   rpc ArchiveSession(ArchiveSessionRequest) returns (ArchiveSessionResponse);
+  rpc ArchiveProjectSessions(ArchiveProjectSessionsRequest) returns (ArchiveProjectSessionsResponse);
   rpc RestoreSession(RestoreSessionRequest) returns (RestoreSessionResponse);
   rpc SetSessionPermissionMode(SetSessionPermissionModeRequest) returns (SetSessionPermissionModeResponse);
   rpc SetSessionLabel(SetSessionLabelRequest) returns (SetSessionLabelResponse);

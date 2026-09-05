@@ -131,26 +131,75 @@ Feature: Sessions run in isolated sandboxes
     And the workspace has 1 archived sessions
     And the session still holds the conversation the first exec started
 
-  Scenario: Archiving a running session stops it and closes its sandbox
+  Scenario: Archiving a session that holds a container stops it and closes its sandbox
     Given a session started by dispatching "hello"
     When the operator archives the session
     Then the session is reported as stopped
     And the session's sandbox has been closed
 
-  # Archiving takes the container away while the exec is still in it, so the exec lands on a session
-  # that is already put away. Recording what it came to brought the row back to idle, or marked it
-  # failed, and the archived listing then said a session nobody can reach is working.
+  # Archiving used to stop a session of any status and put it away. That took the container away while
+  # an exec was still working in it, so the exec landed on a session nobody could reach and the
+  # operator lost the answer. The answer is the work, so the session that holds one is refused.
   #
-  # The exec is held open here rather than timed, because what is being specified is what happens
-  # while one runs, and a scenario that waits a duration for that passes by accident.
-  Scenario: An exec that lands after its session was archived leaves it stopped
+  # The way off the old behaviour: it fails loudly and names krewe stop, rather than archiving
+  # quietly. The exec is held open here rather than timed, because what is being specified is what
+  # happens while one runs, and a scenario that waits a duration for that passes by accident.
+  Scenario: Archiving a session that holds an open exec is refused, and the refusal names the exec
+    Given the model takes longer over an exec than anybody will wait
+    And an exec dispatched without waiting for it
+    And an exec is under way
+    When the operator archives the session
+    Then the control plane refuses it as the wrong state
+    And the refusal names the exec the session holds
+    And the refusal names krewe stop as the way to end it
+    And the workspace has 0 archived sessions
+
+  # The same session archives once nothing is running in it, so the refusal is about the exec rather
+  # than about the session.
+  Scenario: The session archives once its exec has landed
     Given the model takes longer over an exec than anybody will wait
     And an exec dispatched without waiting for it
     And an exec is under way
     When the operator archives the session
     And the model finishes the exec
-    Then the session is reported as stopped
+    And the operator archives the session
+    Then the workspace has 1 archived sessions
+
+  # The console's own key calls the same method, and it must read the same way. A person refused at
+  # the command line and allowed at the key believes the refusal is a bug.
+  Scenario: The console key gives the same refusal as the command
+    Given the model takes longer over an exec than anybody will wait
+    And an exec dispatched without waiting for it
+    And an exec is under way
+    When the operator presses the console key that archives
+    Then the console gives the same refusal, naming the exec
+    And the workspace has 0 archived sessions
+
+  # A sweep rather than a refusal. The single form refuses one live session because the operator named
+  # that session; this form names a project, and a sweep that stops at the first live session finishes
+  # nothing. So it says what it left as well as what it took, because a sweep that reports only what it
+  # took reads as a sweep that took everything.
+  Scenario: Archiving a project takes every session that holds no container and says what it left
+    Given a session started by dispatching "hello"
+    And the operator stops the session
+    And a session started by dispatching "and another"
+    When the operator archives the project's sessions
+    Then 1 session was archived and 1 was left
+    And the archived identifiers are the sessions that were archived
+    And the workspace has 1 sessions
     And the workspace has 1 archived sessions
+
+  # Archiving is the operator's word about the record. A session that could put sessions away could
+  # hide the evidence of what it did.
+  Scenario: The driver cannot archive a session
+    Given a session started by dispatching "hello"
+    When the driver asks to archive the session
+    Then the driver is refused, told the call is the operator's to make
+
+  Scenario: The driver cannot archive a project's sessions
+    Given a session started by dispatching "hello"
+    When the driver asks to archive the project's sessions
+    Then the driver is refused, told the call is the operator's to make
 
   # A handle is matched whether the session is put away or not, so this used to start a container for
   # a session that is not in the listing.
@@ -179,6 +228,69 @@ Feature: Sessions run in isolated sandboxes
     When the operator archives the session
     And the operator archives the session
     Then the control plane refuses it as the wrong state
+
+  # The scenarios below run the command line tool as a caller runs it, because what is being specified
+  # here is what a person reads on the screen after they archive something.
+
+  # A listing that falls from 296 rows to 4 with no explanation reads as lost data, and a person who
+  # reads it as lost data stops archiving. So the listing says how many it is not showing, and names
+  # the command that shows them.
+  Scenario: The default listing says how many sessions are hidden and names the flag
+    Given the system listens on an address the tool can dial
+    And a session started by dispatching "hello"
+    And the operator stops the session
+    And a session started by dispatching "and another"
+    When the caller archives the session started first
+    And the caller lists the sessions
+    Then the listing does not name the session started first
+    And the listing says 1 archived and hidden, naming krewe sessions system --archived
+
+  # The two listings are never mixed. A default view that quietly grew back the sessions somebody hid
+  # would be worse than no archive at all.
+  Scenario: The archived listing holds what was put away and none of the live ones
+    Given the system listens on an address the tool can dial
+    And a session started by dispatching "hello"
+    And the operator stops the session
+    And a session started by dispatching "and another"
+    When the caller archives the session started first
+    And the caller lists the archived sessions
+    Then the listing names the session started first
+    And the listing does not name the session started last
+    And the listing says 1 live and hidden, naming krewe sessions system
+
+  # Archiving deletes nothing. It hides a row from one listing, and every other way of reaching the
+  # session still answers, which is why the word is safe to use.
+  Scenario: An archived session keeps its conversation, its execs and its files
+    Given the system listens on an address the tool can dial
+    And a session started by dispatching "remember this"
+    And a file the session left in its own directory
+    When the caller archives that session
+    Then krewe read still lists that file for the session
+    And the session still holds the conversation the first exec started
+    And that session's execs still read back
+
+  # The way back ships in the same change as the way in. A wrong address hides work that a person then
+  # cannot find.
+  Scenario: Unarchiving puts a session back, reading stopped
+    Given the system listens on an address the tool can dial
+    And a session started by dispatching "hello"
+    When the caller archives that session
+    And the caller unarchives that session
+    Then the workspace has 1 sessions
+    And the workspace has 0 archived sessions
+    And the session is reported as stopped
+    And the tool says it holds no container
+
+  # The container does not come back with the session. Archiving closed it, so the next exec builds a
+  # fresh one over the same conversation and the same files.
+  Scenario: An exec after unarchiving builds a fresh container
+    Given the system listens on an address the tool can dial
+    And a session started by dispatching "hello"
+    When the caller archives that session
+    And the caller unarchives that session
+    And the operator dispatches "carry on" to the same session
+    Then a second sandbox has been created for that session
+    And the second exec resumed the conversation the first exec started
 
   # The mode an exec runs in was hardcoded, so no operator could see it or change it. It belongs to the
   # session rather than to an exec: a session started to plan something should keep planning instead of

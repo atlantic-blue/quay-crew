@@ -506,12 +506,70 @@ func (m *Memory) CountExecs(_ context.Context, session string) (int, error) {
 	return count, nil
 }
 
-// ArchiveSession stamps a session as put away.
+// ArchiveSession stamps a session as put away, and refuses one that holds an exec still running.
+//
+// The check and the write are under one lock, so nothing can start an exec between them. Postgres
+// carries the same rule as a condition on the update for the same reason.
 func (m *Memory) ArchiveSession(_ context.Context, id string) error {
 	m.mu.Lock()
-	delete(m.skillsBorn, id)
-	m.mu.Unlock()
-	return m.stampArchived(id, timestamppb.New(time.Now().UTC()))
+	defer m.mu.Unlock()
+	session, ok := m.sessions[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if session.GetStatus() == StatusRunning {
+		return ErrSessionHoldsAnExec
+	}
+	// Already stamped: the row does not move, and the caller that reads the row first says the
+	// plainer thing.
+	if session.GetArchivedAt() != nil {
+		return ErrNotFound
+	}
+	m.putAway(session, timestamppb.New(time.Now().UTC()))
+	return nil
+}
+
+// ArchiveProjectSessions puts away every session of the project that holds no container.
+//
+// One stamp for all of them, rather than one clock read each: the archived listing is ordered by the
+// stamp, and stamps a nanosecond apart would order the sweep by which session the map happened to
+// yield first.
+func (m *Memory) ArchiveProjectSessions(ctx context.Context, project string) ([]string, error) {
+	if _, err := m.GetProject(ctx, project); err != nil {
+		return nil, err
+	}
+	settled := map[string]bool{}
+	for _, status := range settledStatuses() {
+		settled[status] = true
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	at := timestamppb.New(time.Now().UTC())
+	putAway := make([]*quaycrewv1.Session, 0, len(m.sessions))
+	for _, session := range m.sessions {
+		if session.GetProject() != project || session.GetArchivedAt() != nil {
+			continue
+		}
+		if !settled[session.GetStatus()] {
+			continue
+		}
+		m.putAway(session, at)
+		putAway = append(putAway, session)
+	}
+	sortByLastMoved(putAway)
+	archived := make([]string, 0, len(putAway))
+	for _, session := range putAway {
+		archived = append(archived, session.GetId())
+	}
+	return archived, nil
+}
+
+// putAway is the write both of those make. The caller holds the lock.
+func (m *Memory) putAway(session *quaycrewv1.Session, at *timestamppb.Timestamp) {
+	delete(m.skillsBorn, session.GetId())
+	session.ArchivedAt = at
+	session.UpdatedAt = timestamppb.New(time.Now().UTC())
 }
 
 // RestoreSession clears the stamp, bringing the session back into the default listing.

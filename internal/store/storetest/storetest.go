@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sort"
 	"testing"
 	"time"
 
@@ -613,6 +614,126 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 			if !errors.Is(err, store.ErrNotFound) {
 				t.Fatalf("acting on a missing session returned %v, want ErrNotFound", err)
 			}
+		}
+	})
+
+	// The refusal is a condition on the write rather than a check in front of it, so an exec that
+	// starts between a read and a write cannot be archived out from under itself. Both stores have to
+	// agree, because a system on memory and a system on Postgres would otherwise disagree about
+	// whether the operator keeps the answer.
+	t.Run("a session holding an exec that is still running cannot be archived", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+		working, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", store.Birth{})
+		if err := s.RecordExec(ctx, working.GetId(), "conversation-1", "running"); err != nil {
+			t.Fatalf("RecordExec: %v", err)
+		}
+
+		if err := s.ArchiveSession(ctx, working.GetId()); !errors.Is(err, store.ErrSessionHoldsAnExec) {
+			t.Fatalf("archiving a session with an exec in flight returned %v, want ErrSessionHoldsAnExec", err)
+		}
+		// The row is unchanged, which is the half a refusal that only returned an error would not have.
+		held, _ := s.GetSession(ctx, working.GetId())
+		if held.GetArchivedAt() != nil {
+			t.Fatal("the session was stamped anyway, so the refusal is only a message")
+		}
+		if listed, _ := s.ListSessions(ctx, store.SessionFilter{Project: project.GetId()}); len(listed) != 1 {
+			t.Fatalf("the default listing is %v, want the session still in it", ids(listed))
+		}
+
+		// The same session archives once the exec has landed, so the refusal is about the exec rather
+		// than about the session.
+		if err := s.RecordExec(ctx, working.GetId(), "conversation-1", "idle"); err != nil {
+			t.Fatalf("RecordExec: %v", err)
+		}
+		if err := s.ArchiveSession(ctx, working.GetId()); err != nil {
+			t.Fatalf("ArchiveSession after the exec landed: %v", err)
+		}
+	})
+
+	// The sweep takes the finished sessions of one project and leaves the rest. It reports what it
+	// took, so the caller can say what it did and what it did not do.
+	t.Run("archiving a project takes every session that holds no container", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+		elsewhere := newProject(t, s, "other", "notes")
+
+		settled := make([]string, 0, 2)
+		for _, handle := range []string{"session-a", "session-b"} {
+			one, _, _ := s.FindOrCreateSession(ctx, project.GetId(), handle, store.Birth{})
+			if err := s.StopSession(ctx, one.GetId()); err != nil {
+				t.Fatalf("StopSession: %v", err)
+			}
+			settled = append(settled, one.GetId())
+		}
+		live, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-c", store.Birth{})
+		next, _, _ := s.FindOrCreateSession(ctx, elsewhere.GetId(), "session-d", store.Birth{})
+		if err := s.StopSession(ctx, next.GetId()); err != nil {
+			t.Fatalf("StopSession: %v", err)
+		}
+
+		archived, err := s.ArchiveProjectSessions(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("ArchiveProjectSessions: %v", err)
+		}
+		sort.Strings(settled)
+		got := append([]string(nil), archived...)
+		sort.Strings(got)
+		if !slices.Equal(got, settled) {
+			t.Fatalf("the sweep took %v, want the two stopped sessions %v", archived, settled)
+		}
+		// The idle session holds a container, so it is skipped rather than refused: a sweep that
+		// stopped at the first live session would finish nothing.
+		listed, _ := s.ListSessions(ctx, store.SessionFilter{Project: project.GetId()})
+		if len(listed) != 1 || listed[0].GetId() != live.GetId() {
+			t.Fatalf("the default listing is %v, want only the session holding a container", ids(listed))
+		}
+		// It never reaches a second project.
+		if elsewhereLive, _ := s.ListSessions(ctx, store.SessionFilter{Project: elsewhere.GetId()}); len(elsewhereLive) != 1 {
+			t.Fatalf("the sweep reached %s: its listing is %v", elsewhere.GetId(), ids(elsewhereLive))
+		}
+
+		// Run twice and the second run takes nothing: a session already put away is not stamped again
+		// and is not returned, so a caller cannot count the same session in two sweeps.
+		again, err := s.ArchiveProjectSessions(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("ArchiveProjectSessions again: %v", err)
+		}
+		if len(again) != 0 {
+			t.Fatalf("the second sweep took %v, want nothing", again)
+		}
+		if _, err := s.ArchiveProjectSessions(ctx, "ghost"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("sweeping a project that does not exist returned %v, want ErrNotFound", err)
+		}
+	})
+
+	// The stamp is not a state word. A reader still wants to know how the session finished, so a
+	// session that failed reads failed after it is put away rather than being flattened to one word.
+	t.Run("a session put away keeps the status word it ended on", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house bills")
+		broken, _, _ := s.FindOrCreateSession(ctx, project.GetId(), "session-a", store.Birth{})
+		if err := s.RecordExec(ctx, broken.GetId(), "conversation-1", "failed"); err != nil {
+			t.Fatalf("RecordExec: %v", err)
+		}
+
+		archived, err := s.ArchiveProjectSessions(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("ArchiveProjectSessions: %v", err)
+		}
+		// A failed session holds no container, so the sweep takes it.
+		if len(archived) != 1 || archived[0] != broken.GetId() {
+			t.Fatalf("the sweep took %v, want the failed session %s", archived, broken.GetId())
+		}
+		put, _ := s.GetSession(ctx, broken.GetId())
+		if put.GetStatus() != "failed" {
+			t.Fatalf("the archived session reads %q, want the word it ended on", put.GetStatus())
+		}
+		if put.GetArchivedAt() == nil {
+			t.Fatal("the archived session carries no stamp")
 		}
 	})
 

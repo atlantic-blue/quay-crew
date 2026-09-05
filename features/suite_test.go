@@ -31,6 +31,7 @@ import (
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/auth"
 	"github.com/atlantic-blue/quay-krewe/internal/controlplane"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
 	"github.com/atlantic-blue/quay-krewe/internal/model"
 	"github.com/atlantic-blue/quay-krewe/internal/sandbox"
 	"github.com/atlantic-blue/quay-krewe/internal/secrets"
@@ -38,6 +39,7 @@ import (
 	"github.com/atlantic-blue/quay-krewe/internal/skill"
 	"github.com/atlantic-blue/quay-krewe/internal/store"
 	"github.com/atlantic-blue/quay-krewe/internal/telemetry"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cucumber/godog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -287,6 +289,9 @@ type world struct {
 	listener *bufconn.Listener
 	// token is the system's token, which every caller has to present to be served.
 	token string
+	// lastSweep is what archiving a whole project answered, so a later step can hold the count and the
+	// list of identifiers to each other.
+	lastSweep *quaycrewv1.ArchiveProjectSessionsResponse
 	// driverToken is the driver's own token: recognised, and refused the calls that grant capability.
 	driverToken string
 	conn        *grpc.ClientConn
@@ -928,6 +933,252 @@ func initializeScenario(sc *godog.ScenarioContext) {
 		}
 		return nil
 	})
+	// The refusal has to be actable: it names the exec that is running and the command that ends it,
+	// so an operator who wanted the session put away knows what to do next rather than only that they
+	// may not.
+	sc.Step(`^the refusal names the exec the session holds$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if w.lastErr == nil {
+			return fmt.Errorf("the session was archived with an exec still running in it")
+		}
+		current, err := w.lastExec()
+		if err != nil {
+			return err
+		}
+		execs, err := w.client.ListExecs(ctx, &quaycrewv1.ListExecsRequest{Session: current.sessionID})
+		if err != nil {
+			return err
+		}
+		open := ""
+		for _, exec := range execs.GetExecs() {
+			if exec.GetStatus() == "running" {
+				open = exec.GetId()
+			}
+		}
+		if open == "" {
+			return fmt.Errorf("no exec is recorded as running, so this scenario is not testing anything")
+		}
+		if !strings.Contains(w.lastErr.Error(), display.ShortID(open)) {
+			return fmt.Errorf("the refusal says %q, which does not name the exec %s that is running",
+				w.lastErr, display.ShortID(open))
+		}
+		return nil
+	})
+	sc.Step(`^the refusal names krewe stop as the way to end it$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if w.lastErr == nil {
+			return fmt.Errorf("the session was archived with an exec still running in it")
+		}
+		if !strings.Contains(w.lastErr.Error(), "krewe stop") {
+			return fmt.Errorf("the refusal says %q, and names nothing to type instead", w.lastErr)
+		}
+		return nil
+	})
+
+	// The console reaches the same method, so it must read the same way. A person refused at the
+	// command line and allowed at the key believes the refusal is a bug.
+	sc.Step(`^the operator presses the console key that archives$`, func(ctx context.Context) error {
+		c := consoleFrom(ctx)
+		if err := c.openModelOn(worldFrom(ctx), "sessions"); err != nil {
+			return err
+		}
+		if err := c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("A")}); err != nil {
+			return err
+		}
+		return c.press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	})
+	sc.Step(`^the console gives the same refusal, naming the exec$`, func(ctx context.Context) error {
+		reported := consoleFrom(ctx).model.Reported()
+		if reported == nil {
+			return fmt.Errorf("the console archived a session holding an open exec and reported nothing")
+		}
+		for _, want := range []string{"holds exec", "krewe stop"} {
+			if !strings.Contains(reported.Error(), want) {
+				return fmt.Errorf("the console says %q, which does not carry %q", reported, want)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^the operator archives the project's sessions$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		w.lastSweep, w.lastErr = w.client.ArchiveProjectSessions(ctx,
+			&quaycrewv1.ArchiveProjectSessionsRequest{Project: w.projectID})
+		return w.lastErr
+	})
+	sc.Step(`^(\d+) sessions? was archived and (\d+) was left$`, func(ctx context.Context, took, left int) error {
+		w := worldFrom(ctx)
+		if got := len(w.lastSweep.GetArchived()); got != took {
+			return fmt.Errorf("the sweep archived %d sessions, want %d", got, took)
+		}
+		if got := int(w.lastSweep.GetSkipped()); got != left {
+			return fmt.Errorf("the sweep says it left %d sessions, want %d", got, left)
+		}
+		return nil
+	})
+	// The count and the list are two statements about one sweep, and a caller reading one of them has
+	// to be able to act on the other.
+	sc.Step(`^the archived identifiers are the sessions that were archived$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		listed, err := w.client.ListSessions(ctx, &quaycrewv1.ListSessionsRequest{
+			Workspace: w.workspaceID, Archived: true,
+		})
+		if err != nil {
+			return err
+		}
+		put := map[string]bool{}
+		for _, session := range listed.GetSessions() {
+			put[session.GetId()] = true
+		}
+		if len(put) != len(w.lastSweep.GetArchived()) {
+			return fmt.Errorf("the sweep named %d sessions and %d are in the archived listing",
+				len(w.lastSweep.GetArchived()), len(put))
+		}
+		for _, id := range w.lastSweep.GetArchived() {
+			if !put[id] {
+				return fmt.Errorf("the sweep named %s and the archived listing does not hold it", id)
+			}
+		}
+		return nil
+	})
+
+	sc.Step(`^the driver asks to archive the session$`, func(ctx context.Context) error {
+		current, err := worldFrom(ctx).lastExec()
+		if err != nil {
+			return err
+		}
+		return asDriver(ctx, func(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) error {
+			_, err := client.ArchiveSession(ctx, &quaycrewv1.ArchiveSessionRequest{Id: current.sessionID})
+			return err
+		})
+	})
+	sc.Step(`^the driver asks to archive the project's sessions$`, func(ctx context.Context) error {
+		project := worldFrom(ctx).projectID
+		return asDriver(ctx, func(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) error {
+			_, err := client.ArchiveProjectSessions(ctx,
+				&quaycrewv1.ArchiveProjectSessionsRequest{Project: project})
+			return err
+		})
+	})
+
+	// The scenarios that run the command line tool. What a person reads on the screen after they
+	// archive something is the whole point of the word, so it is proved through the tool rather than
+	// through the calls under it.
+	sc.Step(`^the caller archives the session started first$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		if len(w.execs) == 0 {
+			return fmt.Errorf("no session has been started yet")
+		}
+		return runTool(ctx, "archive", w.execs[0].sessionID)
+	})
+	sc.Step(`^the caller archives that session$`, func(ctx context.Context) error {
+		current, err := worldFrom(ctx).lastExec()
+		if err != nil {
+			return err
+		}
+		return runTool(ctx, "archive", current.sessionID)
+	})
+	sc.Step(`^the caller unarchives that session$`, func(ctx context.Context) error {
+		current, err := worldFrom(ctx).lastExec()
+		if err != nil {
+			return err
+		}
+		return runTool(ctx, "unarchive", current.sessionID)
+	})
+	sc.Step(`^the caller lists the archived sessions$`, func(ctx context.Context) error {
+		return runTool(ctx, "sessions", "--archived")
+	})
+	sc.Step(`^the listing (does not )?names? the session started (first|last)$`,
+		func(ctx context.Context, absent, which string) error {
+			w := worldFrom(ctx)
+			if len(w.execs) < 2 {
+				return fmt.Errorf("fewer than two sessions were started, so first and last are the same one")
+			}
+			wanted := w.execs[0]
+			if which == "last" {
+				wanted = w.execs[len(w.execs)-1]
+			}
+			named := strings.Contains(toolFrom(ctx).stdout, display.ShortID(wanted.sessionID))
+			if named == (absent == "") {
+				return nil
+			}
+			return fmt.Errorf("the listing %s %s:\n%s", saidOrNot(named), display.ShortID(wanted.sessionID),
+				toolFrom(ctx).stdout)
+		})
+	// The line that makes the flag worth having. A listing that falls from 296 rows to 4 with no
+	// explanation reads as lost data.
+	sc.Step(`^the listing says (\d+) (archived|live) and hidden, naming (.+)$`,
+		func(ctx context.Context, hidden int, which, command string) error {
+			printed := toolFrom(ctx).stdout
+			want := fmt.Sprintf("%d %s and hidden.", hidden, which)
+			if !strings.Contains(printed, want) {
+				return fmt.Errorf("the listing does not say %q:\n%s", want, printed)
+			}
+			if !strings.Contains(printed, command) {
+				return fmt.Errorf("the listing does not name %q, so the count cannot be acted on:\n%s",
+					command, printed)
+			}
+			return nil
+		})
+
+	// Archiving hides a row from one listing and nothing else, so the file the session left is still
+	// there and still readable by the command that reads work out of a session.
+	sc.Step(`^a file the session left in its own directory$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		current, err := w.lastExec()
+		if err != nil {
+			return err
+		}
+		resp, err := w.client.ReadSessionWork(ctx, &quaycrewv1.ReadSessionWorkRequest{Session: current.sessionID})
+		if err != nil {
+			return err
+		}
+		if resp.GetHost() == "" {
+			return fmt.Errorf("the system names no directory for the session, so nothing can be left in one")
+		}
+		return os.WriteFile(filepath.Join(resp.GetHost(), sessionWorkFile), []byte("what it made\n"), 0o600)
+	})
+	sc.Step(`^krewe read still lists that file for the session$`, func(ctx context.Context) error {
+		current, err := worldFrom(ctx).lastExec()
+		if err != nil {
+			return err
+		}
+		if err := runTool(ctx, "read", current.sessionID); err != nil {
+			return err
+		}
+		t := toolFrom(ctx)
+		if t.exitCode != 0 {
+			return fmt.Errorf("krewe read refused an archived session: %s", t.stderr)
+		}
+		if !strings.Contains(t.stdout, sessionWorkFile) {
+			return fmt.Errorf("krewe read does not list %s:\n%s", sessionWorkFile, t.stdout)
+		}
+		return nil
+	})
+	sc.Step(`^that session's execs still read back$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		current, err := w.lastExec()
+		if err != nil {
+			return err
+		}
+		resp, err := w.client.ListExecs(ctx, &quaycrewv1.ListExecsRequest{Session: current.sessionID})
+		if err != nil {
+			return err
+		}
+		if len(resp.GetExecs()) == 0 {
+			return fmt.Errorf("an archived session's history is empty, so archiving took it")
+		}
+		return nil
+	})
+	// An operator who expects the old container back finds a session that answers nothing, so the
+	// command says it out loud.
+	sc.Step(`^the tool says it holds no container$`, func(ctx context.Context) error {
+		if printed := toolFrom(ctx).stdout; !strings.Contains(printed, "holds no container") {
+			return fmt.Errorf("unarchiving says %q, and nothing about the container", printed)
+		}
+		return nil
+	})
+
 	sc.Step(`^the operator restores the session$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		current, err := w.lastExec()
@@ -1325,4 +1576,17 @@ func refused(w *world, want codes.Code) error {
 		return fmt.Errorf("the control plane refused it as %s, want %s", got, want)
 	}
 	return nil
+}
+
+// sessionWorkFile is the file a scenario leaves in a session's own directory, to prove archiving
+// leaves it there.
+const sessionWorkFile = "notes.md"
+
+// saidOrNot reads an assertion about a listing back as a sentence, so the failure says which way
+// round it went wrong.
+func saidOrNot(named bool) string {
+	if named {
+		return "names"
+	}
+	return "does not name"
 }

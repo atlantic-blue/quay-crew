@@ -1916,7 +1916,27 @@ func (s *Server) ListSessions(ctx context.Context, req *quaycrewv1.ListSessionsR
 	if req.GetPresence() {
 		s.withPresence(ctx, sessions)
 	}
-	return &quaycrewv1.ListSessionsResponse{Sessions: sessions}, nil
+	return &quaycrewv1.ListSessionsResponse{
+		Sessions: sessions, Hidden: s.countHidden(ctx, req),
+	}, nil
+}
+
+// countHidden is how many sessions the other listing holds: the archived ones under a default
+// listing, the live ones under an archived one.
+//
+// It is a second read under the same filter with the choice flipped, which is how GetInfo counts both
+// listings today. A count rather than rows: no archived session ever reaches a default listing, which
+// is the rule store.SessionFilter holds.
+func (s *Server) countHidden(ctx context.Context, req *quaycrewv1.ListSessionsRequest) int32 {
+	other, err := s.store.ListSessions(ctx, store.SessionFilter{
+		Workspace: req.GetWorkspace(),
+		Project:   req.GetProject(),
+		Archived:  !req.GetArchived(),
+	})
+	if err != nil {
+		return 0
+	}
+	return int32(len(other))
 }
 
 // GetSession returns a session by id.
@@ -2153,18 +2173,28 @@ func (s *Server) RestartSession(ctx context.Context, req *quaycrewv1.RestartSess
 	return &quaycrewv1.RestartSessionResponse{Session: restarted}, nil
 }
 
-// ArchiveSession puts a session away, stopping it first if it is running.
+// ArchiveSession puts a session away, stopping it first if it still holds a container.
 //
 // Nothing is deleted, by anyone, here: the row, the conversation handle, the conversation store on
 // the host and the project's files are all untouched. Archiving is a stamp, so restoring is clearing
 // it. Deleting a conversation is a separate decision and not something to slip in behind a key.
+//
+// A session with an exec still running is refused. It used to be stopped and put away like any other,
+// and that took the container away while the exec was working in it, so the operator lost the answer
+// and the answer is the work. The way to end an exec is krewe stop, and the refusal says so.
 func (s *Server) ArchiveSession(ctx context.Context, req *quaycrewv1.ArchiveSessionRequest) (*quaycrewv1.ArchiveSessionResponse, error) {
+	if strings.TrimSpace(req.GetId()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "a session is required")
+	}
 	session, err := s.store.GetSession(ctx, req.GetId())
 	if err != nil {
 		return nil, storeError(err, "session")
 	}
 	if session.GetArchivedAt() != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "session %s is already archived", req.GetId())
+	}
+	if session.GetStatus() == StatusRunning {
+		return nil, s.holdsAnExec(ctx, session)
 	}
 	// A container left running for a session nobody can see is exactly the leak this project keeps
 	// finding, so put the sandbox away with the session.
@@ -2175,11 +2205,79 @@ func (s *Server) ArchiveSession(ctx context.Context, req *quaycrewv1.ArchiveSess
 		s.closeSandbox(ctx, req.GetId())
 	}
 	if err := s.store.ArchiveSession(ctx, req.GetId()); err != nil {
+		if errors.Is(err, store.ErrSessionHoldsAnExec) {
+			// An exec started between the read above and the write. The store refused it, which is why
+			// that rule is a condition on the update rather than a check in front of it.
+			return nil, s.holdsAnExec(ctx, session)
+		}
 		return nil, storeError(err, "session")
 	}
 	archived := s.reread(ctx, req.GetId())
 	s.emit(ctx, archived, KindSessionArchived, "")
 	return &quaycrewv1.ArchiveSessionResponse{Session: archived}, nil
+}
+
+// holdsAnExec is the refusal a session with an open exec gets. It names the exec by its identifier
+// and how long it has been running, so the operator can go and read what is working before deciding
+// to end it, and it names the command that ends it.
+func (s *Server) holdsAnExec(ctx context.Context, session *quaycrewv1.Session) error {
+	where := display.ShortID(session.GetHandle())
+	named := "an exec"
+	if open := s.openExecOf(ctx, session.GetId()); open != nil {
+		named = fmt.Sprintf("exec %s, running for %s",
+			display.ShortID(open.GetId()), display.Age(open.GetOccurredAt()))
+	}
+	return status.Errorf(codes.FailedPrecondition,
+		"session %s holds %s: archiving now would take the container away while it is working"+
+			"\n\nend it with krewe stop %s, or wait for it and archive after",
+		where, named, where)
+}
+
+// openExecOf is the exec a session has in flight, read from the history the session's own record
+// carries. It comes back nil when the history says nothing is running, which is not an error: the
+// refusal still holds, and it names the session rather than an exec.
+func (s *Server) openExecOf(ctx context.Context, sessionID string) *quaycrewv1.Exec {
+	execs, err := s.store.ListExecs(ctx, sessionID, 0)
+	if err != nil {
+		return nil
+	}
+	for i := len(execs) - 1; i >= 0; i-- {
+		if execs[i].GetStatus() == StatusRunning {
+			return execs[i]
+		}
+	}
+	return nil
+}
+
+// ArchiveProjectSessions puts away every session of one project that holds no container.
+//
+// A sweep rather than a refusal. The single form refuses one live session because the operator named
+// that session; this one names a project, so it takes what it can and says how many it left. A sweep
+// that stops at the first live session finishes nothing.
+func (s *Server) ArchiveProjectSessions(ctx context.Context, req *quaycrewv1.ArchiveProjectSessionsRequest) (
+	*quaycrewv1.ArchiveProjectSessionsResponse, error) {
+	if strings.TrimSpace(req.GetProject()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "a project is required")
+	}
+	// Counted before the sweep, because what it leaves is what it did not take, and after the write
+	// every session it took has left the listing it was counted in.
+	before, err := s.store.ListSessions(ctx, store.SessionFilter{Project: req.GetProject()})
+	if err != nil {
+		return nil, storeError(err, "list sessions")
+	}
+	archived, err := s.store.ArchiveProjectSessions(ctx, req.GetProject())
+	if err != nil {
+		return nil, storeError(err, "project")
+	}
+	for _, id := range archived {
+		// The sandbox goes with the session, for the reason the single form closes one: a container
+		// running for a session nobody can see is the leak archiving exists to close.
+		s.closeSandbox(ctx, id)
+		s.emit(ctx, s.reread(ctx, id), KindSessionArchived, "")
+	}
+	return &quaycrewv1.ArchiveProjectSessionsResponse{
+		Archived: archived, Skipped: int32(len(before) - len(archived)),
+	}, nil
 }
 
 // RestoreSession brings an archived session back into the default listing. It comes back stopped,

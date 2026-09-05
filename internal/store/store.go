@@ -54,6 +54,14 @@ var ErrNotFound = errors.New("store: not found")
 // then a write would let a design emptied between the two come back approved.
 var ErrNothingToApprove = errors.New("store: there is no design to approve")
 
+// ErrSessionHoldsAnExec is returned when a session that has an exec in flight is asked to be
+// archived.
+//
+// The check and the write are one statement, for the reason ErrNothingToApprove is one: a read of the
+// status followed by a write would let an exec start between the two, and the session would then be
+// put away with an open exec in it. The operator would lose the answer, and the answer is the work.
+var ErrSessionHoldsAnExec = errors.New("store: the session holds an exec that is still running")
+
 // ErrStepNotReady is returned when a step somebody asks for is not in state ready.
 //
 // The check and the write are one statement, for the reason ErrNothingToApprove is one: a read of
@@ -103,6 +111,17 @@ const StatusReclaimed = "reclaimed"
 // bookkeeping. "reclaimed" is absent because the container has already gone, and mixing it in here is
 // what starved the reclaim: see IdleSandboxes.
 func holdingStatuses() []string { return []string{"idle", "failed"} }
+
+// StatusRunning is the session status that means an exec is in flight. Both stores refuse to archive
+// a session carrying it, and the refusal is a condition on the write, so the word has to be here for
+// the same reason StatusReclaimed is: the store cannot depend on the package that owns the
+// vocabulary, and the two must not disagree about the spelling.
+const StatusRunning = "running"
+
+// settledStatuses are the states a session holds no container in, which is what the whole project
+// sweep puts away. A session in any other state is left in the listing rather than refused: the sweep
+// names a project, not a session, so it takes what it can and reports what it left.
+func settledStatuses() []string { return []string{"stopped", "failed", StatusReclaimed} }
 
 // ErrSkillChanged is returned when a version of a skill is imported again carrying a different skill.
 //
@@ -234,7 +253,24 @@ type Store interface {
 	ReclaimedSessions(ctx context.Context, limit int) ([]*quaycrewv1.Session, error)
 	// ArchiveSession only hides a session from the default listing. The row, the conversation handle
 	// and the files on the host all stay.
+	//
+	// A session whose status is running is refused with ErrSessionHoldsAnExec, and a session that is
+	// archived already changes no row and is ErrNotFound. The refusal is a condition on the update
+	// rather than a read before it, so nothing can start an exec between the two.
+	//
+	// The write clears the skills fingerprint. The sandbox goes with the archive, so the fingerprint
+	// of the skills that sandbox was born with describes nothing.
 	ArchiveSession(ctx context.Context, id string) error
+	// ArchiveProjectSessions puts away every session of one project that holds no container, and
+	// returns what it stamped, in the order the archived listing draws them.
+	//
+	// It skips a session that holds one rather than refusing it. The single form refuses, because the
+	// operator named that session; this form names a project, and a sweep that stops at the first live
+	// session finishes nothing. A session already archived is not stamped again and is not returned.
+	//
+	// It is one statement, for the reason ArchiveSession is: a dispatch that lands during the sweep
+	// either runs before the statement and keeps its session out of it, or runs after it.
+	ArchiveProjectSessions(ctx context.Context, project string) ([]string, error)
 	// RestoreSession brings an archived session back into the default listing.
 	RestoreSession(ctx context.Context, id string) error
 	// SetPermissionMode records what a session's execs may do without asking. Whether the mode is one
