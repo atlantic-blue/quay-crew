@@ -133,6 +133,13 @@ commands:
                                           approval, because approval is a statement about one text
   design approve [<address>]              say the design as it stands is the one to build from. It
                                           is the operator's word: a session is refused this call
+  path [<address>]                        the steps a design was broken into, in number order, with
+                                          the state of each one and the session holding it
+  path set [<address>] --file <path>      write the path from a document. Each step is a heading
+                                          reading ## 1. <title>, and the blocks under it say what
+                                          changes, what it touches, what proves it and which step it
+                                          waits for. A step that names no predecessor waits for the
+                                          number below it
   attach <session>                         open a session's conversation, with its history
   secret set [<workspace>] <key>          set a workspace secret from standard input, so the value
                                           never reaches your shell history: pipe it in, or redirect

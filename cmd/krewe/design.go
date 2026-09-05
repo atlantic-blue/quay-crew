@@ -173,29 +173,7 @@ func runDesignApprove(ctx context.Context, client quaycrewv1.ControlPlaneService
 
 // fileAndAddress reads --file out of the arguments and hands back the address in front of it.
 func fileAndAddress(args []string) (typed, path string, err error) {
-	rest := make([]string, 0, len(args))
-	for at := 0; at < len(args); at++ {
-		if args[at] != flagFile {
-			rest = append(rest, args[at])
-			continue
-		}
-		if at+1 >= len(args) {
-			return "", "", fmt.Errorf("%s needs a path\n\nusage: krewe design set [<address>] %s <path>",
-				flagFile, flagFile)
-		}
-		path = args[at+1]
-		at++
-	}
-	if path == "" {
-		return "", "", fmt.Errorf("usage: krewe design set [<address>] %s <path>", flagFile)
-	}
-	if len(rest) > 1 {
-		return "", "", fmt.Errorf("usage: krewe design set [<address>] %s <path>", flagFile)
-	}
-	if len(rest) == 1 {
-		typed = rest[0]
-	}
-	return typed, path, nil
+	return fileAndAddressFor("krewe design set", args)
 }
 
 // designProject resolves the address a design command is about, and refuses one that names no

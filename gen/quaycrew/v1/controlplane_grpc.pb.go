@@ -52,6 +52,8 @@ const (
 	ControlPlaneService_SetBrief_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/SetBrief"
 	ControlPlaneService_SetDesign_FullMethodName                = "/quaycrew.v1.ControlPlaneService/SetDesign"
 	ControlPlaneService_ApproveDesign_FullMethodName            = "/quaycrew.v1.ControlPlaneService/ApproveDesign"
+	ControlPlaneService_SetPath_FullMethodName                  = "/quaycrew.v1.ControlPlaneService/SetPath"
+	ControlPlaneService_ListSteps_FullMethodName                = "/quaycrew.v1.ControlPlaneService/ListSteps"
 	ControlPlaneService_ReadSessionWork_FullMethodName          = "/quaycrew.v1.ControlPlaneService/ReadSessionWork"
 	ControlPlaneService_LocateDirectory_FullMethodName          = "/quaycrew.v1.ControlPlaneService/LocateDirectory"
 	ControlPlaneService_ImportSkill_FullMethodName              = "/quaycrew.v1.ControlPlaneService/ImportSkill"
@@ -116,6 +118,13 @@ type ControlPlaneServiceClient interface {
 	// The operator's word on a design, and the driver is refused it. A session that could approve its
 	// own design would be agreeing with itself, which is the whole thing this gate exists to stop.
 	ApproveDesign(ctx context.Context, in *ApproveDesignRequest, opts ...grpc.CallOption) (*ApproveDesignResponse, error)
+	// The path a design was broken into. The control plane parses the document, so the command line
+	// and the console send the same words and cannot drift on the grammar.
+	//
+	// The driver may call both: a design session is what writes a path, and writing one grants it
+	// nothing that dispatching would not.
+	SetPath(ctx context.Context, in *SetPathRequest, opts ...grpc.CallOption) (*SetPathResponse, error)
+	ListSteps(ctx context.Context, in *ListStepsRequest, opts ...grpc.CallOption) (*ListStepsResponse, error)
 	// Reads a file, or a listing, out of the work a session left behind, without attaching to it.
 	ReadSessionWork(ctx context.Context, in *ReadSessionWorkRequest, opts ...grpc.CallOption) (*ReadSessionWorkResponse, error)
 	// Says where an address is on the machine, so a person can put a file in it by hand. It reads the
@@ -479,6 +488,26 @@ func (c *controlPlaneServiceClient) ApproveDesign(ctx context.Context, in *Appro
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) SetPath(ctx context.Context, in *SetPathRequest, opts ...grpc.CallOption) (*SetPathResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetPathResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_SetPath_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controlPlaneServiceClient) ListSteps(ctx context.Context, in *ListStepsRequest, opts ...grpc.CallOption) (*ListStepsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListStepsResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ListSteps_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) ReadSessionWork(ctx context.Context, in *ReadSessionWorkRequest, opts ...grpc.CallOption) (*ReadSessionWorkResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReadSessionWorkResponse)
@@ -676,6 +705,13 @@ type ControlPlaneServiceServer interface {
 	// The operator's word on a design, and the driver is refused it. A session that could approve its
 	// own design would be agreeing with itself, which is the whole thing this gate exists to stop.
 	ApproveDesign(context.Context, *ApproveDesignRequest) (*ApproveDesignResponse, error)
+	// The path a design was broken into. The control plane parses the document, so the command line
+	// and the console send the same words and cannot drift on the grammar.
+	//
+	// The driver may call both: a design session is what writes a path, and writing one grants it
+	// nothing that dispatching would not.
+	SetPath(context.Context, *SetPathRequest) (*SetPathResponse, error)
+	ListSteps(context.Context, *ListStepsRequest) (*ListStepsResponse, error)
 	// Reads a file, or a listing, out of the work a session left behind, without attaching to it.
 	ReadSessionWork(context.Context, *ReadSessionWorkRequest) (*ReadSessionWorkResponse, error)
 	// Says where an address is on the machine, so a person can put a file in it by hand. It reads the
@@ -807,6 +843,12 @@ func (UnimplementedControlPlaneServiceServer) SetDesign(context.Context, *SetDes
 }
 func (UnimplementedControlPlaneServiceServer) ApproveDesign(context.Context, *ApproveDesignRequest) (*ApproveDesignResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ApproveDesign not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) SetPath(context.Context, *SetPathRequest) (*SetPathResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetPath not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ListSteps(context.Context, *ListStepsRequest) (*ListStepsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSteps not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ReadSessionWork(context.Context, *ReadSessionWorkRequest) (*ReadSessionWorkResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReadSessionWork not implemented")
@@ -1468,6 +1510,42 @@ func _ControlPlaneService_ApproveDesign_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_SetPath_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetPathRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).SetPath(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_SetPath_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).SetPath(ctx, req.(*SetPathRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControlPlaneService_ListSteps_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListStepsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ListSteps(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ListSteps_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ListSteps(ctx, req.(*ListStepsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ReadSessionWork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReadSessionWorkRequest)
 	if err := dec(in); err != nil {
@@ -1876,6 +1954,14 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ApproveDesign",
 			Handler:    _ControlPlaneService_ApproveDesign_Handler,
+		},
+		{
+			MethodName: "SetPath",
+			Handler:    _ControlPlaneService_SetPath_Handler,
+		},
+		{
+			MethodName: "ListSteps",
+			Handler:    _ControlPlaneService_ListSteps_Handler,
 		},
 		{
 			MethodName: "ReadSessionWork",

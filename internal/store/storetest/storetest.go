@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -1724,6 +1725,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	runHookConformance(t, newDataset)
 	runSessionLifecycleConformance(t, newDataset)
 	runDesignConformance(t, newDataset)
+	runPathConformance(t, newDataset)
 }
 
 // runDesignConformance holds both stores to the same answers about what a project is for and what
@@ -2069,4 +2071,254 @@ func assertTarget(t *testing.T, where string, got *quaycrewv1.DeployTarget, want
 	if read != want {
 		t.Fatalf("%s deploys to %+v, want %+v", where, read, want)
 	}
+}
+
+// runPathConformance holds both stores to the same answers about the steps a design was broken into.
+//
+// The store keeps what it is given: whether a number is unique and whether `after` names a step that
+// exists are the control plane's questions, because the document is where a person can be told which
+// line is wrong. What is proved here is order, replacement, and what a fresh step reads as.
+func runPathConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
+	t.Helper()
+
+	t.Run("a project with no path answers with nothing, and it is not an error", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		steps, err := s.ListSteps(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("ListSteps on a project with no path: %v", err)
+		}
+		if len(steps) != 0 {
+			t.Fatalf("a project nobody gave a path answered %d steps", len(steps))
+		}
+	})
+
+	// Number order is what a caller is promised, whatever order the steps were written in.
+	t.Run("a path is written whole and read back in number order", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		written, err := s.SetPath(ctx, project.GetId(), []store.Step{
+			{Number: 3, Title: "the third", After: 2},
+			{Number: 1, Title: "the first"},
+			{Number: 2, Title: "the second", After: 1},
+		})
+		if err != nil {
+			t.Fatalf("SetPath: %v", err)
+		}
+		if got := numbersOf(written); !slices.Equal(got, []int32{1, 2, 3}) {
+			t.Fatalf("the write answered steps %v, want 1, 2, 3 in order", got)
+		}
+		read, err := s.ListSteps(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("ListSteps: %v", err)
+		}
+		if got := numbersOf(read); !slices.Equal(got, []int32{1, 2, 3}) {
+			t.Fatalf("the path reads back as steps %v, want 1, 2, 3 in order", got)
+		}
+	})
+
+	// Numbers need not run without gaps, so a path may go 1, 2, 5.
+	t.Run("a path with gaps in its numbers is kept as it is", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		if _, err := s.SetPath(ctx, project.GetId(), []store.Step{
+			{Number: 1, Title: "the first"},
+			{Number: 2, Title: "the second", After: 1},
+			{Number: 5, Title: "the fifth", After: 2},
+		}); err != nil {
+			t.Fatalf("SetPath: %v", err)
+		}
+		read, err := s.ListSteps(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("ListSteps: %v", err)
+		}
+		if got := numbersOf(read); !slices.Equal(got, []int32{1, 2, 5}) {
+			t.Fatalf("the path reads back as steps %v, want 1, 2, 5", got)
+		}
+	})
+
+	// Everything a caller may set travels, and everything the system owns reads as a step nobody has
+	// touched. A column added to one store and not the other reads as a zero rather than a failure,
+	// so every field is named here.
+	t.Run("a step keeps what it was given and is born ready", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		written, err := s.SetPath(ctx, project.GetId(), []store.Step{{
+			Number:        1,
+			Title:         "the store holds a project's brief",
+			Intention:     "The design has nowhere to live.",
+			Touches:       "internal/store/store.go\ninternal/store/postgres.go",
+			Proof:         "The operator sets a brief and reads it back.",
+			ProofScenario: "a project carries a brief",
+			After:         0,
+		}})
+		if err != nil {
+			t.Fatalf("SetPath: %v", err)
+		}
+		if len(written) != 1 {
+			t.Fatalf("the write answered %d steps, want 1", len(written))
+		}
+		step := written[0]
+		if step.GetProject() != project.GetId() {
+			t.Errorf("the step names project %q, want %q", step.GetProject(), project.GetId())
+		}
+		if step.GetTitle() != "the store holds a project's brief" {
+			t.Errorf("the step is titled %q", step.GetTitle())
+		}
+		if step.GetIntention() != "The design has nowhere to live." {
+			t.Errorf("the step's intention reads %q", step.GetIntention())
+		}
+		// Line breaks and all: the take reads this field line by line.
+		if step.GetTouches() != "internal/store/store.go\ninternal/store/postgres.go" {
+			t.Errorf("the step touches %q", step.GetTouches())
+		}
+		if step.GetProof() != "The operator sets a brief and reads it back." {
+			t.Errorf("the step's proof reads %q", step.GetProof())
+		}
+		if step.GetProofScenario() != "a project carries a brief" {
+			t.Errorf("the step names scenario %q", step.GetProofScenario())
+		}
+		if step.GetState() != store.StepReady {
+			t.Errorf("a fresh step reads as %q, want %q", step.GetState(), store.StepReady)
+		}
+		if step.GetSession() != "" || step.GetResult() != "" {
+			t.Errorf("a fresh step reads session %q and result %q, want both empty",
+				step.GetSession(), step.GetResult())
+		}
+		if step.GetTakenAt() != nil || step.GetFinishedAt() != nil {
+			t.Errorf("a fresh step carries the stamps %v and %v, and nobody has touched it",
+				step.GetTakenAt(), step.GetFinishedAt())
+		}
+	})
+
+	// Writing a path replaces it. A step the new path does not name is gone, which is the whole of
+	// what this slice of SetPath does.
+	t.Run("writing a path again replaces the one that was there", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		if _, err := s.SetPath(ctx, project.GetId(), []store.Step{
+			{Number: 1, Title: "the first"},
+			{Number: 2, Title: "the second", After: 1},
+			{Number: 3, Title: "the third", After: 2},
+		}); err != nil {
+			t.Fatalf("SetPath: %v", err)
+		}
+		written, err := s.SetPath(ctx, project.GetId(), []store.Step{
+			{Number: 1, Title: "the first, rewritten"},
+			{Number: 3, Title: "the third", After: 1},
+		})
+		if err != nil {
+			t.Fatalf("SetPath again: %v", err)
+		}
+		if got := numbersOf(written); !slices.Equal(got, []int32{1, 3}) {
+			t.Fatalf("the rewritten path holds steps %v, want 1 and 3", got)
+		}
+		if written[0].GetTitle() != "the first, rewritten" {
+			t.Errorf("step 1 is titled %q, so the rewrite did not reach it", written[0].GetTitle())
+		}
+		if written[1].GetAfter() != 1 {
+			t.Errorf("step 3 waits for step %d, want 1", written[1].GetAfter())
+		}
+	})
+
+	t.Run("one project's path is not another's", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		bills := newProject(t, s, "acme", "house-bills")
+		garden := newProject(t, s, "acme", "the-garden")
+
+		if _, err := s.SetPath(ctx, bills.GetId(), []store.Step{{Number: 1, Title: "pay the water"}}); err != nil {
+			t.Fatalf("SetPath for house-bills: %v", err)
+		}
+		if _, err := s.SetPath(ctx, garden.GetId(), []store.Step{
+			{Number: 1, Title: "cut the grass"},
+			{Number: 2, Title: "plant the beds", After: 1},
+		}); err != nil {
+			t.Fatalf("SetPath for the-garden: %v", err)
+		}
+
+		read, err := s.ListSteps(ctx, bills.GetId())
+		if err != nil {
+			t.Fatalf("ListSteps: %v", err)
+		}
+		if len(read) != 1 || read[0].GetTitle() != "pay the water" {
+			t.Fatalf("house-bills holds %d steps, and the first is %q", len(read), read[0].GetTitle())
+		}
+
+		// Every project at once, ordered by project and then by number.
+		every, err := s.ListSteps(ctx, "")
+		if err != nil {
+			t.Fatalf("ListSteps for every project: %v", err)
+		}
+		if len(every) != 3 {
+			t.Fatalf("every project holds %d steps, want 3", len(every))
+		}
+		for at := 1; at < len(every); at++ {
+			before, now := every[at-1], every[at]
+			if before.GetProject() > now.GetProject() {
+				t.Fatalf("the listing goes from project %q to %q, so it is not in project order",
+					before.GetProject(), now.GetProject())
+			}
+			if before.GetProject() == now.GetProject() && before.GetNumber() >= now.GetNumber() {
+				t.Fatalf("one project's steps read %d then %d", before.GetNumber(), now.GetNumber())
+			}
+		}
+	})
+
+	// A project here is deleted by a stamp rather than by removing the row, so the foreign key
+	// cascade never fires for one. Both stores have to hide its path anyway, or a listing answers
+	// with the path of a project nobody can reach.
+	t.Run("a deleted project's path leaves every listing", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		if _, err := s.SetPath(ctx, project.GetId(), []store.Step{{Number: 1, Title: "pay the water"}}); err != nil {
+			t.Fatalf("SetPath: %v", err)
+		}
+		if err := s.DeleteProject(ctx, project.GetId()); err != nil {
+			t.Fatalf("DeleteProject: %v", err)
+		}
+		if _, err := s.ListSteps(ctx, project.GetId()); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("ListSteps on a deleted project answered %v, want ErrNotFound", err)
+		}
+		every, err := s.ListSteps(ctx, "")
+		if err != nil {
+			t.Fatalf("ListSteps for every project: %v", err)
+		}
+		if len(every) != 0 {
+			t.Fatalf("a deleted project left %d steps in the listing", len(every))
+		}
+	})
+
+	t.Run("a path written for a project that does not exist is not found", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+
+		if _, err := s.SetPath(ctx, "no-such-project", []store.Step{{Number: 1, Title: "the first"}}); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("SetPath on a missing project answered %v, want ErrNotFound", err)
+		}
+		if _, err := s.ListSteps(ctx, "no-such-project"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("ListSteps on a missing project answered %v, want ErrNotFound", err)
+		}
+	})
+}
+
+// numbersOf is a path's step numbers, in the order the store answered with.
+func numbersOf(steps []*quaycrewv1.Step) []int32 {
+	numbers := make([]int32, 0, len(steps))
+	for _, step := range steps {
+		numbers = append(numbers, step.GetNumber())
+	}
+	return numbers
 }

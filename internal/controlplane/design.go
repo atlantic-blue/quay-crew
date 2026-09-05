@@ -7,6 +7,9 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -260,4 +263,331 @@ func cutTo(text string, room int) string {
 // a document. It is the same reason SetContext renders, and the same call underneath.
 func (s *Server) renderDesignTo(ctx context.Context, project string) {
 	s.renderTo(ctx, store.ContextProject, project)
+}
+
+// The path a design was broken into: the document grammar, and the two calls that write and read it.
+//
+// The control plane parses the document rather than the caller. That way the command line and the
+// console send the same words and cannot drift on the grammar, which is the same reason the control
+// plane composes the text a session is dispatched with.
+
+// The five labels a step block carries. Each one sits alone on its line, and a block runs from its
+// label to the next label, to the next step heading, or to the end of the document.
+const (
+	labelIntention = "What changes and why"
+	labelTouches   = "What this touches"
+	labelProof     = "What proves it"
+	labelScenario  = "The scenario that proves it"
+	labelAfter     = "After"
+)
+
+// stepHeading matches a step's own line: `## <number>. <title>`.
+//
+// The sign is matched so a number below one is read as a heading with a bad number rather than as
+// prose. Left out, `## -1. the store` would be ignored the way a paragraph is, and the refusal about
+// a number below one could only ever fire for zero.
+var stepHeading = regexp.MustCompile(`^##\s+(-?\d+)\s*\.\s*(.*)$`)
+
+// pathStepMark is the count past which a path is long enough to say so. It refuses nothing: the
+// path is kept whole and a person decides.
+const pathStepMark = 200
+
+// declaredStep is one step as the document declares it, with the line numbers a refusal has to name.
+type declaredStep struct {
+	step        store.Step
+	headingLine int
+	// numberText is the number as the document wrote it, so a refusal quotes what a person typed
+	// rather than what it became. A number too large for the column never reaches step.Number.
+	numberText string
+	// afterSaid is whether the document carried an After block at all, which is a different thing
+	// from one that holds nothing. A block holding nothing means zero, and no block at all means the
+	// step waits for the number below it.
+	afterSaid bool
+	afterText string
+	afterLine int
+	// scenarioExtraLine is the second line of a scenario block, which holds one line and no more.
+	scenarioExtraLine int
+}
+
+// parsePath reads a path document and returns the steps in ascending number order, with any
+// warnings. Every refusal is an InvalidArgument naming the line, so a person can go and fix it.
+func parsePath(document string) ([]store.Step, []string, error) {
+	declared := readPathDocument(document)
+	if len(declared) == 0 {
+		return nil, nil, status.Error(codes.InvalidArgument,
+			"this document has no steps in it. A step starts with a line reading ## 1. <title>")
+	}
+	if err := refuseBadHeadings(declared); err != nil {
+		return nil, nil, err
+	}
+	sort.SliceStable(declared, func(i, j int) bool {
+		return declared[i].step.Number < declared[j].step.Number
+	})
+	if err := resolveAfter(declared); err != nil {
+		return nil, nil, err
+	}
+
+	steps := make([]store.Step, 0, len(declared))
+	for _, one := range declared {
+		steps = append(steps, one.step)
+	}
+	return steps, pathWarnings(steps), nil
+}
+
+// readPathDocument walks the document once and collects what each step declared.
+//
+// Text before the first heading is ignored, so a document may carry a title and a paragraph saying
+// what the path is for. Every label is optional: a step needs only its heading.
+func readPathDocument(document string) []*declaredStep {
+	var (
+		declared []*declaredStep
+		current  *declaredStep
+		blocks   map[string][]string
+		label    string
+	)
+	// finish writes the blocks read so far onto the step they belong to. It runs at the next heading
+	// and again at the end, because the last step's blocks have no heading after them.
+	finish := func() {
+		if current == nil {
+			return
+		}
+		current.step.Intention = joinBlock(blocks[labelIntention])
+		current.step.Touches = joinBlock(blocks[labelTouches])
+		current.step.Proof = joinBlock(blocks[labelProof])
+		current.step.ProofScenario = joinBlock(blocks[labelScenario])
+		current.afterText = joinBlock(blocks[labelAfter])
+		declared = append(declared, current)
+	}
+
+	for at, line := range strings.Split(document, "\n") {
+		number := at + 1
+		if found := stepHeading.FindStringSubmatch(line); found != nil {
+			finish()
+			// Parsed at the width the column holds, so a number larger than that is refused by the
+			// rule below rather than wrapping into a different step silently.
+			read, err := strconv.ParseInt(found[1], 10, 32)
+			if err != nil {
+				read = 0
+			}
+			current = &declaredStep{
+				step:        store.Step{Number: int32(read), Title: strings.TrimSpace(found[2])},
+				headingLine: number,
+				numberText:  found[1],
+			}
+			blocks, label = map[string][]string{}, ""
+			continue
+		}
+		if current == nil {
+			continue
+		}
+		if named, is := labelOn(line); is {
+			label = named
+			if named == labelAfter {
+				current.afterSaid, current.afterLine = true, number
+			}
+			continue
+		}
+		if label == "" {
+			continue
+		}
+		// The scenario block holds one line, so the second line with anything on it is the line a
+		// person has to delete. Blank lines do not count: a block written with a line break under its
+		// label still names one scenario. Recorded rather than refused here, so every refusal runs in
+		// one place.
+		if label == labelScenario && strings.TrimSpace(line) != "" && current.scenarioExtraLine == 0 &&
+			saidSomething(blocks[labelScenario]) {
+			current.scenarioExtraLine = number
+		}
+		blocks[label] = append(blocks[label], line)
+	}
+	finish()
+	return declared
+}
+
+// saidSomething says whether a block already holds a line with anything on it, so a blank line
+// under a label is not read as a second answer.
+func saidSomething(lines []string) bool {
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// labelOn says whether a line is one of the five labels, alone on its line.
+func labelOn(line string) (string, bool) {
+	switch strings.TrimSpace(line) {
+	case labelIntention:
+		return labelIntention, true
+	case labelTouches:
+		return labelTouches, true
+	case labelProof:
+		return labelProof, true
+	case labelScenario:
+		return labelScenario, true
+	case labelAfter:
+		return labelAfter, true
+	}
+	return "", false
+}
+
+// joinBlock is a block's own text: the blank lines at each end taken off, and everything between
+// them kept, because `What this touches` is read line by line later.
+func joinBlock(lines []string) string {
+	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+// refuseBadHeadings holds the rules about a step's own line: its number and its title.
+//
+// A duplicate names both lines, because the person fixing it has to see the one they forgot as well
+// as the one they are looking at.
+func refuseBadHeadings(declared []*declaredStep) error {
+	seen := make(map[int32]int, len(declared))
+	for _, one := range declared {
+		if one.step.Number < 1 {
+			return status.Errorf(codes.InvalidArgument,
+				"line %d: this step is numbered %s, and a path is numbered from one",
+				one.headingLine, one.numberText)
+		}
+		if before, already := seen[one.step.Number]; already {
+			return status.Errorf(codes.InvalidArgument,
+				"line %d: step %d is already declared on line %d, and two steps cannot share a number",
+				one.headingLine, one.step.Number, before)
+		}
+		if one.step.Title == "" {
+			return status.Errorf(codes.InvalidArgument,
+				"line %d: step %d has no title, and a title is the one line saying what the step is",
+				one.headingLine, one.step.Number)
+		}
+		if one.scenarioExtraLine > 0 {
+			return status.Errorf(codes.InvalidArgument,
+				"line %d: step %d names more than one scenario, and a step names exactly one",
+				one.scenarioExtraLine, one.step.Number)
+		}
+		seen[one.step.Number] = one.headingLine
+	}
+	return nil
+}
+
+// resolveAfter reads what each step waits for, and gives a step that says nothing the number below
+// it. The steps arrive in ascending number order.
+//
+// A default of nothing would make the gate worthless, because every step would be ready at once. So
+// a numbered path is a chain unless the document says otherwise, and saying otherwise is an After
+// block holding nothing.
+func resolveAfter(declared []*declaredStep) error {
+	numbers := make(map[int32]bool, len(declared))
+	for _, one := range declared {
+		numbers[one.step.Number] = true
+	}
+
+	for at, one := range declared {
+		if !one.afterSaid {
+			if at > 0 {
+				one.step.After = declared[at-1].step.Number
+			}
+			continue
+		}
+		// An After block holding nothing means zero, which is the way to say a step waits for nobody.
+		if one.afterText == "" {
+			continue
+		}
+		read, err := strconv.Atoi(one.afterText)
+		if err != nil {
+			return status.Errorf(codes.InvalidArgument,
+				"line %d: step %d says it comes after %q, and After takes one step number or nothing",
+				one.afterLine, one.step.Number, one.afterText)
+		}
+		after := int32(read)
+		if after == 0 {
+			continue
+		}
+		if !numbers[after] {
+			return status.Errorf(codes.InvalidArgument,
+				"line %d: step %d says it comes after step %d, and this document has no step %d",
+				one.afterLine, one.step.Number, after, after)
+		}
+		if after >= one.step.Number {
+			return status.Errorf(codes.InvalidArgument,
+				"line %d: step %d says it comes after step %d, and a step waits for a lower number",
+				one.afterLine, one.step.Number, after)
+		}
+		one.step.After = after
+	}
+	return nil
+}
+
+// pathWarnings is what the write says about a path it kept whole. No warning refuses a document.
+func pathWarnings(steps []store.Step) []string {
+	var warnings []string
+	if len(steps) > pathStepMark {
+		warnings = append(warnings, fmt.Sprintf(
+			"this path has %d steps, over the %d mark. It is kept whole.", len(steps), pathStepMark))
+	}
+	for _, step := range steps {
+		if missing := whatTheStepDoesNotSay(step); len(missing) > 0 {
+			warnings = append(warnings, fmt.Sprintf(
+				"step %d says nothing under %s. It is kept as it is.",
+				step.Number, strings.Join(missing, ", ")))
+		}
+		// Harder than the line above, because this is the one krewe itself cannot work around: it
+		// runs the scenario a step names, and a step that names none is a step it cannot check.
+		if step.ProofScenario == "" {
+			warnings = append(warnings, fmt.Sprintf(
+				"step %d names no scenario, so krewe step check will refuse this step.", step.Number))
+		}
+	}
+	return warnings
+}
+
+// whatTheStepDoesNotSay names the blocks a step left empty, in the order the document writes them.
+func whatTheStepDoesNotSay(step store.Step) []string {
+	var missing []string
+	for _, block := range []struct {
+		label string
+		text  string
+	}{
+		{labelIntention, step.Intention},
+		{labelTouches, step.Touches},
+		{labelProof, step.Proof},
+		{labelScenario, step.ProofScenario},
+	} {
+		if block.text == "" {
+			missing = append(missing, block.label)
+		}
+	}
+	return missing
+}
+
+// SetPath replaces a project's path with the steps the document declares.
+//
+// A refused document changes nothing, because the parse runs before the write. There is no way to
+// empty a path: a document with no step heading is refused, so a wrong file path cannot take
+// somebody's path away.
+func (s *Server) SetPath(ctx context.Context, req *quaycrewv1.SetPathRequest) (*quaycrewv1.SetPathResponse, error) {
+	if req.GetProject() == "" {
+		return nil, status.Error(codes.InvalidArgument, "which project: say where with an address")
+	}
+	steps, warnings, err := parsePath(req.GetDocument())
+	if err != nil {
+		return nil, err
+	}
+	written, err := s.store.SetPath(ctx, req.GetProject(), steps)
+	if err != nil {
+		return nil, storeError(err, "project")
+	}
+	return &quaycrewv1.SetPathResponse{Steps: written, Warnings: warnings}, nil
+}
+
+// ListSteps reads a project's path, or every project's when it names none.
+//
+// A project with no path answers with an empty list rather than an error, because nothing written is
+// the normal state. Reading records nothing.
+func (s *Server) ListSteps(ctx context.Context, req *quaycrewv1.ListStepsRequest) (*quaycrewv1.ListStepsResponse, error) {
+	steps, err := s.store.ListSteps(ctx, req.GetProject())
+	if err != nil {
+		return nil, storeError(err, "project")
+	}
+	return &quaycrewv1.ListStepsResponse{Steps: steps}, nil
 }
