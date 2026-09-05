@@ -1,6 +1,7 @@
 # Roadmap: a project carries its own context
 
 Written 2026-09-04, revised the same day after the operator read the first version.
+Amended 2026-09-05, after the operator settled the four levels.
 
 Status: proposed. Nothing starts before the operator approves it.
 
@@ -16,7 +17,12 @@ flowchart LR
   M2G -->|"yes"| M3["3 the operator approves a design"]
   M3 --> M4["4 the design carries a numbered path"]
   M4 --> M5["5 the operator takes a step"]
-  M5 --> M6["6 a step records what came of it"]
+  M5 --> M17["17 a project holds features"]
+  M17 --> M18["18 a path belongs to a feature"]
+  M18 --> M19["19 a feature is delivered in milestones"]
+  M19 --> M20["20 a project carries a contracts document"]
+  M20 --> M21["21 a step names the contracts it builds"]
+  M21 --> M6["6 a step records what came of it"]
   M6 --> M7["7 several steps run at once, capped, with a file collision refused"]
   M7 --> M8["8 the session restates the step before it builds"]
   M8 --> M9["9 the operator approves the restatement and the build starts"]
@@ -39,7 +45,10 @@ Each milestone is one intention. The graph splits it into slices, and a slice is
 request. A slice is revertable on its own.
 
 Each milestone names the files it touches, what it changes, what proves it, and what it depends on.
-`.greenlight/GRAPH.json` holds the slices. Thirteen of the sixteen milestones hold more than one.
+`.greenlight/GRAPH.json` holds the slices. Fifteen of the twenty one milestones hold more than one.
+
+Milestones 17 to 21 came later than milestones 6 to 16, and they are built before them. The number
+says when it was written. The order comes from the graph.
 
 Each one is written for a person who was not in this conversation. If a milestone needs somebody to
 explain it, it is a note and not a milestone.
@@ -82,7 +91,8 @@ explain it, it is a note and not a milestone.
 - Depends on: milestone 2.
 
 **Milestone 4. A design carries a numbered path, and the operator reads it.**
-- Touches: a migration pair for `project_steps`; the `Step` message; `SetPath` and `ListSteps`;
+- Touches: a migration pair that creates the step table as `project_steps`, which milestone 18 then
+  renames; the `Step` message; `SetPath` and `ListSteps`;
   `internal/controlplane/design.go`; `cmd/krewe/path.go` (new).
 - The path document names each step's scenario. A step with no named predecessor waits for the
   previous number.
@@ -100,6 +110,82 @@ explain it, it is a note and not a milestone.
   is refused and starts nothing.
 - Depends on: milestone 4.
 
+**Milestone 17. A project holds features.**
+- A project is one and it holds one design. A feature is a narrowed part of it, and a project grows
+  features over time.
+- The reason for the layer is parallel delivery. A website runs an authentication feature and a
+  payment feature at once. Authentication ships sign up, then sign in, then reset, then sessions.
+  Payment ships checkout, then refunds, then webhooks. Each feature holds its own path.
+- Touches: a migration pair for `features`; `internal/store/store.go`, `postgres.go`, `memory.go`,
+  `storetest/`; the `Feature` message; `ListFeatures`, `AddFeature`, `SetFeatureIntention` and
+  `FinishFeature`; `cmd/krewe/feature.go` (new).
+- The server gives the number, never the caller. The read of the highest number and the insert are
+  one statement.
+- Proves it: `features/path.feature`. Adding two features gives them the numbers 1 and 2. A second
+  project starts again at 1. Closing a feature with a taken step warns and closes it. The steps of a
+  closed feature read back unchanged.
+- Depends on: milestone 5.
+
+**Milestone 18. A path belongs to a feature, not to a project.**
+- This is the re-keying, and it is why these milestones land here rather than at the end. Twenty six
+  slices ahead of it assumed the step table was keyed by the project.
+- Touches: a migration pair that renames `project_steps` to `feature_steps`. It adds `feature`,
+  drops `project` and moves the primary key. Every store method, every request message and every
+  command that reached a step through a project reaches it through a feature.
+- The up migration writes rows. Every project that already holds steps gets one feature, numbered 1
+  and titled with the project name, and its steps point at it.
+- A step is typed as one token, `<feature>.<number>`. A bare number is refused, and the refusal says
+  what to type and lists the features that exist.
+- The trap. Once the step table is keyed by the feature, the natural query is steps in flight in this
+  feature. That query lets two features write one file at the same moment. Every count of steps in
+  flight is by project, across every feature. Milestone 7 builds those reads.
+- Proves it: `features/path.feature`. Setting the path of feature 2 leaves the path of feature 1
+  whole. Two features each hold a step 3. A bare step number is refused. Steps written before the
+  migration read back under one feature, with every column kept.
+- Depends on: milestone 17.
+
+**Milestone 19. A feature is delivered in milestones, and the listing groups by them.**
+- Touches: a migration pair for `milestones` and the `milestone` column. Then the `Milestone`
+  message, `ListMilestones`, the grammar and the listing in `internal/controlplane/design.go`,
+  `cmd/krewe/path.go`, and the render of `.krewe/path.md`.
+- The path document gains a heading above the steps, reading `# 4. A design carries a numbered
+  path`, with one line under it. One document still carries the whole path of one feature.
+- Step numbers are unique across the feature, and not inside a milestone. That is the trap in this
+  grammar, and the refusal says so in those words.
+- Proves it, on the grammar: a document with three milestone headings writes three rows, and each
+  step carries the number of the milestone above it. A document with no milestone heading gives every
+  step a milestone of 0. Two steps numbered 1 under different milestones are refused, naming both
+  lines.
+- Proves it, on the listing: five steps under two milestones print two headings, five step lines and
+  a count. Each heading carries the count of its own steps and how many are done.
+- Proves it, on the render: a session reads both open features in `.krewe/path.md`. Each step block
+  names its milestone. Closing a feature takes it out of the file.
+- Depends on: milestone 18.
+
+**Milestone 20. A project carries a contracts document.**
+- A second body beside the design, rendered into the session's working directory the same way. This
+  project holds 118 contracts across 43 slices, which is too large for a memory file.
+- Touches: a migration pair for the `contracts` column on `project_designs`; `SetContracts`;
+  `internal/controlplane/design.go`; `krewe design contracts`.
+- Writing it does not clear the approval. The approval is the operator's word about the design body,
+  and the contracts document is read from that body.
+- Proves it: `features/design.feature`. A session finds the whole document at `.krewe/contracts.md`.
+  Setting it on an approved design leaves the design approved. A project with none has no such file.
+- Depends on: milestone 19.
+
+**Milestone 21. A step names the contracts it builds, and the scope of each.**
+- Touches: a migration pair for the `contracts` and `contract_scope` columns; two labels in the
+  path grammar; two blocks in the take text.
+- Every step brief this project wrote by hand carried that scoping, copied out of the graph. The one
+  time a contract was wrong, a session refused to build and asked, which cost a slice of work.
+- Nothing checks that a named contract exists in the contracts document. Section 14 of the design
+  records that.
+- Proves it: `features/path.feature`. A document naming two contracts and two scopes reads back on
+  the step. A scope line naming a contract the step does not build is refused, naming the line.
+  Taking that step dispatches a session whose text names both contracts, both scopes and the
+  contracts document.
+- Depends on: milestone 20.
+
 **Milestone 6. A step records what came of it, and the path says what is next.**
 - Touches: `FinishStep` on the protobuf file and the server; `krewe step done` and `krewe step stop`;
   the next step calculation in `internal/controlplane/design.go`.
@@ -107,13 +193,20 @@ explain it, it is a note and not a milestone.
 - Proves it: `features/path.feature`. A finished step carries its result into `.krewe/path.md`, so the
   next session reads what the last one produced. Finishing with a word that is not done or stopped is
   refused.
-- Depends on: milestone 5.
+- Depends on: milestone 21.
 
 **Milestone 7. Several steps run at once, with a cap and a file collision refused.**
 - This is the fan out. One session still builds one step. The operator takes each one.
 - Touches: `steps_in_flight_cap` on `project_designs`; `SetStepsInFlightCap` on the protobuf file;
   the take rules in `internal/controlplane/design.go`; `krewe path cap`.
-- The collision check reads the `touches` field of every step in state taken, line by line.
+- The collision check reads the `touches` field of every step in state taken, line by line, across
+  every feature of the project. A feature must not collide with another feature, the same way a step
+  must not collide with another step. It is one rule at one level.
+- The refusal lands on the step, never on the feature. Authentication and payment share the user
+  model, the router and the configuration, so the collision is real. Only the step naming the shared
+  file waits, and the feature carries on with the rest of its path.
+- The cap stays one number, on the project, counting across every feature. There is no second cap
+  per feature.
 - Proves it, on the cap: taking a fourth step with three in flight is refused, naming the three and
   the cap. Raising the cap lets the fourth take go through. A cap below 1 or above 20 is refused.
 - Proves it, on the collision: a take is refused when the step names a file that a step in flight
@@ -127,7 +220,7 @@ explain it, it is a note and not a milestone.
   `internal/controlplane/server.go` names the new mark in `syncContextExcept`, and `renderContext`
   renders it back while the step is taken.
 - Touches, elsewhere: `internal/controlplane/proof.go` (new, the read back handler); the restatement
-  columns on `project_steps`; `GetStep` on the protobuf file; `krewe step restatement`.
+  columns on `feature_steps`; `GetStep` on the protobuf file; `krewe step restatement`.
 - Proves it: `features/path.feature`. A session that writes the mark into its memory file has its text
   read back into the step. Reading the step again shows the latest text without a dispatch. Text under
   the mark is not swept into session context. A new restatement clears the approval.
@@ -143,7 +236,7 @@ explain it, it is a note and not a milestone.
 
 **Milestone 10. Krewe runs the scenario the step promised and states a verdict.**
 - Gate 3 lands here. Krewe checks. The operator still speaks the word.
-- Touches: the proof columns on `project_steps` and the proof command columns on `project_designs`;
+- Touches: the proof columns on `feature_steps` and the proof command columns on `project_designs`;
   `SetProofCommand`; `internal/controlplane/proof.go` (the run); `krewe design proof`;
   `krewe step check`, `krewe step done` and `krewe step show`.
 - The run uses `Provider.Existing`. When the session was reclaimed it starts a container and restores
@@ -168,7 +261,7 @@ explain it, it is a note and not a milestone.
 **Milestone 12. Krewe earns the word done, and can lose it.**
 - This is the trust ladder. It is the last thing built, because it is worth nothing until the
   operator reads the check under it many times.
-- Touches: the six trust columns on `project_designs` and the two on `project_steps`; `RaiseTrust`,
+- Touches: the six trust columns on `project_designs` and the two on `feature_steps`; `RaiseTrust`,
   `SetTrustThreshold` and `ReopenStep`; the counters in `internal/controlplane/design.go`;
   `krewe trust`, `krewe trust raise`, `krewe trust threshold` and `krewe step reopen`.
 - Proves it, on the counters: `features/path.feature`. Finishing after a passing check records an
@@ -225,11 +318,20 @@ the dead one.
 Milestone 2 is the cheapest thing that answers the riskiest assumption. Everything after it costs real
 work. The measurement may say a session builds no better from a design. Then stop there.
 
-Milestones 3 to 6 build the path in the order a person uses it: write it, approve it, take a step,
-finish a step.
+Milestones 3 to 5 build the path in the order a person uses it: write it, approve it, take a step.
+
+Milestones 17 to 21 come next, and their number says only when they were written. They put the four
+levels under the path. Milestone 18 is the reason they are here rather than at the end. It moves the
+key of the step table from the project to the feature. Twenty six slices ahead of it assumed the old
+key.
+
+Doing it now costs one migration and an amendment to three merged slices, S-8, S-9 and S-10. Doing
+it at slice thirty costs the same migration plus every slice built on the old key.
+
+Milestone 6 then finishes a step, and everything after it reads a step by its feature.
 
 Milestone 7 is the fan out, and it sits here because everything after it is easier to build with it.
-This project's own graph is 25 waves deep and its widest wave holds three slices. So the cap never
+This project's own graph is 33 waves deep and its widest wave holds three slices. So the cap never
 refuses a take on this path, and the file collision check is the part that does work here.
 
 Milestones 8 to 12 are the trust the operator asked for, and they are last of the working code on
@@ -255,3 +357,10 @@ the graph, a second proof kind, a trust level above 1, and visual acceptance evi
 
 Several steps may run at once from milestone 7. The operator takes each one. Section 5.1 of the
 design records what the collision check cannot see.
+
+A sequential number is one of those things. Two features that each add a migration name two different
+files, so the check passes and both take the same number. Section 5.1 measures it and section 14 of
+the design defers the fix.
+
+Nothing here reads the contracts document. A step names the contracts it builds, and krewe never
+checks that a named contract exists. Section 14 of the design records that.
