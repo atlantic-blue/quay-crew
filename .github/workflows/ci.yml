@@ -75,8 +75,11 @@ jobs:
       - name: Behaviour specifications
         run: go test ./features/... -v -count=1
 
+      # The same target the Makefile runs, so a machine and the pipeline cannot drift apart on
+      # what a branch on a boolean literal means.
       - name: Lint
         run: |
+          make constant-branches
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
           "$(go env GOPATH)/bin/golangci-lint" run ./internal/... ./cmd/... ./features/...
           for dir in $(find hooks -maxdepth 2 -name go.mod -exec dirname {} \;); do
