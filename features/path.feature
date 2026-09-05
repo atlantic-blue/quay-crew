@@ -15,6 +15,10 @@ Feature: A project holds a numbered path of steps
   There is no way to empty a path. A document with no step heading is refused, so a wrong file path
   cannot take somebody's path away.
 
+  The session working in the project reads the path in its own working directory, in number order.
+  That is what lets a session start from what is true: a session on step 4 reads what steps 1 to 3
+  produced.
+
   Background:
     Given a running control plane
     And a workspace named "acme"
@@ -363,3 +367,95 @@ Feature: A project holds a numbered path of steps
     When the caller writes the path without naming a file
     Then standard error says "usage: krewe path set"
     And the command fails
+
+  # The session working in the project reads the path out of its own working directory. It is a file
+  # rather than a section in the memory file, because a path grows with the project and the memory
+  # file is read on every exec.
+
+  Scenario: A session reads every step of the path in its working directory
+    Given the project's path is:
+      """
+      ## 1. The store holds a project's brief
+
+      What changes and why
+      The design has nowhere to live, so a project cannot carry one.
+
+      What this touches
+      internal/store/store.go
+      internal/store/postgres.go
+
+      What proves it
+      The operator sets a brief and reads it back.
+
+      The scenario that proves it
+      a project carries a brief
+
+      ## 2. The store holds a project's design
+      ## 3. The control plane serves the design
+      """
+    When the operator dispatches "hello" to the project
+    Then the session's path file lists steps 1, 2, 3 in that order
+    And the session's path file carries "## 1. The store holds a project's brief"
+    And the session's path file carries "state: ready"
+    And the session's path file carries "The design has nowhere to live, so a project cannot carry one."
+    And the session's path file carries "internal/store/postgres.go"
+    And the session's path file carries "a project carries a brief"
+
+  # Numbers need not run without gaps, so the order is the number's and never the store's. A file
+  # that named 12 before 5 would be a different path from the one the operator wrote.
+  Scenario: The steps are in number order even when the numbers are not contiguous
+    Given the project's path is:
+      """
+      ## 5. The command line reads it back
+      ## 1. The store holds a project's brief
+      ## 12. The console shows the path
+      ## 2. The store holds a project's design
+      """
+    When the operator dispatches "hello" to the project
+    Then the session's path file lists steps 1, 2, 5, 12 in that order
+
+  # A file that exists and says nothing costs a read.
+  Scenario: A project with no path has no path file
+    Given the project's design is "# Bills\n"
+    When the operator dispatches "hello" to the project
+    Then the session has no path file
+    And the session's memory file does not carry ".krewe/path.md"
+
+  Scenario: Setting a new path and dispatching again gives the session the new text
+    Given the project's path is:
+      """
+      ## 1. The store holds a project's brief
+      """
+    And a session started by dispatching "hello"
+    When the operator sets the path to:
+      """
+      ## 1. The store holds a project's design
+      """
+    And the operator dispatches "and again" to the same session
+    Then the session's path file carries "## 1. The store holds a project's design"
+    And the session's path file does not carry "The store holds a project's brief"
+
+  # A line naming a file that is not there sends the model to open nothing, so the summary names the
+  # path only when the project has one.
+  Scenario: The memory file sends the session to the path file
+    Given the project's design is "# Bills\n"
+    And the project's path is:
+      """
+      ## 1. The store holds a project's brief
+      """
+    When the operator dispatches "hello" to the project
+    Then the session's memory file carries "Read .krewe/design.md before you start. The whole path is in .krewe/path.md."
+
+  # The section is read again on every exec of every session in the project, and the path took a
+  # piece of it. The brief is the only part whose length nobody controls, so it is the part that is
+  # cut.
+  Scenario: A very long brief is cut so the section stays small with a path in it
+    Given the project's brief is 5000 characters
+    And the project's design is "# Bills\n"
+    And the project's path is:
+      """
+      ## 1. The store holds a project's brief
+      """
+    When the operator dispatches "hello" to the project
+    Then the design section is under 400 characters
+    And the session's memory file carries "The whole path is in .krewe/path.md."
