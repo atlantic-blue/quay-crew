@@ -15,6 +15,7 @@ import (
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
 	"github.com/atlantic-blue/quay-krewe/internal/contextsize"
+	"github.com/atlantic-blue/quay-krewe/internal/display"
 	"github.com/atlantic-blue/quay-krewe/internal/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -171,7 +172,29 @@ func (s *Server) renderDesign(ctx context.Context, session *quaycrewv1.Session, 
 		return ""
 	}
 	hasBody := s.writeSessionFile(dir, designFile, "design", design.GetBody())
-	return designSummary(project.GetName(), design, hasBody, hasPath)
+	on, inThePath := s.stepThisSessionHolds(ctx, session)
+	return designSummary(project.GetName(), design, hasBody, hasPath, on, inThePath)
+}
+
+// stepThisSessionHolds is the step this session took and how many steps the path has, and nil for a
+// session that took none. Most sessions took none: an ordinary exec into a project is not a step.
+//
+// The path is read again here rather than handed down from the render beside it, because the summary
+// and the path document are written by two calls and neither owns the other's read.
+func (s *Server) stepThisSessionHolds(ctx context.Context, session *quaycrewv1.Session) (*quaycrewv1.Step, int) {
+	steps, err := s.store.ListSteps(ctx, session.GetProject())
+	if err != nil {
+		return nil, 0
+	}
+	for _, step := range steps {
+		if step.GetState() != store.StepTaken {
+			continue
+		}
+		if step.GetSession() == session.GetHandle() || step.GetSession() == session.GetId() {
+			return step, len(steps)
+		}
+	}
+	return nil, len(steps)
 }
 
 // writeSessionFile puts a rendered document where the model can open it, and says whether it is
@@ -213,10 +236,17 @@ func (s *Server) clearSessionFile(dir, name, what string) {
 // on every exec and the brief is the only part of it whose length nobody controls. A cut line ends
 // with a full stop and nothing else: an ellipsis or a note saying the text was cut would tell the
 // model to go looking for the rest, and the rest is in the design.
-func designSummary(project string, design *quaycrewv1.Design, hasBody, hasPath bool) string {
+func designSummary(project string, design *quaycrewv1.Design, hasBody, hasPath bool,
+	on *quaycrewv1.Step, inThePath int) string {
 	lines := []string{"This project is " + project + "."}
 	if hasBody {
 		lines = append(lines, approvalLine(design), readLine(hasPath))
+	}
+	// The step this session took, which most sessions did not. It goes above the brief's own room so
+	// a long brief is cut for it rather than pushing it out of the section.
+	if on != nil {
+		lines = append(lines, fmt.Sprintf("You are on step %d of %d: %s",
+			on.GetNumber(), inThePath, on.GetTitle()))
 	}
 	brief := design.GetBrief()
 	if brief == "" {
@@ -670,4 +700,146 @@ func (s *Server) ListSteps(ctx context.Context, req *quaycrewv1.ListStepsRequest
 		return nil, storeError(err, "project")
 	}
 	return &quaycrewv1.ListStepsResponse{Steps: steps}, nil
+}
+
+// Taking a step: the gate the operator's own command is refused by, the write that records who holds
+// it, and the text the session is dispatched with.
+//
+// The gate reads first and starts nothing. A refusal costs one line of output, and the point of it is
+// that no code exists before the operator approves the path.
+
+// TakeStep gives one step of a project's path to a session, and dispatches that session with the step.
+//
+// The order is the whole design of this call. The approval is read before anything else, so a project
+// whose design nobody approved never reaches the store, never mints a session and never starts a
+// container. The store's own write is what refuses a step somebody already holds, because a read here
+// followed by a write there would let two takes of one step both pass.
+func (s *Server) TakeStep(ctx context.Context, req *quaycrewv1.TakeStepRequest) (*quaycrewv1.TakeStepResponse, error) {
+	if req.GetProject() == "" {
+		return nil, status.Error(codes.InvalidArgument, "which project: say where with an address")
+	}
+	if req.GetNumber() < 1 {
+		return nil, status.Error(codes.InvalidArgument, "a step number counts from one")
+	}
+	design, err := s.store.GetDesign(ctx, req.GetProject())
+	if err != nil {
+		return nil, storeError(err, "project")
+	}
+	if !design.GetApproved() {
+		return nil, status.Error(codes.FailedPrecondition,
+			"this project's design is not approved, so no step can be taken. "+
+				"Read it with krewe design [<address>]. Approve it with krewe design approve [<address>]")
+	}
+
+	// The whole path, because the text says which step of how many this is, and because a refusal
+	// about a step nobody wrote has to say how many the path holds.
+	steps, err := s.store.ListSteps(ctx, req.GetProject())
+	if err != nil {
+		return nil, storeError(err, "project")
+	}
+	held := stepNumbered(steps, req.GetNumber())
+	if held == nil {
+		return nil, noSuchStep(req.GetNumber(), len(steps))
+	}
+
+	// The session is named before the take, because the store records who holds the step in the same
+	// write that moves the state. The name is a handle, which is what a dispatch is addressed by, so
+	// the session the store names is the session the dispatch continues.
+	handle := store.NewID()
+	taken, err := s.store.TakeStep(ctx, req.GetProject(), req.GetNumber(), handle)
+	if errors.Is(err, store.ErrStepNotReady) {
+		return nil, status.Error(codes.FailedPrecondition, whoHoldsIt(held))
+	}
+	if err != nil {
+		return nil, storeError(err, "step")
+	}
+
+	text := takeText(taken, len(steps), s.projectName(ctx, req.GetProject()))
+	dispatched, err := s.Dispatch(ctx, &quaycrewv1.DispatchRequest{
+		Project: req.GetProject(), Handle: handle, Text: text, Detach: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	started, err := s.store.GetSession(ctx, dispatched.GetId())
+	if err != nil {
+		return nil, storeError(err, "session")
+	}
+	return &quaycrewv1.TakeStepResponse{Step: taken, Session: started, Text: text}, nil
+}
+
+// stepNumbered is the step of that number, and nil when the path holds none.
+func stepNumbered(steps []*quaycrewv1.Step, number int32) *quaycrewv1.Step {
+	for _, step := range steps {
+		if step.GetNumber() == number {
+			return step
+		}
+	}
+	return nil
+}
+
+// noSuchStep says how many steps the path has, because a number that is one past the end and a
+// number nobody ever wrote read the same to whoever typed it.
+func noSuchStep(number int32, held int) error {
+	if held == 0 {
+		return status.Errorf(codes.NotFound,
+			"this project has no path, so there is no step %d to take: "+
+				"write one with krewe path set [<address>] --file <path>", number)
+	}
+	return status.Errorf(codes.NotFound, "this path has no step %d: it has %d steps", number, held)
+}
+
+// whoHoldsIt is the refusal for a step that is not ready. It names the state, and the session where
+// there is one, because the way past a step somebody is already on is to go and talk to that session.
+func whoHoldsIt(step *quaycrewv1.Step) string {
+	said := fmt.Sprintf("step %d is %s", step.GetNumber(), step.GetState())
+	if step.GetSession() == "" {
+		return said
+	}
+	return said + ", and session " + display.ShortID(step.GetSession()) + " holds it"
+}
+
+// takeText is what the session is given: the step whole, where it sits in the path, and what to do
+// with it.
+//
+// A block the step left empty is left out with its label, because a label with nothing under it is
+// text the model reads for nothing. The count is of the steps in the path and never of the highest
+// number, so a path running 1, 2, 5 reads "of 3".
+func takeText(step *quaycrewv1.Step, inThePath int, project string) string {
+	blocks := []string{
+		fmt.Sprintf("Step %d of %d on the path for %s.", step.GetNumber(), inThePath, project),
+		step.GetTitle(),
+	}
+	if step.GetIntention() != "" {
+		blocks = append(blocks, labelIntention+"\n"+step.GetIntention())
+	}
+	if step.GetTouches() != "" {
+		blocks = append(blocks, labelTouches+"\n"+step.GetTouches())
+	}
+	if proof := proofBlock(step); proof != "" {
+		blocks = append(blocks, proof)
+	}
+	blocks = append(blocks,
+		"The design is in "+designDir+"/"+designFile+". The whole path is in "+
+			designDir+"/"+pathFile+". Read both.",
+		"Build this step only. Do not take work from another step.")
+	return strings.Join(blocks, "\n\n") + "\n"
+}
+
+// proofBlock is what proves the step and the scenario that proves it, which are one block: the
+// scenario names what the prose above it describes. Either half alone still says something, so the
+// block is left out only when the step says neither.
+func proofBlock(step *quaycrewv1.Step) string {
+	block := ""
+	if step.GetProof() != "" {
+		block = labelProof + "\n" + step.GetProof()
+	}
+	if step.GetProofScenario() == "" {
+		return block
+	}
+	named := "The scenario that proves it is named: " + step.GetProofScenario()
+	if block == "" {
+		return named
+	}
+	return block + "\n" + named
 }

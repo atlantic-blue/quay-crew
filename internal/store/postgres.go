@@ -862,6 +862,55 @@ func (p *Postgres) ListSteps(ctx context.Context, project string) ([]*quaycrewv1
 	return steps, nil
 }
 
+// GetStep returns one step of a project's path.
+//
+// The join is the one ListSteps uses, so a deleted project answers about its path the same way
+// whichever call asks.
+func (p *Postgres) GetStep(ctx context.Context, project string, number int32) (*quaycrewv1.Step, error) {
+	if err := p.projectExists(ctx, project); err != nil {
+		return nil, err
+	}
+	step, err := scanStep(p.pool.QueryRow(ctx, `
+		select `+stepColumns+` from project_steps s
+		join projects p on p.id = s.project
+		join workspaces w on w.id = p.workspace
+		where s.project = $1 and s.number = $2
+		  and p.deleted_at is null and w.deleted_at is null`, project, number))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get step: %w", err)
+	}
+	return step, nil
+}
+
+// TakeStep gives a ready step to a session.
+//
+// The state is read in the statement that writes it, so two callers racing for one step cannot both
+// be told they have it. A write that matched no row is then read back to say which of the two things
+// happened: there is no such step, or somebody already holds it.
+func (p *Postgres) TakeStep(ctx context.Context, project string, number int32, session string) (*quaycrewv1.Step, error) {
+	if err := p.projectExists(ctx, project); err != nil {
+		return nil, err
+	}
+	step, err := scanStep(p.pool.QueryRow(ctx, `
+		update project_steps s
+		set state = $4, session = $3, taken_at = now(), updated_at = now()
+		where s.project = $1 and s.number = $2 and s.state = $5
+		returning `+stepColumns, project, number, session, StepTaken, StepReady))
+	if errors.Is(err, pgx.ErrNoRows) {
+		if _, missing := p.GetStep(ctx, project, number); missing != nil {
+			return nil, missing
+		}
+		return nil, ErrStepNotReady
+	}
+	if err != nil {
+		return nil, fmt.Errorf("take step: %w", err)
+	}
+	return step, nil
+}
+
 // sessionBy reads the single session matching a where clause.
 func (p *Postgres) sessionBy(ctx context.Context, where string, args ...any) (*quaycrewv1.Session, error) {
 	rows, err := p.pool.Query(ctx, `

@@ -1726,6 +1726,7 @@ func RunConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 	runSessionLifecycleConformance(t, newDataset)
 	runDesignConformance(t, newDataset)
 	runPathConformance(t, newDataset)
+	runTakeConformance(t, newDataset)
 }
 
 // runDesignConformance holds both stores to the same answers about what a project is for and what
@@ -2321,4 +2322,163 @@ func numbersOf(steps []*quaycrewv1.Step) []int32 {
 		numbers = append(numbers, step.GetNumber())
 	}
 	return numbers
+}
+
+// runTakeConformance holds both stores to the same answers about giving one step to a session.
+func runTakeConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
+	t.Helper()
+
+	t.Run("one step of a path is read back whole", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		if _, err := s.SetPath(ctx, project.GetId(), []store.Step{
+			{Number: 1, Title: "the first"},
+			{Number: 2, Title: "the second", Intention: "The second thing.",
+				Touches: "internal/store/store.go", Proof: "It reads back.",
+				ProofScenario: "a project carries a brief", After: 1},
+		}); err != nil {
+			t.Fatalf("SetPath: %v", err)
+		}
+		step, err := s.GetStep(ctx, project.GetId(), 2)
+		if err != nil {
+			t.Fatalf("GetStep: %v", err)
+		}
+		if step.GetNumber() != 2 || step.GetTitle() != "the second" {
+			t.Fatalf("the read answered step %d titled %q", step.GetNumber(), step.GetTitle())
+		}
+		if step.GetIntention() != "The second thing." || step.GetTouches() != "internal/store/store.go" {
+			t.Errorf("the step reads intention %q and touches %q",
+				step.GetIntention(), step.GetTouches())
+		}
+		if step.GetProof() != "It reads back." || step.GetProofScenario() != "a project carries a brief" {
+			t.Errorf("the step reads proof %q and scenario %q",
+				step.GetProof(), step.GetProofScenario())
+		}
+		if step.GetAfter() != 1 || step.GetState() != store.StepReady {
+			t.Errorf("the step waits for %d and reads as %q", step.GetAfter(), step.GetState())
+		}
+	})
+
+	// A number nobody wrote and a project nobody made both answer the same way: neither is the step
+	// that was asked for.
+	t.Run("a step the path does not hold is not found", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		if _, err := s.SetPath(ctx, project.GetId(), []store.Step{{Number: 1, Title: "the first"}}); err != nil {
+			t.Fatalf("SetPath: %v", err)
+		}
+		if _, err := s.GetStep(ctx, project.GetId(), 7); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("GetStep on a step nobody wrote answered %v, want ErrNotFound", err)
+		}
+		if _, err := s.GetStep(ctx, "no-such-project", 1); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("GetStep on a missing project answered %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("taking a ready step records the session and the moment", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		if _, err := s.SetPath(ctx, project.GetId(), []store.Step{{Number: 1, Title: "the first"}}); err != nil {
+			t.Fatalf("SetPath: %v", err)
+		}
+		taken, err := s.TakeStep(ctx, project.GetId(), 1, "session-one")
+		if err != nil {
+			t.Fatalf("TakeStep: %v", err)
+		}
+		if taken.GetState() != store.StepTaken {
+			t.Errorf("the taken step reads as %q, want %q", taken.GetState(), store.StepTaken)
+		}
+		if taken.GetSession() != "session-one" {
+			t.Errorf("the taken step names session %q, want session-one", taken.GetSession())
+		}
+		if taken.GetTakenAt() == nil {
+			t.Error("the taken step carries no moment, so nothing records when it was taken")
+		}
+		// Read again, because a write that answered well and stored nothing reads the same to its
+		// caller and to nobody else.
+		read, err := s.GetStep(ctx, project.GetId(), 1)
+		if err != nil {
+			t.Fatalf("GetStep after the take: %v", err)
+		}
+		if read.GetState() != store.StepTaken || read.GetSession() != "session-one" {
+			t.Fatalf("the step reads back as %q held by %q", read.GetState(), read.GetSession())
+		}
+	})
+
+	// The refusal is what makes one step one session's. Two takes that both passed would put two
+	// sessions on one change.
+	t.Run("taking a step somebody already holds is refused, and the holder keeps it", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		if _, err := s.SetPath(ctx, project.GetId(), []store.Step{{Number: 1, Title: "the first"}}); err != nil {
+			t.Fatalf("SetPath: %v", err)
+		}
+		if _, err := s.TakeStep(ctx, project.GetId(), 1, "session-one"); err != nil {
+			t.Fatalf("TakeStep: %v", err)
+		}
+		if _, err := s.TakeStep(ctx, project.GetId(), 1, "session-two"); !errors.Is(err, store.ErrStepNotReady) {
+			t.Fatalf("taking a step twice answered %v, want ErrStepNotReady", err)
+		}
+		read, err := s.GetStep(ctx, project.GetId(), 1)
+		if err != nil {
+			t.Fatalf("GetStep after the refusal: %v", err)
+		}
+		if read.GetSession() != "session-one" {
+			t.Fatalf("the refused take moved the step to session %q", read.GetSession())
+		}
+	})
+
+	// Several steps may be in flight. Nothing here refuses a second take on a different step.
+	t.Run("two steps of one path are taken at once", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		if _, err := s.SetPath(ctx, project.GetId(), []store.Step{
+			{Number: 1, Title: "the first"},
+			{Number: 2, Title: "the second", After: 1},
+		}); err != nil {
+			t.Fatalf("SetPath: %v", err)
+		}
+		if _, err := s.TakeStep(ctx, project.GetId(), 1, "session-one"); err != nil {
+			t.Fatalf("TakeStep on step 1: %v", err)
+		}
+		if _, err := s.TakeStep(ctx, project.GetId(), 2, "session-two"); err != nil {
+			t.Fatalf("TakeStep on step 2: %v", err)
+		}
+		read, err := s.ListSteps(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("ListSteps: %v", err)
+		}
+		for at, want := range []string{"session-one", "session-two"} {
+			if read[at].GetState() != store.StepTaken || read[at].GetSession() != want {
+				t.Errorf("step %d reads as %q held by %q, want taken by %q",
+					read[at].GetNumber(), read[at].GetState(), read[at].GetSession(), want)
+			}
+		}
+	})
+
+	t.Run("taking a step nothing holds is not found", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		if _, err := s.SetPath(ctx, project.GetId(), []store.Step{{Number: 1, Title: "the first"}}); err != nil {
+			t.Fatalf("SetPath: %v", err)
+		}
+		if _, err := s.TakeStep(ctx, project.GetId(), 7, "session-one"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("TakeStep on a step nobody wrote answered %v, want ErrNotFound", err)
+		}
+		if _, err := s.TakeStep(ctx, "no-such-project", 1, "session-one"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("TakeStep on a missing project answered %v, want ErrNotFound", err)
+		}
+	})
 }

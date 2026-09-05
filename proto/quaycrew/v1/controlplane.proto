@@ -647,6 +647,22 @@ message ListStepsResponse {
   repeated Step steps = 1;
 }
 
+// TakeStepRequest gives one step of a project's path to a session that starts now.
+message TakeStepRequest {
+  string project = 1;
+  int32 number = 2;
+}
+// TakeStepResponse says what was taken, which session took it, and what that session was asked to do.
+//
+// The text is carried back so a caller can show what the session was given without a second call. It
+// is composed by the control plane, so the console and the command line send the same words.
+message TakeStepResponse {
+  Step step = 1;
+  Session session = 2;
+  string text = 3;
+  repeated string warnings = 4;
+}
+
 // SessionWorkEntry is one thing in a session's work: a file or a directory, with the size of a file.
 message SessionWorkEntry {
   string name = 1;
@@ -1134,6 +1150,11 @@ service ControlPlaneService {
   // nothing that dispatching would not.
   rpc SetPath(SetPathRequest) returns (SetPathResponse);
   rpc ListSteps(ListStepsRequest) returns (ListStepsResponse);
+  // Taking a step starts a session on it. The driver may call it, because a take is a dispatch and
+  // the driver already has that: it reaches nothing here it could not reach by dispatching itself.
+  // The refusal an unapproved design earns is the gate, and it is on the operator's own command as
+  // much as on this one.
+  rpc TakeStep(TakeStepRequest) returns (TakeStepResponse);
   // Reads a file, or a listing, out of the work a session left behind, without attaching to it.
   rpc ReadSessionWork(ReadSessionWorkRequest) returns (ReadSessionWorkResponse);
   // Says where an address is on the machine, so a person can put a file in it by hand. It reads the
