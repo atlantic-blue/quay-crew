@@ -45,6 +45,45 @@ Feature: A project carries what it is for and what was designed
     Then the brief reads "keep the household bills paid on time"
     And the design body reads "# Bills\n"
 
+  # The word is about one text. Approving records it, and any write to the design takes it away in
+  # the same write, so a row never says approved over a body nobody has read.
+  Scenario: The operator approves a design
+    Given the project's design is "# Bills\n"
+    When the operator approves the project's design
+    And the operator reads the project's design
+    Then the design is approved
+
+  Scenario: Rewriting an approved design takes the approval away
+    Given the project's design is "# Bills\n"
+    And the operator approved the project's design
+    When the operator writes the project's design as "# Bills, again\n"
+    And the operator reads the project's design
+    Then the design is not approved
+
+  # A brief says what the project is for. It says nothing about what was designed, so it cannot take
+  # the operator's word away.
+  Scenario: Writing a brief leaves the approval alone
+    Given the project's design is "# Bills\n"
+    And the operator approved the project's design
+    When the operator sets the project's brief to "keep the household bills paid on time"
+    And the operator reads the project's design
+    Then the design is approved
+
+  Scenario: Approving a project with no design is refused
+    When the operator approves the project's design
+    Then the control plane refuses it as the wrong state
+    And the refusal suggests "krewe design set"
+
+  # The gate is only real while nothing inside a sandbox can pass it. A session writes a design, and
+  # that write clears the approval, so a session that could then approve it would be agreeing with
+  # itself.
+  Scenario: A session cannot approve a design
+    Given the project's design is "# Bills\n"
+    When the driver asks to approve the project's design
+    Then the driver is refused, told the call is the operator's to make
+    And the operator reads the project's design
+    And the design is not approved
+
   Scenario: The design of a project that does not exist is refused
     When the operator reads the design of a project that does not exist
     Then the control plane refuses it as not found
@@ -104,6 +143,21 @@ Feature: A project carries what it is for and what was designed
     Then standard output carries "the approval is cleared"
     And the command succeeds
 
+  Scenario: The operator approves a design with the tool and reads it back
+    Given the system listens on an address the tool can dial
+    And a design file saying "# Bills\n"
+    And the caller wrote the design from that file
+    When the caller approves the design
+    And the caller reads the project's design
+    Then standard output carries "approved"
+    And the command succeeds
+
+  Scenario: Approving a project with no design tells the caller how to write one
+    Given the system listens on an address the tool can dial
+    When the caller approves the design
+    Then standard error says "krewe design set"
+    And the command fails
+
   Scenario: A project with no design tells the caller how to write one
     Given the system listens on an address the tool can dial
     When the caller reads the project's design
@@ -144,6 +198,27 @@ Feature: A project carries what it is for and what was designed
     Given the project's design is "# Bills\n"
     When the operator dispatches "hello" to the project
     Then the session's memory file carries "Read .krewe/design.md before you start."
+
+  # A session reads the design and has to know whether anybody agreed to it. An unapproved design is
+  # still a design worth reading, and the line says which it is rather than leaving the session to
+  # assume.
+  Scenario: A session reads that the design is not approved
+    Given the project's design is "# Bills\n"
+    When the operator dispatches "hello" to the project
+    Then the session's memory file carries "The design is not approved yet."
+
+  Scenario: A session reads that the design is approved
+    Given the project's design is "# Bills\n"
+    And the operator approved the project's design
+    When the operator dispatches "hello" to the project
+    Then the session's memory file carries "The design is approved, on "
+
+  # A project with a brief and no design has nothing to say about approval, and the section is capped,
+  # so it spends no line on a word about a document that does not exist.
+  Scenario: A project with a brief and no design says nothing about approval
+    Given the project's brief is "keep the household bills paid on time"
+    When the operator dispatches "hello" to the project
+    Then the session's memory file does not carry "The design is"
 
   # A line telling the model to open a file that is not there sends it to open nothing.
   Scenario: A project with a brief and no design does not send the session to a file

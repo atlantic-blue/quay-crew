@@ -1868,6 +1868,124 @@ func runDesignConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	// The operator's word is a statement about one text, and this is the pair of writes that proves
+	// it: approve, then write a body over it, and the word is gone.
+	t.Run("writing a design clears the approval", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		if _, err := s.SetProjectDesign(ctx, project.GetId(), "the whole design", ""); err != nil {
+			t.Fatalf("SetProjectDesign: %v", err)
+		}
+		approved, err := s.ApproveProjectDesign(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("ApproveProjectDesign: %v", err)
+		}
+		if !approved.GetApproved() {
+			t.Fatal("the approval answered a design that is not approved")
+		}
+		if approved.GetApprovedAt() == nil {
+			t.Fatal("the approval answered no moment, so nothing says when the word was given")
+		}
+
+		rewritten, err := s.SetProjectDesign(ctx, project.GetId(), "the whole design, again", "")
+		if err != nil {
+			t.Fatalf("SetProjectDesign over an approved design: %v", err)
+		}
+		if rewritten.GetApproved() || rewritten.GetApprovedAt() != nil {
+			t.Fatalf("a design rewritten over an approved one reads approved at %v", rewritten.GetApprovedAt())
+		}
+		read, err := s.GetDesign(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("GetDesign: %v", err)
+		}
+		if read.GetApproved() || read.GetApprovedAt() != nil {
+			t.Fatalf("the rewritten design reads back approved at %v", read.GetApprovedAt())
+		}
+	})
+
+	// A brief says nothing about what was designed, so it cannot take the word away.
+	t.Run("writing a brief leaves the approval alone", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		if _, err := s.SetProjectDesign(ctx, project.GetId(), "the whole design", ""); err != nil {
+			t.Fatalf("SetProjectDesign: %v", err)
+		}
+		if _, err := s.ApproveProjectDesign(ctx, project.GetId()); err != nil {
+			t.Fatalf("ApproveProjectDesign: %v", err)
+		}
+		afterBrief, err := s.SetProjectBrief(ctx, project.GetId(), "keep the household bills paid")
+		if err != nil {
+			t.Fatalf("SetProjectBrief: %v", err)
+		}
+		if !afterBrief.GetApproved() {
+			t.Fatal("writing a brief took the approval away, and a brief says nothing about the design")
+		}
+	})
+
+	// The check on the body and the write are one statement, so only the store can hold this rule.
+	t.Run("approving a design that says nothing is refused", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		// A project with no design row at all.
+		if _, err := s.ApproveProjectDesign(ctx, project.GetId()); !errors.Is(err, store.ErrNothingToApprove) {
+			t.Fatalf("approving a project with no design answered %v, want ErrNothingToApprove", err)
+		}
+		// And one that holds a brief and no body, which is a row with nothing to agree to.
+		if _, err := s.SetProjectBrief(ctx, project.GetId(), "keep the household bills paid"); err != nil {
+			t.Fatalf("SetProjectBrief: %v", err)
+		}
+		if _, err := s.ApproveProjectDesign(ctx, project.GetId()); !errors.Is(err, store.ErrNothingToApprove) {
+			t.Fatalf("approving a design with no body answered %v, want ErrNothingToApprove", err)
+		}
+		read, err := s.GetDesign(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("GetDesign: %v", err)
+		}
+		if read.GetApproved() {
+			t.Fatal("the refused approval was written anyway")
+		}
+	})
+
+	t.Run("approving the design of a project that does not exist is not found", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+
+		if _, err := s.ApproveProjectDesign(ctx, "no-such-project"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("ApproveProjectDesign on a missing project answered %v, want ErrNotFound", err)
+		}
+	})
+
+	// The word is about the text, so saying it twice is not a mistake to refuse. The moment moves,
+	// which is what an operator who approved the same design again would expect to read.
+	t.Run("approving an approved design moves the moment", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		if _, err := s.SetProjectDesign(ctx, project.GetId(), "the whole design", ""); err != nil {
+			t.Fatalf("SetProjectDesign: %v", err)
+		}
+		first, err := s.ApproveProjectDesign(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("ApproveProjectDesign: %v", err)
+		}
+		time.Sleep(orderingGap)
+		again, err := s.ApproveProjectDesign(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("ApproveProjectDesign again: %v", err)
+		}
+		if !again.GetApprovedAt().AsTime().After(first.GetApprovedAt().AsTime()) {
+			t.Fatalf("the second approval reads %v, and the first reads %v",
+				again.GetApprovedAt().AsTime(), first.GetApprovedAt().AsTime())
+		}
+	})
+
 	// The design row hangs off the project, so deleting the project takes it. Postgres does this with
 	// the cascade and the in memory store has to agree, or a deleted project would keep answering.
 	t.Run("deleting a project takes its design with it", func(t *testing.T) {

@@ -181,6 +181,59 @@ func initializeDesignSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	// The approval: the operator's word about the design as it stands.
+
+	sc.Step(`^the operator (?:approves|approved) the project's design$`, func(ctx context.Context) error {
+		w, d := worldFrom(ctx), designFrom(ctx)
+		resp, err := w.client.ApproveDesign(ctx, &quaycrewv1.ApproveDesignRequest{Project: w.projectID})
+		w.lastErr = err
+		if err != nil {
+			return nil
+		}
+		d.design = resp.GetDesign()
+		return nil
+	})
+
+	sc.Step(`^the design is approved$`, func(ctx context.Context) error {
+		d := designFrom(ctx)
+		if d.design == nil {
+			return fmt.Errorf("no design has been read, so there is nothing to check")
+		}
+		if !d.design.GetApproved() {
+			return fmt.Errorf("the design reads as not approved")
+		}
+		if d.design.GetApprovedAt() == nil {
+			return fmt.Errorf("the design is approved and says no moment, so nothing records when the word was given")
+		}
+		return nil
+	})
+
+	// The moment goes with the word. A row that read as unapproved while keeping the time of a word
+	// since taken back would let a later reader believe the approval still stands.
+	sc.Step(`^the design is not approved$`, func(ctx context.Context) error {
+		d := designFrom(ctx)
+		if d.design == nil {
+			return fmt.Errorf("no design has been read, so there is nothing to check")
+		}
+		if d.design.GetApproved() {
+			return fmt.Errorf("the design reads as approved, on %v", d.design.GetApprovedAt().AsTime())
+		}
+		if d.design.GetApprovedAt() != nil {
+			return fmt.Errorf("the design is not approved and keeps the moment %v", d.design.GetApprovedAt().AsTime())
+		}
+		return nil
+	})
+
+	// The call carries the driver's token, which is what a session inside a sandbox presents. The
+	// scenario reads the design again afterwards, because a refusal that still wrote the row would
+	// leave the gate looking closed and standing open.
+	sc.Step(`^the driver asks to approve the project's design$`, func(ctx context.Context) error {
+		return asDriver(ctx, func(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) error {
+			_, err := client.ApproveDesign(ctx, &quaycrewv1.ApproveDesignRequest{
+				Project: worldFrom(ctx).projectID})
+			return err
+		})
+	})
 	// The steps that drive the real command line tool, as a caller runs it.
 
 	sc.Step(`^a design file saying "([^"]*)"$`, func(ctx context.Context, body string) error {
@@ -207,6 +260,14 @@ func initializeDesignSteps(sc *godog.ScenarioContext) {
 
 	sc.Step(`^the caller writes the design without naming a file$`, func(ctx context.Context) error {
 		return runTool(ctx, "design", "set", whereTheProjectIs(ctx))
+	})
+
+	sc.Step(`^the caller (?:approves|approved) the design$`, func(ctx context.Context) error {
+		return runTool(ctx, "design", "approve", whereTheProjectIs(ctx))
+	})
+
+	sc.Step(`^the caller wrote the design from that file$`, func(ctx context.Context) error {
+		return runTool(ctx, "design", "set", whereTheProjectIs(ctx), "--file", designFrom(ctx).file)
 	})
 }
 
