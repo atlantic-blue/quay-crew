@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	quaycrewv1 "github.com/atlantic-blue/quay-krewe/gen/quaycrew/v1"
@@ -323,4 +324,89 @@ func refusalNamesLines(ctx context.Context, lines ...int) error {
 		}
 	}
 	return nil
+}
+
+// The steps about what reaches the session: the path document in its working directory.
+
+// pathFileAt is where the path sits in a session's working directory, as this process sees it on the
+// host.
+func pathFileAt(ctx context.Context) (string, error) {
+	dir, err := sessionWorkingDir(ctx)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, ".krewe", "path.md"), nil
+}
+
+func sessionPathFile(ctx context.Context) (string, error) {
+	at, err := pathFileAt(ctx)
+	if err != nil {
+		return "", err
+	}
+	body, err := os.ReadFile(at)
+	if err != nil {
+		return "", fmt.Errorf("the session has no path at %s: %w", at, err)
+	}
+	return string(body), nil
+}
+
+// pathHeading matches a step's own line in the rendered document, which is the same line the grammar
+// reads.
+var pathHeading = regexp.MustCompile(`(?m)^##\s+(\d+)\.`)
+
+func initializePathRenderSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^the session's path file carries "([^"]*)"$`, func(ctx context.Context, want string) error {
+		body, err := sessionPathFile(ctx)
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(body, unescape(want)) {
+			return fmt.Errorf("the path file does not carry %q: %q", unescape(want), body)
+		}
+		return nil
+	})
+
+	sc.Step(`^the session's path file does not carry "([^"]*)"$`, func(ctx context.Context, unwanted string) error {
+		body, err := sessionPathFile(ctx)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(body, unescape(unwanted)) {
+			return fmt.Errorf("the path file carries %q, and it should not: %q", unescape(unwanted), body)
+		}
+		return nil
+	})
+
+	// Read as the list of headings rather than as a search for each number, because the failure this
+	// guards against is the right steps in the wrong order, which a search for the text passes.
+	sc.Step(`^the session's path file lists steps ([\d, ]+) in that order$`,
+		func(ctx context.Context, want string) error {
+			body, err := sessionPathFile(ctx)
+			if err != nil {
+				return err
+			}
+			var numbers []string
+			for _, found := range pathHeading.FindAllStringSubmatch(body, -1) {
+				numbers = append(numbers, found[1])
+			}
+			if got := strings.Join(numbers, ", "); got != strings.TrimSpace(want) {
+				return fmt.Errorf("the path file lists steps %s, want %s: %q", got, want, body)
+			}
+			return nil
+		})
+
+	sc.Step(`^the session has no path file$`, func(ctx context.Context) error {
+		at, err := pathFileAt(ctx)
+		if err != nil {
+			return err
+		}
+		body, err := os.ReadFile(at)
+		if err == nil {
+			return fmt.Errorf("the session has a path at %s saying %q, and the store holds none", at, body)
+		}
+		if !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	})
 }

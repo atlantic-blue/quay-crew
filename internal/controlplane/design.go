@@ -143,6 +143,9 @@ const (
 	// design.md of its own.
 	designDir  = ".krewe"
 	designFile = "design.md"
+	// pathFile is the path document, beside the design in the same dot directory and for the same
+	// reason.
+	pathFile = "path.md"
 )
 
 // renderDesign puts the design body in the session's working directory and returns the summary that
@@ -154,48 +157,48 @@ const (
 //
 // Nothing here fails an exec. A session with no design summary is a session that reads the project's
 // context and gets on with it, which is what every session did before this existed.
-func (s *Server) renderDesign(ctx context.Context, session *quaycrewv1.Session, dir string) string {
+func (s *Server) renderDesign(ctx context.Context, session *quaycrewv1.Session, dir string, hasPath bool) string {
 	design, err := s.store.GetDesign(ctx, session.GetProject())
 	if err != nil {
 		return ""
 	}
 	if design.GetBrief() == "" && design.GetBody() == "" {
-		s.clearDesignFile(dir)
+		s.clearSessionFile(dir, designFile, "design")
 		return ""
 	}
 	project, err := s.store.GetProject(ctx, session.GetProject())
 	if err != nil {
 		return ""
 	}
-	hasBody := s.writeDesignFile(dir, design.GetBody())
-	return designSummary(project.GetName(), design, hasBody)
+	hasBody := s.writeSessionFile(dir, designFile, "design", design.GetBody())
+	return designSummary(project.GetName(), design, hasBody, hasPath)
 }
 
-// writeDesignFile puts the design body where the model can open it, and says whether it is there to
-// open. An empty body has no file: a file that exists and says nothing costs a read.
-func (s *Server) writeDesignFile(dir, body string) bool {
+// writeSessionFile puts a rendered document where the model can open it, and says whether it is
+// there to open. An empty document has no file: a file that exists and says nothing costs a read.
+func (s *Server) writeSessionFile(dir, name, what, body string) bool {
 	if body == "" {
-		s.clearDesignFile(dir)
+		s.clearSessionFile(dir, name, what)
 		return false
 	}
 	at := filepath.Join(dir, designDir)
 	if err := os.MkdirAll(at, 0o755); err != nil {
-		slog.Warn("the design was not written where the session can read it", "at", at, "error", err)
+		slog.Warn("the "+what+" was not written where the session can read it", "at", at, "error", err)
 		return false
 	}
-	if err := os.WriteFile(filepath.Join(at, designFile), []byte(body), 0o644); err != nil {
-		slog.Warn("the design was not written where the session can read it", "at", at, "error", err)
+	if err := os.WriteFile(filepath.Join(at, name), []byte(body), 0o644); err != nil {
+		slog.Warn("the "+what+" was not written where the session can read it", "at", at, "error", err)
 		return false
 	}
 	return true
 }
 
-// clearDesignFile takes the file away when the store holds no body, so what the session reads and
-// what the store holds cannot disagree. A design emptied on purpose would otherwise stay readable
-// for the life of the working directory.
-func (s *Server) clearDesignFile(dir string) {
-	if err := os.Remove(filepath.Join(dir, designDir, designFile)); err != nil && !os.IsNotExist(err) {
-		slog.Warn("the old design was left where the session can read it", "dir", dir, "error", err)
+// clearSessionFile takes the file away when the store holds nothing, so what the session reads and
+// what the store holds cannot disagree. A design or a path emptied on purpose would otherwise stay
+// readable for the life of the working directory.
+func (s *Server) clearSessionFile(dir, name, what string) {
+	if err := os.Remove(filepath.Join(dir, designDir, name)); err != nil && !os.IsNotExist(err) {
+		slog.Warn("the old "+what+" was left where the session can read it", "dir", dir, "error", err)
 	}
 }
 
@@ -210,10 +213,10 @@ func (s *Server) clearDesignFile(dir string) {
 // on every exec and the brief is the only part of it whose length nobody controls. A cut line ends
 // with a full stop and nothing else: an ellipsis or a note saying the text was cut would tell the
 // model to go looking for the rest, and the rest is in the design.
-func designSummary(project string, design *quaycrewv1.Design, hasBody bool) string {
+func designSummary(project string, design *quaycrewv1.Design, hasBody, hasPath bool) string {
 	lines := []string{"This project is " + project + "."}
 	if hasBody {
-		lines = append(lines, approvalLine(design), "Read "+designDir+"/"+designFile+" before you start.")
+		lines = append(lines, approvalLine(design), readLine(hasPath))
 	}
 	brief := design.GetBrief()
 	if brief == "" {
@@ -229,6 +232,17 @@ func designSummary(project string, design *quaycrewv1.Design, hasBody bool) stri
 	}
 	lines[0] += " It is for: " + cutTo(brief, room)
 	return strings.Join(lines, "\n")
+}
+
+// readLine sends the session to the documents it has. The path is named only when the project has
+// one, for the reason renderDesign gives: a line naming a file that is not there sends the model to
+// open nothing.
+func readLine(hasPath bool) string {
+	line := "Read " + designDir + "/" + designFile + " before you start."
+	if hasPath {
+		line += " The whole path is in " + designDir + "/" + pathFile + "."
+	}
+	return line
 }
 
 // approvalLine says where the design stands with the operator, in the one line the session reads on
@@ -578,6 +592,72 @@ func (s *Server) SetPath(ctx context.Context, req *quaycrewv1.SetPathRequest) (*
 		return nil, storeError(err, "project")
 	}
 	return &quaycrewv1.SetPathResponse{Steps: written, Warnings: warnings}, nil
+}
+
+// What the session working in a project reads about the steps before its own: the path, written
+// into its working directory beside the design.
+//
+// It is a file rather than a section in the memory file because a path grows with the project and
+// the memory file is read on every exec. The summary names it, and a model that needs it opens it.
+
+// renderPath puts the project's path where the model can open it, and says whether it is there to
+// open. A project with no path has no file: a file that exists and says nothing costs a read.
+//
+// Nothing here fails an exec, for the same reason renderDesign fails none.
+func (s *Server) renderPath(ctx context.Context, project, dir string) bool {
+	steps, err := s.store.ListSteps(ctx, project)
+	if err != nil {
+		return false
+	}
+	return s.writeSessionFile(dir, pathFile, "path", pathDocument(steps))
+}
+
+// pathDocument writes the steps back out in the grammar they were read in, one block each.
+//
+// The order is the number's and never the store's. A session reads this file as the path, so steps
+// out of order are a different path: the one thing the file is for is saying what came before this
+// step.
+func pathDocument(steps []*quaycrewv1.Step) string {
+	if len(steps) == 0 {
+		return ""
+	}
+	ordered := make([]*quaycrewv1.Step, len(steps))
+	copy(ordered, steps)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		return ordered[i].GetNumber() < ordered[j].GetNumber()
+	})
+
+	blocks := make([]string, 0, len(ordered))
+	for _, step := range ordered {
+		blocks = append(blocks, stepBlock(step))
+	}
+	return strings.Join(blocks, "\n\n") + "\n"
+}
+
+// stepBlock is one step: its heading, where it stands, and the blocks the operator wrote under it,
+// in the words they set. A block they left empty is left out rather than written as a bare label,
+// because a label with nothing under it costs a read and answers nothing.
+func stepBlock(step *quaycrewv1.Step) string {
+	lines := []string{
+		fmt.Sprintf("## %d. %s", step.GetNumber(), step.GetTitle()),
+		"state: " + step.GetState(),
+	}
+	for _, block := range []struct {
+		label string
+		text  string
+	}{
+		{labelIntention, step.GetIntention()},
+		{labelTouches, step.GetTouches()},
+		{labelProof, step.GetProof()},
+		{labelScenario, step.GetProofScenario()},
+		{labelAfter, strconv.Itoa(int(step.GetAfter()))},
+	} {
+		if block.text == "" {
+			continue
+		}
+		lines = append(lines, "", block.label, block.text)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // ListSteps reads a project's path, or every project's when it names none.

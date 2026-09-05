@@ -587,7 +587,11 @@ func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session)
 		// in the inner file, which is the one a session reads for the project it is working in, and it
 		// is rendered every exec and never read back.
 		if at == innerFile {
-			if summary := s.renderDesign(ctx, session, dirs[at]); summary != "" {
+			// The path goes in beside the design, and whether there is one decides whether the summary
+			// sends the session to it. Written first for that reason: a line naming a file the render
+			// then decided not to write sends the model to open nothing.
+			hasPath := s.renderPath(ctx, session.GetProject(), dirs[at])
+			if summary := s.renderDesign(ctx, session, dirs[at], hasPath); summary != "" {
 				sections = append(sections, sandbox.Section{Scope: sandbox.DesignScope, Body: summary})
 			}
 		}
