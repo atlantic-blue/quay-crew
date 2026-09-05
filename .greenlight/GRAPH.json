@@ -2,10 +2,10 @@
   "version": "1.0.0",
   "project": "quay-krewe: a project carries its own context",
   "written": "2026-09-04",
-  "rewritten": "2026-09-04, a fourth time, after the design settled the operator's own commands",
+  "rewritten": "2026-09-05, a fifth time, after the operator settled the four levels",
   "source": ".greenlight/DESIGN.md, .greenlight/ROADMAP.md, .greenlight/DECISIONS.md, .greenlight/CONTRACTS.md",
-  "total_slices": 35,
-  "milestones": 16,
+  "total_slices": 43,
+  "milestones": 21,
   "user_actions": {
     "1": "A project holds a brief and a design, and any write to the design clears the approval.",
     "2": "The design carries a numbered path of atomised changes.",
@@ -14,7 +14,8 @@
     "5": "The operator reads the state of the path.",
     "6": "Krewe checks the proof, and a step records what came of it.",
     "7": "Krewe earns the word done, and can lose it.",
-    "8": "The operator drives krewe from a slash command in their own session. Krewe writes those command files, and an install never writes over a file somebody else wrote."
+    "8": "The operator drives krewe from a slash command in their own session. Krewe writes those command files, and an install never writes over a file somebody else wrote.",
+    "9": "A project holds features, and each feature is delivered in milestones. A step belongs to one milestone, and it names the contracts it builds."
   },
   "rules": [
     "One intention per slice. One reviewable pull request per slice. Revertable alone.",
@@ -22,8 +23,9 @@
     "Each slice is written for somebody who was not in the design conversation.",
     "S-5 is the gate. If the measurement says no, every slice after it is cancelled.",
     "The whole suite runs on this machine and in continuous integration. It takes about 42 seconds and peaks at about 1.18 gigabytes. The local gates are make test, go build, go vet, gofmt and golangci-lint.",
-    "Each slice names the milestone of .greenlight/ROADMAP.md it belongs to. Sixteen milestones, thirty five slices, because a milestone that is more than one reviewable pull request is split.",
-    "The dependency edges order by meaning, not by file. Section 5.1 of the design measures what that does not record. From milestone 7 on, several steps may be taken at once, capped at three by default, and every take is a command the operator typed."
+    "Each slice names the milestone of .greenlight/ROADMAP.md it belongs to. Twenty one milestones, forty three slices, because a milestone that is more than one reviewable pull request is split.",
+    "The dependency edges order by meaning, not by file. Section 5.1 of the design measures what that does not record. From milestone 7 on, several steps may be taken at once, capped at three by default, and every take is a command the operator typed.",
+    "Identifiers never move. S-36 to S-43 came after S-35 and were placed in the order through depends_on, because merged pull requests name the earlier ones. Order comes from the graph, never from the number."
   ],
   "slices": [
     {
@@ -373,7 +375,7 @@
         2
       ],
       "depends_on": [
-        "S-10"
+        "S-43"
       ],
       "contracts": [
         "STORE-0",
@@ -396,7 +398,7 @@
       ],
       "changes": "SetPath refuses a document that drops or renames a step in state taken, done or stopped. The refusal names those numbers. A refused write changes nothing.",
       "proves": "features/path.feature. Take step 2, then set a path without it: refused, naming step 2. Set a path without step 2 while it is ready: it goes. Changing after on a ready step moves it past a stopped step.",
-      "why_after_s10": "Before a step can be taken, the rule is unreachable and no scenario can prove it. It completes milestone 4's promise, which is why its milestone is 4 and its dependency is S-10."
+      "why_after_s10": "Before a step can be taken, the rule is unreachable and no scenario can prove it. It completes milestone 4's promise, which is why its milestone is 4. It waits for S-43 because the step table is re-keyed to the feature in S-37, and this slice writes the rule that protects a taken step."
     },
     {
       "id": "S-12",
@@ -407,7 +409,7 @@
         6
       ],
       "depends_on": [
-        "S-10"
+        "S-43"
       ],
       "contracts": [
         "STORE-9",
@@ -437,7 +439,8 @@
       ],
       "changes": "One store method, one remote procedure call, and the words krewe step done and krewe step stop. A finished step carries its result into .krewe/path.md.",
       "proves": "features/path.feature. A finished step carries its result into the path document, so the next session reads what the last one produced. Finishing with a word that is not done or stopped is refused. Finishing with no result is refused.",
-      "note": "No proof check yet. That is S-20 and S-22, and both need this command to exist first."
+      "note": "No proof check yet. That is S-20 and S-22, and both need this command to exist first.",
+      "why_after_s10": "It waits for S-43 rather than for S-10. The step table is re-keyed to the feature in S-37, and every slice from here on hangs off this one. Building it on the old key would put twenty five slices on a key that is about to move."
     },
     {
       "id": "S-13",
@@ -508,8 +511,8 @@
         "FLIGHT-2": "Whole."
       },
       "touches": [
-        "internal/store/migrations/0065_a_project_caps_its_steps_in_flight.up.sql",
-        "internal/store/migrations/0065_a_project_caps_its_steps_in_flight.down.sql",
+        "internal/store/migrations/0070_a_project_caps_its_steps_in_flight.up.sql",
+        "internal/store/migrations/0070_a_project_caps_its_steps_in_flight.down.sql",
         "internal/store/store.go",
         "internal/store/postgres.go",
         "internal/store/memory.go",
@@ -597,8 +600,8 @@
         "COMMAND-9": "The line that says the session will restate the step and build nothing."
       },
       "touches": [
-        "internal/store/migrations/0066_a_step_carries_a_restatement.up.sql",
-        "internal/store/migrations/0066_a_step_carries_a_restatement.down.sql",
+        "internal/store/migrations/0071_a_step_carries_a_restatement.up.sql",
+        "internal/store/migrations/0071_a_step_carries_a_restatement.down.sql",
         "internal/store/store.go",
         "internal/store/postgres.go",
         "internal/store/memory.go",
@@ -704,8 +707,8 @@
         "TABLE-1": "The three proof command columns, in migration 0067."
       },
       "touches": [
-        "internal/store/migrations/0067_a_design_carries_a_proof_command.up.sql",
-        "internal/store/migrations/0067_a_design_carries_a_proof_command.down.sql",
+        "internal/store/migrations/0072_a_design_carries_a_proof_command.up.sql",
+        "internal/store/migrations/0072_a_design_carries_a_proof_command.down.sql",
         "internal/store/store.go",
         "internal/store/postgres.go",
         "internal/store/memory.go",
@@ -755,8 +758,8 @@
         "RENDER-3": "The proof line of a checked step."
       },
       "touches": [
-        "internal/store/migrations/0068_a_step_carries_a_proof_result.up.sql",
-        "internal/store/migrations/0068_a_step_carries_a_proof_result.down.sql",
+        "internal/store/migrations/0073_a_step_carries_a_proof_result.up.sql",
+        "internal/store/migrations/0073_a_step_carries_a_proof_result.down.sql",
         "internal/store/store.go",
         "internal/store/postgres.go",
         "internal/store/memory.go",
@@ -948,8 +951,8 @@
         "RENDER-3": "The closed by part of the proof line."
       },
       "touches": [
-        "internal/store/migrations/0069_krewe_earns_the_word_done.up.sql",
-        "internal/store/migrations/0069_krewe_earns_the_word_done.down.sql",
+        "internal/store/migrations/0074_krewe_earns_the_word_done.up.sql",
+        "internal/store/migrations/0074_krewe_earns_the_word_done.down.sql",
         "internal/store/store.go",
         "internal/store/postgres.go",
         "internal/store/memory.go",
@@ -1283,6 +1286,328 @@
       "changes": "One markdown file. It runs krewe trust, prints the level, the run, the threshold and any standing offer, and runs krewe trust raise on a yes. The listing now names four commands.",
       "proves": "features/commands.feature. The file installs and carries the marker. With an offer standing, a yes raises the level and krewe trust then says level 1. With no offer it prints the run and asks nothing. Answering no leaves the level where it was.",
       "note": "It never lowers a level. A wrong close does that, through krewe step reopen."
+    },
+    {
+      "id": "S-36",
+      "milestone": 17,
+      "name": "A project holds features",
+      "intention": "Give a project somewhere to keep each narrowed part of itself.",
+      "user_actions": [
+        9
+      ],
+      "depends_on": [
+        "S-10"
+      ],
+      "contracts": [
+        "TABLE-3",
+        "STORE-18",
+        "STORE-19",
+        "STORE-20",
+        "WIRE-19",
+        "WIRE-21",
+        "WIRE-22",
+        "WIRE-23",
+        "COMMAND-24",
+        "COMMAND-25",
+        "COMMAND-26",
+        "LEVEL-1"
+      ],
+      "partial_contracts": {
+        "TABLE-3": "The columns migration 0065 creates, including state. The verbs that write state come in S-39.",
+        "LEVEL-1": "The feature level only. The milestone level comes in S-38. The step key moves in S-37."
+      },
+      "touches": [
+        "internal/store/migrations/0065_a_project_holds_features.up.sql",
+        "internal/store/migrations/0065_a_project_holds_features.down.sql",
+        "internal/store/store.go",
+        "internal/store/postgres.go",
+        "internal/store/memory.go",
+        "internal/store/storetest/storetest.go",
+        "proto/quaycrew/v1/controlplane.proto",
+        "internal/controlplane/design.go",
+        "cmd/krewe/feature.go",
+        "cmd/krewe/quay.go",
+        "internal/manual/manual.go",
+        "features/path.feature",
+        "features/path_steps_test.go"
+      ],
+      "changes": "A third table, three store methods, a Feature message and three remote procedure calls. The words krewe feature, krewe feature add and krewe feature intention. Nothing about the path changes yet, so every step still hangs off its project.",
+      "proves": "features/path.feature. Adding two features to a project gives them the numbers 1 and 2. A second project starts again at 1. A feature with an empty title is refused. Reading a project with no feature says so and names the command that adds one.",
+      "note": "The server gives the number, never the caller, so two adds at one moment cannot take the same one. The read of the highest number and the insert are one statement."
+    },
+    {
+      "id": "S-37",
+      "milestone": 18,
+      "name": "A path belongs to a feature",
+      "intention": "Move the key of the step table from the project to the feature, before anything else is built on the old key.",
+      "user_actions": [
+        2,
+        9
+      ],
+      "depends_on": [
+        "S-36"
+      ],
+      "contracts": [
+        "LEVEL-2",
+        "TABLE-2",
+        "STORE-5",
+        "STORE-6",
+        "STORE-7",
+        "STORE-8",
+        "WIRE-2",
+        "WIRE-7",
+        "WIRE-8",
+        "WIRE-9",
+        "WIRE-10",
+        "COMMAND-7",
+        "COMMAND-8",
+        "COMMAND-9"
+      ],
+      "partial_contracts": {
+        "TABLE-2": "What migration 0066 changes. The milestone column comes in S-38, the contracts columns in S-43.",
+        "LEVEL-2": "The whole substitution, and the refusal that meets a bare step number.",
+        "STORE-5": "The feature key, and the rule that another feature is untouched. The milestones come in S-38.",
+        "COMMAND-7": "The feature number and the whole feature listing. The milestone grouping comes in S-40.",
+        "WIRE-8": "The feature field. The milestones field comes in S-38."
+      },
+      "touches": [
+        "internal/store/migrations/0066_a_path_belongs_to_a_feature.up.sql",
+        "internal/store/migrations/0066_a_path_belongs_to_a_feature.down.sql",
+        "internal/store/store.go",
+        "internal/store/postgres.go",
+        "internal/store/memory.go",
+        "internal/store/storetest/storetest.go",
+        "proto/quaycrew/v1/controlplane.proto",
+        "internal/controlplane/design.go",
+        "internal/controlplane/server.go",
+        "cmd/krewe/path.go",
+        "cmd/krewe/step.go",
+        "internal/manual/manual.go",
+        "features/path.feature",
+        "features/path_steps_test.go"
+      ],
+      "changes": "Migration 0066 renames project_steps to feature_steps, adds feature, drops project, and moves the primary key. It adds one feature for every project that already holds steps, and points those steps at it. Every store method, request message and command that reached a step through a project reaches it through a feature. A step is typed as one token, feature.number.",
+      "proves": "features/path.feature. Setting the path of feature 2 leaves the path of feature 1 whole. Two features each hold a step 3, and taking one leaves the other ready. A bare step number is refused, and the refusal names the form and the features that exist. Steps written before the migration read back under one feature, with every column kept.",
+      "why_here": "Twenty six slices ahead of this one assumed the step table was keyed by the project. Re-keying now costs one migration and an amendment to three merged slices, S-8, S-9 and S-10. Re-keying at slice thirty costs the same migration plus every slice built on the old key.",
+      "risk": "The up migration writes rows, not only a schema. A project that holds steps gets a feature it did not ask for, titled with the project name. The down migration cannot reverse a feature the operator added afterwards, and it says so in its own comment."
+    },
+    {
+      "id": "S-38",
+      "milestone": 19,
+      "name": "A feature is delivered in milestones",
+      "intention": "Group the steps of a feature, so a reader sees what a run of steps adds up to.",
+      "user_actions": [
+        2,
+        9
+      ],
+      "depends_on": [
+        "S-37"
+      ],
+      "contracts": [
+        "TABLE-4",
+        "STORE-22",
+        "GRAMMAR-1",
+        "WIRE-20",
+        "WIRE-8",
+        "STORE-5",
+        "TABLE-2",
+        "LEVEL-1"
+      ],
+      "partial_contracts": {
+        "TABLE-2": "The milestone column that migration 0067 adds.",
+        "GRAMMAR-1": "The milestone heading, its intention line, and every milestone refusal. The contract labels come in S-43.",
+        "STORE-5": "The milestones written in the same transaction as the steps.",
+        "WIRE-8": "The milestones field on the response.",
+        "LEVEL-1": "The milestone level, which completes the contract."
+      },
+      "touches": [
+        "internal/store/migrations/0067_a_feature_is_delivered_in_milestones.up.sql",
+        "internal/store/migrations/0067_a_feature_is_delivered_in_milestones.down.sql",
+        "internal/store/store.go",
+        "internal/store/postgres.go",
+        "internal/store/memory.go",
+        "internal/store/storetest/storetest.go",
+        "proto/quaycrew/v1/controlplane.proto",
+        "internal/controlplane/design.go",
+        "features/path.feature",
+        "features/path_steps_test.go"
+      ],
+      "changes": "A fourth table, one store method, a Milestone message, and a milestone column on the step table. The path document gains a heading above the steps, reading # 4. A design carries a numbered path, with one line under it. SetPath writes the milestones and the steps from that one document, in one transaction.",
+      "proves": "features/path.feature. A document with three milestone headings writes three milestone rows, and each step carries the number of the milestone above it. A document with no milestone heading gives every step a milestone of 0. Two steps numbered 1 under different milestones are refused, naming both lines. A document opening with a hash line that carries no number parses, and that line is ignored.",
+      "note": "Step numbers are unique across the feature, not inside a milestone. That is the trap in this grammar, because a reader expects the numbering to start again under each milestone. The refusal says so in those words."
+    },
+    {
+      "id": "S-39",
+      "milestone": 17,
+      "name": "The operator closes a feature",
+      "intention": "Let the operator say a feature finished, so the record of the work stops growing.",
+      "user_actions": [
+        9
+      ],
+      "depends_on": [
+        "S-38"
+      ],
+      "contracts": [
+        "STORE-21",
+        "WIRE-24",
+        "COMMAND-27",
+        "COMMAND-28",
+        "COMMAND-29",
+        "TABLE-3"
+      ],
+      "partial_contracts": {
+        "TABLE-3": "The writes to state, which complete the table's contract."
+      },
+      "touches": [
+        "internal/store/store.go",
+        "internal/store/postgres.go",
+        "internal/store/memory.go",
+        "internal/store/storetest/storetest.go",
+        "proto/quaycrew/v1/controlplane.proto",
+        "internal/controlplane/design.go",
+        "cmd/krewe/feature.go",
+        "internal/manual/manual.go",
+        "features/path.feature",
+        "features/path_steps_test.go"
+      ],
+      "changes": "One store method, one remote procedure call, and the words krewe feature done, krewe feature stop and krewe feature open. Closing a feature warns about each step under it that is not finished, and it does not refuse. The operator decides when a feature is finished.",
+      "proves": "features/path.feature. Closing a feature with a taken step prints a warning naming that step, and closes it anyway. A state word outside the three is refused, naming the three. The steps of a closed feature read back unchanged. Reopening a closed feature writes the word open.",
+      "why_before_s41": "S-41 leaves a closed feature out of the path document a session reads. Without these verbs nothing can close a feature, so no scenario can prove that rule."
+    },
+    {
+      "id": "S-40",
+      "milestone": 19,
+      "name": "The path listing groups the steps under their milestones",
+      "intention": "Let the operator read where the feature reached, without counting rows by hand.",
+      "user_actions": [
+        5
+      ],
+      "depends_on": [
+        "S-39"
+      ],
+      "contracts": [
+        "COMMAND-7"
+      ],
+      "partial_contracts": {
+        "COMMAND-7": "The milestone grouping, the count on each heading, and the count under the list. The feature number and the whole feature listing shipped in S-37."
+      },
+      "touches": [
+        "cmd/krewe/path.go",
+        "internal/controlplane/design.go",
+        "features/path.feature",
+        "features/path_steps_test.go"
+      ],
+      "changes": "krewe path prints each milestone as a heading carrying its number, its title and a count reading so many steps and so many done. The steps print under it, in number order. One line under the whole list counts the steps of the feature by state, and one line says which step is next.",
+      "proves": "features/path.feature. A path of five steps under two milestones prints two headings, five step lines and a count. Each heading carries the count of its own steps and how many are done. A step whose milestone is 0 prints under the heading no milestone. With no feature number, two open features print two headings and a closed third one is left out.",
+      "note": "This answers the question the operator asked of the tool: where is this project. Before it, the honest answer was that somebody reads the git log."
+    },
+    {
+      "id": "S-41",
+      "milestone": 19,
+      "name": "The path document a session reads names each step's milestone",
+      "intention": "Let a session see which milestone its step belongs to, and what the steps around it reached.",
+      "user_actions": [
+        3
+      ],
+      "depends_on": [
+        "S-40"
+      ],
+      "contracts": [
+        "RENDER-3"
+      ],
+      "partial_contracts": {
+        "RENDER-3": "The feature heading, the milestone heading, the milestone line in each block, and the rule that a closed feature is left out. The state line shipped in S-9, the result line in S-12 and the proof line in S-20."
+      },
+      "touches": [
+        "internal/controlplane/design.go",
+        "internal/controlplane/server.go",
+        "features/path.feature",
+        "features/path_steps_test.go"
+      ],
+      "changes": "Every render writes .krewe/path.md with one heading per open feature, one heading per milestone, and one block per step. Each block names its milestone, so a reader who opens the file at one step still knows where the step sits. A feature that is done or stopped is left out.",
+      "proves": "features/path.feature. A session dispatched into a project with two open features reads both in .krewe/path.md, each under its own heading. Each step block names its milestone. Closing a feature takes it out of the file on the next dispatch. Reopening it brings it back.",
+      "note": "Leaving a closed feature out is what keeps this file from growing with every finished feature. A session opens it on demand, so the cost is a read and not context."
+    },
+    {
+      "id": "S-42",
+      "milestone": 20,
+      "name": "A project carries a contracts document",
+      "intention": "Give a session the contracts to build against, in a file it opens rather than in the memory file it always pays for.",
+      "user_actions": [
+        1
+      ],
+      "depends_on": [
+        "S-41"
+      ],
+      "contracts": [
+        "STORE-23",
+        "WIRE-25",
+        "WIRE-1",
+        "RENDER-8",
+        "COMMAND-30",
+        "TABLE-1"
+      ],
+      "partial_contracts": {
+        "TABLE-1": "The contracts column that migration 0068 adds.",
+        "WIRE-1": "The contracts field on the Design message."
+      },
+      "touches": [
+        "internal/store/migrations/0068_a_project_carries_a_contracts_document.up.sql",
+        "internal/store/migrations/0068_a_project_carries_a_contracts_document.down.sql",
+        "internal/store/store.go",
+        "internal/store/postgres.go",
+        "internal/store/memory.go",
+        "internal/store/storetest/storetest.go",
+        "proto/quaycrew/v1/controlplane.proto",
+        "internal/controlplane/design.go",
+        "internal/controlplane/server.go",
+        "cmd/krewe/design.go",
+        "internal/manual/manual.go",
+        "features/design.feature",
+        "features/design_steps_test.go"
+      ],
+      "changes": "One column on the design row, one store method, one remote procedure call, and the word krewe design contracts. Every render writes .krewe/contracts.md into the session's working directory, exactly as it writes .krewe/design.md.",
+      "proves": "features/design.feature. A session dispatched into a project with a contracts document finds it whole at .krewe/contracts.md. Setting the contracts document on an approved design leaves the design approved. A project with no contracts document has no such file.",
+      "note": "Writing the contracts document does not clear the approval. The approval is the operator's word about the design body, and the contracts document is read from that body. This project carries 118 contracts across 43 slices, which is why it is a file the model opens and not text in a memory file."
+    },
+    {
+      "id": "S-43",
+      "milestone": 21,
+      "name": "A step names the contracts it builds",
+      "intention": "Carry the scoping the operator writes by hand today, so the take text says which part of a contract is this step's.",
+      "user_actions": [
+        3
+      ],
+      "depends_on": [
+        "S-42"
+      ],
+      "contracts": [
+        "TABLE-2",
+        "GRAMMAR-1",
+        "WIRE-2",
+        "RENDER-4"
+      ],
+      "partial_contracts": {
+        "TABLE-2": "The contracts and contract_scope columns that migration 0069 adds, which complete the table.",
+        "GRAMMAR-1": "The two contract labels and their refusals, which complete the grammar.",
+        "WIRE-2": "The contracts and contract_scope fields.",
+        "RENDER-4": "The two contract blocks and the pointer to .krewe/contracts.md. The step body shipped in S-10, and S-16 replaces the tail."
+      },
+      "touches": [
+        "internal/store/migrations/0069_a_step_names_the_contracts_it_builds.up.sql",
+        "internal/store/migrations/0069_a_step_names_the_contracts_it_builds.down.sql",
+        "internal/store/store.go",
+        "internal/store/postgres.go",
+        "internal/store/memory.go",
+        "internal/store/storetest/storetest.go",
+        "proto/quaycrew/v1/controlplane.proto",
+        "internal/controlplane/design.go",
+        "features/path.feature",
+        "features/path_steps_test.go"
+      ],
+      "changes": "Two columns on the step table, two labels in the path document, and two blocks in the take text. A step names the contracts it builds, one identifier per line. It names the scope of each, one line per contract, saying which part is this step's and which part waits for a later step.",
+      "proves": "features/path.feature. A document naming two contracts and two scopes reads back on the step. A scope line naming a contract the step does not build is refused, naming the line. Taking that step dispatches a session whose text names both contracts, both scopes, and the contracts document. A step with no contracts produces text with no contracts label in it.",
+      "note": "Every step brief this project wrote by hand carried this scoping, copied out of the graph. The one time a contract was wrong, a session refused to build and asked, which cost a slice of work. Nothing checks that a named contract exists in the contracts document, and the deferred list in the design records that."
     }
   ]
 }

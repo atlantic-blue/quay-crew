@@ -1,6 +1,7 @@
 # System Design: a project carries its own context
 
 Written 2026-09-04, revised the same day after the operator read the first version.
+Amended 2026-09-05, after the operator settled the four levels.
 
 Status: proposed. The decisions in section 12 are settled. No code exists yet.
 
@@ -151,12 +152,15 @@ them.
 
 ### 3.1 Functional
 
-Eight actions, where the first version had five. Action 4 is new and action 6 grew a check, both from
+Nine actions, where the first version had five. Action 4 is new and action 6 grew a check, both from
 section 12.2. Action 7 is the trust ladder, from section 12.3. Action 8 is the operator's own
-commands, from section 12.5. Nothing was added for any other reason.
+commands, from section 12.5. Action 9 is the four levels, from section 12.6. Nothing was added for
+any other reason.
 
 **Action 1. A project holds a brief and a design.**
 - The operator sets a brief on a project. The brief is one paragraph: what this project is for.
+- The project also holds a contracts document, a second body beside the design. It states the input,
+  the output and every error of each thing the path builds.
 - A design session reads the brief, the project context and the repository, and writes a design.
 - The design is one document. It carries the requirements, the decisions and the shape.
 - Any write to the design body clears the approval. An approved design that somebody rewrote is not
@@ -233,6 +237,20 @@ commands, from section 12.5. Nothing was added for any other reason.
   trust level.
 - `/krewe:trust` prints the level and any standing offer, and raises it.
 - A slash command asks, runs the command line tool, and reads back. It never designs the product.
+
+**Action 9. A project holds features, and each feature is delivered in milestones.**
+- The operator adds a feature to a project. A feature carries a title and one line saying which part
+  of the project it narrows to.
+- A project grows features over time. A project holds one design, and that does not change.
+- The operator sets one feature's path. Setting it leaves every other feature's path whole.
+- The path document carries the milestones. One heading above the steps names a milestone, and the
+  steps under it belong to it.
+- The path listing groups the steps under their milestone titles. It counts each milestone and the
+  whole feature, so the operator reads where the work reached without counting rows.
+- A step names the contracts it builds, and the scope of each. The scope says which part of the
+  contract is this step's, and which part waits for a later step.
+- The operator closes a feature. A closed feature keeps its steps, and it leaves the path document
+  the session reads.
 
 ### 3.2 Non functional
 
@@ -417,11 +435,12 @@ flowchart TD
   OP -->|"krewe design approve"| CP
   OP -->|"krewe step take, approve, done"| CP
   CP --> ST[("Postgres store")]
-  ST --> D["project_designs: brief, body, approved, proof command"]
-  ST --> P["project_steps: number, title, proof, restatement, proof state"]
+  ST --> D["project_designs: brief, body, contracts, approved, proof command"]
+  ST --> F["features and milestones: what the project narrows to, and how it is delivered"]
+  ST --> P["feature_steps: number, title, milestone, proof, restatement, proof state"]
   CP -->|"renderContext"| OUTER["Outer memory file: system and workspace context, skills index"]
   CP -->|"renderContext"| INNER["Inner memory file: design summary, project context, restatement, session context"]
-  CP -->|"writes beside it"| DOC["Design document and path document, read on demand"]
+  CP -->|"writes beside it"| DOC["Design, contracts and path documents, read on demand"]
   CP -->|"Dispatch with the composed step text"| SESS["Session in its own sandbox"]
   OUTER --> SESS
   INNER --> SESS
@@ -474,14 +493,14 @@ slice writes. Those are different questions, and the difference is measurable.
 Measured on `.greenlight/GRAPH.json` as it stands. Take every pair of slices with no dependency path
 between them in either direction. Then intersect the files each one names:
 
-Measured on the graph of 35 slices:
+Measured on the graph of 43 slices, after the four level revision added eight:
 
-- 154 pairs have no ordering between them, and 66 of those share at least one file.
-- `features/path.feature` is in 43 of the 66. Its step definitions are in 34.
-- `internal/manual/manual.go` is in 29, because it holds the usage text that every new command
+- 170 pairs have no ordering between them, and 70 of those share at least one file.
+- `features/path.feature` is in 43 of the 70. Its step definitions are in 34.
+- `internal/manual/manual.go` is in 33, because it holds the usage text that every new command
   writes. `internal/controlplane/design.go` is in 28, and `cmd/krewe/step.go` is in 27.
-- The widest single collision is seven files. S-11 shares seven with each of S-12, S-14, S-15 and
-  S-16.
+- The widest single collision is seven files. S-11 shares seven with each of eleven other slices,
+  and S-13 shares seven with each of three.
 
 This is an observation from the graph, and the design now acts on it. Several steps may be in flight,
 so two sessions can write one file. The take refuses that: it compares the `touches` field of the
@@ -503,6 +522,46 @@ alone:
 
 None of this is designed here. This section exists so a later reader does not read the dependency
 edges as a statement about safety to run in parallel.
+
+### 5.2 The four levels: a project, a feature, a milestone and a step
+
+The operator settled this shape on 2026-09-05, and section 12.6 records it.
+
+A project is one. It holds one brief, one design, one contracts document and one approval. Nothing
+about that moves down a level.
+
+A feature is many per project. It carries a number, a title, and one line saying which part of the
+project it narrows to. A project grows features over time.
+
+A milestone belongs to one feature. It carries a number, a title and one line.
+
+A step belongs to one milestone. It carries everything the step table holds.
+
+```mermaid
+flowchart TD
+  P["Project: one brief, one design, one contracts document, one approval"]
+  P --> F1["Feature 1: a narrowed part of the project"]
+  P --> F2["Feature 2: a later part"]
+  F1 --> M1["Milestone 1"]
+  F1 --> M2["Milestone 2"]
+  M1 --> S1["Step 1"]
+  M1 --> S2["Step 2"]
+  M2 --> S3["Step 3"]
+  F2 --> M3["Milestone 1 again, because a number restarts in each feature"]
+  M3 --> S4["Step 1 again, because a step number restarts in each feature"]
+```
+
+This project's own build is one feature. Its roadmap holds twenty one milestones: sixteen from the
+first design, and five that this revision added.
+
+Two rules fall out of the shape, and neither one is obvious.
+
+Feature numbers restart in each project, and milestone numbers restart in each feature. Step numbers
+restart in each feature, and not in each milestone. So a feature holds one step 3, and `after` keeps
+naming a lower step number in the same path.
+
+Gate 1 still reads the project's design. A feature carries no approval of its own. Taking a step is
+refused while the project's design carries no approval, whichever feature the step sits in.
 
 ## 6. Data model, field level
 
@@ -544,6 +603,9 @@ design, which is the normal state.
 - `project` text, primary key, references `projects (id)` on delete cascade
 - `brief` text not null default ''. What the project is for. One paragraph. The operator writes it.
 - `body` text not null default ''. The design document, whole. Markdown.
+- `contracts` text not null default ''. The contracts document, whole. Markdown. It is a second
+  body, and writing it does not clear the approval. The approval is the operator's word about the
+  design body, and the contracts document is read from that body.
 - `approved` boolean not null default false. The operator's word. Any write to `body` sets it false.
 - `approved_at` timestamptz, null while `approved` is false
 - `written_by` text not null default ''. The session identifier that last wrote `body`. Empty when
@@ -599,11 +661,19 @@ A separate table rather than columns on `projects`, for two reasons. Every proje
 `projects`, and a design body is the largest text in the system. The row also carries its own
 timestamps and its own writer, which are facts about the design and not about the project.
 
-### 6.3 New table `project_steps`
+### 6.3 New table `feature_steps`
 
-One row per step of one project's path.
+One row per step of one feature's path. The first version of this document called it
+`project_steps` and keyed it by the project. Section 12.6 moved the key to the feature, and the
+table is named after the row's owner, as `project_designs` is.
 
-- `project` text not null, references `projects (id)` on delete cascade
+- `feature` text not null, references `features (id)` on delete cascade
+- `milestone` integer not null default 0. Which milestone of the feature this step belongs to. Zero
+  means the step belongs to no milestone.
+- `contracts` text not null default ''. The contracts this step builds, one identifier per line.
+- `contract_scope` text not null default ''. One line per contract, reading
+  `<identifier>: <sentence>`. The sentence says which part is this step's, and which part waits for
+  a later step.
 - `number` integer not null. Where in the path, counting from one.
 - `title` text not null. One line, one intention.
 - `intention` text not null default ''. What changes and why, in the words a stranger needs.
@@ -640,14 +710,17 @@ One row per step of one project's path.
 - `finished_at` timestamptz, null until done or stopped
 - `created_at` timestamptz not null default now()
 - `updated_at` timestamptz not null default now()
-- primary key (`project`, `number`)
+- primary key (`feature`, `number`)
+
+Step numbers restart in each feature, so `after` keeps its meaning: a lower step number in the same
+path.
 
 Indexes:
-- The primary key serves the only ordinary read: one project's path in number order.
-- `create index if not exists project_steps_session_idx on project_steps (session) where session <> ''`.
+- The primary key serves the only ordinary read: one feature's path in number order.
+- `create index if not exists feature_steps_session_idx on feature_steps (session) where session <> ''`.
   This answers "which step is this session on", which a session listing needs to draw one row.
-- No index on `proof_state` or on `state`. A whole path is read by the primary key prefix and filtered
-  in memory. An index nothing reads is a cost with no reader.
+- No index on `proof_state`, on `state` or on `milestone`. A whole path is read by the primary key
+  prefix, then filtered and grouped in memory. An index nothing reads is a cost with no reader.
 
 The four state words:
 - `ready`: nobody took it.
@@ -663,8 +736,11 @@ Three phases a reader wants, each derived from the row and none of them stored:
 
 Rules, each proved by a scenario:
 - A step number must be one or greater. Zero and negative numbers are refused.
-- `after` must name a lower numbered step that exists in the same path, or be zero. A step cannot wait
-  for itself.
+- `after` must name a lower numbered step that exists in the same feature's path, or be zero. A step
+  cannot wait for itself.
+- `milestone` must be zero, or a milestone number that exists for the same feature.
+- `contract_scope` names only identifiers that `contracts` names.
+- Writing a path replaces one feature's path. Another feature of the same project is untouched.
 - When the path document names no predecessor, krewe sets `after` to the previous number in the path.
   Step one gets zero. A numbered path is a chain unless the document says otherwise, and the gate is
   worth nothing when every step defaults to waiting for nothing.
@@ -696,17 +772,24 @@ Rules, each proved by a scenario:
   back to `taken`, writes `operator_agreed` of 'no', and lowers the project's trust level by one.
 - Reopening a step the operator closed is refused. Nothing about trust is learned from the operator
   disagreeing with the operator.
-- Deleting a project deletes its steps through the cascade.
+- Deleting a project deletes its features. Each feature deletes its steps and its milestones through
+  the cascades.
 
 ### 6.4 The single dependency field, and its limit
 
 `after` is one integer, not a list. A path is numbered and mostly runs in order, so one predecessor
 answers most real paths.
 
-Marked as an inference, not an observation. Nobody measured how many real paths need two
-predecessors, because no such path exists in this system yet. A step that truly waits for two others
-names the later of the two, and says the rest in its `intention`. Section 14 records the full
-dependency graph as deferred, and section 5.1 states what the graph does not record.
+This is now an observation, and the first version of this document marked it an inference. The
+measurement is on `.greenlight/GRAPH.json`, which holds the only real path this project has. Of its
+43 slices, none carries more than one dependency. One slice carries none, and 42 carry exactly one.
+The same held at 35 slices, before this revision added eight. So one predecessor carries this path,
+and nothing is lost by the limit.
+
+The limit stays, and so does the deferral. One path is one measurement, and a later path may need
+two predecessors on one step. A step that truly waits for two others names the later of the two, and
+says the rest in its `intention`. Section 14 records the full dependency graph as deferred, and
+section 5.1 states what the graph does not record.
 
 ### 6.5 Field mapping, store to wire
 
@@ -715,19 +798,72 @@ order:
 
 `project`, `brief`, `body`, `approved`, `approved_at`, `written_by`, `proof_command`,
 `proof_count_pattern`, `proof_timeout_seconds`, `trust_level`, `trust_threshold`, `trust_run`,
-`trust_offered`, `trust_agreements`, `trust_disagreements`, `steps_in_flight_cap`, `updated_at`.
+`trust_offered`, `trust_agreements`, `trust_disagreements`, `steps_in_flight_cap`, `updated_at`,
+`contracts`.
 
 `created_at` is not on the wire. Nothing reads it.
 
-Every field of `project_steps` maps to the message `Step`, under the same name. The fields, in
+Every field of `feature_steps` maps to the message `Step`, under the same name. The fields, in
 order:
 
-`project`, `number`, `title`, `intention`, `touches`, `proof`, `proof_scenario`, `proof_state`,
+`feature`, `number`, `title`, `intention`, `touches`, `proof`, `proof_scenario`, `proof_state`,
 `proof_scenarios_run`, `proof_output`, `proof_ran_at`, `restatement`, `restated_at`,
 `restatement_approved`, `restatement_approved_at`, `after`, `state`, `session`, `result`,
 `closed_by`, `operator_agreed`, `taken_at`, `finished_at`.
 
+Then the three fields this revision added: `milestone`, `contracts` and `contract_scope`.
+
 `created_at` and `updated_at` are not on the wire.
+
+Every field of `features` maps to the message `Feature`, under the same name. Every field of
+`milestones` maps to the message `Milestone`, under the same name, except its two stamps, which
+nothing reads.
+
+### 6.6 New table `features`
+
+Many rows per project. One row is one narrowed part of the project.
+
+- `id` text, primary key. The identifier the step table and the milestone table point at.
+- `project` text not null, references `projects (id)` on delete cascade
+- `number` integer not null. Where in the project, counting from one. This is the number a person
+  types.
+- `title` text not null. One line.
+- `intention` text not null default ''. One line. Which part of the project this feature narrows to.
+- `state` text not null default 'open'. One of 'open', 'done', 'stopped'.
+- `created_at` timestamptz not null default now()
+- `updated_at` timestamptz not null default now()
+- unique (`project`, `number`)
+
+Rules, each proved by a scenario:
+- The number is the highest number in the project plus one. The first feature of a project is 1.
+- The read of the highest number and the insert are one statement. Two callers at one moment then
+  never take the same number.
+- A number is never reused. A feature that stopped keeps its number.
+- Closing a feature keeps its steps and its milestones. A state is not a delete.
+- A feature carries no design and no approval. Those belong to the project.
+- Deleting a project deletes its features through the cascade.
+
+### 6.7 New table `milestones`
+
+Many rows per feature. A milestone groups the steps of one feature.
+
+- `feature` text not null, references `features (id)` on delete cascade
+- `number` integer not null. Where in the feature, counting from one.
+- `title` text not null. One line.
+- `intention` text not null default ''. One line.
+- `created_at` timestamptz not null default now()
+- `updated_at` timestamptz not null default now()
+- primary key (`feature`, `number`)
+
+Rules, each proved by a scenario:
+- Numbers are unique inside the feature, and one or greater. They need not be contiguous.
+- Milestone numbers restart in each feature.
+- A milestone holds no state of its own. What a milestone reached is counted from the steps under
+  it, and it is never stored.
+- Only the path write makes a milestone. There is no command that writes one on its own, so one
+  document carries the whole path of one feature.
+- Zero is never a row. A step whose `milestone` is 0 belongs to no milestone.
+- Deleting a feature deletes its milestones through the cascade.
 
 ## 7. What a session gets, and how the restatement comes back
 
@@ -746,7 +882,8 @@ the top, before the project context. The section carries, and nothing else:
   store
 - one line: whether the design carries an approval, and when
 - one line: the path to the design document, `.krewe/design.md`, and an instruction to read it before
-  starting
+  starting. The contracts document is not named here, and the take text names it instead. This file
+  is read on every exec of every session in the project. It is capped at 400 characters.
 - one line: the step this session took, its number and its title, when a step was taken
 
 Target size: under 400 characters. Measured on every exec by `internal/contextspend`.
@@ -755,8 +892,12 @@ Two documents sit in the session's working directory and are written fresh befor
 builds a sandbox:
 
 - `/home/agent/workspace/.krewe/design.md`: the whole design body.
-- `/home/agent/workspace/.krewe/path.md`: every step, in number order, with its state, its proof
-  state and its result. A session on step 4 reads what steps 1 to 3 produced.
+- `/home/agent/workspace/.krewe/contracts.md`: the whole contracts document. It is a second body
+  beside the design, and it is large, which is why it is a file the model opens.
+- `/home/agent/workspace/.krewe/path.md`: every open feature, its milestones, and every step in
+  number order, with its state, its proof state and its result. A session on step 4 reads what steps
+  1 to 3 produced. A feature that is done or stopped is left out, which keeps the file from growing
+  with every finished feature.
 
 Neither is a memory file, so the model does not load them automatically. A dot directory rather than
 the working directory root, because a repository cloned into the working directory may hold its own
@@ -816,7 +957,7 @@ restatement handler instead of to session context.
 
 The handler, in `internal/controlplane/proof.go`:
 
-1. Find the step this session holds, through the session index on `project_steps`.
+1. Find the step this session holds, through the session index on `feature_steps`.
 2. When there is no such step, drop the text and do nothing. A restatement with no step is noise.
 3. When the text equals what the store holds, do nothing.
 4. When it differs, write it to `restatement`, set `restated_at`, set `restatement_approved` to false
@@ -839,6 +980,8 @@ Taking a step composes this:
 
 ```
 Step 3 of 7 on the path for <project>.
+Feature <feature number>: <feature title>
+Milestone <milestone number>: <milestone title>
 
 <title>
 
@@ -852,7 +995,14 @@ What proves it
 <proof>
 The scenario that proves it is named: <proof_scenario>
 
-The design is in .krewe/design.md. The whole path is in .krewe/path.md. Read both.
+The contracts this step builds
+<contracts>
+
+The scope of each contract
+<contract_scope>
+
+The design is in .krewe/design.md. The contracts are in .krewe/contracts.md. The whole path is
+in .krewe/path.md. Read all three.
 
 Write no code. Change no file in the repository. Write what you understood into your own
 CLAUDE.md, inside a section marked <!-- quay:restatement -->, with these six headings:
@@ -870,6 +1020,11 @@ step.
 The scenario named <proof_scenario> must exist and must pass when the step is finished. It
 must describe the value in "What proves it" above, not the shape of the code.
 ```
+
+The contracts block and the scope block are there for a measured reason. Every step brief this
+project wrote by hand carried that scoping, copied out of the graph. The one time a contract was
+wrong, a session refused to build and asked, which cost a slice of work. The system carries it now,
+so nobody types it.
 
 Nothing else changes. No new environment variable, no new mount, no new credential.
 
@@ -936,12 +1091,26 @@ Following the existing shape: a noun, then verbs under it, addresses instead of 
 - `krewe design approve [<address>]` records the approval.
 - `krewe design proof [<address>] "<command>"` sets the proof command. With no command it prints the
   one that is set, with the timeout and the count pattern.
+- `krewe design contracts [<address>] --file <path>` writes the contracts document from a file. With
+  no file it prints the document whole. It never clears the approval, and the output says so.
 
-`krewe path` on a project:
-- `krewe path [<address>]` lists every step with its number, title, state, proof state and session.
-- `krewe path set [<address>] --file <path>` replaces the path from a file.
+`krewe feature` on a project:
+- `krewe feature [<address>]` lists every feature with its number, title, state and step counts.
+- `krewe feature add [<address>] "<title>"` adds a feature and prints the number it took.
+- `krewe feature intention [<address>] <feature> "<text>"` sets the one line.
+- `krewe feature done [<address>] <feature>` and `krewe feature stop [<address>] <feature>
+  "<reason>"` close it. `krewe feature open [<address>] <feature>` is the way back.
 
-`krewe step`:
+`krewe path` on a feature:
+- `krewe path [<address>] [<feature>]` lists the steps of that feature, grouped under their
+  milestone titles, with a count on each milestone and a count for the whole feature. With no feature
+  number it prints every open feature.
+- `krewe path set [<address>] <feature> --file <path>` replaces one feature's path from a file. It
+  leaves every other feature whole.
+
+`krewe step`, where a step is named as one token, `<feature>.<number>`. A bare number named a whole
+step before the four levels, so it is in somebody's notes. It is refused now, and the refusal says to
+type `<feature>.<number>` and lists the features that exist.
 - `krewe step take [<address>] <number>` dispatches a session to restate that step.
 - `krewe step restatement [<address>] <number>` prints what the session wrote back, whole, with the
   time it was written and whether it is approved. It reads the session's file first, so it shows the
@@ -970,7 +1139,12 @@ The path file format for `krewe path set`: markdown, one heading per step, numbe
 field for the scenario. The design session writes it. The exact grammar is the architect's contract.
 
 Nothing is removed from the command line, so no entry is added to `removedCommands` or
-`removedFlags`. Four words become taken: `design`, `path`, `step` and `trust`.
+`removedFlags`. Five words become taken in this section: `design`, `path`, `step`, `trust` and
+`feature`. Section 8.3 takes a sixth, `commands`.
+
+One form is replaced rather than removed. A step used to be one bare number, and it is
+`<feature>.<number>` now. The refusal names what to type, so the way off the old form is tested and
+not guessed at.
 
 ### 8.2 Console
 
@@ -1025,9 +1199,18 @@ add a layer and no answer.
 
 ## 9. The protobuf changes
 
-In `proto/quaycrew/v1/controlplane.proto`. Two messages and sixteen service methods.
+In `proto/quaycrew/v1/controlplane.proto`. Four messages and twenty one service methods.
 
-Message `Design` and message `Step` carry the fields listed in section 6.5, in that order.
+Message `Design`, message `Step`, message `Feature` and message `Milestone` carry the fields
+listed in section 6.5, in that order.
+
+Five methods come from the four levels: `ListFeatures`, `AddFeature`, `SetFeatureIntention`,
+`FinishFeature` and `SetContracts`. A milestone gets no method of its own. `SetPath` writes the
+milestones from the path document, and `ListStepsResponse` carries them back, so a grouped listing
+needs one call.
+
+`SetPathRequest`, `ListStepsRequest` and every request that reaches a step carry a `feature` field
+where the first version carried a `project` field.
 
 Sixteen methods are added to `ControlPlaneService`:
 - `GetDesign`, `SetBrief`, `SetDesign`, `ApproveDesign`, `SetProofCommand`
@@ -1100,8 +1283,13 @@ mechanism to copy.
 
 No change to `deploy/docker-compose.yml`. No new environment variable. No new image.
 
-What ships: the migration pairs; one protobuf regeneration through `make proto`; a rebuilt tool and
-control plane.
+What ships: thirteen migration pairs, `0062` to `0074`, one per slice that adds columns; one
+protobuf regeneration through `make proto`; a rebuilt tool and control plane.
+
+Migration `0066` is the one to read before it runs. It renames a table and moves a primary key. It
+also writes rows. Every project that already holds steps gets one feature, and its steps point at
+that feature. Its down migration cannot reverse a feature the operator added afterwards, and it says so in
+its own comment.
 
 The existing `make upgrade` covers all of it. An operator on an older tool sees `unimplemented` for
 the new calls, which is the ordinary result of a new call against an old server.
@@ -1161,7 +1349,7 @@ followed and each is settled.
 
 What this changes in the rest of the document. Gate 3 now refuses an unchecked step rather than a
 failing one. `krewe step check` and `krewe step reopen` are new commands, and `krewe trust` is a new
-noun. `project_designs` carries six trust columns and `project_steps` carries two.
+noun. `project_designs` carries six trust columns and the step table carries two.
 
 The number five is provisional and section 4 says so. Nothing measured it, because krewe never
 closed a step.
@@ -1184,8 +1372,9 @@ The limit of the collision check. It reads the `touches` field, which a design s
 that writes a file its `touches` does not name goes through the check. Nothing in this design reads
 the diff, so nothing catches that.
 
-Measured on this project's own graph: the widest wave holds five slices, and fourteen independent
-pairs share a file. With a cap of three, the last wave runs as two takes rather than one.
+Measured on this project's own graph, at 43 slices. It is 33 waves deep, and the widest wave holds
+three slices. Nine pairs that could run in one wave share a file. So a cap of three refuses no wave
+of this path. The file collision check is the part that does work here.
 
 ### 12.5 The operator's own commands, settled 2026-09-04
 
@@ -1201,6 +1390,38 @@ definitions. Three questions followed and each is settled.
 3. **Four commands ship: init, design, status and trust.** The path and the step get none. Taking a
    step and approving a restatement are one line each on the command line tool.
 
+### 12.6 The four levels, settled 2026-09-05
+
+The operator asked how we know where the project reached. The honest answer was that somebody reads
+the git log. The design had two levels where the work has four, it stored no contracts, and
+`krewe path` counted nothing. Seven things followed and each is settled.
+
+1. **A project holds one design, and many features.** A feature is a narrowed part of the project.
+   It carries a title and one line saying what it narrows to. Nothing about the brief, the design,
+   the contracts document or the approval moves down a level.
+2. **A feature is delivered in milestones, and a milestone holds steps.** A milestone carries a
+   number, a title and one line. A step carries what the step table already holds.
+3. **The step table is keyed by the feature, and it is renamed `feature_steps`.** Rejected: keeping
+   the project key and adding a feature column beside it, which leaves two answers to the question
+   of who owns a step. The cost of doing it now is one migration and an amendment to three merged
+   slices, S-8, S-9 and S-10. The cost at slice thirty is the same migration plus every slice built
+   on the old key.
+4. **The path write replaces one feature's path.** Before this, a second feature would wipe the
+   first.
+5. **The path document carries the milestones.** One heading above the steps names a milestone. One
+   document still carries the whole path of one feature, so there is one grammar in one place.
+   Rejected: a second document, and rejected a command that writes a milestone on its own.
+6. **The project carries a contracts document, and it renders into the session's working
+   directory.** It is a second body beside the design, and the render is the one that already
+   carries the design. This project holds 118 contracts across 43 slices, which is too large for a
+   memory file and right for a file the model opens.
+7. **A step names the contracts it builds, and the scope of each.** The take text carries both.
+   Every step brief this project wrote by hand carried that scoping, copied out of the graph. The
+   one time a contract was wrong, a session refused to build and asked, which cost a slice of work.
+
+The single `after` integer is not reopened by any of this. Section 6.4 now measures it, and the
+answer is that one predecessor carries this path.
+
 ## 13. The new risk: the step stops twice
 
 State this honestly, because it is the cost of the four decisions above.
@@ -1210,12 +1431,12 @@ mark it done. Now one step costs five commands and two reads at trust level 0. T
 restatement, approve it, run the check, read the verdict, then mark it done. At level 1 it costs four
 commands and two reads, because a passing check closes the step.
 
-On a path of 35 steps, which is the size of the path in this project's own graph today:
+On a path of 43 steps, which is the size of the path in this project's own graph today:
 
-- Commands go from about 70 to about 175 at level 0, and about 140 at level 1.
-- Points where the path stops and waits for the operator go from 35 to 70.
-- Restatements to read go from 0 to 35. A restatement of about 1,500 characters takes one to two
-  minutes to read properly. That is about 35 to 70 minutes of reading, spread across the path.
+- Commands go from about 86 to about 215 at level 0, and about 172 at level 1.
+- Points where the path stops and waits for the operator go from 43 to 86.
+- Restatements to read go from 0 to 43. A restatement of about 1,500 characters takes one to two
+  minutes to read properly. That is about 43 to 86 minutes of reading, spread across the path.
 - The proof run adds machine time, not operator time. In this repository one scenario runs in a few
   seconds inside a suite that takes about 42 seconds whole. That is an observation about the suite,
   and the time for one filtered scenario is not yet measured.
@@ -1263,4 +1484,11 @@ Each item matters and is not in this design.
 - **Taking or approving a step from the console with a key press.** The console draws the path. Acting
   from it is a second change.
 - **A path that spans two projects.** Probably wrong: a path belongs to one project.
+- **Krewe checking that a contract a step names exists in the contracts document.** A step names its
+  contracts and their scope, and nothing reads the document to confirm the identifier is real. A
+  wrong identifier reaches the session, which is what happens today by hand.
+- **A milestone that carries its own state.** What a milestone reached is counted from the steps
+  under it. A stored state would be a second answer that can disagree with the first.
+- **A step that moves between features.** A path write replaces one feature's path, and there is no
+  way to carry a taken step across.
 - **Visual acceptance evidence on a step.** A picture or a recording is a whole capability.

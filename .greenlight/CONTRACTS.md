@@ -1,6 +1,7 @@
 # Contracts: a project carries its own context
 
 Written 2026-09-04, and written again the same day after the design was revised three times.
+Amended 2026-09-05, after the operator settled the four levels.
 
 The source is `.greenlight/DESIGN.md`, `.greenlight/DECISIONS.md` and the code the design touches.
 
@@ -17,6 +18,7 @@ which contracts it satisfies.
 The groups are:
 
 - `REMOVE` for the dead code the work clears first.
+- `LEVEL` for the four levels a project is built from.
 - `TABLE` for a database table, at field level.
 - `STORE` for one method on the `Store` interface.
 - `WIRE` for one protobuf message or one service method.
@@ -67,17 +69,47 @@ and `COMMAND-20`, and it widened `TABLE-1`, `STORE-0`, `STORE-8`, `WIRE-1`, `WIR
 The commands revision renamed nothing either. It added `SLASH-1` to `SLASH-7` and `COMMAND-21` to
 `COMMAND-23`, and it widened the preamble of the COMMAND group from four taken words to five.
 
+## What the four level revision changed, 2026-09-05
+
+The operator settled a shape the design did not carry. A project holds one design and many features.
+A feature is delivered in milestones. A milestone holds steps. Six things moved.
+
+1. There is a `LEVEL` group. `LEVEL-1` states the four levels. `LEVEL-2` states how a step is
+   addressed after the key moves, and it lists every contract that reads differently because of it.
+2. The step table is renamed. `TABLE-2` is now `feature_steps`, keyed by (`feature`, `number`).
+   Migration `0066` renames it, moves the key, and carries the rows that exist.
+3. There are two more tables. `TABLE-3` holds `features` and `TABLE-4` holds `milestones`.
+4. `SetPath` replaces one feature's path, and it writes that feature's milestones in the same
+   transaction. Before this, a second feature would wipe the first.
+5. A project carries a contracts document, a second body beside the design. `RENDER-8` renders it
+   to `.krewe/contracts.md`, exactly as `RENDER-2` renders the design.
+6. A step names the contracts it builds, and the scope of each. `RENDER-4` puts both into the take
+   text, so nobody types the scoping by hand.
+
+Identifiers survive again. Nothing was renamed. The revision added `LEVEL-1`, `LEVEL-2`,
+`TABLE-3`, `TABLE-4`, `STORE-18` to `STORE-23`, `WIRE-19` to `WIRE-25`, `RENDER-8` and
+`COMMAND-24` to `COMMAND-30`. It widened `TABLE-1`, `TABLE-2`, `STORE-5`, `STORE-6`,
+`WIRE-1`, `WIRE-2`, `WIRE-7`, `WIRE-8`, `GRAMMAR-1`, `RENDER-2`, `RENDER-3`, `RENDER-4`,
+`COMMAND-7` and `COMMAND-8`.
+
 ## Decisions the architect took, beyond the design
 
 The design does not answer these. Each one is a decision, not a fact. The operator can reverse any
 of them.
 
-1. The migrations split into eight numbered pairs, `0062` to `0069`, one per slice that adds
+1. The migrations split into thirteen numbered pairs, `0062` to `0074`, one per slice that adds
    columns. Section 11 of the design says one pair. One reviewable pull request per slice forces the
    split. Migrations `0043` and `0044` already add one column each to `projects`, so this follows
-   the house style. The latest migration in the repository today is `0061`.
-   The numbers follow the order the slices ship, which is why the cap column takes `0065` and the
-   restatement columns moved from `0065` to `0066`.
+   the house style. Migrations `0062`, `0063` and `0064` shipped, and their numbers are fixed.
+
+   The numbers follow the order the slices ship. The four level revision took `0065` to `0069`,
+   because those five migrations land before every unbuilt slice. Five reserved numbers moved up by
+   five.
+
+   The cap column moved from `0065` to `0070`. The restatement columns moved from `0066` to
+   `0071`. The proof command columns moved from `0067` to `0072`. The proof result columns moved
+   from `0068` to `0073`. The trust columns moved from `0069` to `0074`. None of those five
+   shipped, so no applied migration moved.
 2. `SetPath` carries the markdown document, and the control plane parses it. The design says the
    grammar is the architect's contract. One grammar in one place keeps the console and the command
    line from drifting. It is the same reason the control plane composes the step text.
@@ -105,8 +137,8 @@ of them.
 11. Section 9 of the design says twelve service methods and then names sixteen. These contracts
     carry the sixteen it names.
 12. The collision check compares the `touches` field of the step against every step in state
-    `taken`, and it does that in the store, in the same statement as the take. A read then a write
-    in the control plane would let two takes pass the check at the same moment.
+    `taken`. The store does that in the same statement as the take. A read then a write in the
+    control plane would let two takes pass the check at the same moment.
 13. A step with an empty `touches` collides with nothing and takes a slot under the cap. The design
     does not say which, and refusing every such take would block a path whose design session left
     the field empty. GRAMMAR-1 warns instead.
@@ -121,6 +153,31 @@ of them.
     The house style is addresses instead of flags, and these files belong to the machine rather than
     to a project. The design already refuses a flag that forces a write.
 
+The five below came with the four level revision.
+
+17. A step is named as one token, `<feature>.<number>`. The address already holds three parts, and
+    the third is a session, so a feature cannot go in the address. Two bare numbers in a row is the
+    other option, and a reader swaps them. LEVEL-2 states the refusal that meets the old form.
+18. The milestones travel inside `ListStepsResponse` rather than through a service method of their
+    own. A caller that draws a grouped listing needs both, and one call cannot answer half of it.
+    The store keeps `ListMilestones` as STORE-22, because the render reads milestones without
+    reading steps.
+19. The step table is named `feature_steps`. The house names a table after the row's owner, as
+    `project_designs` does, and the key is (`feature`, `number`). Rejected: keeping
+    `project_steps`, which names a column the table no longer holds. Rejected: a bare `steps`,
+    which reads as one global list in a store where every other table carries its owner.
+20. Writing the contracts document does not clear the approval. The approval is the operator's word
+    about the design body, and the contracts document is read from that body. Rejected: clearing it,
+    which asks the operator to approve the design again every time an architect writes a contract.
+    The operator can reverse this.
+21. The pointer to `.krewe/contracts.md` goes in the take text of RENDER-4, and not in the memory
+    file of RENDER-1. The memory file is read on every exec of every session in the project, and it
+    is capped at 400 characters. A fourth pointer there would cut the brief further.
+
+One word now names two things in this repository. `features/` holds the scenario files, and a
+feature is a level of this model. The prose says "a feature file" for the first and "a feature" for
+the second, everywhere.
+
 ## The order of the work
 
 ```mermaid
@@ -134,8 +191,16 @@ flowchart TD
   S6 --> S8["S-8 a project holds a numbered path"]
   S8 --> S9["S-9 the path document reaches the session"]
   S9 --> S10["S-10 the operator takes a step"]
-  S10 --> S11["S-11 a path protects the steps somebody took"]
-  S10 --> S12["S-12 a step records what came of it"]
+  S10 --> S36["S-36 a project holds features"]
+  S36 --> S37["S-37 a path belongs to a feature"]
+  S37 --> S38["S-38 a feature is delivered in milestones"]
+  S38 --> S39["S-39 the operator closes a feature"]
+  S39 --> S40["S-40 the path listing groups by milestone"]
+  S40 --> S41["S-41 the path document names each milestone"]
+  S41 --> S42["S-42 a project carries a contracts document"]
+  S42 --> S43["S-43 a step names the contracts it builds"]
+  S43 --> S11["S-11 a path protects the steps somebody took"]
+  S43 --> S12["S-12 a step records what came of it"]
   S12 --> S13["S-13 the path says which step is next"]
   S12 --> S14["S-14 several steps run at once, capped"]
   S14 --> S15["S-15 a take refuses a shared file"]
@@ -162,6 +227,10 @@ flowchart TD
 ```
 
 S-5 is the gate. It costs no code. If the answer is no, every slice after it is cancelled.
+
+S-36 to S-43 sit between S-10 and everything else. S-37 moves the key of the step table from the
+project to the feature. Every unbuilt slice hangs off S-11 or S-12, and both wait for S-43. So no
+slice after this chain is built on the old key.
 
 Slice identifiers after S-13 moved by two, because milestone 7 inserted two slices. No contract
 identifier moved. The commands revision appended S-32 to S-35 and moved nothing.
@@ -271,6 +340,110 @@ Acceptance criteria:
 Steps:
 - Run `make constant-branches` and read what it prints.
 
+## LEVEL: the four levels a project is built from
+
+### LEVEL-1: a project, a feature, a milestone and a step
+
+Boundary: the model every other contract in this file is written against.
+
+A project is one. It holds one brief, one design, one contracts document and one approval. Nothing
+about those moves down a level.
+
+A feature is many per project. It carries a number, a title, and one line saying which part of the
+project it narrows to. A project grows features over time.
+
+A milestone belongs to one feature. It carries a number, a title and one line.
+
+A step belongs to one milestone. It carries everything the step table holds today.
+
+```mermaid
+flowchart TD
+  P["Project: one brief, one design, one contracts document, one approval"]
+  P --> F1["Feature 1: a narrowed part of the project"]
+  P --> F2["Feature 2: a later part"]
+  F1 --> M1["Milestone 1"]
+  F1 --> M2["Milestone 2"]
+  M1 --> S1["Step 1"]
+  M1 --> S2["Step 2"]
+  M2 --> S3["Step 3"]
+  F2 --> M3["Milestone 1 again, because a number restarts in each feature"]
+  M3 --> S4["Step 1 again, because a step number restarts in each feature"]
+```
+
+Errors: none. This contract states a model, and the tables under it carry the behaviour.
+
+Invariants:
+- A project holds one design and one approval. A feature carries no approval of its own.
+- Gate 1 reads the project's design. Taking a step is refused while that design carries no approval,
+  whichever feature the step sits in.
+- Feature numbers restart in each project.
+- Milestone numbers restart in each feature.
+- Step numbers restart in each feature, and not in each milestone. So a feature holds one step 3, and
+  `after` keeps naming a lower step number in the same path.
+- A step may belong to no milestone. Its `milestone` is then 0, and 0 is not a row in `milestones`.
+- A feature holds a path. A project does not.
+
+Verification: verify
+Acceptance criteria:
+- A project with two features holds two paths. Setting the path of one leaves the other whole.
+- Step 1 exists in each of two features at the same time.
+- Taking a step in the second feature is refused while the project's design carries no approval.
+
+### LEVEL-2: how a step is addressed after the key moves
+
+Boundary: every contract in this file that names a step.
+
+Migration `0066` moves the key of the step table from the project to the feature. This contract
+states what that does to every contract already written, so no contract is left saying the old
+thing.
+
+The substitution is one rule. A store method, a request message or a command took a project to
+reach a step. It takes a feature instead.
+
+The store methods: STORE-5, STORE-6, STORE-7, STORE-8, STORE-9, STORE-11, STORE-12, STORE-13 and
+STORE-14 take a feature identifier where they took a project identifier.
+
+The service methods: WIRE-7, WIRE-8, WIRE-9, WIRE-10, WIRE-11, WIRE-12, WIRE-14 and WIRE-15 carry a
+`feature` field where they carried a `project` field. Each keeps its field number, because the field
+type does not change and no message shipped yet.
+
+The commands: COMMAND-7 to COMMAND-16 and COMMAND-20 name a step as one token, `<feature>.<number>`.
+`krewe step take me/house-bills 2.3` takes step 3 of feature 2.
+
+The console: CONSOLE-1 draws one feature's path and names the feature above it. CONSOLE-2 counts
+every open feature of the project in the project row, so the row keeps saying what the project
+reached.
+
+The renders: RENDER-3 writes one block per feature, and RENDER-4 names the feature the step sits in.
+
+Input: a feature identifier and a step number, wherever a project identifier and a step number were
+read before.
+
+Output: the same output each of those contracts already states.
+
+Errors:
+- A step token with no full stop in it is refused, on every command that names a step. The refusal
+  reads: "name a step as <feature>.<number>, for example 2.3", and it lists the project's open
+  features with their numbers. This is the way off the old form, and it is refused rather than
+  guessed at, even when the project holds exactly one feature.
+- A step token whose feature part names no feature of the project is refused, naming the number and
+  the features that exist.
+- A step token whose feature part or number part is not a number is refused, naming the token.
+
+Invariants:
+- The old form never resolves. A bare number was a whole step address before this change, so it is
+  in somebody's notes and in their shell history. It names nothing now, and it says so.
+- A feature alone is still a bare number, because a feature address has one part. `krewe path
+  me/house-bills 2` reads the path of feature 2.
+- Nothing else about any listed contract changes. The errors, the invariants and the output of each
+  one stand as they are written.
+
+Verification: verify
+Acceptance criteria:
+- `krewe step take me/house-bills 2.3` takes step 3 of feature 2.
+- `krewe step take me/house-bills 3` is refused, and the refusal names the form and the features.
+- Two features each hold a step 3, and taking one leaves the other ready.
+
 ## TABLE: the tables, at field level
 
 ### TABLE-1: table `project_designs`
@@ -296,12 +469,12 @@ The columns migration `0063` adds, for the approval:
 - `approved` boolean not null default false. The operator's word. Any write to `body` sets it false.
 - `approved_at` timestamptz, null while `approved` is false.
 
-The column migration `0065` adds, for the fan out:
+The column migration `0070` adds, for the fan out:
 
 - `steps_in_flight_cap` integer not null default 3. How many steps may be in state `taken` at one
   time. The number is provisional, and section 4 of the design says why.
 
-The columns migration `0067` adds, for the proof command:
+The columns migration `0072` adds, for the proof command:
 
 - `proof_command` text not null default `''`. The command krewe runs inside the session's sandbox to
   run one scenario. It must carry the token `{scenario}`. For this repository the value is
@@ -310,7 +483,12 @@ The columns migration `0067` adds, for the proof command:
   capture group, read against the run output for the number of scenarios that ran.
 - `proof_timeout_seconds` integer not null default 900. The budget for one proof run.
 
-The columns migration `0069` adds, for the trust ladder:
+The column migration `0068` adds, for the contracts document:
+
+- `contracts` text not null default `''`. The contracts document, whole, in markdown. It is a second
+  body beside the design, and RENDER-8 renders it into the session's working directory.
+
+The columns migration `0074` adds, for the trust ladder:
 
 - `trust_level` integer not null default 0. Level 0: krewe checks and the operator says done. Level
   1: krewe closes a step its own check passed.
@@ -336,6 +514,9 @@ Invariants:
 - Setting `body` sets `approved` to false and `approved_at` to null, in the same write.
 - Setting `brief` does not touch `approved`.
 - Setting any proof column does not touch `approved`. None of them changes what the design says.
+- Setting `contracts` does not touch `approved`. The approval is the operator's word about the
+  design body, and the contracts document is read from that body. Architect decision 20 records
+  this, and the operator can reverse it.
 - Setting `steps_in_flight_cap` does not touch `approved`, and it moves no trust column. The cap
   governs the fan out, not the word done.
 - Writing `body` does not touch any trust column. Trust records the checking, not the text.
@@ -351,6 +532,7 @@ Acceptance criteria:
 - The control plane starts twice against the same database without failing.
 - A design row reads back with the default proof command pattern, a trust level of 0 and a cap of
   3.
+- A design row reads back with an empty contracts document.
 Steps:
 - Read each up migration file and confirm every column above, with the stated default.
 
@@ -358,15 +540,23 @@ A separate table rather than columns on `projects`, for two reasons. Every proje
 `projects`, and a design body is the largest text in the system. The row also carries its own
 timestamps and its own writer.
 
-### TABLE-2: table `project_steps`
+### TABLE-2: table `feature_steps`
 
 Boundary: store to Postgres.
 
-One row per step of one project's path.
+One row per step of one feature's path.
 
-The columns migration `0064` creates:
+The table is named after the row's owner, as `project_designs` is. Its key is (`feature`,
+`number`), so `project_steps` would name a column the table does not hold. Architect decision 19
+records the name and what was rejected.
 
-- `project` text not null, references `projects (id)` on delete cascade.
+Migration `0064` created this table as `project_steps`, keyed by the project. Migration `0066`
+renames it and moves the key to the feature. The list below reads in the order the migrations ran.
+
+The columns migration `0064` created, as `project_steps`:
+
+- `project` text not null, references `projects (id)` on delete cascade. Migration `0066` drops
+  it.
 - `number` integer not null. Where in the path, counting from one.
 - `title` text not null. One line, one intention.
 - `intention` text not null default `''`. What changes and why, in the words a stranger needs.
@@ -386,9 +576,39 @@ The columns migration `0064` creates:
 - `finished_at` timestamptz, null until done or stopped.
 - `created_at` timestamptz not null default now().
 - `updated_at` timestamptz not null default now().
-- primary key (`project`, `number`).
+- primary key (`project`, `number`). Migration `0066` moves it.
 
-The columns migration `0066` adds, for the restatement:
+What migration `0066` changes, for the feature:
+
+- The table is renamed to `feature_steps`.
+- `feature` text not null, references `features (id)` on delete cascade, is added.
+- `project` is dropped.
+- The primary key moves from (`project`, `number`) to (`feature`, `number`).
+- Step numbers restart in each feature. So `after` keeps its meaning: a lower step number in the
+  same path.
+- The index `project_steps_session_idx` is renamed to `feature_steps_session_idx`, and it keeps
+  its shape.
+- The up migration carries the rows that exist. It adds one feature for every project that holds
+  steps. That feature is numbered 1 and takes the project name as its title. Every step of the
+  project then points at it. A project that holds no step gets no feature.
+- The down migration puts `project` back from each row's feature, drops `feature` and the
+  `milestone` column, and renames the table again. It then drops every feature the up migration
+  made. A feature the operator added after the up migration ran cannot be reversed, and its steps
+  move to the project that holds it. The down migration says so in its own comment.
+
+The column migration `0067` adds, for the milestone:
+
+- `milestone` integer not null default 0. Which milestone of the feature this step belongs to. Zero
+  means the step belongs to no milestone.
+
+The columns migration `0069` adds, for the contracts a step builds:
+
+- `contracts` text not null default `''`. The contracts this step builds, one identifier per line.
+- `contract_scope` text not null default `''`. One line per contract, reading
+  `<identifier>: <sentence>`. The sentence says which part of the contract is this step's, and which
+  part waits for a later step. RENDER-4 puts both into the take text.
+
+The columns migration `0071` adds, for the restatement:
 
 - `restatement` text not null default `''`. What the session wrote about this step, before it built
   anything. RENDER-5 states what it contains.
@@ -396,7 +616,7 @@ The columns migration `0066` adds, for the restatement:
 - `restatement_approved` boolean not null default false. The operator's word about this exact text.
 - `restatement_approved_at` timestamptz, null while `restatement_approved` is false.
 
-The columns migration `0068` adds, for the proof result:
+The columns migration `0073` adds, for the proof result:
 
 - `proof_state` text not null default `'unproven'`. One of `unproven`, `passing`, `failing`.
 - `proof_scenarios_run` integer not null default 0. How many scenarios the last run reported. Zero
@@ -405,7 +625,7 @@ The columns migration `0068` adds, for the proof result:
   output was cut, the first line says how much.
 - `proof_ran_at` timestamptz, null until a proof runs.
 
-The columns migration `0069` adds, for the trust ladder:
+The columns migration `0074` adds, for the trust ladder:
 
 - `closed_by` text not null default `''`. Who spoke the word: `operator` or `krewe`. Empty while the
   step is ready or taken.
@@ -413,11 +633,11 @@ The columns migration `0069` adds, for the trust ladder:
   verdict: `yes`, `no`, or empty while nothing is decided.
 
 Indexes:
-- The primary key serves the only ordinary read: one project's path in number order.
-- `project_steps_session_idx on project_steps (session) where session <> ''`. It answers which step
+- The primary key serves the only ordinary read: one feature's path in number order.
+- `feature_steps_session_idx on feature_steps (session) where session <> ''`. It answers which step
   a session is on, which a session listing needs to draw one row.
-- No index on `proof_state` or on `state`. A whole path is read by the primary key prefix and
-  filtered in memory. An index nothing reads is a cost with no reader.
+- No index on `proof_state`, on `state` or on `milestone`. A whole path is read by the primary
+  key prefix, then filtered and grouped in memory. An index nothing reads is a cost with no reader.
 
 The four state words:
 - `ready`: nobody took it.
@@ -432,24 +652,125 @@ Three phases a reader wants, each derived from the row and none of them stored:
 - Building: `state` is `taken` and `restatement_approved` is true.
 
 Errors:
-- An insert naming a project that does not exist fails on the foreign key, mapped to
+- An insert naming a feature that does not exist fails on the foreign key, mapped to
   `store.ErrNotFound`.
-- A second row with the same project and number fails on the primary key. The store never writes
+- A second row with the same feature and number fails on the primary key. The store never writes
   one, because `SetPath` replaces.
 
 Invariants:
 - `number` is one or greater. Zero and negative numbers never reach the table.
-- `after` is zero, or a lower number that exists in the same project's path. It never equals the
+- `after` is zero, or a lower number that exists in the same feature's path. It never equals the
   row's own number.
 - The state words do not grow past four. A phase a reader wants is derived from the row.
-- Deleting a project deletes its steps through the cascade.
+- `milestone` is zero, or a milestone number that exists for the same feature.
+- Two features each hold a step 3, and neither one blocks the other.
+- `contract_scope` names only identifiers that `contracts` names. GRAMMAR-1 refuses a document
+  that breaks this.
+- Deleting a project deletes its features, and each feature deletes its steps, through the cascades.
 - Each down migration drops what its up migration added, and says the data exists nowhere else.
 
 Verification: verify
 Acceptance criteria:
 - The control plane starts against an empty database and applies every migration above.
-- Deleting a project leaves no rows in `project_steps` for it.
-- A fresh step reads back with a proof state of `unproven` and an empty closer.
+- Deleting a project leaves no rows in `feature_steps` for it.
+- A fresh step reads back with a proof state of `unproven`, an empty closer and a milestone of 0.
+- A database holding steps written before migration `0066` reads them back after it, under one
+  feature numbered 1, with every column and every number kept.
+
+### TABLE-3: table `features`
+
+Boundary: store to Postgres.
+
+Many rows per project. One row is one narrowed part of the project. A project grows features over
+time, and each one is delivered in milestones.
+
+The columns migration `0065` creates:
+
+- `id` text, primary key. The identifier the step table and the milestone table point at.
+- `project` text not null, references `projects (id)` on delete cascade.
+- `number` integer not null. Where in the project, counting from one. This is
+  the number a person types.
+- `title` text not null. One line.
+- `intention` text not null default `''`. One line. It says which part of the project this feature
+  narrows to.
+- `state` text not null default `'open'`. One of `open`, `done`, `stopped`.
+- `created_at` timestamptz not null default now().
+- `updated_at` timestamptz not null default now().
+- unique (`project`, `number`).
+
+Indexes:
+- The primary key answers a read by identifier. Every step read goes through it.
+- `features_project_idx on features (project)`. It answers a listing of one project's features, in
+  number order.
+
+The three state words:
+- `open`: somebody works on this feature, or nobody started it yet.
+- `done`: the feature finished.
+- `stopped`: somebody stopped it. It keeps its steps.
+
+Errors:
+- An insert naming a project that does not exist fails on the foreign key. The store maps this to
+  `store.ErrNotFound`.
+- A second row with the same project and number fails on the unique constraint. The store never
+  writes one, because it reads the highest number and adds one in the same statement.
+
+Invariants:
+- `number` is one or greater.
+- The state words do not grow past three. This follows the four step state words: the state says who
+  holds the row, and nothing else.
+- Closing a feature keeps its steps and its milestones. A state is not a delete.
+- A feature carries no design, no contracts document and no approval. Those belong to the project.
+- Deleting a project deletes its features through the cascade. Each feature then deletes its steps
+  and its milestones through theirs.
+- Each down migration drops what its up migration added, and says the data exists nowhere else.
+
+Verification: verify
+Acceptance criteria:
+- The control plane starts against an empty database and applies the migration.
+- Adding two features to one project gives them the numbers 1 and 2.
+- Deleting a project leaves no rows in `features` for it.
+- A fresh feature reads back in state `open` with an empty intention.
+
+### TABLE-4: table `milestones`
+
+Boundary: store to Postgres.
+
+Many rows per feature. A milestone groups the steps of one feature. It is written by `SetPath`,
+from the same document that writes the steps, so a feature carries one path in one place.
+
+The columns migration `0067` creates:
+
+- `feature` text not null, references `features (id)` on delete cascade.
+- `number` integer not null. Where in the feature, counting from one.
+- `title` text not null. One line.
+- `intention` text not null default `''`. One line.
+- `created_at` timestamptz not null default now().
+- `updated_at` timestamptz not null default now().
+- primary key (`feature`, `number`).
+
+Indexes: the primary key serves the only read, which is one feature's milestones in number order.
+
+Errors:
+- An insert naming a feature that does not exist fails on the foreign key, mapped to
+  `store.ErrNotFound`.
+- A second row with the same feature and number fails on the primary key. `SetPath` replaces, so the
+  store never writes one.
+
+Invariants:
+- `number` is one or greater. Numbers are unique inside the feature. They need not be contiguous, so
+  a feature may hold milestones 1, 2 and 5.
+- Milestone numbers restart in each feature.
+- A milestone holds no state of its own. What a milestone reached is counted from the steps under
+  it, and it is never stored.
+- A milestone is written only by `SetPath`. There is no command that writes one on its own.
+- Deleting a feature deletes its milestones through the cascade.
+- Milestone `0` is never a row. A step whose `milestone` is 0 belongs to no milestone.
+
+Verification: verify
+Acceptance criteria:
+- The control plane starts against an empty database and applies the migration.
+- A path document with three milestone headings writes three rows, in number order.
+- Deleting a feature leaves no rows in `milestones` for it.
 
 ## STORE: the methods on the one `Store` interface
 
@@ -461,7 +782,9 @@ question. The exception is a rule only an atomic write can hold, and each such r
 
 Three value types carry what a caller may set, so no method takes more than three arguments:
 
-- `store.Step` carries `Number`, `Title`, `Intention`, `Touches`, `Proof`, `ProofScenario`, `After`.
+- `store.Step` carries `Number`, `Title`, `Intention`, `Touches`, `Proof`, `ProofScenario`, `After`,
+  `Milestone`, `Contracts` and `ContractScope`.
+- `store.Milestone` carries `Number`, `Title` and `Intention`.
 - `store.Finish` carries `State`, `Result`, `ClosedBy`.
 - `store.ProofSettings` carries `Command`, `CountPattern`, `TimeoutSeconds`.
 - `store.ProofResult` carries `State`, `ScenariosRun`, `Output`.
@@ -596,19 +919,29 @@ Acceptance criteria:
 ### STORE-5: `SetPath`
 
 Signature:
-`SetPath(ctx context.Context, project string, steps []store.Step) ([]*quaycrewv1.Step, error)`
+`SetPath(ctx context.Context, feature string, milestones []store.Milestone, steps []store.Step) ([]*quaycrewv1.Step, error)`
 
-Input: a project identifier and the whole path.
+Input: a feature identifier, the whole set of milestones, and the whole path.
 
-Output: the project's whole path after the write, in number order.
+Output: the feature's whole path after the write, in number order.
+
+It replaces one feature's path. It never touches another feature of the same project. Before the
+four level revision this method took a project. A second path then wiped the first.
 
 Errors:
-- `store.ErrNotFound` when the project does not exist or is deleted.
+- `store.ErrNotFound` when the feature does not exist.
 - `ErrPathHoldsTakenSteps` when the incoming path drops or renames a step in state `taken`, `done`
   or `stopped`. The error text names those numbers.
 
 Invariants:
-- Every step in state `ready` is replaced, including its `proof_scenario` and its `after`.
+- Every step in state `ready` is replaced, including its `proof_scenario`, its `after`, its
+  `milestone`, its `contracts` and its `contract_scope`.
+- The milestones of the feature are replaced whole, in the same transaction as the steps. A
+  milestone the document does not carry is dropped, whatever the steps under it reached. A milestone
+  holds no state of its own, so nothing is lost.
+- A step whose `milestone` names a milestone the document does not carry is refused. GRAMMAR-1
+  cannot see this, because it reads one document and the refusal needs the write.
+- Steps of another feature of the same project are untouched, in every case, including a refusal.
 - A step in state `taken`, `done` or `stopped` keeps its state, its session, its result, its proof
   columns, its restatement columns and its stamps. Its title, intention, touches, proof, scenario
   and `after` are updated from the incoming step.
@@ -624,21 +957,26 @@ Acceptance criteria:
   step 2.
 - Setting a path again, without step 2, succeeds when step 2 is ready.
 - Changing `after` on a ready step moves it past a stopped step.
+- Setting the path of feature 2 leaves the path of feature 1 whole.
+- A document with three milestone headings writes three milestone rows, and each step carries the
+  number of the milestone above it.
 
 ### STORE-6: `ListSteps`
 
-Signature: `ListSteps(ctx context.Context, project string) ([]*quaycrewv1.Step, error)`
+Signature: `ListSteps(ctx context.Context, feature string) ([]*quaycrewv1.Step, error)`
 
-Input: a project identifier, or the empty string for every project.
+Input: a feature identifier, or the empty string for every feature.
 
-Output: steps in number order. For every project, the order is by project identifier, then number.
+Output: steps in number order. For every feature, the order is by feature identifier, then number.
 
 Errors:
-- `store.ErrNotFound` when a named project does not exist or is deleted.
+- `store.ErrNotFound` when a named feature does not exist.
 
 Invariants:
-- A project with no path returns an empty slice and no error.
-- No pagination. One operator, tens of projects, tens of steps in a path.
+- A feature with no path returns an empty slice and no error.
+- No pagination. One operator, tens of features in a project, tens of steps in a path.
+- The empty identifier is what lets the console count the steps of a page of projects in one call,
+  as architect decision 7 states.
 
 Verification: auto
 The reason: order and emptiness are both stated, and the conformance suite proves both stores agree.
@@ -929,6 +1267,140 @@ Acceptance criteria:
 - Setting the cap to 5 reads back through `krewe path cap`.
 - Lowering the cap to 1 with two steps in flight leaves both sessions running.
 
+### STORE-18: `ListFeatures`
+
+Signature: `ListFeatures(ctx context.Context, project string) ([]*quaycrewv1.Feature, error)`
+
+Input: a project identifier, or the empty string for every project.
+
+Output: features in number order. For every project, the order is by project identifier, then
+number.
+
+Errors:
+- `store.ErrNotFound` when a named project does not exist or is deleted.
+
+Invariants:
+- A project with no feature returns an empty slice and no error.
+- Every state comes back. Filtering to the open ones is the caller's question.
+- No pagination. One operator, tens of projects, tens of features in a project.
+
+Verification: auto
+The reason: order and emptiness are both stated, and the conformance suite proves both stores agree.
+
+### STORE-19: `AddFeature`
+
+Signature:
+`AddFeature(ctx context.Context, project string, title string) (*quaycrewv1.Feature, error)`
+
+Input: a project identifier and one line of title.
+
+Output: the feature, carrying the number the store gave it.
+
+Errors:
+- `store.ErrNotFound` when the project does not exist or is deleted.
+
+Invariants:
+- The number is the highest number in the project plus one. The first feature of a project is 1.
+- The read of the highest number and the insert are one statement, so two callers at one moment
+  never take the same number.
+- A number is never reused. A feature that stopped keeps its number.
+- The identifier is made the way every other identifier in this store is made.
+- The intention starts empty. STORE-20 sets it.
+
+Verification: verify
+Acceptance criteria:
+- Adding two features to one project gives them the numbers 1 and 2.
+- Adding a feature to a second project starts again at 1.
+- Adding a feature to a project that does not exist is refused.
+
+### STORE-20: `SetFeatureIntention`
+
+Signature:
+`SetFeatureIntention(ctx context.Context, feature string, intention string) (*quaycrewv1.Feature, error)`
+
+Input: a feature identifier and one line.
+
+Output: the feature after the write.
+
+Errors:
+- `store.ErrNotFound` when the feature does not exist.
+
+Invariants:
+- It touches no other column, and it moves nothing on the project's design row.
+- An empty intention is kept. A feature that says nothing yet is the normal state.
+
+Verification: auto
+The reason: one write with one error, proved against both stores.
+
+### STORE-21: `FinishFeature`
+
+Signature:
+`FinishFeature(ctx context.Context, feature string, state string) (*quaycrewv1.Feature, error)`
+
+Input: a feature identifier, and the word `done` or `stopped`.
+
+Output: the feature after the write.
+
+Errors:
+- `store.ErrNotFound` when the feature does not exist.
+
+Invariants:
+- The store keeps the word it is given. The control plane refuses a word outside the three.
+- It touches no step and no milestone. A closed feature keeps its path.
+- A feature may be closed while steps under it are ready or taken. The control plane warns and does
+  not refuse, because the operator decides when a feature is finished.
+- Setting the state back to `open` is allowed, and it needs no separate method.
+
+Verification: verify
+Acceptance criteria:
+- Closing a feature leaves its steps readable and unchanged.
+- Reading the project's features shows the closed one with the word `done`.
+
+### STORE-22: `ListMilestones`
+
+Signature: `ListMilestones(ctx context.Context, feature string) ([]*quaycrewv1.Milestone, error)`
+
+Input: a feature identifier.
+
+Output: milestones in number order.
+
+Errors:
+- `store.ErrNotFound` when the feature does not exist.
+
+Invariants:
+- A feature with no milestone returns an empty slice and no error.
+- Nothing writes a milestone except `SetPath`, so this read always agrees with the last path
+  document.
+
+Verification: auto
+The reason: order and emptiness are both stated, and the conformance suite proves both stores agree.
+
+### STORE-23: `SetProjectContracts`
+
+Signature:
+`SetProjectContracts(ctx context.Context, project string, body string, writtenBy string) (*quaycrewv1.Design, error)`
+
+Input: a project identifier, the contracts document whole, and who wrote it.
+
+Output: the design row after the write.
+
+Errors:
+- `store.ErrNotFound` when the project does not exist or is deleted.
+
+Invariants:
+- The row is made when it is missing, exactly as `SetProjectDesign` makes it.
+- Writing the contracts body does not touch `approved`. The approval is the operator's word about
+  the design body, and the contracts document is read from that body. Architect decision 20 records
+  this, and the operator can reverse it.
+- Writing the contracts body does not touch any trust column and no step.
+- An empty body is kept. It is how a project says it carries no contracts document.
+
+Verification: verify
+Acceptance criteria:
+- Setting a contracts document on a project with an approved design leaves the approval in place.
+- Setting a contracts document on a project with no design row makes the row.
+- The body reads back whole, at 140,000 characters.
+
 ## WIRE: the protobuf messages and the service methods
 
 All of it lands in `proto/quaycrew/v1/controlplane.proto` and regenerates through `make proto`.
@@ -959,6 +1431,7 @@ message Design {
   int32 trust_agreements = 15;
   int32 trust_disagreements = 16;
   int32 steps_in_flight_cap = 17;
+  string contracts = 18;
 }
 ```
 
@@ -976,6 +1449,7 @@ Invariants:
 - A project with no design row answers with a `Design` carrying only `project`.
 - `trust_level` is 0 or 1. Nothing else is a level.
 - `steps_in_flight_cap` is between 1 and 20, and it is 3 on a row nobody set.
+- `contracts` is a second body beside `body`. Writing it does not clear `approved`.
 
 Verification: auto
 The reason: a message with a field list is fully proved by a compile and by the calls that carry it.
@@ -984,7 +1458,7 @@ The reason: a message with a field list is fully proved by a compile and by the 
 
 ```protobuf
 message Step {
-  string project = 1;
+  string feature = 1;
   int32 number = 2;
   string title = 3;
   string intention = 4;
@@ -1007,16 +1481,26 @@ message Step {
   google.protobuf.Timestamp proof_ran_at = 21;
   string closed_by = 22;
   string operator_agreed = 23;
+  int32 milestone = 24;
+  string contracts = 25;
+  string contract_scope = 26;
 }
 ```
 
-Field mapping: every field of `project_steps` maps to the field of the same name. `created_at` and
+Field mapping: every field of `feature_steps` maps to the field of the same name. `created_at` and
 `updated_at` are not on the wire.
+
+Field 1 held `project` before the four level revision. It holds `feature` now, and it keeps the
+number, because the type does not change and no message shipped yet.
 
 Errors: none.
 
 Invariants:
 - `state` is one of `ready`, `taken`, `done`, `stopped`.
+- `milestone` is zero, or a milestone number of the same feature.
+- `contracts` holds one contract identifier per line.
+- `contract_scope` holds one line per contract, and it names no identifier that `contracts` does
+  not name.
 - `proof_state` is one of `unproven`, `passing`, `failing`.
 - `closed_by` is `operator`, `krewe`, or empty.
 - `operator_agreed` is `yes`, `no`, or empty.
@@ -1128,16 +1612,18 @@ Acceptance criteria:
 
 ### WIRE-7: `SetPath`
 
-Request: `SetPathRequest { string project = 1; string document = 2; }`
-Response: `SetPathResponse { repeated Step steps = 1; repeated string warnings = 2; }`
+Request: `SetPathRequest { string feature = 1; string document = 2; }`
+Response:
+`SetPathResponse { repeated Step steps = 1; repeated Milestone milestones = 2; repeated string warnings = 3; }`
 
-Input: a project identifier and the path document, in the grammar of GRAMMAR-1.
+Input: a feature identifier and the path document, in the grammar of GRAMMAR-1.
 
-Output: the whole path after the write, in number order, and any warnings.
+Output: the whole path after the write, in number order, the feature's milestones, and any
+warnings.
 
 Errors:
-- `InvalidArgument` when `project` is empty.
-- `NotFound` when the project does not exist or is deleted.
+- `InvalidArgument` when `feature` is empty.
+- `NotFound` when the feature does not exist.
 - `InvalidArgument` for every grammar refusal in GRAMMAR-1. The refusal names the line number.
 - `FailedPrecondition` when the write would drop or rename a step that is taken, done or stopped.
   The refusal names those step numbers and says to keep them.
@@ -1146,37 +1632,45 @@ Invariants:
 - The control plane parses the document. The command line and the console send the same words.
 - A refused document changes nothing.
 - The driver may call it. A design session writes the path.
+- It replaces one feature's path. Another feature of the same project is untouched.
+- The milestones and the steps are written in one transaction, from one document.
 
 Verification: verify
 Acceptance criteria:
 - Setting a path of five steps reads back five steps in number order.
 - A document with a bad heading is refused, and the refusal names the line.
+- Setting the path of feature 2 leaves the path of feature 1 whole.
 
 ### WIRE-8: `ListSteps`
 
-Request: `ListStepsRequest { string project = 1; }`
-Response: `ListStepsResponse { repeated Step steps = 1; int32 next = 2; }`
+Request: `ListStepsRequest { string feature = 1; }`
+Response:
+`ListStepsResponse { repeated Step steps = 1; int32 next = 2; repeated Milestone milestones = 3; }`
 
-Input: a project identifier, or empty for every project.
+Input: a feature identifier, or empty for every feature.
 
-Output: steps in number order, and `next`.
+Output: steps in number order, `next`, and the milestones of the feature.
 
 `next` is the lowest numbered step in state `ready` whose `after` step is done, or whose `after` is
 zero. It is 0 when no step qualifies.
 
 Errors:
-- `NotFound` when a named project does not exist or is deleted.
+- `NotFound` when a named feature does not exist.
 
 Invariants:
 - `next` is 0 for an empty path, and 0 when every ready step waits on something unfinished.
-- `next` is 0 when the request names no project, because "what is next" is a question about one
+- `next` is 0 when the request names no feature, because "what is next" is a question about one
   path.
-- A project with no path answers with an empty list and no error.
+- A feature with no path answers with an empty list and no error.
+- The milestones travel with the steps, so a caller groups the listing without a second call. This
+  is why there is no `ListMilestones` service method beside the store method of STORE-22.
+- `milestones` is empty when the request names no feature.
 
 Verification: verify
 Acceptance criteria:
 - A path with steps 1 and 2 done says step 3 is next.
 - A path where step 3 waits for step 4 does not say step 3 is next.
+- A feature with three milestones answers with three, in number order.
 
 ### WIRE-9: `TakeStep`
 
@@ -1509,15 +2003,192 @@ Acceptance criteria:
 - Setting the cap to 21 is refused.
 - Setting the cap to 5 reads back on the design.
 
+### WIRE-19: message `Feature`
+
+```protobuf
+message Feature {
+  string id = 1;
+  string project = 2;
+  int32 number = 3;
+  string title = 4;
+  string intention = 5;
+  string state = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+```
+
+Field mapping: every column of `features` maps to the field of the same name.
+
+Errors: none. A message carries no behaviour.
+
+Invariants:
+- `state` is one of `open`, `done`, `stopped`.
+- `number` is one or greater.
+- A feature carries no approval field, because an approval belongs to the project.
+
+Verification: auto
+The reason: a message with a field list is fully proved by a compile and by the calls that carry it.
+
+### WIRE-20: message `Milestone`
+
+```protobuf
+message Milestone {
+  string feature = 1;
+  int32 number = 2;
+  string title = 3;
+  string intention = 4;
+}
+```
+
+Field mapping: every column of `milestones` maps to the field of the same name. `created_at` and
+`updated_at` are not on the wire, because nothing reads them.
+
+Errors: none.
+
+Invariants:
+- `number` is one or greater. 0 is not a milestone, and it never appears in this message.
+
+Verification: auto
+The reason: as WIRE-19.
+
+### WIRE-21: `ListFeatures`
+
+Request: `ListFeaturesRequest { string project = 1; }`
+Response: `ListFeaturesResponse { repeated Feature features = 1; }`
+
+Input: a project identifier, or empty for every project.
+
+Output: features in number order.
+
+Errors:
+- `NotFound` when a named project does not exist or is deleted.
+
+Invariants:
+- A project with no feature answers with an empty list and no error.
+- Every state comes back. The command line filters, not the server.
+- The driver may call it. A design session reads what features exist before it writes a path.
+
+Verification: verify
+Acceptance criteria:
+- A project with two features answers with both, in number order.
+- A project with none answers with an empty list.
+
+### WIRE-22: `AddFeature`
+
+Request: `AddFeatureRequest { string project = 1; string title = 2; }`
+Response: `AddFeatureResponse { Feature feature = 1; }`
+
+Input: a project identifier and one line of title.
+
+Output: the feature, carrying its number.
+
+Errors:
+- `InvalidArgument` when `project` is empty.
+- `InvalidArgument` when `title` is empty. A feature with no title says nothing in a listing.
+- `InvalidArgument` when the title runs past 200 characters. The refusal says the length.
+- `NotFound` when the project does not exist or is deleted.
+
+Invariants:
+- The server gives the number. A caller never chooses one.
+- The driver may call it, because a design session names the features it is about to write paths
+  for.
+
+Verification: verify
+Acceptance criteria:
+- Adding a feature answers with the number 1 on a project that had none.
+- Adding a feature with an empty title is refused.
+
+### WIRE-23: `SetFeatureIntention`
+
+Request: `SetFeatureIntentionRequest { string feature = 1; string intention = 2; }`
+Response: `SetFeatureIntentionResponse { Feature feature = 1; }`
+
+Input: a feature identifier and one line.
+
+Output: the feature after the write.
+
+Errors:
+- `InvalidArgument` when `feature` is empty.
+- `InvalidArgument` when the intention holds a line break. It is one line.
+- `NotFound` when the feature does not exist.
+
+Invariants:
+- A warning, never a refusal, when the intention runs past 200 characters. The warning says the
+  length. No length cap refuses text a person wrote.
+- An empty intention clears the line, and that is not an error.
+
+Verification: verify
+Acceptance criteria:
+- Setting an intention reads back on the feature.
+- An intention of two lines is refused.
+
+### WIRE-24: `FinishFeature`
+
+Request: `FinishFeatureRequest { string feature = 1; string state = 2; }`
+Response: `FinishFeatureResponse { Feature feature = 1; repeated string warnings = 2; }`
+
+Input: a feature identifier, and one of `open`, `done` or `stopped`.
+
+Output: the feature after the write, and any warnings.
+
+Errors:
+- `InvalidArgument` when `feature` is empty.
+- `InvalidArgument` for a state word outside the three. The refusal names the three words.
+- `NotFound` when the feature does not exist.
+
+Invariants:
+- A warning names each step of the feature that is not `done` or `stopped`, with its number and its
+  state. It does not refuse. The operator decides when a feature is finished.
+- The word `open` reopens a feature, and it warns nothing.
+- Closing a feature takes it out of `.krewe/path.md`, which RENDER-3 states. The warning says that
+  too, because a session then stops reading that path.
+
+Verification: verify
+Acceptance criteria:
+- Closing a feature with a taken step answers with a warning naming that step, and the state is
+  written.
+- A state word of `finished` is refused, and the refusal names the three words.
+
+### WIRE-25: `SetContracts`
+
+Request: `SetContractsRequest { string project = 1; string body = 2; string written_by = 3; }`
+Response: `SetContractsResponse { Design design = 1; }`
+
+Input: a project identifier and the contracts document whole.
+
+Output: the design row after the write.
+
+Errors:
+- `InvalidArgument` when `project` is empty.
+- `NotFound` when the project does not exist or is deleted.
+
+Invariants:
+- The write does not clear the approval. WIRE-5 clears it for the design body, and this call is a
+  different body.
+- `written_by` is a claim the caller sends, never an authenticated fact, exactly as WIRE-5 states.
+- The driver may call it. A design session writes the contracts document beside the design.
+- Nothing parses the body. Krewe never checks that a contract a step names exists in it, and the
+  deferred list in the design records that.
+
+Verification: verify
+Acceptance criteria:
+- Setting a contracts document leaves an approved design approved.
+- The body reads back whole through `GetDesign`.
+
 ## GRAMMAR: the path document
 
 ### GRAMMAR-1: the format `SetPath` reads
 
 Boundary: a document a person or a design session writes, to the control plane.
 
-Input: markdown, one heading per step.
+Input: markdown, one heading per milestone and one heading per step. One document carries the whole
+path of one feature, so there is one grammar in one place.
 
 ```
+# 4. A design carries a numbered path
+The project holds the design, and the design needs somewhere to keep the atomised changes.
+
 ## 1. The store holds a project's brief
 
 What changes and why
@@ -1533,38 +2204,88 @@ The operator sets a brief and reads it back, so the project says what it is for.
 The scenario that proves it
 a project carries a brief
 
+The contracts it builds
+TABLE-1
+STORE-2
+
+The scope of each contract
+TABLE-1: the columns migration 0062 creates. The approval column comes later.
+STORE-2: the whole method.
+
 After
 0
 ```
 
-The rules:
+The rules for a milestone:
+
+- A milestone starts at a line reading `# <number>. <title>`. One hash, so it sits above the step
+  headings, which carry two. The number is one or more digits. The title is the rest of the line,
+  trimmed.
+- The lines under the heading, up to the next heading of either kind, are the milestone's intention.
+- Every step heading after a milestone heading belongs to that milestone. It belongs to it until the
+  next milestone heading, or to the end of the document.
+- A step before the first milestone heading gets a milestone of 0. A document with no milestone
+  heading gives every step a milestone of 0, and that is not an error.
+- A `#` line that does not carry a number and a full stop is not a milestone heading. It is ignored
+  text, so a document may still open with a title.
+
+The rules for a step:
 
 - A step starts at a line reading `## <number>. <title>`. The number is one or more digits. The
   title is the rest of the line, trimmed.
-- The five labels are exactly `What changes and why`, `What this touches`, `What proves it`, `The
-  scenario that proves it` and `After`. Each label sits alone on its line.
-- A block runs from its label to the next label, or to the next step heading, or to the end.
+- Step numbers are unique across the whole document, and not inside one milestone. A feature holds
+  one step 3. This is the trap in this grammar, because a reader expects the numbering to start
+  again under each milestone.
+- The seven labels are exactly `What changes and why`, `What this touches`, `What proves it`, `The
+  scenario that proves it`, `The contracts it builds`, `The scope of each contract` and `After`.
+  Each label sits alone on its line.
+- A block runs from its label to the next label, or to the next heading of either kind, or to the
+  end.
 - Every label is optional. A step needs only its heading.
 - Text before the first heading is ignored, so a document may carry a title and a paragraph.
 - `After` holds one number, or `0`, or nothing.
 - `The scenario that proves it` holds one line: the scenario name as the feature file writes it.
+- `The contracts it builds` holds one contract identifier per line.
+- `The scope of each contract` holds one line per contract, reading `<identifier>: <sentence>`. The
+  sentence says which part of that contract is this step's, and which part waits for a later step.
 
-Output: a list of steps, in ascending number order, ready for STORE-5.
+Output: the milestones and the steps, each in ascending number order, ready for STORE-5.
 
-Errors:
+Errors, for a step:
 - `InvalidArgument`, naming the line, when a number is zero or negative.
-- `InvalidArgument`, naming both lines, when two steps carry the same number.
+- `InvalidArgument`, naming both lines, when two steps carry the same number. Two steps under
+  different milestones carry the same number in exactly the same way, and the refusal says so.
 - `InvalidArgument`, naming the line, when a step heading carries no title.
 - `InvalidArgument`, naming the line, when `After` is not a number.
 - `InvalidArgument`, naming the line, when `After` names a number that no step in the document has.
 - `InvalidArgument`, naming the line, when `After` is not lower than the step's own number.
 - `InvalidArgument`, naming the line, when the scenario block holds more than one line.
+- `InvalidArgument`, naming the line, when a scope line carries no full stop after the identifier.
+  The refusal says the form is `<identifier>: <sentence>`.
+- `InvalidArgument`, naming the line, when a scope line names an identifier that `The contracts it
+  builds` does not name.
+- `InvalidArgument`, naming both lines, when two scope lines name the same identifier.
 - `InvalidArgument` when the document holds no step heading. The refusal reads: "this document has
   no steps in it. A step starts with a line reading ## 1. <title>". There is no way to empty a path,
   and that is deliberate.
 
+Errors, for a milestone:
+- `InvalidArgument`, naming the line, when a milestone number is zero or negative.
+- `InvalidArgument`, naming both lines, when two milestones carry the same number.
+- `InvalidArgument`, naming the line, when a milestone heading carries no title.
+
 Invariants:
 - Numbers must be unique and one or greater. They need not be contiguous, so a path may run 1, 2, 5.
+- Milestone numbers follow the same rule, and they are counted apart from the step numbers.
+- A milestone with no step under it is kept, and it warns. A milestone nobody planned steps for is
+  worth seeing on the listing.
+- A milestone with no intention line warns and is kept.
+- A step with an empty `The contracts it builds` warns. Krewe then hands that step no contract, and
+  the session has to find its own.
+- A contract that `The contracts it builds` names, with no scope line under `The scope of each
+  contract`, warns and is kept. The warning names the contract.
+- Nothing checks that a contract identifier exists in the project's contracts document. Krewe never
+  reads that document, and the deferred list in the design records it.
 - A step with no `After` block waits for the previous number in the document. Step one gets zero.
   Gate 2 is worth nothing when every step defaults to waiting for nothing.
 - An `After` block holding nothing means zero. That is the way to say a step waits for nobody.
@@ -1590,6 +2311,12 @@ Acceptance criteria:
 - A document whose steps name no predecessor gives step 3 an `after` of 2.
 - A step titled "add the table and the index" is accepted without complaint.
 - A step with no `What this touches` block parses, and the warning says it collides with nothing.
+- A document with two milestone headings gives each step the number of the milestone above it.
+- A document with no milestone heading gives every step a milestone of 0.
+- A document that opens with a `#` line carrying no number parses, and that line is ignored.
+- A document naming step 1 under milestone 1 and step 1 under milestone 2 is refused, and the
+  refusal names both lines.
+- A scope line naming a contract the step does not build is refused, and the refusal names the line.
 
 ## RENDER: what the control plane writes into a sandbox
 
@@ -1665,6 +2392,8 @@ Invariants:
 - A project with an empty design body has no `.krewe/design.md`. A file that exists and says nothing
   costs a read.
 - Nothing reads the file back. A session that edits it changes nothing in the store.
+- The contracts document is a second body on the same row, and RENDER-8 renders it the same way, to
+  `.krewe/contracts.md`.
 
 Verification: verify
 Acceptance criteria:
@@ -1675,12 +2404,19 @@ Acceptance criteria:
 
 Boundary: control plane to the sandbox filesystem.
 
-Input: the project's steps, in number order.
+Input: the project's open features, each with its milestones and its steps, in number order.
 
-Output: `.krewe/path.md` inside the session's working directory. One block per step:
+Output: `.krewe/path.md` inside the session's working directory. One heading per feature, one
+heading per milestone, and one block per step:
 
 ```
-## 3. The store holds a project's brief
+# 2. A design carries a numbered path
+It narrows the project to where the atomised changes live.
+
+## 4. A design carries a numbered path
+
+### 3. The store holds a project's brief
+milestone: 4. A design carries a numbered path
 state: done
 proof: passing, 1 scenario, closed by krewe
 result: shipped as pull request 712, the brief reads back whole
@@ -1694,30 +2430,41 @@ Errors:
 
 Invariants:
 - Written on every render, from the store.
+- Every feature in state `open` is written, in number order. A feature that is `done` or
+  `stopped` is left out, which is what keeps this file from growing with every finished feature.
+  Reopening a feature brings it back on the next render.
+- The milestone line repeats what the milestone heading says, so a reader who opens the file at one
+  step still knows where the step sits.
+- A step whose milestone is 0 is written under a heading reading `## No milestone`.
 - A finished step carries its result and its proof state. This is what makes a session start from
   what is true: a session on step 4 reads what steps 1 to 3 produced.
 - The proof line is left out while the proof state is `unproven`.
 - The restatement is not in this file. It belongs to one step and one session, and RENDER-6 renders
   it into the memory file of that session only.
-- A project with no path has no `.krewe/path.md`.
+- A project whose open features hold no step has no `.krewe/path.md`.
 - Nothing reads the file back.
 
 Verification: verify
 Acceptance criteria:
 - A session dispatched after step 1 is done reads step 1's result in `.krewe/path.md`.
-- The steps appear in number order.
+- The steps appear in number order, under their milestone headings.
+- Each step block names its milestone.
 - A step krewe closed reads "closed by krewe" in its proof line.
+- A project with two open features writes both, each under its own heading.
+- Closing a feature takes it out of the file on the next dispatch.
 
 ### RENDER-4: the composed take text
 
 Boundary: control plane to the model, through `Dispatch`.
 
-Input: one step, and how many steps the path has.
+Input: one step, the feature and the milestone it sits in, and how many steps the path has.
 
 Output: the text the session is given when the operator takes the step.
 
 ```
 Step 3 of 7 on the path for <project>.
+Feature <feature number>: <feature title>
+Milestone <milestone number>: <milestone title>
 
 <title>
 
@@ -1731,7 +2478,14 @@ What proves it
 <proof>
 The scenario that proves it is named: <proof_scenario>
 
-The design is in .krewe/design.md. The whole path is in .krewe/path.md. Read both.
+The contracts this step builds
+<contracts>
+
+The scope of each contract
+<contract_scope>
+
+The design is in .krewe/design.md. The contracts are in .krewe/contracts.md. The whole path is
+in .krewe/path.md. Read all three.
 
 Write no code. Change no file in the repository. Write what you understood into your own
 CLAUDE.md, inside a section marked <!-- quay:restatement -->, with these six headings:
@@ -1748,6 +2502,12 @@ Invariants:
   command line then send the same words.
 - An empty block is left out entirely, with its label. A label with nothing under it is noise the
   model has to read.
+- The milestone line is left out when the step's milestone is 0.
+- The contracts block and the scope block are the reason the take text needs no hand written
+  scoping. Every step brief this project wrote by hand carried that scoping, copied out of the
+  graph. The system carries it now, so nobody types it.
+- The pointer to `.krewe/contracts.md` is left out when the project holds no contracts document. A
+  pointer to a file that is not there sends the model to open nothing.
 - `Dispatch` gains no field. The step text is the dispatch text.
 - The last paragraph is always present, whole. It is what makes the session restate rather than
   build.
@@ -1759,9 +2519,12 @@ Invariants:
 Verification: verify
 Acceptance criteria:
 - Taking step 3 dispatches a session whose text opens with "Step 3 of 7".
+- The text names the feature and the milestone the step sits in.
+- The text names the contracts the step builds, and the scope of each.
 - The text names the six headings and the restatement mark.
 - The text says to write no code.
 - A step with no proof produces text with no "What proves it" label in it.
+- A step with no contracts produces text with no "The contracts this step builds" label in it.
 
 ### RENDER-5: the restatement mark, read back into the store
 
@@ -1781,7 +2544,7 @@ Output: the step's `restatement`, `restated_at` and a cleared approval.
 
 The handler, in `internal/controlplane/proof.go`:
 
-1. Find the step this session holds, through the session index on `project_steps`.
+1. Find the step this session holds, through the session index on `feature_steps`.
 2. When there is no such step, drop the text and do nothing. A restatement with no step is noise.
 3. When the text equals what the store holds, do nothing.
 4. When it differs, call STORE-11.
@@ -1873,6 +2636,40 @@ Verification: verify
 Acceptance criteria:
 - Approving a restatement dispatches the same session with this text.
 - The text names the step's scenario.
+
+### RENDER-8: the contracts document file
+
+Boundary: control plane to the sandbox filesystem.
+
+Input: the contracts body from the project's design row.
+
+Output: `.krewe/contracts.md` inside the session's working directory, at
+`/home/agent/workspace/.krewe/contracts.md` as the model sees it. It holds the body, whole.
+
+Errors:
+- As RENDER-2. A directory that cannot be made, or a file that cannot be written, is skipped. A
+  failure here never fails an exec, and it is logged at warning level.
+
+Invariants:
+- It is written on every render, which is every dispatch. The file always agrees with the store.
+- It is not a memory file, so the model does not load it.
+- A project with an empty contracts body has no `.krewe/contracts.md`.
+- Nothing reads the file back. A session that edits it changes nothing in the store.
+- The pointer to it is in the take text of RENDER-4, and not in the memory file of RENDER-1. The
+  memory file is read on every exec of every session in the project, and it is capped at 400
+  characters. A fourth pointer there would eat the brief. Architect decision 21 records this.
+- It is a second body beside the design, and it is large. This project carries 118 contracts across
+  43 slices, which is why it is a file the model opens and not text in a memory file.
+
+Verification: verify
+Acceptance criteria:
+- A session dispatched into a project with a contracts document finds it whole at
+  `.krewe/contracts.md`.
+- Rewriting the contracts document and dispatching again gives the session the new text.
+- A project with no contracts document has no such file.
+Steps:
+- Dispatch a session into a project that holds a contracts document. Read the file in the session's
+  working directory.
 
 ## FLIGHT: several steps at once
 
@@ -2222,9 +3019,13 @@ Acceptance criteria:
 
 ## COMMAND: the command line verbs
 
-Five new words become taken: `design`, `path`, `step`, `trust` and `commands`. None of them is in
-`removedCommands` or `removedFlags`, so no refusal table is made to lie. Nothing is removed from the
-command line, so no entry is added to either table.
+Six new words become taken: `design`, `path`, `step`, `trust`, `commands` and `feature`. None of
+them is in `removedCommands` or `removedFlags`, so no refusal table is made to lie. Nothing is
+removed from the command line, so no entry is added to either table.
+
+One form is replaced rather than added. A step used to be named by one bare number. It is named by
+`<feature>.<number>` now. LEVEL-2 states the refusal that meets the old form, and it names what to
+type instead.
 
 Every verb takes an optional address. With no address it reads where the operator stands, and it
 refuses the way every other command does when they stand nowhere.
@@ -2369,41 +3170,76 @@ Acceptance criteria:
 - Setting the proof command, then running `krewe design proof` with no argument, prints it back.
 - A command with no scenario token is refused, and the refusal says what to put in.
 
-### COMMAND-7: `krewe path [<address>]`
+### COMMAND-7: `krewe path [<address>] [<feature>]`
 
-Input: an optional address.
+Input: an optional address, and an optional feature number.
 
-Output: one line per step: the number, the title, the state, the proof state, who closed it, the
-session and the age. Under the list, one line saying which step is next.
+With a feature number it prints that feature's path. With none it prints the path of every open
+feature of the project, each under its own feature heading.
+
+Output: the steps, grouped under their milestone titles. One line per step: the number, the title,
+the state, the proof state, who closed it, the session and the age. A milestone heading carries its
+number, its title, and a count reading "<n> steps, <n> done". Under the whole list, one line counts
+the steps of the feature, and one line says which step is next.
+
+```
+1. A project carries a design (3 steps, 3 done)
+   1  the store holds a project brief      done   passing   operator  4f2a91cd  2 days
+   2  the design reaches the session       done   passing   operator  9ab30e17  1 day
+   3  the riskiest assumption is measured  done   passing   operator  1cd77b04  1 day
+2. A design carries an approval (2 steps, 1 done)
+   4  a design carries an approval         done   passing   operator  77e1a0b9  4 hours
+   5  the operator edits the design body   taken  unproven            31a5c8d2  20 minutes
+5 steps, 4 done, 1 taken, 0 ready.
+next: nothing, every step is taken or waiting
+```
 
 Errors:
 - The shared address refusals.
-- A project with no path prints "this project has no path yet", and names the command that writes
+- A feature number that names no feature of the project, naming the numbers that exist.
+- A project with no feature prints "this project has no feature yet", and names
+  `krewe feature add`.
+- A feature with no path prints "this feature has no path yet", and names the command that writes
   one.
 
 Invariants:
-- Number order, always. The order comes from the control plane, so the console and the command line
-  cannot drift.
+- Number order, always, inside a milestone and between milestones. The order comes from the control
+  plane, so the console and the command line cannot drift.
+- The steps whose milestone is 0 print first, under a heading reading "no milestone", with the same
+  count beside it.
+- The count under the list is the whole feature, and it names each state that holds at least one
+  step.
+- With no feature number, each feature prints its own heading, its own milestone headings and its
+  own count. One last line then counts every step of the project.
+- A closed feature is left out when no feature number is given. Naming its number prints it, so the
+  record of finished work is still readable.
 - A step that waits for the operator to read a restatement draws "waiting on you". A step whose
   check passed and whose word is missing draws the same. Both come from the row.
-- The next line reads "next: step 3" or "next: nothing, every step is taken or waiting".
+- The next line reads "next: step 3" or "next: nothing, every step is taken or waiting". It is
+  printed for one feature only, because "what is next" is a question about one path.
 - It records nothing.
 
 Verification: verify
 Acceptance criteria:
-- A path of five steps prints five lines in number order.
-- The done steps read done, and the line under the list names the next step.
+- A path of five steps under two milestones prints two headings, five step lines, and a count.
+- Each milestone heading carries the count of its own steps and how many are done.
+- A step whose milestone is 0 prints under the heading "no milestone".
+- The line under the list counts the whole feature, and it names the next step.
+- With no feature number, two open features print two headings, and a closed third one is left out.
 - A step whose restatement nobody read draws "waiting on you".
 
-### COMMAND-8: `krewe path set [<address>] --file <path>`
+### COMMAND-8: `krewe path set [<address>] <feature> --file <path>`
 
-Input: an optional address, and a file in the grammar of GRAMMAR-1.
+Input: an optional address, a feature number, and a file in the grammar of GRAMMAR-1.
 
-Output: a line per step written, then any warnings.
+Output: a line per milestone written, a line per step written, then any warnings.
 
 Errors:
 - The shared address refusals.
-- `usage: krewe path set [<address>] --file <path>` when `--file` is missing.
+- `usage: krewe path set [<address>] <feature> --file <path>` when the feature number or `--file`
+  is missing.
+- A feature number that names no feature of the project, naming the numbers that exist and
+  `krewe feature add`.
 - A file that cannot be read, naming the path and the reason.
 - Every grammar refusal of GRAMMAR-1, printed as the control plane sent it, with the line number.
 - The `FailedPrecondition` of WIRE-7 when the write would drop a step somebody took.
@@ -2411,13 +3247,17 @@ Errors:
 Invariants:
 - The tool sends the document. It does not parse it. One grammar, in one place.
 - A refused document changes nothing, and the output says nothing was written.
+- It writes one feature's path. The output names the feature, so nobody reads it as the project's
+  whole path.
 - A warning about a step with no scenario is printed, and it says that `krewe step check` will
   refuse that step.
 
 Verification: verify
 Acceptance criteria:
-- Setting a path from a file, then running `krewe path`, shows those steps.
+- Setting a path from a file, then running `krewe path` on that feature, shows those steps.
 - A file with a duplicate step number is refused, naming both lines, and nothing is written.
+- Setting the path of feature 2 leaves the path of feature 1 whole.
+- A feature number of 9, with no feature 9, is refused and names `krewe feature add`.
 
 ### COMMAND-9: `krewe step take [<address>] <number>`
 
@@ -2781,6 +3621,159 @@ Acceptance criteria:
 - It names four commands, each in the form `/krewe:<name>`.
 - It answers on a machine where nothing was installed.
 
+### COMMAND-24: `krewe feature [<address>]`
+
+Input: an optional address naming a workspace and a project.
+
+Output: one line per feature: the number, the title, the state, the count of steps done out of the
+total, and the intention.
+
+Errors:
+- The shared address refusals.
+- A project with no feature prints "this project has no feature yet", and names the command that
+  adds one.
+
+Invariants:
+- Number order, always.
+- Every state is listed. A closed feature is what the record of the work looks like, so it stays on
+  the screen.
+- It records nothing.
+
+Verification: verify
+Acceptance criteria:
+- A project with two features prints two lines in number order.
+- A closed feature prints the word `done`.
+- A project with no feature says so and names `krewe feature add`.
+
+### COMMAND-25: `krewe feature add [<address>] "<title>"`
+
+Input: an optional address, and one line of title.
+
+Output: a line naming the number the feature took, and the command that sets its intention.
+
+Errors:
+- The shared address refusals.
+- `usage: krewe feature add [<address>] "<title>"` when the title is missing.
+- The `InvalidArgument` of WIRE-22 for an empty or over long title.
+
+Invariants:
+- The operator never chooses the number. The server gives it, so two adds at one moment cannot take
+  the same one.
+- It writes no path. A new feature holds no step until `krewe path set` writes one.
+
+Verification: verify
+Acceptance criteria:
+- Adding a feature prints the number 1 on a project that had none.
+- Running `krewe feature` after it shows that feature.
+
+### COMMAND-26: `krewe feature intention [<address>] <feature> "<text>"`
+
+Input: an optional address, a feature number, and one line.
+
+Output: a line saying the intention is set, and its length.
+
+Errors:
+- The shared address refusals.
+- `usage: krewe feature intention [<address>] <feature> "<text>"` when either is missing.
+- A feature number that names no feature of the project, naming the numbers that exist.
+- The `InvalidArgument` of WIRE-23 for a text of two lines.
+
+Invariants:
+- The warning about a long line is printed as the control plane sent it.
+- It touches nothing else on the feature.
+
+Verification: verify
+Acceptance criteria:
+- Setting an intention shows it on the next `krewe feature`.
+- A feature number of 9, with no feature 9, is refused and the refusal names the numbers that exist.
+
+### COMMAND-27: `krewe feature done [<address>] <feature>`
+
+Input: an optional address and a feature number.
+
+Output: a line saying the feature is done, then any warning.
+
+Errors:
+- The shared address refusals.
+- `usage: krewe feature done [<address>] <feature>` when the number is missing.
+- A feature number that names no feature of the project.
+
+Invariants:
+- Every warning of WIRE-24 is printed, one per line. A feature closed with steps still open says so.
+- It closes nothing else. The steps keep their state.
+- The output says the feature leaves `.krewe/path.md`, so the operator knows what a session stops
+  reading.
+
+Verification: verify
+Acceptance criteria:
+- Closing a feature that holds a taken step prints the warning and closes it.
+- Running `krewe feature` after it shows the word `done`.
+
+### COMMAND-28: `krewe feature stop [<address>] <feature> "<reason>"`
+
+Input: an optional address, a feature number, and one line of reason.
+
+Output: a line saying the feature is stopped, then any warning.
+
+Errors:
+- As COMMAND-27, with `stop` in the usage line.
+
+Invariants:
+- The reason is printed back, and it is not stored. A feature carries no result column, because what
+  came of the work is on its steps. The reason belongs in the operator's own record.
+- `krewe feature done` on a stopped feature reopens nothing. The word `open` does that, through
+  `krewe feature open`.
+
+Verification: verify
+Acceptance criteria:
+- Stopping a feature writes the word `stopped`.
+- The steps of a stopped feature read back unchanged.
+
+### COMMAND-29: `krewe feature open [<address>] <feature>`
+
+Input: an optional address and a feature number.
+
+Output: a line saying the feature is open again.
+
+Errors:
+- As COMMAND-27, with `open` in the usage line.
+
+Invariants:
+- It is the way back from `done` and from `stopped`. There is no other.
+- It warns nothing. Reopening a feature costs nothing and starts nothing.
+- The feature returns to `.krewe/path.md` on the next render.
+
+Verification: verify
+Acceptance criteria:
+- Reopening a closed feature writes the word `open`.
+- The feature appears again in `.krewe/path.md` after the next dispatch.
+
+### COMMAND-30: `krewe design contracts [<address>] --file <path>`
+
+Input: an optional address, and a file holding the contracts document.
+
+Output: a line saying the contracts document is set, and its length. With no `--file` it prints the
+document whole.
+
+Errors:
+- The shared address refusals.
+- A file that cannot be read, naming the path and the reason.
+- The `NotFound` of WIRE-25.
+
+Invariants:
+- It never clears the approval, and the output says so. The operator must not think a contracts
+  write undid the word they gave the design.
+- The document prints whole, so it can be piped.
+- A project with no contracts document prints "this project has no contracts document yet", and
+  names the command that writes one.
+- This follows `krewe design set` exactly, and it is a second body on the same row.
+
+Verification: verify
+Acceptance criteria:
+- Setting a contracts document on an approved design leaves the design approved.
+- Reading it back prints the whole document.
+- Reading a project with no contracts document says so.
+
 ## CONSOLE: the views
 
 ### CONSOLE-1: the `path` view
@@ -2881,8 +3874,11 @@ It says, at least:
 - Read the brief with `krewe design [<address>]`, and read the project's context.
 - Read the repository the project names, and say what was read.
 - Write the design as one document, and write it with `krewe design set [<address>] --file <path>`.
-- Write the path in the grammar of GRAMMAR-1, and write it with
-  `krewe path set [<address>] --file <path>`.
+- Add a feature with `krewe feature add [<address>] "<title>"`, and say what it narrows to.
+- Write that feature's path in the grammar of GRAMMAR-1, with its milestone headings, and write it
+  with `krewe path set [<address>] <feature> --file <path>`.
+- Write the contracts document with `krewe design contracts [<address>] --file <path>`. Every step
+  names the contracts it builds, and the scope of each.
 - Every step is one intention and one reviewable change. A title needing "and" is two steps.
 - Every step is written for a person who was not in the conversation. That person must build it
   without asking a question.
