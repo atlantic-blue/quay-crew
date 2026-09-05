@@ -503,7 +503,7 @@
       "partial_contracts": {
         "TABLE-1": "The steps_in_flight_cap column, in migration 0065. The proof columns come in S-19, the trust columns in S-25.",
         "STORE-0": "ErrTooManyStepsInFlight only. ErrStepsTouchTheSameFile comes in S-15.",
-        "STORE-8": "The cap check, in the same statement as the take. The file check comes in S-15, gate 2 in S-24.",
+        "STORE-8": "The cap check, in the same statement as the take, counting across the whole project. The file check comes in S-15, gate 2 in S-24.",
         "WIRE-1": "Field 17 only.",
         "WIRE-9": "The cap refusal, and in_flight and steps_in_flight_cap on the response. The file refusal comes in S-15.",
         "COMMAND-9": "The in flight line and the cap refusal.",
@@ -527,10 +527,10 @@
         "features/path.feature",
         "features/path_steps_test.go"
       ],
-      "changes": "One column with a default of 3, one store method, one remote procedure call, one deny list entry, and the words krewe path cap. TakeStep counts the steps in state taken in the same statement that writes the take, and refuses at the cap. The take response carries the count and the cap, and krewe step take prints them.",
-      "proves": "features/path.feature. Taking step 4 while step 6 runs leaves both taken, each with its own session. A fourth take is refused, naming the cap and the three steps in flight. Raising the cap lets it through. Finishing one step starts nothing and takes nothing.",
+      "changes": "One column with a default of 3, one store method, one remote procedure call, one deny list entry, and the words krewe path cap. TakeStep counts the steps in state taken in the same statement that writes the take, and refuses at the cap. It counts across the whole project, joining the step table to features on the project, and never inside one feature. The take response carries the count and the cap, and krewe step take prints them.",
+      "proves": "features/path.feature. Taking step 4 while step 6 runs leaves both taken, each with its own session. A fourth take is refused, naming the cap and the three steps in flight with the feature each one sits in. Three steps taken in three different features refuse a fourth take in any feature. Raising the cap lets it through. Finishing one step starts nothing and takes nothing.",
       "gate": "The controller guard is proved here, not assumed. One scenario finishes a step and asserts that no session started and no step moved.",
-      "note": "The default of 3 is a guess about how many sessions one person reads at once. Nothing measured it. The design records that."
+      "note": "The default of 3 is a guess about how many sessions one person reads at once. Nothing measured it. The design records that. The cap stays one number on the project, counting across every feature. There is no second cap per feature, and section 12.4 of the design says why."
     },
     {
       "id": "S-15",
@@ -570,10 +570,10 @@
         "features/path.feature",
         "features/path_steps_test.go"
       ],
-      "changes": "TakeStep splits the touches text on newlines. It reads the step being taken and every step in state taken. It trims the spaces at each end and drops empty lines. It refuses an exact match, naming the first collision in step number order. SetPath warns about a step naming no file.",
-      "proves": "features/path.feature. Taking a step naming internal/store/store.go while a taken step names it is refused, naming the file and that step. Two steps naming different files are both taken. A file written with trailing spaces still collides. A step naming no file is taken, and setting that path warned.",
-      "risk": "The check reads what a step says it writes, never a diff. A step that writes a file it did not name is not caught. Section 14 of the design defers the diff based check, and FLIGHT-3 records the limit.",
-      "note": "The check lives in the store, in the same statement as the take. A read in the control plane, then a write, would let two takes pass at the same moment."
+      "changes": "TakeStep splits the touches text on newlines. It reads the step being taken and every step in state taken in the whole project, across every feature. It trims the spaces at each end and drops empty lines. It refuses an exact match, naming the first collision in step number order. SetPath warns about a step naming no file.",
+      "proves": "features/path.feature. Taking a step naming internal/store/store.go while a taken step names it is refused, naming the file and that step. A step of feature 2 naming a file that a taken step of feature 1 names is refused, and the refusal names feature 1. The next step of feature 2, naming a different file, is taken while the first one waits. Two steps naming different files are both taken. A file written with trailing spaces still collides. A step naming no file is taken, and setting that path warned.",
+      "risk": "The check reads what a step says it writes, never a diff. A step that writes a file it did not name is not caught. Section 14 of the design defers the diff based check, and FLIGHT-3 records the limit. A sequential number is not a filename either, so two steps that each add a migration take the same number and both takes pass. Section 5.1 of the design measures that and section 14 defers the fix.",
+      "note": "The query is by project, across every feature, and never by feature. A feature must not collide with another feature, the same way a step must not collide with another step. It is one rule at one level. The refusal lands on the step, never on the feature, so a feature waits on one step and carries on with the rest. The check lives in the store, in the same statement as the take. A read in the control plane, then a write, would let two takes pass at the same moment."
     },
     {
       "id": "S-16",
@@ -1386,10 +1386,10 @@
         "features/path.feature",
         "features/path_steps_test.go"
       ],
-      "changes": "Migration 0066 renames project_steps to feature_steps, adds feature, drops project, and moves the primary key. It adds one feature for every project that already holds steps, and points those steps at it. Every store method, request message and command that reached a step through a project reaches it through a feature. A step is typed as one token, feature.number.",
+      "changes": "Migration 0066 renames project_steps to feature_steps, adds feature, drops project, and moves the primary key. It adds one feature for every project that already holds steps, and points those steps at it. Every store method, request message and command that reached a step through a project reaches it through a feature. A step is typed as one token, feature.number. Every read of steps in flight is scoped to the project and never to the feature.",
       "proves": "features/path.feature. Setting the path of feature 2 leaves the path of feature 1 whole. Two features each hold a step 3, and taking one leaves the other ready. A bare step number is refused, and the refusal names the form and the features that exist. Steps written before the migration read back under one feature, with every column kept.",
       "why_here": "Twenty six slices ahead of this one assumed the step table was keyed by the project. Re-keying now costs one migration and an amendment to three merged slices, S-8, S-9 and S-10. Re-keying at slice thirty costs the same migration plus every slice built on the old key.",
-      "risk": "The up migration writes rows, not only a schema. A project that holds steps gets a feature it did not ask for, titled with the project name. The down migration cannot reverse a feature the operator added afterwards, and it says so in its own comment."
+      "risk": "The up migration writes rows, not only a schema. A project that holds steps gets a feature it did not ask for, titled with the project name. The down migration cannot reverse a feature the operator added afterwards, and it says so in its own comment. The second risk is a query. Once the step table is keyed by the feature, the natural read is steps in flight in this feature, and that read lets two features write one file at the same moment. Every count of steps in flight is by project, across every feature. S-14 and S-15 build those reads, and STORE-8 states the rule."
     },
     {
       "id": "S-38",

@@ -72,7 +72,10 @@ The commands revision renamed nothing either. It added `SLASH-1` to `SLASH-7` an
 ## What the four level revision changed, 2026-09-05
 
 The operator settled a shape the design did not carry. A project holds one design and many features.
-A feature is delivered in milestones. A milestone holds steps. Six things moved.
+A feature is delivered in milestones. A milestone holds steps.
+
+The reason for the layer is parallel delivery. A website runs an authentication feature and a payment
+feature at once, and each holds its own path of milestones. Seven things moved.
 
 1. There is a `LEVEL` group. `LEVEL-1` states the four levels. `LEVEL-2` states how a step is
    addressed after the key moves, and it lists every contract that reads differently because of it.
@@ -85,12 +88,15 @@ A feature is delivered in milestones. A milestone holds steps. Six things moved.
    to `.krewe/contracts.md`, exactly as `RENDER-2` renders the design.
 6. A step names the contracts it builds, and the scope of each. `RENDER-4` puts both into the take
    text, so nobody types the scoping by hand.
+7. The cap and the collision check still read the whole project, across every feature. `STORE-8`,
+   `FLIGHT-2`, `FLIGHT-3` and `LEVEL-2` each state it. The new key invites a query scoped to the
+   feature, and that query lets two features write one file at once.
 
 Identifiers survive again. Nothing was renamed. The revision added `LEVEL-1`, `LEVEL-2`,
 `TABLE-3`, `TABLE-4`, `STORE-18` to `STORE-23`, `WIRE-19` to `WIRE-25`, `RENDER-8` and
 `COMMAND-24` to `COMMAND-30`. It widened `TABLE-1`, `TABLE-2`, `STORE-5`, `STORE-6`,
-`WIRE-1`, `WIRE-2`, `WIRE-7`, `WIRE-8`, `GRAMMAR-1`, `RENDER-2`, `RENDER-3`, `RENDER-4`,
-`COMMAND-7` and `COMMAND-8`.
+`STORE-8`, `WIRE-1`, `WIRE-2`, `WIRE-7`, `WIRE-8`, `GRAMMAR-1`, `FLIGHT-2`, `FLIGHT-3`,
+`RENDER-2`, `RENDER-3`, `RENDER-4`, `COMMAND-7` and `COMMAND-8`.
 
 ## Decisions the architect took, beyond the design
 
@@ -346,6 +352,11 @@ Steps:
 
 Boundary: the model every other contract in this file is written against.
 
+The layer exists because a project delivers several features at the same time. A website runs an
+authentication feature and a payment feature at once. Authentication ships sign up, then sign in,
+then reset, then sessions. Payment ships checkout, then refunds, then webhooks. Two paths, each with
+its own milestones, and neither one waits for the other.
+
 A project is one. It holds one brief, one design, one contracts document and one approval. Nothing
 about those moves down a level.
 
@@ -382,11 +393,14 @@ Invariants:
   `after` keeps naming a lower step number in the same path.
 - A step may belong to no milestone. Its `milestone` is then 0, and 0 is not a row in `milestones`.
 - A feature holds a path. A project does not.
+- Several features of one project run at the same time. Nothing orders one feature against another,
+  and no feature waits for another to close.
 
 Verification: verify
 Acceptance criteria:
 - A project with two features holds two paths. Setting the path of one leaves the other whole.
 - Step 1 exists in each of two features at the same time.
+- A step of feature 1 and a step of feature 2 are both in state `taken` at the same time.
 - Taking a step in the second feature is refused while the project's design carries no approval.
 
 ### LEVEL-2: how a step is addressed after the key moves
@@ -431,6 +445,12 @@ Errors:
 - A step token whose feature part or number part is not a number is refused, naming the token.
 
 Invariants:
+- **The substitution does not change what the cap and the collision check read.** They read the
+  whole project, across every feature, exactly as they did before the key moved. A read filtered by
+  feature is the defect this contract exists to refuse, and it is the one the new key invites.
+  STORE-8, FLIGHT-2 and FLIGHT-3 each state it.
+- `after` is the one thing that stays inside the feature. A step waits for a lower step of its own
+  path, and never for a step of another feature.
 - The old form never resolves. A bare number was a whole step address before this change, so it is
   in somebody's notes and in their shell history. It names nothing now, and it says so.
 - A feature alone is still a bare number, because a feature address has one part. `krewe path
@@ -638,6 +658,10 @@ Indexes:
   a session is on, which a session listing needs to draw one row.
 - No index on `proof_state`, on `state` or on `milestone`. A whole path is read by the primary
   key prefix, then filtered and grouped in memory. An index nothing reads is a cost with no reader.
+- The take reads every step in state `taken` in the whole project. It reads the project's features
+  through `features_project_idx`, then each feature's steps by the primary key prefix, and filters
+  in memory. Tens of features holding tens of steps each is what this store is sized for, so no
+  index on `state` is added for it.
 
 The four state words:
 - `ready`: nobody took it.
@@ -701,7 +725,8 @@ The columns migration `0065` creates:
 Indexes:
 - The primary key answers a read by identifier. Every step read goes through it.
 - `features_project_idx on features (project)`. It answers a listing of one project's features, in
-  number order.
+  number order. It also answers the take, which counts the steps in flight across every feature of
+  the project. STORE-8 states why that count is by project and never by feature.
 
 The three state words:
 - `open`: somebody works on this feature, or nobody started it yet.
@@ -1001,28 +1026,40 @@ The reason: one read with one error, proved against both stores.
 ### STORE-8: `TakeStep`
 
 Signature:
-`TakeStep(ctx context.Context, project string, number int32, session string) (*quaycrewv1.Step, error)`
+`TakeStep(ctx context.Context, feature string, number int32, session string) (*quaycrewv1.Step, error)`
 
-Input: a project identifier, a step number, and the session that takes it.
+Input: a feature identifier, a step number, and the session that takes it.
 
 Output: the step after the write, in state `taken`.
+
+**The step is addressed by its feature. The cap and the collision check read the whole project.**
+This is the trap in the re-keying, and it is written here because the natural query after the key
+moves is the wrong one. "Steps in flight in this feature" lets two features write one file at the
+same moment. The store resolves the feature's project, then reads every step in state `taken` in
+that project, across every feature of it. There is one rule at one level.
 
 Errors:
 - `store.ErrNotFound` when the project does not exist, or the path holds no step of that number.
 - `ErrStepNotReady` when the step is not in state `ready`.
 - `ErrPredecessorNotDone` when the step named by `after` is not in state `done`. The error text
   names that step and its state.
-- `ErrTooManyStepsInFlight` when the count of steps in state `taken` reaches the design's
-  `steps_in_flight_cap`. The error text names those steps and the cap.
+- `ErrTooManyStepsInFlight` when the count of steps in state `taken` in the whole project reaches
+  the design's `steps_in_flight_cap`. The error text names those steps, their features, and the cap.
 - `ErrStepsTouchTheSameFile` when a line of the step's `touches` matches a line of `touches` on a
-  step in state `taken`. The error text names the file and the step that holds it.
+  step in state `taken` anywhere in the project. The error text names the file, the step that holds
+  it, and that step's feature.
 
 Invariants:
 - The four checks and the write happen in one statement, so two callers cannot both take one step.
 - The count and the collision check read the same rows the write locks. A read in the control plane,
   then a write, would let two takes pass the cap at the same moment.
-- Several steps may be in state `taken` at once. Nothing here refuses a second take on a different
-  step, as long as the cap and the collision check allow it.
+- The count and the collision check are scoped to the project, never to the feature. The store joins
+  `feature_steps` to `features` on the project to read them. A query filtered by feature is the
+  defect this invariant exists to refuse.
+- `after` and `ErrPredecessorNotDone` stay inside the feature. A step waits for a lower step of its
+  own path, and never for a step of another feature.
+- Several steps may be in state `taken` at once, in one feature or across several. Nothing here
+  refuses a second take on a different step, as long as the cap and the collision check allow it.
 - `session` and `taken_at` are set in the same write as the state.
 - A step taken again after a stop starts clean. The write sets `proof_state` to `unproven`, clears
   `restatement`, `restated_at`, `restatement_approved` and every proof column. A new attempt proves
@@ -1036,7 +1073,12 @@ Acceptance criteria:
 - Taking step 3 while step 2 is not done is refused, and the refusal names step 2 and its state.
 - Taking a stopped step again leaves its proof state at `unproven`.
 - Taking a fourth step with three in flight is refused, and the refusal names the three and the cap.
+  The three sit in three different features, and the refusal counts them all.
 - Taking a step whose `touches` names a file a step in flight also names is refused.
+- A taken step of the authentication feature names a file. Taking a step of the payment feature that
+  names the same file is refused, and the refusal names authentication.
+- Taking the next step of the payment feature goes through, because it names a different file. One
+  step waits, and the feature carries on.
 
 ### STORE-9: `FinishStep`
 
@@ -2702,7 +2744,8 @@ Acceptance criteria:
 
 Boundary: the operator to the control plane, and the control plane to the store.
 
-Input: `steps_in_flight_cap` on the design row, and the count of steps in state `taken`.
+Input: `steps_in_flight_cap` on the design row, and the count of steps in state `taken` in the whole
+project.
 
 Output: a take that passes, or a refusal that names the cap.
 
@@ -2713,7 +2756,12 @@ Errors:
 Invariants:
 - The default is 3. A project nobody configured allows three steps at once.
 - The count reads the rows the write locks, in one statement. Two takes cannot both pass the cap.
-- The cap is per project.
+- The cap is one number, on the project, and it counts across every feature. Three steps in flight
+  is three steps whether they sit in one feature or in three.
+- There is no second cap per feature, and none is added. Nothing can collide across features,
+  because FLIGHT-3 reads the whole project. So a cap protects the machine and the operator's
+  reading, and one number does that. A per feature cap would let a project with five features run
+  fifteen sessions while every number in the design still read three.
 - Lowering the cap refuses the next take and stops nothing that runs.
 - Three is a guess about how many sessions one person reads at once. Nothing measured it. A count of
   how often the refusal fires would replace it.
@@ -2721,7 +2769,8 @@ Invariants:
 Verification: verify
 Acceptance criteria:
 - A project nobody configured refuses the fourth take and names a cap of 3.
-- The refusal lists the three steps in flight.
+- The refusal lists the three steps in flight, with the feature each one sits in.
+- Three steps taken in three different features refuse a fourth take in any feature.
 - Raising the cap to 4 lets the fourth take pass.
 - Finishing one of three steps lets the next take pass.
 
@@ -2729,9 +2778,19 @@ Acceptance criteria:
 
 Boundary: the control plane to the store, at the moment of a take.
 
-Input: the step's `touches` text, and `touches` on every step in state `taken`.
+Input: the step's `touches` text, and `touches` on every step in state `taken` in the whole project,
+across every feature.
 
-Output: a take that passes, or a refusal naming the file and the step.
+Output: a take that passes, or a refusal naming the file, the step and its feature.
+
+A feature must not collide with another feature, the same way a step must not collide with another
+step. It is one rule at one level, and there is no separate rule about features. Authentication and
+payment share the user model, the router and the configuration, so the collision is real and it
+crosses the two paths.
+
+The refusal lands on the step, never on the feature. It refuses only the step that names a file a
+taken step already names, and only while that step is in flight. Payment waits on one step and
+carries on with the rest of its path.
 
 Errors:
 - The take is refused when a line matches. WIRE-9 carries the code and the text.
@@ -2740,18 +2799,29 @@ Invariants:
 - Each field is split on newlines. Every line is trimmed of the spaces at each end. Empty lines are
   dropped.
 - Two lines collide when the trimmed text is equal. The comparison is exact and case sensitive.
-- The refusal names one file and one step. It names the first collision found, in step number order.
+- The refusal names one file and one step, and it names the feature that step sits in. It names the
+  first collision found, in feature number order, then step number order.
+- Nothing about a feature is refused. A feature is never blocked, never queued and never ordered
+  against another feature. Only a step is refused, and only while the step it collides with is
+  taken.
+- Finishing the colliding step lets the refused take go through. Nothing has to be re-planned.
 - A step with an empty `touches` collides with nothing, so both takes pass. GRAMMAR-1 warns about it.
 - The check reads what a step says it writes. It never reads a diff, and it never opens a file.
 - So a step that writes a file it did not name is not caught. Two sessions then edit one file and
   git says so at merge time. Section 14 of the design defers the diff based check.
+- A sequential number is not a filename, so this check cannot see one. Two steps that each add a
+  migration name two different files and both takes pass, and both take the same number. Section 5.1
+  of the design measures it and section 14 defers the fix.
 - The check compares text, not paths. `./internal/store/store.go` and `internal/store/store.go` are
   two different lines to it.
 
 Verification: verify
 Acceptance criteria:
 - Taking a step naming `internal/store/store.go` while another taken step names it is refused.
-- The refusal names the file and the step holding it.
+- The refusal names the file, the step holding it, and that step's feature.
+- A step of feature 2 naming a file that a taken step of feature 1 names is refused. The two sit in
+  different features and the check still finds it.
+- The next step of feature 2, naming a different file, is taken while the first one waits.
 - Two steps naming different files are both taken.
 - A step naming a file with trailing spaces still collides with the same file written plainly.
 

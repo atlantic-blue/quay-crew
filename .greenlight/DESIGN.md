@@ -509,6 +509,26 @@ step against every step already taken, and names the file it shares.
 The check is only as good as the `touches` field. A step that writes a file its `touches` does not
 name goes through. The design session writes that field, and section 12.4 records the limit.
 
+The second limit is worse, because the check passes and both steps look correct. A sequential number
+is a shared resource, and no list of filenames describes it. Two features run at once and each adds
+a migration. One step names `internal/store/migrations/0075_add_payments.up.sql` and the other names
+`internal/store/migrations/0075_add_sessions.up.sql`. The filenames differ, so the collision check
+finds nothing, and both features take number 0075.
+
+This repository already numbers migrations that way, and this design already reserves numbers for
+slices nobody built: `0070` to `0074` belong to five unbuilt slices. So the shape is not
+hypothetical here.
+
+What it costs. The two migrations apply in an order the file names do not decide, and one of them
+may never apply at all. The failure lands at merge time or at the next start, and not at the take.
+
+The same shape holds for any sequential number a project hands out: a protobuf field number, a port,
+a slice identifier.
+
+No fix is built here. Section 14 defers it. The answer is a reservation, and a reservation is a
+capability rather than a check. It needs a place to live. It needs a way to release a number a
+stopped step held. It needs a rule for every kind of number a project shares.
+
 What a fan out would need before it is safe, stated so nobody adds one on the strength of the graph
 alone:
 
@@ -526,6 +546,16 @@ edges as a statement about safety to run in parallel.
 ### 5.2 The four levels: a project, a feature, a milestone and a step
 
 The operator settled this shape on 2026-09-05, and section 12.6 records it.
+
+The layer exists because a project delivers several features at the same time.
+
+Take a website. It runs an authentication feature and a payment feature at once. Authentication ships
+sign up, then sign in, then reset, then sessions. Payment ships checkout, then refunds, then
+webhooks. Those are two paths, each with its own milestones, and neither one waits for the other.
+
+Without the layer, a project holds one path. The two sets of work then interleave in one numbered
+list, and nobody can read where either one reached. With the layer, each feature holds its own path,
+and each path is read on its own.
 
 A project is one. It holds one brief, one design, one contracts document and one approval. Nothing
 about that moves down a level.
@@ -550,6 +580,9 @@ flowchart TD
   F2 --> M3["Milestone 1 again, because a number restarts in each feature"]
   M3 --> S4["Step 1 again, because a step number restarts in each feature"]
 ```
+
+Read the two branches under the project as two paths running at the same time. Authentication sits
+on its third milestone while payment sits on its first. Neither one waits for the other.
 
 This project's own build is one feature. Its roadmap holds twenty one milestones: sixteen from the
 first design, and five that this revision added.
@@ -629,8 +662,8 @@ design, which is the normal state.
   operator answers.
 - `trust_agreements` integer not null default 0. Every agreement this project recorded.
 - `trust_disagreements` integer not null default 0. Every disagreement this project recorded.
-- `steps_in_flight_cap` integer not null default 3. How many steps may be in state `taken` at one
-  time. Provisional, and section 4 says why.
+- `steps_in_flight_cap` integer not null default 3. How many steps of this project may be in state
+  `taken` at one time, counted across every feature. Provisional, and section 4 says why.
 - `created_at` timestamptz not null default now()
 - `updated_at` timestamptz not null default now()
 
@@ -752,10 +785,24 @@ Rules, each proved by a scenario:
 - Taking a step is refused while the step named by `after` is not in state `done`. The refusal names
   that step and its state.
 - Taking a step is refused when the count of steps in state `taken` reaches `steps_in_flight_cap`.
-  The refusal names the steps in flight and the cap.
+  The refusal names the steps in flight, their features, and the cap.
 - Taking a step is refused when a line of its `touches` matches a line of `touches` on a step in
-  state `taken`. The refusal names the file and the step that holds it. Lines are compared after the
-  spaces at each end are removed.
+  state `taken`. The refusal names the file, the step that holds it, and that step's feature. Lines
+  are compared after the spaces at each end are removed.
+- **Both of those read the whole project, across every feature, and never one feature.** This is the
+  trap in the key move. The step table is keyed by the feature now, so the natural query is "steps
+  in flight in this feature". That query lets two features write the same file at the same moment.
+
+  A feature must not collide with another feature, the same way a step must not collide with another
+  step. It is one rule at one level. The store joins the step table to `features` on the project to
+  read them.
+- `after` is the one thing that stays inside the feature. A step waits for a lower step of its own
+  path, and never for a step of another feature.
+- The refusal lands on the step, never on the feature. Nothing blocks a feature, queues a feature or
+  orders one feature against another. Authentication and payment share the user model, the router
+  and the configuration, so the collision is real. Only the step that names the shared file waits,
+  and only while the step it collides with is in flight. Payment carries on with the rest of its
+  path.
 - Taking a step again after it was stopped sets `proof_state` to 'unproven', clears `restatement`,
   clears `restatement_approved` and clears the proof fields. A new attempt proves itself again.
 - Any write to `restatement` sets `restatement_approved` to false and its timestamp to null.
@@ -1368,6 +1415,12 @@ several sessions. Three questions followed and each is settled.
 3. **A project setting caps the steps in flight, and the default is three.** Rejected in the same
    question: no cap. Rejected in the same question: a cap the trust level sets.
 
+   The four levels did not change this. The cap stays one number, on the project, counting across
+   every feature. Rejected: a second cap per feature. Nothing can collide across features, because the
+   check reads the whole project. So a cap protects the machine and the operator's reading, and one
+   number does that. A per feature cap would let a project with five features run fifteen
+   sessions while every number in the design still read three.
+
 The limit of the collision check. It reads the `touches` field, which a design session writes. A step
 that writes a file its `touches` does not name goes through the check. Nothing in this design reads
 the diff, so nothing catches that.
@@ -1399,6 +1452,10 @@ the git log. The design had two levels where the work has four, it stored no con
 1. **A project holds one design, and many features.** A feature is a narrowed part of the project.
    It carries a title and one line saying what it narrows to. Nothing about the brief, the design,
    the contracts document or the approval moves down a level.
+
+   The reason for the layer is parallel delivery. A website runs an authentication feature and a
+   payment feature at once, and each one holds its own path of milestones. One path per project
+   interleaves the two, and then nobody can read where either one reached.
 2. **A feature is delivered in milestones, and a milestone holds steps.** A milestone carries a
    number, a title and one line. A step carries what the step table already holds.
 3. **The step table is keyed by the feature, and it is renamed `feature_steps`.** Rejected: keeping
@@ -1418,6 +1475,14 @@ the git log. The design had two levels where the work has four, it stored no con
 7. **A step names the contracts it builds, and the scope of each.** The take text carries both.
    Every step brief this project wrote by hand carried that scoping, copied out of the graph. The
    one time a contract was wrong, a session refused to build and asked, which cost a slice of work.
+8. **The cap and the collision check read the whole project, across every feature.** A feature must
+   not collide with another feature, the same way a step must not collide with another step. It is
+   one rule at one level. The refusal lands on the step, never on the feature: only the step naming
+   the shared file waits, and the feature carries on.
+
+   Rejected: a query scoped to the feature. That is what the new key invites, and it lets two
+   features write one file at the same moment. Rejected: a second cap per feature. Section 12.4 says
+   why one number is enough.
 
 The single `after` integer is not reopened by any of this. Section 6.4 now measures it, and the
 answer is that one predecessor carries this path.
@@ -1471,6 +1536,10 @@ Each item matters and is not in this design.
   table and a cycle check.
 - **A conflict check that reads the diff rather than the `touches` field.** The take now compares
   what each step says it writes. Nothing compares what a session actually wrote.
+- **A reservation for a sequential number.** The collision check compares filenames, and a migration
+  number is not a filename. Two features that each add a migration take the same number, and both
+  takes pass. Section 5.1 measures the shape and states what it costs. A fix hands out the number at
+  take time, releases it when a step stops, and covers every sequential number a project shares.
 - **A second proof kind, beyond a named scenario.** A build, a linter run or a manual check with
   written steps. One kind is enough to learn whether the gate helps.
 - **Krewe judging whether a scenario describes the value.** The operator does that at design

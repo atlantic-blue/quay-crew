@@ -113,6 +113,9 @@ explain it, it is a note and not a milestone.
 **Milestone 17. A project holds features.**
 - A project is one and it holds one design. A feature is a narrowed part of it, and a project grows
   features over time.
+- The reason for the layer is parallel delivery. A website runs an authentication feature and a
+  payment feature at once. Authentication ships sign up, then sign in, then reset, then sessions.
+  Payment ships checkout, then refunds, then webhooks. Each feature holds its own path.
 - Touches: a migration pair for `features`; `internal/store/store.go`, `postgres.go`, `memory.go`,
   `storetest/`; the `Feature` message; `ListFeatures`, `AddFeature`, `SetFeatureIntention` and
   `FinishFeature`; `cmd/krewe/feature.go` (new).
@@ -133,6 +136,9 @@ explain it, it is a note and not a milestone.
   and titled with the project name, and its steps point at it.
 - A step is typed as one token, `<feature>.<number>`. A bare number is refused, and the refusal says
   what to type and lists the features that exist.
+- The trap. Once the step table is keyed by the feature, the natural query is steps in flight in this
+  feature. That query lets two features write one file at the same moment. Every count of steps in
+  flight is by project, across every feature. Milestone 7 builds those reads.
 - Proves it: `features/path.feature`. Setting the path of feature 2 leaves the path of feature 1
   whole. Two features each hold a step 3. A bare step number is refused. Steps written before the
   migration read back under one feature, with every column kept.
@@ -193,7 +199,14 @@ explain it, it is a note and not a milestone.
 - This is the fan out. One session still builds one step. The operator takes each one.
 - Touches: `steps_in_flight_cap` on `project_designs`; `SetStepsInFlightCap` on the protobuf file;
   the take rules in `internal/controlplane/design.go`; `krewe path cap`.
-- The collision check reads the `touches` field of every step in state taken, line by line.
+- The collision check reads the `touches` field of every step in state taken, line by line, across
+  every feature of the project. A feature must not collide with another feature, the same way a step
+  must not collide with another step. It is one rule at one level.
+- The refusal lands on the step, never on the feature. Authentication and payment share the user
+  model, the router and the configuration, so the collision is real. Only the step naming the shared
+  file waits, and the feature carries on with the rest of its path.
+- The cap stays one number, on the project, counting across every feature. There is no second cap
+  per feature.
 - Proves it, on the cap: taking a fourth step with three in flight is refused, naming the three and
   the cap. Raising the cap lets the fourth take go through. A cap below 1 or above 20 is refused.
 - Proves it, on the collision: a take is refused when the step names a file that a step in flight
@@ -344,6 +357,10 @@ the graph, a second proof kind, a trust level above 1, and visual acceptance evi
 
 Several steps may run at once from milestone 7. The operator takes each one. Section 5.1 of the
 design records what the collision check cannot see.
+
+A sequential number is one of those things. Two features that each add a migration name two different
+files, so the check passes and both take the same number. Section 5.1 measures it and section 14 of
+the design defers the fix.
 
 Nothing here reads the contracts document. A step names the contracts it builds, and krewe never
 checks that a named contract exists. Section 14 of the design records that.
