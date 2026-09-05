@@ -55,11 +55,15 @@ func runFeature(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 	// the command line cannot draw one project two ways.
 	rows := make([][]string, 0, len(features))
 	for _, feature := range features {
+		steps, err := theStepsUnder(ctx, client, feature)
+		if err != nil {
+			return err
+		}
 		rows = append(rows, []string{
 			strconv.FormatInt(int64(feature.GetNumber()), 10),
 			feature.GetTitle(),
 			feature.GetState(),
-			stepsDone(theStepsUnder(feature)),
+			stepsDone(steps),
 			feature.GetIntention(),
 		})
 	}
@@ -69,11 +73,16 @@ func runFeature(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient
 
 // theStepsUnder is the path of one feature, which the count of steps done is taken from.
 //
-// A step hangs off its project until the step key moves down to the feature, so nothing can ask for
-// one feature's steps yet and every feature counts none. The count is taken from the feature's own
-// steps rather than from the project's, which would print one project wide number against every
-// feature of it and say nothing about any of them.
-func theStepsUnder(_ *quaycrewv1.Feature) []*quaycrewv1.Step { return nil }
+// The count is the feature's own steps and never the project's, which would print one project wide
+// number against every feature of it and say nothing about any of them.
+func theStepsUnder(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
+	feature *quaycrewv1.Feature) ([]*quaycrewv1.Step, error) {
+	resp, err := client.ListSteps(ctx, &quaycrewv1.ListStepsRequest{Feature: feature.GetId()})
+	if err != nil {
+		return nil, err
+	}
+	return resp.GetSteps(), nil
+}
 
 // stepsDone is how far a feature got: the steps that finished, out of the steps it holds.
 func stepsDone(steps []*quaycrewv1.Step) string {

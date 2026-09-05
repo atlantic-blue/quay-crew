@@ -142,18 +142,22 @@ commands:
                                           same one
   feature intention [<address>]           say which part of the project one feature narrows to, in
     <feature> "<text>"                    one line. A second line is refused
-  path [<address>]                        the steps a design was broken into, in number order, with
-                                          the state of each one and the session holding it
-  path set [<address>] --file <path>      write the path from a document. Each step is a heading
-                                          reading ## 1. <title>, and the blocks under it say what
-                                          changes, what it touches, what proves it and which step it
-                                          waits for. A step that names no predecessor waits for the
-                                          number below it
-  step take [<address>] <number>          start a session on one step, and let go of it. The session
-                                          is given that step whole: what changes, what it touches and
-                                          what proves it. It is refused while the design carries no
-                                          approval, and while somebody already holds the step, and
-                                          a refusal starts nothing
+  path [<address>] [<feature>]            the steps one feature was broken into, in number order,
+                                          with the state of each one and the session holding it. With
+                                          no feature number it prints the path of every open feature
+  path set [<address>] <feature>          write one feature's path from a document. Each step is a
+    --file <path>                         heading reading ## 1. <title>, and the blocks under it say
+                                          what changes, what it touches, what proves it and which
+                                          step it waits for. A step that names no predecessor waits
+                                          for the number below it. The other features of the project
+                                          keep the paths they have
+  step take [<address>]                   start a session on one step, and let go of it. A step is
+    <feature>.<number>                    named as 2.3, which is step 3 of feature 2, and a bare
+                                          number is refused. The session is given that step whole:
+                                          what changes, what it touches and what proves it. It is
+                                          refused while the design carries no approval, and while
+                                          somebody already holds the step, and a refusal starts
+                                          nothing
   attach <session>                         open a session's conversation, with its history
   secret set [<workspace>] <key>          set a workspace secret from standard input, so the value
                                           never reaches your shell history: pipe it in, or redirect

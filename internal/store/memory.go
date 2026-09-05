@@ -38,7 +38,7 @@ type Memory struct {
 	// designs is what each project is for and what was designed for it, keyed by project. A project
 	// with no entry has no design, which is the normal state.
 	designs map[string]*quaycrewv1.Design
-	// steps is each project's path, keyed by project and held in number order. A project with no
+	// steps is each feature's path, keyed by feature and held in number order. A feature with no
 	// entry has no path, which is the normal state.
 	steps map[string][]*quaycrewv1.Step
 	// features is each project's narrowed parts, keyed by project and held in number order. A project
@@ -633,15 +633,18 @@ func copyDesign(design *quaycrewv1.Design) *quaycrewv1.Design {
 	return proto.Clone(design).(*quaycrewv1.Design)
 }
 
-// SetPath replaces the project's path with the steps given, and returns the whole path in number
+// SetPath replaces one feature's path with the steps given, and returns the whole path in number
 // order.
+//
+// The map is keyed by the feature, so the paths of the project's other features are never read and
+// never written. Keyed by the project, this call wiped every path of it.
 //
 // The state word is written here rather than left absent, because Postgres writes it from the
 // column's own default and the two stores have to answer the same thing about a fresh step.
-func (m *Memory) SetPath(_ context.Context, project string, steps []Step) ([]*quaycrewv1.Step, error) {
+func (m *Memory) SetPath(_ context.Context, feature string, steps []Step) ([]*quaycrewv1.Step, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, err := m.getProjectLocked(project); err != nil {
+	if _, err := m.featureLocked(feature); err != nil {
 		return nil, err
 	}
 	if m.steps == nil {
@@ -650,7 +653,7 @@ func (m *Memory) SetPath(_ context.Context, project string, steps []Step) ([]*qu
 	written := make([]*quaycrewv1.Step, 0, len(steps))
 	for _, step := range steps {
 		written = append(written, &quaycrewv1.Step{
-			Project:       project,
+			Feature:       feature,
 			Number:        step.Number,
 			Title:         step.Title,
 			Intention:     step.Intention,
@@ -662,28 +665,28 @@ func (m *Memory) SetPath(_ context.Context, project string, steps []Step) ([]*qu
 		})
 	}
 	sort.SliceStable(written, func(i, j int) bool { return written[i].GetNumber() < written[j].GetNumber() })
-	m.steps[project] = written
+	m.steps[feature] = written
 	return copySteps(written), nil
 }
 
-// ListSteps returns a project's path in number order, or every project's when it names none.
+// ListSteps returns a feature's path in number order, or every feature's when it names none.
 //
-// A deleted project's path is left out for every project as well as for one, because a project here
+// A deleted project's path is left out for every feature as well as for one, because a project here
 // is deleted by a stamp rather than by removing it, so nothing cascades and a listing that read the
 // map alone would answer with the path of a project nobody can reach.
-func (m *Memory) ListSteps(_ context.Context, project string) ([]*quaycrewv1.Step, error) {
+func (m *Memory) ListSteps(_ context.Context, feature string) ([]*quaycrewv1.Step, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	if project != "" {
-		if _, err := m.getProjectLocked(project); err != nil {
+	if feature != "" {
+		if _, err := m.featureLocked(feature); err != nil {
 			return nil, err
 		}
-		return copySteps(m.steps[project]), nil
+		return copySteps(m.steps[feature]), nil
 	}
 
 	live := make([]string, 0, len(m.steps))
 	for held := range m.steps {
-		if _, err := m.getProjectLocked(held); err != nil {
+		if _, err := m.featureLocked(held); err != nil {
 			continue
 		}
 		live = append(live, held)
@@ -697,15 +700,15 @@ func (m *Memory) ListSteps(_ context.Context, project string) ([]*quaycrewv1.Ste
 	return every, nil
 }
 
-// GetStep returns one step of a project's path. A path that holds no step of that number is not
-// found, the way a project that is not there is: neither answers the question asked.
-func (m *Memory) GetStep(_ context.Context, project string, number int32) (*quaycrewv1.Step, error) {
+// GetStep returns one step of a feature's path. A path that holds no step of that number is not
+// found, the way a feature that is not there is: neither answers the question asked.
+func (m *Memory) GetStep(_ context.Context, feature string, number int32) (*quaycrewv1.Step, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	if _, err := m.getProjectLocked(project); err != nil {
+	if _, err := m.featureLocked(feature); err != nil {
 		return nil, err
 	}
-	held, err := m.stepLocked(project, number)
+	held, err := m.stepLocked(feature, number)
 	if err != nil {
 		return nil, err
 	}
@@ -714,16 +717,19 @@ func (m *Memory) GetStep(_ context.Context, project string, number int32) (*quay
 
 // TakeStep gives a ready step to a session.
 //
+// The step is addressed by its feature, and step 3 of one feature is a different step from step 3 of
+// another, so taking one leaves the other ready.
+//
 // The whole read and write happen under the one lock, because Postgres reads the state in the
 // statement that writes it and the two stores have to answer the same thing to two callers racing
 // for one step.
-func (m *Memory) TakeStep(_ context.Context, project string, number int32, session string) (*quaycrewv1.Step, error) {
+func (m *Memory) TakeStep(_ context.Context, feature string, number int32, session string) (*quaycrewv1.Step, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, err := m.getProjectLocked(project); err != nil {
+	if _, err := m.featureLocked(feature); err != nil {
 		return nil, err
 	}
-	held, err := m.stepLocked(project, number)
+	held, err := m.stepLocked(feature, number)
 	if err != nil {
 		return nil, err
 	}
@@ -736,9 +742,9 @@ func (m *Memory) TakeStep(_ context.Context, project string, number int32, sessi
 	return proto.Clone(held).(*quaycrewv1.Step), nil
 }
 
-// stepLocked is one step of a project's path, or ErrNotFound. The caller holds the lock.
-func (m *Memory) stepLocked(project string, number int32) (*quaycrewv1.Step, error) {
-	for _, step := range m.steps[project] {
+// stepLocked is one step of a feature's path, or ErrNotFound. The caller holds the lock.
+func (m *Memory) stepLocked(feature string, number int32) (*quaycrewv1.Step, error) {
+	for _, step := range m.steps[feature] {
 		if step.GetNumber() == number {
 			return step, nil
 		}
@@ -757,6 +763,20 @@ func copySteps(steps []*quaycrewv1.Step) []*quaycrewv1.Step {
 
 // The narrowed parts of a project: the listing, the add that gives the number, and the one line
 // saying what a feature narrows to.
+
+// GetFeature returns one feature, and ErrNotFound for one nobody can reach.
+//
+// The step calls take a feature, and the design and its approval belong to the project, so this is
+// what the control plane reads to get from one to the other.
+func (m *Memory) GetFeature(_ context.Context, feature string) (*quaycrewv1.Feature, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	held, err := m.featureLocked(feature)
+	if err != nil {
+		return nil, err
+	}
+	return copyFeature(held), nil
+}
 
 // ListFeatures returns a project's features in number order, or every project's when it names none.
 //

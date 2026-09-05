@@ -595,12 +595,15 @@ message ApproveDesignResponse {
   Design design = 1;
 }
 
-// Step is one step of a project's path: one atomised change, with what proves it.
+// Step is one step of a feature's path: one atomised change, with what proves it.
 //
 // The field numbers follow the order the slices add them, not the order the design document lists
 // them. A field number is fixed once it ships, so a later change appends rather than renumbers.
 message Step {
-  string project = 1;
+  // feature is the feature this step's path belongs to. Field 1 held the project before the key
+  // moved down to the feature, and it keeps the number: the type does not change, and no message
+  // shipped.
+  string feature = 1;
   // number is where in the path this step sits, counting from one. Numbers need not run without
   // gaps, so a path may go 1, 2, 5.
   int32 number = 2;
@@ -631,7 +634,7 @@ message Step {
 // sent whole rather than parsed by the caller, so the console and the command line send the same
 // words and cannot drift.
 message SetPathRequest {
-  string project = 1;
+  string feature = 1;
   string document = 2;
 }
 message SetPathResponse {
@@ -639,17 +642,17 @@ message SetPathResponse {
   repeated string warnings = 2;
 }
 
-// ListStepsRequest reads a project's path, or every project's when it names none.
+// ListStepsRequest reads a feature's path, or every feature's when it names none.
 message ListStepsRequest {
-  string project = 1;
+  string feature = 1;
 }
 message ListStepsResponse {
   repeated Step steps = 1;
 }
 
-// TakeStepRequest gives one step of a project's path to a session that starts now.
+// TakeStepRequest gives one step of a feature's path to a session that starts now.
 message TakeStepRequest {
-  string project = 1;
+  string feature = 1;
   int32 number = 2;
 }
 // TakeStepResponse says what was taken, which session took it, and what that session was asked to do.

@@ -749,25 +749,36 @@ func (p *Postgres) ApproveProjectDesign(ctx context.Context, project string) (*q
 // next to each other because a column added to one and not the other reads as a zero rather than as
 // a failure.
 //
-// Qualified, because every read joins the project and its workspace to hide a deleted project's
-// path, and an unqualified name would be one the join could make ambiguous later.
-const stepColumns = `s.project, s.number, s.title, s.intention, s.touches, s.proof, ` +
+// Qualified, because every read joins the feature, its project and that project's workspace to hide
+// a deleted project's path, and an unqualified name would be one the join could make ambiguous
+// later.
+const stepColumns = `s.feature, s.number, s.title, s.intention, s.touches, s.proof, ` +
 	`s.proof_scenario, s.after, s.state, s.session, s.result, s.taken_at, s.finished_at`
+
+// stepJoins is the join every path read goes through: a step to its feature, that feature to its
+// project, and that project to its workspace.
+//
+// A project here is deleted by a stamp rather than by removing the row, so the foreign key cascade
+// never fires for one, and a read that matched on the feature alone would keep answering with the
+// path of a project nobody can reach.
+const stepJoins = `join features f on f.id = s.feature ` +
+	`join projects p on p.id = f.project ` +
+	`join workspaces w on w.id = p.workspace`
 
 // scanStep reads one step row.
 func scanStep(row pgx.Row) (*quaycrewv1.Step, error) {
 	var (
-		project, title, intention, touches, proof string
+		feature, title, intention, touches, proof string
 		scenario, state, session, result          string
 		number, after                             int32
 		takenAt, finishedAt                       *time.Time
 	)
-	if err := row.Scan(&project, &number, &title, &intention, &touches, &proof,
+	if err := row.Scan(&feature, &number, &title, &intention, &touches, &proof,
 		&scenario, &after, &state, &session, &result, &takenAt, &finishedAt); err != nil {
 		return nil, err
 	}
 	step := &quaycrewv1.Step{
-		Project:       project,
+		Feature:       feature,
 		Number:        number,
 		Title:         title,
 		Intention:     intention,
@@ -788,14 +799,17 @@ func scanStep(row pgx.Row) (*quaycrewv1.Step, error) {
 	return step, nil
 }
 
-// SetPath replaces the project's path with the steps given.
+// SetPath replaces one feature's path with the steps given.
+//
+// The delete and the inserts name the feature, so the paths of the project's other features are
+// never read and never written. Keyed by the project, this call wiped every path of it.
 //
 // The whole write is one transaction, so a refused write changes nothing and no reader ever sees
 // half a path. The rows are read back through ListSteps rather than returned from the inserts,
 // because number order is what a caller is promised and the insert order is whatever the document
 // happened to be written in.
-func (p *Postgres) SetPath(ctx context.Context, project string, steps []Step) ([]*quaycrewv1.Step, error) {
-	if err := p.projectExists(ctx, project); err != nil {
+func (p *Postgres) SetPath(ctx context.Context, feature string, steps []Step) ([]*quaycrewv1.Step, error) {
+	if err := p.featureExists(ctx, feature); err != nil {
 		return nil, err
 	}
 	transaction, err := p.pool.Begin(ctx)
@@ -805,15 +819,15 @@ func (p *Postgres) SetPath(ctx context.Context, project string, steps []Step) ([
 	defer func() { _ = transaction.Rollback(ctx) }()
 
 	if _, err := transaction.Exec(ctx,
-		`delete from project_steps where project = $1`, project); err != nil {
+		`delete from feature_steps where feature = $1`, feature); err != nil {
 		return nil, fmt.Errorf("clear the path: %w", err)
 	}
 	for _, step := range steps {
 		if _, err := transaction.Exec(ctx, `
-			insert into project_steps
-				(project, number, title, intention, touches, proof, proof_scenario, after)
+			insert into feature_steps
+				(feature, number, title, intention, touches, proof, proof_scenario, after)
 			values ($1, $2, $3, $4, $5, $6, $7, $8)`,
-			project, step.Number, step.Title, step.Intention, step.Touches, step.Proof,
+			feature, step.Number, step.Title, step.Intention, step.Touches, step.Proof,
 			step.ProofScenario, step.After); err != nil {
 			return nil, fmt.Errorf("write step %d: %w", step.Number, err)
 		}
@@ -821,28 +835,40 @@ func (p *Postgres) SetPath(ctx context.Context, project string, steps []Step) ([
 	if err := transaction.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit the path: %w", err)
 	}
-	return p.ListSteps(ctx, project)
+	return p.ListSteps(ctx, feature)
 }
 
-// ListSteps returns a project's path in number order, or every project's when it names none.
-//
-// The join is the same one projectExists asks, both conditions and all. A project here is deleted by
-// a stamp rather than by removing the row, so the foreign key cascade never fires for one, and a
-// read that only matched on the project identifier would keep answering with the path of a project
-// nobody can reach.
-func (p *Postgres) ListSteps(ctx context.Context, project string) ([]*quaycrewv1.Step, error) {
-	if project != "" {
-		if err := p.projectExists(ctx, project); err != nil {
+// featureExists says whether a feature is one a caller can reach, which is the check every step call
+// opens with. The conditions are projectExists's, one join further down.
+func (p *Postgres) featureExists(ctx context.Context, feature string) error {
+	var one int
+	err := p.pool.QueryRow(ctx, `
+		select 1 from features f
+		join projects p on p.id = f.project
+		join workspaces w on w.id = p.workspace
+		where f.id = $1 and p.deleted_at is null and w.deleted_at is null`, feature).Scan(&one)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("read feature: %w", err)
+	}
+	return nil
+}
+
+// ListSteps returns a feature's path in number order, or every feature's when it names none.
+func (p *Postgres) ListSteps(ctx context.Context, feature string) ([]*quaycrewv1.Step, error) {
+	if feature != "" {
+		if err := p.featureExists(ctx, feature); err != nil {
 			return nil, err
 		}
 	}
 	rows, err := p.pool.Query(ctx, `
-		select `+stepColumns+` from project_steps s
-		join projects p on p.id = s.project
-		join workspaces w on w.id = p.workspace
-		where ($1 = '' or s.project = $1)
+		select `+stepColumns+` from feature_steps s
+		`+stepJoins+`
+		where ($1 = '' or s.feature = $1)
 		  and p.deleted_at is null and w.deleted_at is null
-		order by s.project, s.number`, project)
+		order by s.feature, s.number`, feature)
 	if err != nil {
 		return nil, fmt.Errorf("list steps: %w", err)
 	}
@@ -862,20 +888,19 @@ func (p *Postgres) ListSteps(ctx context.Context, project string) ([]*quaycrewv1
 	return steps, nil
 }
 
-// GetStep returns one step of a project's path.
+// GetStep returns one step of a feature's path.
 //
 // The join is the one ListSteps uses, so a deleted project answers about its path the same way
 // whichever call asks.
-func (p *Postgres) GetStep(ctx context.Context, project string, number int32) (*quaycrewv1.Step, error) {
-	if err := p.projectExists(ctx, project); err != nil {
+func (p *Postgres) GetStep(ctx context.Context, feature string, number int32) (*quaycrewv1.Step, error) {
+	if err := p.featureExists(ctx, feature); err != nil {
 		return nil, err
 	}
 	step, err := scanStep(p.pool.QueryRow(ctx, `
-		select `+stepColumns+` from project_steps s
-		join projects p on p.id = s.project
-		join workspaces w on w.id = p.workspace
-		where s.project = $1 and s.number = $2
-		  and p.deleted_at is null and w.deleted_at is null`, project, number))
+		select `+stepColumns+` from feature_steps s
+		`+stepJoins+`
+		where s.feature = $1 and s.number = $2
+		  and p.deleted_at is null and w.deleted_at is null`, feature, number))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -887,20 +912,23 @@ func (p *Postgres) GetStep(ctx context.Context, project string, number int32) (*
 
 // TakeStep gives a ready step to a session.
 //
+// The step is addressed by its feature, and step 3 of one feature is a different step from step 3 of
+// another, so taking one leaves the other ready.
+//
 // The state is read in the statement that writes it, so two callers racing for one step cannot both
 // be told they have it. A write that matched no row is then read back to say which of the two things
 // happened: there is no such step, or somebody already holds it.
-func (p *Postgres) TakeStep(ctx context.Context, project string, number int32, session string) (*quaycrewv1.Step, error) {
-	if err := p.projectExists(ctx, project); err != nil {
+func (p *Postgres) TakeStep(ctx context.Context, feature string, number int32, session string) (*quaycrewv1.Step, error) {
+	if err := p.featureExists(ctx, feature); err != nil {
 		return nil, err
 	}
 	step, err := scanStep(p.pool.QueryRow(ctx, `
-		update project_steps s
+		update feature_steps s
 		set state = $4, session = $3, taken_at = now(), updated_at = now()
-		where s.project = $1 and s.number = $2 and s.state = $5
-		returning `+stepColumns, project, number, session, StepTaken, StepReady))
+		where s.feature = $1 and s.number = $2 and s.state = $5
+		returning `+stepColumns, feature, number, session, StepTaken, StepReady))
 	if errors.Is(err, pgx.ErrNoRows) {
-		if _, missing := p.GetStep(ctx, project, number); missing != nil {
+		if _, missing := p.GetStep(ctx, feature, number); missing != nil {
 			return nil, missing
 		}
 		return nil, ErrStepNotReady
@@ -944,6 +972,25 @@ func scanFeature(row pgx.Row) (*quaycrewv1.Feature, error) {
 		CreatedAt: timestamppb.New(createdAt),
 		UpdatedAt: timestamppb.New(updatedAt),
 	}, nil
+}
+
+// GetFeature returns one feature, and ErrNotFound for one nobody can reach.
+//
+// The step calls take a feature, and the design and its approval belong to the project, so this is
+// what the control plane reads to get from one to the other.
+func (p *Postgres) GetFeature(ctx context.Context, feature string) (*quaycrewv1.Feature, error) {
+	held, err := scanFeature(p.pool.QueryRow(ctx, `
+		select `+featureColumns+` from features f
+		join projects p on p.id = f.project
+		join workspaces w on w.id = p.workspace
+		where f.id = $1 and p.deleted_at is null and w.deleted_at is null`, feature))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get feature: %w", err)
+	}
+	return held, nil
 }
 
 // ListFeatures returns a project's features in number order, or every project's when it names none.
