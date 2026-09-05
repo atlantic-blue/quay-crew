@@ -123,3 +123,72 @@ Feature: A project carries what it is for and what was designed
     When the caller writes the design without naming a file
     Then standard error says "usage: krewe design set"
     And the command fails
+
+  # The session working in the project reads what the project is for, on every exec, out of its own
+  # memory file. The design itself is a file beside it: the summary is read every time and the
+  # document is opened by a model that decides it needs it.
+
+  Scenario: A session reads what the project is for
+    Given the project's brief is "keep the household bills paid on time"
+    And the project's design is "# Bills\n\nPay the water bill first.\n"
+    When the operator dispatches "hello" to the project
+    Then the session's memory file carries "This project is house-bills."
+    And the session's memory file carries "keep the household bills paid on time"
+
+  Scenario: A session finds the whole design in its working directory
+    Given the project's design is "# Bills\n\nPay the water bill first.\n"
+    When the operator dispatches "hello" to the project
+    Then the session's design file reads "# Bills\n\nPay the water bill first.\n"
+
+  Scenario: The memory file sends the session to the design file
+    Given the project's design is "# Bills\n"
+    When the operator dispatches "hello" to the project
+    Then the session's memory file carries "Read .krewe/design.md before you start."
+
+  # A line telling the model to open a file that is not there sends it to open nothing.
+  Scenario: A project with a brief and no design does not send the session to a file
+    Given the project's brief is "keep the household bills paid on time"
+    When the operator dispatches "hello" to the project
+    Then the session's memory file carries "keep the household bills paid on time"
+    And the session's memory file does not carry ".krewe/design.md"
+    And the session has no design file
+
+  Scenario: A project with no design puts no design section in the memory file
+    Given the operator sets the project's context to "pay the water bill first"
+    When the operator dispatches "hello" to the project
+    Then the session's memory file carries "pay the water bill first"
+    And the session's memory file carries no design section
+
+  # The section is read again on every exec of every session in the project, so its cost is paid per
+  # exec. The brief is the only part whose length nobody controls, so it is the part that is cut.
+  Scenario: A very long brief is cut so the section stays small
+    Given the project's brief is 5000 characters
+    And the project's design is "# Bills\n"
+    When the operator dispatches "hello" to the project
+    Then the design section is under 400 characters
+    And the session's memory file carries "Read .krewe/design.md before you start."
+
+  # The section is rendered state, never context. A mark the read back does not know is swept into
+  # the session's own context, stored as though a person typed it, and rendered again underneath
+  # itself on the next exec.
+  Scenario: The design section is not carried twice
+    Given the project's brief is "keep the household bills paid on time"
+    And the project's design is "# Bills\n"
+    When the operator dispatches "hello" to the project
+    And the operator dispatches "and again" to the same session
+    Then the memory file carries one design section
+    And the session's context does not carry the design section
+
+  Scenario: Rewriting the design gives the session the new text
+    Given the project's design is "# Bills\n"
+    And a session started by dispatching "hello"
+    When the operator writes the project's design as "# Bills, again\n"
+    Then the session's design file reads "# Bills, again\n"
+
+  # A design emptied on purpose must not stay readable in the working directory, or what the session
+  # reads and what the store holds disagree.
+  Scenario: Emptying the design takes the file away
+    Given the project's design is "# Bills\n"
+    And a session started by dispatching "hello"
+    When the operator writes the project's design as ""
+    Then the session has no design file

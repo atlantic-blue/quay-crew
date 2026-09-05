@@ -522,8 +522,8 @@ func (s *Server) syncContextExcept(ctx context.Context, session *quaycrewv1.Sess
 		// file, but a build that wrote it into the session's own file has been and gone, so the inner
 		// file's read back has to know the mark too. It goes first, never last: the last scope is where
 		// unmarked text belongs, and a note an agent appends is a note, not an index.
-		scopes := make([]string, 0, len(levels)+1)
-		scopes = append(scopes, sandbox.SkillsScope)
+		scopes := make([]string, 0, len(levels)+2)
+		scopes = append(scopes, sandbox.SkillsScope, sandbox.DesignScope)
 		for _, level := range levels {
 			scopes = append(scopes, string(level.scope))
 		}
@@ -582,7 +582,15 @@ func (s *Server) renderContext(ctx context.Context, session *quaycrewv1.Session)
 		return
 	}
 	for at, levels := range contextFiles(session) {
-		sections := make([]sandbox.Section, 0, len(levels)+1)
+		sections := make([]sandbox.Section, 0, len(levels)+2)
+		// What the project is for, first, because everything under it is read in that light. It goes
+		// in the inner file, which is the one a session reads for the project it is working in, and it
+		// is rendered every exec and never read back.
+		if at == innerFile {
+			if summary := s.renderDesign(ctx, session, dirs[at]); summary != "" {
+				sections = append(sections, sandbox.Section{Scope: sandbox.DesignScope, Body: summary})
+			}
+		}
 		for _, level := range levels {
 			body, err := s.store.GetContext(ctx, level.scope, level.owner)
 			if err != nil {
