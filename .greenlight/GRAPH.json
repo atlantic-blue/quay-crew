@@ -4,8 +4,8 @@
   "written": "2026-09-04",
   "rewritten": "2026-09-05, a fifth time, after the operator settled the four levels",
   "source": ".greenlight/DESIGN.md, .greenlight/ROADMAP.md, .greenlight/DECISIONS.md, .greenlight/CONTRACTS.md",
-  "total_slices": 43,
-  "milestones": 21,
+  "total_slices": 44,
+  "milestones": 22,
   "user_actions": {
     "1": "A project holds a brief and a design, and any write to the design clears the approval.",
     "2": "The design carries a numbered path of atomised changes.",
@@ -15,7 +15,8 @@
     "6": "Krewe checks the proof, and a step records what came of it.",
     "7": "Krewe earns the word done, and can lose it.",
     "8": "The operator drives krewe from a slash command in their own session. Krewe writes those command files, and an install never writes over a file somebody else wrote.",
-    "9": "A project holds features, and each feature is delivered in milestones. A step belongs to one milestone, and it names the contracts it builds."
+    "9": "A project holds features, and each feature is delivered in milestones. A step belongs to one milestone, and it names the contracts it builds.",
+    "10": "The operator archives a finished session. The listing hides it and keeps its record, and the last line says how many are hidden."
   },
   "rules": [
     "One intention per slice. One reviewable pull request per slice. Revertable alone.",
@@ -23,9 +24,9 @@
     "Each slice is written for somebody who was not in the design conversation.",
     "S-5 is the gate. If the measurement says no, every slice after it is cancelled.",
     "The whole suite runs on this machine and in continuous integration. It takes about 42 seconds and peaks at about 1.18 gigabytes. The local gates are make test, go build, go vet, gofmt and golangci-lint.",
-    "Each slice names the milestone of .greenlight/ROADMAP.md it belongs to. Twenty one milestones, forty three slices, because a milestone that is more than one reviewable pull request is split.",
+    "Each slice names the milestone of .greenlight/ROADMAP.md it belongs to. Twenty two milestones, forty four slices, because a milestone that is more than one reviewable pull request is split.",
     "The dependency edges order by meaning, not by file. Section 5.1 of the design measures what that does not record. From milestone 7 on, several steps may be taken at once, capped at three by default, and every take is a command the operator typed.",
-    "Identifiers never move. S-36 to S-43 came after S-35 and were placed in the order through depends_on, because merged pull requests name the earlier ones. Order comes from the graph, never from the number."
+    "Identifiers never move. S-36 to S-43 came after S-35 and were placed in the order through depends_on, because merged pull requests name the earlier ones. S-44 came after those and depends on nothing. Order comes from the graph, never from the number."
   ],
   "slices": [
     {
@@ -1568,7 +1569,7 @@
       ],
       "changes": "One column on the design row, one store method, one remote procedure call, and the word krewe design contracts. Every render writes .krewe/contracts.md into the session's working directory, exactly as it writes .krewe/design.md.",
       "proves": "features/design.feature. A session dispatched into a project with a contracts document finds it whole at .krewe/contracts.md. Setting the contracts document on an approved design leaves the design approved. A project with no contracts document has no such file.",
-      "note": "Writing the contracts document does not clear the approval. The approval is the operator's word about the design body, and the contracts document is read from that body. This project carries 118 contracts across 43 slices, which is why it is a file the model opens and not text in a memory file."
+      "note": "Writing the contracts document does not clear the approval. The approval is the operator's word about the design body, and the contracts document is read from that body. This project carries 127 contracts across 44 slices, which is why it is a file the model opens and not text in a memory file."
     },
     {
       "id": "S-43",
@@ -1608,6 +1609,44 @@
       "changes": "Two columns on the step table, two labels in the path document, and two blocks in the take text. A step names the contracts it builds, one identifier per line. It names the scope of each, one line per contract, saying which part is this step's and which part waits for a later step.",
       "proves": "features/path.feature. A document naming two contracts and two scopes reads back on the step. A scope line naming a contract the step does not build is refused, naming the line. Taking that step dispatches a session whose text names both contracts, both scopes, and the contracts document. A step with no contracts produces text with no contracts label in it.",
       "note": "Every step brief this project wrote by hand carried this scoping, copied out of the graph. The one time a contract was wrong, a session refused to build and asked, which cost a slice of work. Nothing checks that a named contract exists in the contracts document, and the deferred list in the design records that."
+    },
+    {
+      "id": "S-44",
+      "milestone": 22,
+      "name": "A session is archived, and the listing hides it",
+      "intention": "Keep the record of every session, and stop the finished ones from burying the live ones.",
+      "user_actions": [
+        10
+      ],
+      "depends_on": [],
+      "contracts": [
+        "TABLE-5",
+        "STORE-24",
+        "STORE-25",
+        "WIRE-26",
+        "WIRE-27",
+        "WIRE-28",
+        "COMMAND-31",
+        "COMMAND-32",
+        "COMMAND-33"
+      ],
+      "touches": [
+        "internal/store/store.go",
+        "internal/store/postgres.go",
+        "internal/store/memory.go",
+        "internal/store/storetest/storetest.go",
+        "proto/quaycrew/v1/controlplane.proto",
+        "internal/controlplane/server.go",
+        "cmd/krewe/archive.go",
+        "cmd/krewe/quay.go",
+        "internal/manual/manual.go",
+        "features/sessions.feature",
+        "features/suite_test.go"
+      ],
+      "changes": "The words krewe archive and krewe unarchive, and the flag --archived on krewe sessions. One store method, ArchiveProjectSessions, and one widened one, ArchiveSession. One new call on the wire, and a hidden count on the session listing response. No migration and no column: archived_at exists already, from migration 0004_archive_sessions, and this slice reads it. ArchiveSession loses one behaviour and gains one refusal: it stops a session of any status today, and it refuses a session that holds an open exec from here on.",
+      "proves": "features/sessions.feature. Archiving a stopped session takes it out of the default listing and leaves its conversation, its exec history and its files where they are. The listing then says how many are hidden and names the flag that shows them. krewe sessions --archived lists the archived ones and never mixes the two. Archiving a project archives every session that holds no container, and says how many it left. Archiving a session that holds an open exec is refused, and the refusal names the exec. The console key shows the same refusal, which is the way off the old behaviour. Unarchiving puts a session back, reading stopped, and the next exec builds a fresh container.",
+      "why_here": "It depends on nothing. The sessions table, the archive stamp and the session listing all exist today, so this slice can be built at any point in the path. It is placed last because it answers a different question from milestones 1 to 21, which are one design and one path.",
+      "note": "It is independent by dependency and not by file. Measured on the graph of 44 slices on 2026-09-05, it shares at least one file with 34 of the other 43 slices, and with seven of the eight from S-36 to S-43. S-40 is the one exception, because it touches only cmd/krewe/path.go, internal/controlplane/design.go and the path feature files. So the file collision check of FLIGHT-3 refuses to take this step beside almost any other. Take it alone, or take it beside S-40. Nothing here is partial, so this slice carries no partial_contracts: TABLE-5 states a column that exists, and no later slice widens any of the nine."
     }
   ]
 }

@@ -2,6 +2,7 @@
 
 Written 2026-09-04, revised the same day after the operator read the first version.
 Amended 2026-09-05, after the operator settled the four levels.
+Amended again on 2026-09-05, after the session listing was measured.
 
 Status: proposed. The decisions in section 12 are settled. No code exists yet.
 
@@ -493,14 +494,17 @@ slice writes. Those are different questions, and the difference is measurable.
 Measured on `.greenlight/GRAPH.json` as it stands. Take every pair of slices with no dependency path
 between them in either direction. Then intersect the files each one names:
 
-Measured on the graph of 43 slices, after the four level revision added eight:
+Measured on the graph of 44 slices, on 2026-09-05, after the archive amendment added one:
 
-- 170 pairs have no ordering between them, and 70 of those share at least one file.
-- `features/path.feature` is in 43 of the 70. Its step definitions are in 34.
-- `internal/manual/manual.go` is in 33, because it holds the usage text that every new command
-  writes. `internal/controlplane/design.go` is in 28, and `cmd/krewe/step.go` is in 27.
-- The widest single collision is seven files. S-11 shares seven with each of eleven other slices,
-  and S-13 shares seven with each of three.
+- 213 pairs have no ordering between them, and 104 of those share at least one file.
+- `internal/manual/manual.go` is in 54, because it holds the usage text that every new command
+  writes. `features/path.feature` is in 43, and `proto/quaycrew/v1/controlplane.proto` is in 38.
+  The four store files are in 35 each.
+- The widest single collision is seven files. S-44 shares seven with each of thirteen other slices,
+  and S-11 shares seven with each of eleven.
+- The archive slice is what moved these numbers. It depends on nothing, so it has no ordering with
+  any of the other 43. It touches the four store files, the protobuf file and the usage text.
+  At 43 slices the same measurement read 170 pairs, 70 of them sharing a file.
 
 This is an observation from the graph, and the design now acts on it. Several steps may be in flight,
 so two sessions can write one file. The take refuses that: it compares the `touches` field of the
@@ -584,8 +588,8 @@ flowchart TD
 Read the two branches under the project as two paths running at the same time. Authentication sits
 on its third milestone while payment sits on its first. Neither one waits for the other.
 
-This project's own build is one feature. Its roadmap holds twenty one milestones: sixteen from the
-first design, and five that this revision added.
+This project's own build is one feature. Its roadmap holds twenty two milestones: sixteen from the
+first design, five that the four level revision added, and one that the archive amendment added.
 
 Two rules fall out of the shape, and neither one is obvious.
 
@@ -627,6 +631,22 @@ Table `contexts`, from `0006_contexts`:
 - primary key (`scope`, `owner`)
 
 This design adds no column to either table.
+
+Table `sessions` carries one column this design reads and never writes, from
+`0004_archive_sessions`, dated 2026-04-11:
+
+- `archived_at` timestamptz, null while the session is in the default listing
+- with the partial index `sessions_live_idx on sessions (project) where archived_at is null`
+
+The stamp is not a state word. A session keeps the status it ended on, and an archived session still
+reads `stopped` or `failed` or `reclaimed`. Milestone 22 reads the stamp from the command line, and
+it adds no column.
+
+Measured on 2026-09-05: `krewe sessions system` reported 296 sessions and printed 298 lines. 282 of
+those sessions read `stopped`, 9 read `idle`, 3 read `awake` and 2 read `running`. So 282 rows of
+finished work buried the four rows a person wanted. Fourteen session containers stood behind those
+296 rows, so the cost is the listing and not the disk. That number came from a run, on the date
+above, and not from a feeling.
 
 ### 6.2 New table `project_designs`
 
@@ -829,9 +849,9 @@ answers most real paths.
 
 This is now an observation, and the first version of this document marked it an inference. The
 measurement is on `.greenlight/GRAPH.json`, which holds the only real path this project has. Of its
-43 slices, none carries more than one dependency. One slice carries none, and 42 carry exactly one.
-The same held at 35 slices, before this revision added eight. So one predecessor carries this path,
-and nothing is lost by the limit.
+44 slices, none carries more than one dependency. Two slices carry none, and 42 carry exactly one.
+The same held at 35 slices and at 43 slices. So one predecessor carries this
+path, and nothing is lost by the limit.
 
 The limit stays, and so does the deferral. One path is one measurement, and a later path may need
 two predecessors on one step. A step that truly waits for two others names the later of the two, and
@@ -1425,8 +1445,8 @@ The limit of the collision check. It reads the `touches` field, which a design s
 that writes a file its `touches` does not name goes through the check. Nothing in this design reads
 the diff, so nothing catches that.
 
-Measured on this project's own graph, at 43 slices. It is 33 waves deep, and the widest wave holds
-three slices. Nine pairs that could run in one wave share a file. So a cap of three refuses no wave
+Measured on this project's own graph, at 44 slices. It is 33 waves deep, and the widest wave holds
+three slices. Ten pairs that could run in one wave share a file. So a cap of three refuses no wave
 of this path. The file collision check is the part that does work here.
 
 ### 12.5 The operator's own commands, settled 2026-09-04
@@ -1470,7 +1490,7 @@ the git log. The design had two levels where the work has four, it stored no con
    Rejected: a second document, and rejected a command that writes a milestone on its own.
 6. **The project carries a contracts document, and it renders into the session's working
    directory.** It is a second body beside the design, and the render is the one that already
-   carries the design. This project holds 118 contracts across 43 slices, which is too large for a
+   carries the design. This project holds 127 contracts across 44 slices, which is too large for a
    memory file and right for a file the model opens.
 7. **A step names the contracts it builds, and the scope of each.** The take text carries both.
    Every step brief this project wrote by hand carried that scoping, copied out of the graph. The
