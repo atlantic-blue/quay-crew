@@ -120,6 +120,53 @@ func initializeDesignSteps(sc *godog.ScenarioContext) {
 		return nil
 	})
 
+	sc.Step(`^the operator (?:approves|approved) the design$`, func(ctx context.Context) error {
+		w, d := worldFrom(ctx), designFrom(ctx)
+		resp, err := w.client.ApproveDesign(ctx, &quaycrewv1.ApproveDesignRequest{Project: w.projectID})
+		w.lastErr = err
+		if err != nil {
+			return nil
+		}
+		d.design = resp.GetDesign()
+		return nil
+	})
+
+	// Approved carries a time, and a time nobody set reads as the zero one. Both are checked, because
+	// a boolean on its own would pass on a row that says approved and cannot say when.
+	sc.Step(`^the design is approved$`, func(ctx context.Context) error {
+		d := designFrom(ctx)
+		if d.design == nil {
+			return fmt.Errorf("no design has been read, so there is no approval to check")
+		}
+		if !d.design.GetApproved() {
+			return fmt.Errorf("the design is not approved, and it should be")
+		}
+		if !d.design.GetApprovedAt().IsValid() || d.design.GetApprovedAt().AsTime().IsZero() {
+			return fmt.Errorf("the design says it is approved and does not say when")
+		}
+		return nil
+	})
+
+	sc.Step(`^the design is not approved$`, func(ctx context.Context) error {
+		d := designFrom(ctx)
+		if d.design == nil {
+			return fmt.Errorf("no design has been read, so there is no approval to check")
+		}
+		if d.design.GetApproved() {
+			return fmt.Errorf("the design is approved, and nobody approved it")
+		}
+		if at := d.design.GetApprovedAt(); at.IsValid() && !at.AsTime().IsZero() {
+			return fmt.Errorf("the design is not approved and says it was approved at %s", at.AsTime())
+		}
+		return nil
+	})
+
+	sc.Step(`^the operator approves the design of a project that does not exist$`, func(ctx context.Context) error {
+		w := worldFrom(ctx)
+		_, w.lastErr = w.client.ApproveDesign(ctx, &quaycrewv1.ApproveDesignRequest{Project: "no-such-project"})
+		return nil
+	})
+
 	sc.Step(`^the operator reads the design of a project that does not exist$`, func(ctx context.Context) error {
 		w := worldFrom(ctx)
 		_, w.lastErr = w.client.GetDesign(ctx, &quaycrewv1.GetDesignRequest{Project: "no-such-project"})
@@ -201,8 +248,12 @@ func initializeDesignSteps(sc *godog.ScenarioContext) {
 		return runTool(ctx, "design", whereTheProjectIs(ctx))
 	})
 
-	sc.Step(`^the caller writes the design from that file$`, func(ctx context.Context) error {
+	sc.Step(`^the caller (?:writes|wrote) the design from that file$`, func(ctx context.Context) error {
 		return runTool(ctx, "design", "set", whereTheProjectIs(ctx), "--file", designFrom(ctx).file)
+	})
+
+	sc.Step(`^the caller (?:approves|approved) the design$`, func(ctx context.Context) error {
+		return runTool(ctx, "design", "approve", whereTheProjectIs(ctx))
 	})
 
 	sc.Step(`^the caller writes the design without naming a file$`, func(ctx context.Context) error {

@@ -77,6 +77,53 @@ Feature: A project carries what it is for and what was designed
     And the operator reads the project's design
     Then the design says it was written by ""
 
+  # The approval is the operator saying work may be built from this design. Nothing else says it: a
+  # session can write a design body, and the word on it is the operator's alone.
+
+  Scenario: A design nobody approved carries no approval
+    When the operator writes the project's design as "# Bills\n"
+    And the operator reads the project's design
+    Then the design is not approved
+
+  Scenario: An approved design says when it was approved
+    Given the project's design is "# Bills\n"
+    When the operator approves the design
+    And the operator reads the project's design
+    Then the design is approved
+
+  # The rule the whole approval rests on. A body that changed is a body nobody agreed to, so the
+  # write that changes it takes the word away in the same statement.
+  Scenario: Writing the design again takes the approval away
+    Given the project's design is "# Bills\n"
+    And the operator approved the design
+    When the operator writes the project's design as "# Bills, again\n"
+    And the operator reads the project's design
+    Then the design is not approved
+
+  # A brief says what the project is for. It says nothing about what was designed, so it leaves the
+  # word where it is.
+  Scenario: Setting the brief leaves the approval where it is
+    Given the project's design is "# Bills\n"
+    And the operator approved the design
+    When the operator sets the project's brief to "keep the household bills paid on time"
+    And the operator reads the project's design
+    Then the design is approved
+
+  Scenario: A project with no design has nothing to approve
+    When the operator approves the design
+    Then the control plane refuses it as the wrong state
+
+  # An approval of an empty body would read later as an approval of whatever was written next.
+  Scenario: A design emptied on purpose has nothing to approve
+    Given the project's design is "# Bills\n"
+    When the operator writes the project's design as ""
+    And the operator approves the design
+    Then the control plane refuses it as the wrong state
+
+  Scenario: Approving a design of a project that does not exist is refused
+    When the operator approves the design of a project that does not exist
+    Then the control plane refuses it as not found
+
   # These scenarios run the command line tool as a caller runs it: its own process, its own standard
   # output, its own exit status.
 
@@ -122,6 +169,29 @@ Feature: A project carries what it is for and what was designed
     Given the system listens on an address the tool can dial
     When the caller writes the design without naming a file
     Then standard error says "usage: krewe design set"
+    And the command fails
+
+  Scenario: Approving a design says what the approval buys
+    Given the system listens on an address the tool can dial
+    And a design file saying "# Bills\n"
+    And the caller wrote the design from that file
+    When the caller approves the design
+    Then standard output carries "work may be built from it"
+    And the command succeeds
+
+  Scenario: An approved design reads back as approved
+    Given the system listens on an address the tool can dial
+    And a design file saying "# Bills\n"
+    And the caller wrote the design from that file
+    And the caller approved the design
+    When the caller reads the project's design
+    Then standard output carries "approval: approved"
+    And the command succeeds
+
+  Scenario: Approving a design that was never written is refused
+    Given the system listens on an address the tool can dial
+    When the caller approves the design
+    Then standard error says "there is no design to approve"
     And the command fails
 
   # The session working in the project reads what the project is for, on every exec, out of its own
@@ -184,6 +254,37 @@ Feature: A project carries what it is for and what was designed
     And a session started by dispatching "hello"
     When the operator writes the project's design as "# Bills, again\n"
     Then the session's design file reads "# Bills, again\n"
+
+  # What the session working in the project is told about the word. The line is in the memory file
+  # rather than in the design itself, so it is read on every exec of every session in the project.
+
+  Scenario: A session is told to build nothing from a design nobody approved
+    Given the project's design is "# Bills\n"
+    When the operator dispatches "hello" to the project
+    Then the session's memory file carries "The design is not approved yet."
+    And the session's memory file carries "Build nothing from it"
+
+  Scenario: A session is told when the design was approved
+    Given the project's design is "# Bills\n"
+    And the operator approved the design
+    When the operator dispatches "hello" to the project
+    Then the session's memory file carries "The design was approved on"
+    And the session's memory file does not carry "not approved yet"
+
+  # The word has to reach the session that is already running. Nobody replaces a container to deliver
+  # a permission.
+  Scenario: An approval reaches a session that is already working
+    Given the project's design is "# Bills\n"
+    And a session started by dispatching "hello"
+    When the operator approves the design
+    Then the session's memory file carries "The design was approved on"
+
+  # A project with a brief and no design has nothing to approve, so the session is told nothing about
+  # an approval either.
+  Scenario: A project with no design body says nothing about an approval
+    Given the project's brief is "keep the household bills paid on time"
+    When the operator dispatches "hello" to the project
+    Then the session's memory file does not carry "approved"
 
   # A design emptied on purpose must not stay readable in the working directory, or what the session
   # reads and what the store holds disagree.

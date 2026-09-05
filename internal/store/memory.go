@@ -560,24 +560,47 @@ func (m *Memory) GetDesign(_ context.Context, project string) (*quaycrewv1.Desig
 	return copyDesign(held), nil
 }
 
-// SetProjectBrief records what a project is for, leaving the body and its writer alone.
+// SetProjectBrief records what a project is for, leaving the body and its writer alone. It leaves
+// the approval alone too: a brief says nothing about what was designed.
 func (m *Memory) SetProjectBrief(_ context.Context, project, brief string) (*quaycrewv1.Design, error) {
-	return m.writeDesign(project, func(design *quaycrewv1.Design) {
+	return m.writeDesign(project, func(design *quaycrewv1.Design) error {
 		design.Brief = brief
+		return nil
 	})
 }
 
-// SetProjectDesign records the design document whole and who wrote it, leaving the brief alone.
+// SetProjectDesign records the design document whole and who wrote it, leaving the brief alone. It
+// clears the approval in the same write: approval is a statement about one text.
 func (m *Memory) SetProjectDesign(_ context.Context, project, body, writtenBy string) (*quaycrewv1.Design, error) {
-	return m.writeDesign(project, func(design *quaycrewv1.Design) {
+	return m.writeDesign(project, func(design *quaycrewv1.Design) error {
 		design.Body = body
 		design.WrittenBy = writtenBy
+		design.Approved = false
+		design.ApprovedAt = nil
+		return nil
+	})
+}
+
+// ApproveProjectDesign records the operator's word on the body the project holds now. A project with
+// no design, or one whose body is empty, has nothing to approve and is refused.
+func (m *Memory) ApproveProjectDesign(_ context.Context, project string) (*quaycrewv1.Design, error) {
+	return m.writeDesign(project, func(design *quaycrewv1.Design) error {
+		if design.GetBody() == "" {
+			return ErrNothingToApprove
+		}
+		design.Approved = true
+		design.ApprovedAt = timestamppb.New(time.Now().UTC())
+		return nil
 	})
 }
 
 // writeDesign creates the row on first use, applies the change, and moves updated_at. Every design
 // write goes through it so no caller can move one stamp and forget the other.
-func (m *Memory) writeDesign(project string, change func(*quaycrewv1.Design)) (*quaycrewv1.Design, error) {
+//
+// A change that refuses leaves the row as it was, including its stamp, and a row this call created
+// for a refused change is taken away again: a project that answered "nothing to approve" must not
+// come back holding a design row it did not have before.
+func (m *Memory) writeDesign(project string, change func(*quaycrewv1.Design) error) (*quaycrewv1.Design, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, err := m.getProjectLocked(project); err != nil {
@@ -586,12 +609,17 @@ func (m *Memory) writeDesign(project string, change func(*quaycrewv1.Design)) (*
 	if m.designs == nil {
 		m.designs = make(map[string]*quaycrewv1.Design)
 	}
-	held, ok := m.designs[project]
-	if !ok {
+	held, existed := m.designs[project]
+	if !existed {
 		held = &quaycrewv1.Design{Project: project}
 		m.designs[project] = held
 	}
-	change(held)
+	if err := change(held); err != nil {
+		if !existed {
+			delete(m.designs, project)
+		}
+		return nil, err
+	}
 	held.UpdatedAt = timestamppb.New(time.Now().UTC())
 	return copyDesign(held), nil
 }

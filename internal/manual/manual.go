@@ -131,6 +131,9 @@ commands:
                                           clears it
   design set [<address>] --file <path>    write the design document from a file. Any write clears the
                                           approval, because approval is a statement about one text
+  design approve [<address>]              say the design is agreed, so work may be built from it.
+                                          A session cannot make this call: it is the operator's word
+                                          on what a session wrote
   attach <session>                         open a session's conversation, with its history
   secret set [<workspace>] <key>          set a workspace secret from standard input, so the value
                                           never reaches your shell history: pipe it in, or redirect

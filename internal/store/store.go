@@ -48,6 +48,10 @@ func ExecLimit(limit int) int {
 // ErrNotFound covers deleted as well as never existed.
 var ErrNotFound = errors.New("store: not found")
 
+// ErrNothingToApprove is a design with no body. The approval is a statement about one text, so there
+// has to be a text.
+var ErrNothingToApprove = errors.New("store: there is no design body to approve")
+
 // StatusReclaimed is the session status this store writes when the system takes a container back. The
 // control plane owns the whole vocabulary; this one is here because two queries below are written in
 // terms of it and the store must not depend on the package that calls it.
@@ -231,6 +235,11 @@ type Store interface {
 	// writtenBy is the session that wrote it and is empty when the operator did; it is a claim the
 	// system keeps rather than one it checks. No length refuses a body.
 	SetProjectDesign(ctx context.Context, project, body, writtenBy string) (*quaycrewv1.Design, error)
+	// ApproveProjectDesign records the operator's word on the body the project holds now, and stamps
+	// when it was given. A project with no design row, or one whose body is empty, answers
+	// ErrNothingToApprove: an approval of nothing would read later as an approval of whatever was
+	// written next.
+	ApproveProjectDesign(ctx context.Context, project string) (*quaycrewv1.Design, error)
 
 	// ImportSkill takes a skill into the system at the version its manifest declares.
 	//

@@ -29,6 +29,15 @@ func TestTheDriverMayNotTouchAHook(t *testing.T) {
 	}
 }
 
+// A session may write a design body. Approving it is the operator saying work may be built from it,
+// so a session that could approve one would be approving its own and the word would prove nothing.
+func TestTheDriverMayNotApproveADesign(t *testing.T) {
+	err := controlplane.DeniedToDriver(quaycrewv1.ControlPlaneService_ApproveDesign_FullMethodName, nil)
+	if status.Code(err) != codes.PermissionDenied {
+		t.Errorf("approving a design answered %v, want PermissionDenied", status.Code(err))
+	}
+}
+
 // What the driver exists to do stays open, or the deny list would be a system that cannot be driven.
 func TestTheDriverStillDoesWhatItExistsToDo(t *testing.T) {
 	for _, method := range []string{
@@ -36,6 +45,9 @@ func TestTheDriverStillDoesWhatItExistsToDo(t *testing.T) {
 		quaycrewv1.ControlPlaneService_CreateWorkspace_FullMethodName,
 		quaycrewv1.ControlPlaneService_CreateProject_FullMethodName,
 		quaycrewv1.ControlPlaneService_ListSkills_FullMethodName,
+		quaycrewv1.ControlPlaneService_GetDesign_FullMethodName,
+		quaycrewv1.ControlPlaneService_SetDesign_FullMethodName,
+		quaycrewv1.ControlPlaneService_SetBrief_FullMethodName,
 	} {
 		if err := controlplane.DeniedToDriver(method, nil); err != nil {
 			t.Errorf("%s was refused to the driver: %v", method, err)

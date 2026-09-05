@@ -2,6 +2,7 @@ package controlplane
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -87,6 +88,33 @@ func (s *Server) SetDesign(ctx context.Context, req *quaycrewv1.SetDesignRequest
 	}, nil
 }
 
+// ApproveDesign records the operator's word on the design as it stands.
+//
+// It is the operator's call and nobody else's: DeniedToDriver refuses it to a session, so a session
+// that writes a design cannot approve the design it wrote. That refusal is the boundary the whole
+// approval rests on.
+//
+// The call carries no text. The approval is about the body the store holds when it lands, and any
+// later write to that body clears it, so there is no way to approve one text and have the word stand
+// on another.
+func (s *Server) ApproveDesign(ctx context.Context, req *quaycrewv1.ApproveDesignRequest) (*quaycrewv1.ApproveDesignResponse, error) {
+	if req.GetProject() == "" {
+		return nil, status.Error(codes.InvalidArgument, "which project: say where with an address")
+	}
+	design, err := s.store.ApproveProjectDesign(ctx, req.GetProject())
+	if errors.Is(err, store.ErrNothingToApprove) {
+		return nil, status.Error(codes.FailedPrecondition,
+			"there is no design to approve: write one with krewe design set, then approve it")
+	}
+	if err != nil {
+		return nil, storeError(err, "project")
+	}
+	// Every live session in the project reads the approval in its memory file, so the word has to
+	// reach the sessions that are already running rather than only the next sandbox built.
+	s.renderDesignTo(ctx, req.GetProject())
+	return &quaycrewv1.ApproveDesignResponse{Design: design}, nil
+}
+
 // overMark says how long the text is when it is past the mark, and says nothing at all when it is
 // not. It is a warning and never a refusal: the text is already kept.
 func overMark(what string, length, mark int, expected string) []string {
@@ -139,7 +167,7 @@ func (s *Server) renderDesign(ctx context.Context, session *quaycrewv1.Session, 
 		return ""
 	}
 	hasBody := s.writeDesignFile(dir, design.GetBody())
-	return designSummary(project.GetName(), design.GetBrief(), hasBody)
+	return designSummary(project.GetName(), design, hasBody)
 }
 
 // writeDesignFile puts the design body where the model can open it, and says whether it is there to
@@ -172,14 +200,20 @@ func (s *Server) clearDesignFile(dir string) {
 
 // designSummary is the section itself.
 //
+// The approval line is the point of the section rather than a detail of it. A design nobody approved
+// is a design nothing is built from, so the session is told that in the file it reads on every exec,
+// beside the line that sends it to the document. There is no approval line when there is no design
+// body, because there is nothing to approve.
+//
 // The brief is cut to fit rather than the section being allowed to grow, because the section is read
 // on every exec and the brief is the only part of it whose length nobody controls. A cut line ends
 // with a full stop and nothing else: an ellipsis or a note saying the text was cut would tell the
 // model to go looking for the rest, and the rest is in the design.
-func designSummary(project, brief string, hasBody bool) string {
+func designSummary(project string, design *quaycrewv1.Design, hasBody bool) string {
+	brief := design.GetBrief()
 	lines := []string{"This project is " + project + "."}
 	if hasBody {
-		lines = append(lines, "Read "+designDir+"/"+designFile+" before you start.")
+		lines = append(lines, approvalLine(design), "Read "+designDir+"/"+designFile+" before you start.")
 	}
 	if brief == "" {
 		return strings.Join(lines, "\n")
@@ -194,6 +228,17 @@ func designSummary(project, brief string, hasBody bool) string {
 	}
 	lines[0] += " It is for: " + cutTo(brief, room)
 	return strings.Join(lines, "\n")
+}
+
+// approvalLine is what the session is told about the operator's word on this design.
+//
+// The date and nothing finer. A session decides whether to build from the design, and the minute the
+// operator typed the command does not change that answer.
+func approvalLine(design *quaycrewv1.Design) string {
+	if !design.GetApproved() {
+		return "The design is not approved yet. Build nothing from it until the operator approves it."
+	}
+	return "The design was approved on " + design.GetApprovedAt().AsTime().Format("2006-01-02") + "."
 }
 
 // cutTo shortens text to a number of characters, at a word boundary where there is one, and ends it

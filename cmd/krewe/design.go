@@ -21,7 +21,8 @@ const flagFile = "--file"
 
 const designUsage = "usage: krewe design [<address>]" +
 	"\n       krewe design brief [<address>] \"<text>\"" +
-	"\n       krewe design set [<address>] --file <path>"
+	"\n       krewe design set [<address>] --file <path>" +
+	"\n       krewe design approve [<address>]"
 
 func runDesign(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
 	if len(args) > 0 && args[0] == "brief" {
@@ -29,6 +30,9 @@ func runDesign(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient,
 	}
 	if len(args) > 0 && args[0] == "set" {
 		return runDesignSet(ctx, client, args[1:], out)
+	}
+	if len(args) > 0 && args[0] == "approve" {
+		return runDesignApprove(ctx, client, args[1:], out)
 	}
 	if len(args) > 1 {
 		return fmt.Errorf("%s", designUsage)
@@ -139,6 +143,35 @@ func runDesignSet(ctx context.Context, client quaycrewv1.ControlPlaneServiceClie
 	// it twice learns the rule, which is that approval is a statement about one text.
 	fmt.Fprintln(out, "the approval is cleared: a design that changed is a design nobody has agreed to yet")
 	sayWarnings(out, resp.GetWarnings())
+	return nil
+}
+
+// runDesignApprove records the operator's word on the design as it stands.
+//
+// It takes no text and no flag. The approval is about the body the project holds when the command
+// lands, so the only thing to say is which project.
+//
+// This is the operator's command and a session cannot make it: the control plane refuses the call to
+// a driver's token. What the approval buys is stated back, because a person who reads it learns the
+// rule rather than finding it out later at a refusal.
+func runDesignApprove(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient, args []string, out io.Writer) error {
+	if len(args) > 1 {
+		return fmt.Errorf("usage: krewe design approve [<address>]")
+	}
+	typed := ""
+	if len(args) == 1 {
+		typed = args[0]
+	}
+	located, err := designProject(ctx, client, typed)
+	if err != nil {
+		return err
+	}
+	resp, err := client.ApproveDesign(ctx, &quaycrewv1.ApproveDesignRequest{Project: located.ProjectID})
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "%s: %s\n", located.Path.Project, approvalOf(resp.GetDesign()))
+	fmt.Fprintln(out, "work may be built from it until somebody writes the design again")
 	return nil
 }
 

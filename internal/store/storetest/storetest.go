@@ -1868,6 +1868,102 @@ func runDesignConformance(t *testing.T, newDataset func(t *testing.T) Opener) {
 		}
 	})
 
+	// The approval is the operator's word that work may be built from the design. Both stores answer
+	// the same, or the tests that run against memory would pass while Postgres said something else.
+	t.Run("an approval is recorded with the time it was given", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		if _, err := s.SetProjectDesign(ctx, project.GetId(), "the whole design", ""); err != nil {
+			t.Fatalf("SetProjectDesign: %v", err)
+		}
+		approved, err := s.ApproveProjectDesign(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("ApproveProjectDesign: %v", err)
+		}
+		if !approved.GetApproved() {
+			t.Fatal("the write answered a design that is not approved")
+		}
+		if approved.GetApprovedAt() == nil {
+			t.Fatal("the design is approved and nothing says when")
+		}
+		read, err := s.GetDesign(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("GetDesign: %v", err)
+		}
+		if !read.GetApproved() || read.GetApprovedAt() == nil {
+			t.Fatalf("the approval did not survive the read: approved %v, at %v",
+				read.GetApproved(), read.GetApprovedAt())
+		}
+	})
+
+	// The rule the approval rests on. A body that changed is a body nobody agreed to.
+	t.Run("writing the body clears the approval and the brief does not", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		if _, err := s.SetProjectDesign(ctx, project.GetId(), "the whole design", ""); err != nil {
+			t.Fatalf("SetProjectDesign: %v", err)
+		}
+		if _, err := s.ApproveProjectDesign(ctx, project.GetId()); err != nil {
+			t.Fatalf("ApproveProjectDesign: %v", err)
+		}
+		afterBrief, err := s.SetProjectBrief(ctx, project.GetId(), "pay the water bill first")
+		if err != nil {
+			t.Fatalf("SetProjectBrief: %v", err)
+		}
+		if !afterBrief.GetApproved() {
+			t.Fatal("setting the brief cleared the approval, and a brief says nothing about the design")
+		}
+		afterBody, err := s.SetProjectDesign(ctx, project.GetId(), "the design, rewritten", "")
+		if err != nil {
+			t.Fatalf("SetProjectDesign again: %v", err)
+		}
+		if afterBody.GetApproved() {
+			t.Fatal("the design was rewritten and it is still approved")
+		}
+		if afterBody.GetApprovedAt() != nil {
+			t.Fatalf("the design is not approved and still says it was approved at %v", afterBody.GetApprovedAt())
+		}
+	})
+
+	// An approval of nothing would read later as an approval of whatever was written next.
+	t.Run("a design with no body has nothing to approve", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+		project := newProject(t, s, "acme", "house-bills")
+
+		if _, err := s.ApproveProjectDesign(ctx, project.GetId()); !errors.Is(err, store.ErrNothingToApprove) {
+			t.Fatalf("approving a project with no design answered %v, want ErrNothingToApprove", err)
+		}
+		if _, err := s.SetProjectBrief(ctx, project.GetId(), "pay the water bill first"); err != nil {
+			t.Fatalf("SetProjectBrief: %v", err)
+		}
+		if _, err := s.ApproveProjectDesign(ctx, project.GetId()); !errors.Is(err, store.ErrNothingToApprove) {
+			t.Fatalf("approving a project with a brief and no body answered %v, want ErrNothingToApprove", err)
+		}
+		// The refused call must not leave a design row behind, or the project would come back
+		// holding a design it never had.
+		read, err := s.GetDesign(ctx, project.GetId())
+		if err != nil {
+			t.Fatalf("GetDesign: %v", err)
+		}
+		if read.GetApproved() {
+			t.Fatal("the refused approval was recorded anyway")
+		}
+	})
+
+	t.Run("an approval on a project that does not exist is not found", func(t *testing.T) {
+		s := newDataset(t)(t)
+		ctx := context.Background()
+
+		if _, err := s.ApproveProjectDesign(ctx, "no-such-project"); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("ApproveProjectDesign on a missing project answered %v, want ErrNotFound", err)
+		}
+	})
+
 	// The design row hangs off the project, so deleting the project takes it. Postgres does this with
 	// the cascade and the in memory store has to agree, or a deleted project would keep answering.
 	t.Run("deleting a project takes its design with it", func(t *testing.T) {

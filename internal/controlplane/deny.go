@@ -32,8 +32,12 @@ import (
 // session is under. A skill is a capability a session already holds and uses by name, so choosing
 // from the ones the operator attached is the point of listing them.
 //
+// Approving a design is refused, and it is the one design call that is. A session may write a design
+// body, because writing one is work. The approval is what says the design may be built from, so a
+// session that could approve one would be approving its own, and the word would prove nothing.
+//
 // Everything the driver exists to do stays open: workspaces, projects, sessions, dispatch, starting
-// context at the workspace and project scopes.
+// context at the workspace and project scopes, and writing a design for the operator to read.
 func DeniedToDriver(fullMethod string, request any) error {
 	switch fullMethod {
 	case quaycrewv1.ControlPlaneService_SetSecret_FullMethodName,
@@ -45,7 +49,8 @@ func DeniedToDriver(fullMethod string, request any) error {
 		quaycrewv1.ControlPlaneService_ListHooks_FullMethodName,
 		quaycrewv1.ControlPlaneService_AttachHook_FullMethodName,
 		quaycrewv1.ControlPlaneService_DetachHook_FullMethodName,
-		quaycrewv1.ControlPlaneService_SetSessionPermissionMode_FullMethodName:
+		quaycrewv1.ControlPlaneService_SetSessionPermissionMode_FullMethodName,
+		quaycrewv1.ControlPlaneService_ApproveDesign_FullMethodName:
 		return refusedToDriver(fullMethod)
 	case quaycrewv1.ControlPlaneService_SetContext_FullMethodName:
 		if req, ok := request.(*quaycrewv1.SetContextRequest); ok && req.GetScope() == "system" {

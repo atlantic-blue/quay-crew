@@ -47,6 +47,18 @@ Feature: The system refuses a caller it cannot recognise
     When the driver asks to write the system's context
     Then the driver is refused, told the call is the operator's to make
 
+  # A session may write a design body, because writing one is work. The approval says work may be
+  # built from it, so a session that could approve one would be approving its own.
+  Scenario: the driver cannot approve a design
+    When the driver asks to approve a design
+    Then the driver is refused, told the call is the operator's to make
+
+  Scenario: the driver can still write a design for the operator to read
+    Given a workspace named "acme"
+    And a project named "house-bills"
+    When the driver asks to write the project's design
+    Then the caller is served
+
   Scenario: the driver can still write a project's context
     Given a workspace named "acme"
     And a project named "house-bills"

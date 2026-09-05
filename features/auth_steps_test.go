@@ -163,6 +163,22 @@ func initializeAuthSteps(sc *godog.ScenarioContext) {
 		})
 	})
 
+	sc.Step(`^the driver asks to approve a design$`, func(ctx context.Context) error {
+		return asDriver(ctx, func(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) error {
+			_, err := client.ApproveDesign(ctx, &quaycrewv1.ApproveDesignRequest{Project: "any"})
+			return err
+		})
+	})
+
+	sc.Step(`^the driver asks to write the project's design$`, func(ctx context.Context) error {
+		return asDriver(ctx, func(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) error {
+			w := worldFrom(ctx)
+			_, err := client.SetDesign(ctx, &quaycrewv1.SetDesignRequest{
+				Project: w.projectID, Body: "# Bills\n", WrittenBy: "a-session"})
+			return err
+		})
+	})
+
 	sc.Step(`^the driver asks to write the project's context$`, func(ctx context.Context) error {
 		return asDriver(ctx, func(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) error {
 			w := worldFrom(ctx)
