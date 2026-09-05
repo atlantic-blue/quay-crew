@@ -568,11 +568,36 @@ func (m *Memory) SetProjectBrief(_ context.Context, project, brief string) (*qua
 }
 
 // SetProjectDesign records the design document whole and who wrote it, leaving the brief alone.
+//
+// The approval goes with the body, in the one write, because approval is a statement about one
+// text. Postgres does this in a single statement and this has to agree, or a design rewritten here
+// would keep a word nobody gave it.
 func (m *Memory) SetProjectDesign(_ context.Context, project, body, writtenBy string) (*quaycrewv1.Design, error) {
 	return m.writeDesign(project, func(design *quaycrewv1.Design) {
 		design.Body = body
 		design.WrittenBy = writtenBy
+		design.Approved = false
+		design.ApprovedAt = nil
 	})
+}
+
+// ApproveProjectDesign records the operator's word on the design as it stands, and refuses a design
+// with no body. A project with no design row has no body either, so it is refused the same way.
+func (m *Memory) ApproveProjectDesign(_ context.Context, project string) (*quaycrewv1.Design, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, err := m.getProjectLocked(project); err != nil {
+		return nil, err
+	}
+	held, ok := m.designs[project]
+	if !ok || held.GetBody() == "" {
+		return nil, ErrNothingToApprove
+	}
+	now := time.Now().UTC()
+	held.Approved = true
+	held.ApprovedAt = timestamppb.New(now)
+	held.UpdatedAt = timestamppb.New(now)
+	return copyDesign(held), nil
 }
 
 // writeDesign creates the row on first use, applies the change, and moves updated_at. Every design

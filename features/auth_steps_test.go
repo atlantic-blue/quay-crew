@@ -27,6 +27,27 @@ func authFrom(ctx context.Context) *authWorld {
 	return a
 }
 
+// asDriver makes one call carrying the driver's token, recording what came back. It is here rather
+// than beside the steps that use it, because the calls a session is refused are written in the
+// feature file of the thing being refused, and each one has to be made the same way.
+func asDriver(ctx context.Context, call func(context.Context, quaycrewv1.ControlPlaneServiceClient) error) error {
+	w := worldFrom(ctx)
+	conn, err := grpc.NewClient(
+		"passthrough:///bufnet",
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+			return w.listener.DialContext(ctx)
+		}),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		return fmt.Errorf("dial the control plane: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+	callCtx := metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+w.driverToken)
+	authFrom(ctx).err = call(callCtx, quaycrewv1.NewControlPlaneServiceClient(conn))
+	return nil
+}
+
 // initializeAuthSteps registers the steps for how the system treats a caller by what it presents.
 //
 // These steps build the request metadata by hand rather than through the client helper the tool
@@ -91,25 +112,6 @@ func initializeAuthSteps(sc *godog.ScenarioContext) {
 			}
 			return nil
 		})
-
-	// asDriver makes one call carrying the driver's token, recording what came back.
-	asDriver := func(ctx context.Context, call func(context.Context, quaycrewv1.ControlPlaneServiceClient) error) error {
-		w := worldFrom(ctx)
-		conn, err := grpc.NewClient(
-			"passthrough:///bufnet",
-			grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
-				return w.listener.DialContext(ctx)
-			}),
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		)
-		if err != nil {
-			return fmt.Errorf("dial the control plane: %w", err)
-		}
-		defer func() { _ = conn.Close() }()
-		callCtx := metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+w.driverToken)
-		authFrom(ctx).err = call(callCtx, quaycrewv1.NewControlPlaneServiceClient(conn))
-		return nil
-	}
 
 	sc.Step(`^the driver asks to set a secret$`, func(ctx context.Context) error {
 		return asDriver(ctx, func(ctx context.Context, client quaycrewv1.ControlPlaneServiceClient) error {

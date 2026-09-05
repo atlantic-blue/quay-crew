@@ -51,6 +51,7 @@ const (
 	ControlPlaneService_GetDesign_FullMethodName                = "/quaycrew.v1.ControlPlaneService/GetDesign"
 	ControlPlaneService_SetBrief_FullMethodName                 = "/quaycrew.v1.ControlPlaneService/SetBrief"
 	ControlPlaneService_SetDesign_FullMethodName                = "/quaycrew.v1.ControlPlaneService/SetDesign"
+	ControlPlaneService_ApproveDesign_FullMethodName            = "/quaycrew.v1.ControlPlaneService/ApproveDesign"
 	ControlPlaneService_ReadSessionWork_FullMethodName          = "/quaycrew.v1.ControlPlaneService/ReadSessionWork"
 	ControlPlaneService_LocateDirectory_FullMethodName          = "/quaycrew.v1.ControlPlaneService/LocateDirectory"
 	ControlPlaneService_ImportSkill_FullMethodName              = "/quaycrew.v1.ControlPlaneService/ImportSkill"
@@ -107,11 +108,14 @@ type ControlPlaneServiceClient interface {
 	SetSessionLabel(ctx context.Context, in *SetSessionLabelRequest, opts ...grpc.CallOption) (*SetSessionLabelResponse, error)
 	ListContexts(ctx context.Context, in *ListContextsRequest, opts ...grpc.CallOption) (*ListContextsResponse, error)
 	SetContext(ctx context.Context, in *SetContextRequest, opts ...grpc.CallOption) (*SetContextResponse, error)
-	// What a project is for and what was designed for it. The driver may call all three: reading what
-	// the project holds is the point, and a session that writes a design grants itself nothing.
+	// What a project is for and what was designed for it. The driver may call the first three: reading
+	// what the project holds is the point, and a session that writes a design grants itself nothing.
 	GetDesign(ctx context.Context, in *GetDesignRequest, opts ...grpc.CallOption) (*GetDesignResponse, error)
 	SetBrief(ctx context.Context, in *SetBriefRequest, opts ...grpc.CallOption) (*SetBriefResponse, error)
 	SetDesign(ctx context.Context, in *SetDesignRequest, opts ...grpc.CallOption) (*SetDesignResponse, error)
+	// The operator's word on a design, and the driver is refused it. A session that could approve its
+	// own design would be agreeing with itself, which is the whole thing this gate exists to stop.
+	ApproveDesign(ctx context.Context, in *ApproveDesignRequest, opts ...grpc.CallOption) (*ApproveDesignResponse, error)
 	// Reads a file, or a listing, out of the work a session left behind, without attaching to it.
 	ReadSessionWork(ctx context.Context, in *ReadSessionWorkRequest, opts ...grpc.CallOption) (*ReadSessionWorkResponse, error)
 	// Says where an address is on the machine, so a person can put a file in it by hand. It reads the
@@ -465,6 +469,16 @@ func (c *controlPlaneServiceClient) SetDesign(ctx context.Context, in *SetDesign
 	return out, nil
 }
 
+func (c *controlPlaneServiceClient) ApproveDesign(ctx context.Context, in *ApproveDesignRequest, opts ...grpc.CallOption) (*ApproveDesignResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ApproveDesignResponse)
+	err := c.cc.Invoke(ctx, ControlPlaneService_ApproveDesign_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *controlPlaneServiceClient) ReadSessionWork(ctx context.Context, in *ReadSessionWorkRequest, opts ...grpc.CallOption) (*ReadSessionWorkResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReadSessionWorkResponse)
@@ -654,11 +668,14 @@ type ControlPlaneServiceServer interface {
 	SetSessionLabel(context.Context, *SetSessionLabelRequest) (*SetSessionLabelResponse, error)
 	ListContexts(context.Context, *ListContextsRequest) (*ListContextsResponse, error)
 	SetContext(context.Context, *SetContextRequest) (*SetContextResponse, error)
-	// What a project is for and what was designed for it. The driver may call all three: reading what
-	// the project holds is the point, and a session that writes a design grants itself nothing.
+	// What a project is for and what was designed for it. The driver may call the first three: reading
+	// what the project holds is the point, and a session that writes a design grants itself nothing.
 	GetDesign(context.Context, *GetDesignRequest) (*GetDesignResponse, error)
 	SetBrief(context.Context, *SetBriefRequest) (*SetBriefResponse, error)
 	SetDesign(context.Context, *SetDesignRequest) (*SetDesignResponse, error)
+	// The operator's word on a design, and the driver is refused it. A session that could approve its
+	// own design would be agreeing with itself, which is the whole thing this gate exists to stop.
+	ApproveDesign(context.Context, *ApproveDesignRequest) (*ApproveDesignResponse, error)
 	// Reads a file, or a listing, out of the work a session left behind, without attaching to it.
 	ReadSessionWork(context.Context, *ReadSessionWorkRequest) (*ReadSessionWorkResponse, error)
 	// Says where an address is on the machine, so a person can put a file in it by hand. It reads the
@@ -787,6 +804,9 @@ func (UnimplementedControlPlaneServiceServer) SetBrief(context.Context, *SetBrie
 }
 func (UnimplementedControlPlaneServiceServer) SetDesign(context.Context, *SetDesignRequest) (*SetDesignResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetDesign not implemented")
+}
+func (UnimplementedControlPlaneServiceServer) ApproveDesign(context.Context, *ApproveDesignRequest) (*ApproveDesignResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ApproveDesign not implemented")
 }
 func (UnimplementedControlPlaneServiceServer) ReadSessionWork(context.Context, *ReadSessionWorkRequest) (*ReadSessionWorkResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReadSessionWork not implemented")
@@ -1430,6 +1450,24 @@ func _ControlPlaneService_SetDesign_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPlaneService_ApproveDesign_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApproveDesignRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPlaneServiceServer).ApproveDesign(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPlaneService_ApproveDesign_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPlaneServiceServer).ApproveDesign(ctx, req.(*ApproveDesignRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ControlPlaneService_ReadSessionWork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReadSessionWorkRequest)
 	if err := dec(in); err != nil {
@@ -1834,6 +1872,10 @@ var ControlPlaneService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetDesign",
 			Handler:    _ControlPlaneService_SetDesign_Handler,
+		},
+		{
+			MethodName: "ApproveDesign",
+			Handler:    _ControlPlaneService_ApproveDesign_Handler,
 		},
 		{
 			MethodName: "ReadSessionWork",

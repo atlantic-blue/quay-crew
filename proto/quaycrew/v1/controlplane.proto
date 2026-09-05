@@ -547,8 +547,8 @@ message Design {
   string brief = 2;
   // body is the design document, whole, in markdown.
   string body = 3;
-  // approved is the operator's word on this exact body. Nothing sets it yet: the column and the call
-  // that writes it arrive with the approval, and until then every design reads as unapproved.
+  // approved is the operator's word on this exact body. Any write to body clears it, in the same
+  // write, because a design that changed is a design nobody has agreed to yet.
   bool approved = 4;
   google.protobuf.Timestamp approved_at = 5;
   // written_by is the session that last wrote body, empty when the operator wrote it. It is what the
@@ -584,6 +584,15 @@ message SetDesignRequest {
 message SetDesignResponse {
   Design design = 1;
   repeated string warnings = 2;
+}
+
+// ApproveDesignRequest records the operator's word on the design as it stands. A design with no body
+// is refused: there is nothing to agree to.
+message ApproveDesignRequest {
+  string project = 1;
+}
+message ApproveDesignResponse {
+  Design design = 1;
 }
 
 // SessionWorkEntry is one thing in a session's work: a file or a directory, with the size of a file.
@@ -1057,11 +1066,14 @@ service ControlPlaneService {
   rpc ListContexts(ListContextsRequest) returns (ListContextsResponse);
   rpc SetContext(SetContextRequest) returns (SetContextResponse);
 
-  // What a project is for and what was designed for it. The driver may call all three: reading what
-  // the project holds is the point, and a session that writes a design grants itself nothing.
+  // What a project is for and what was designed for it. The driver may call the first three: reading
+  // what the project holds is the point, and a session that writes a design grants itself nothing.
   rpc GetDesign(GetDesignRequest) returns (GetDesignResponse);
   rpc SetBrief(SetBriefRequest) returns (SetBriefResponse);
   rpc SetDesign(SetDesignRequest) returns (SetDesignResponse);
+  // The operator's word on a design, and the driver is refused it. A session that could approve its
+  // own design would be agreeing with itself, which is the whole thing this gate exists to stop.
+  rpc ApproveDesign(ApproveDesignRequest) returns (ApproveDesignResponse);
   // Reads a file, or a listing, out of the work a session left behind, without attaching to it.
   rpc ReadSessionWork(ReadSessionWorkRequest) returns (ReadSessionWorkResponse);
   // Says where an address is on the machine, so a person can put a file in it by hand. It reads the

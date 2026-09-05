@@ -2,6 +2,7 @@ package controlplane
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -16,7 +17,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// What a project is for, and what was designed for it. Three calls, beside the context calls in
+// What a project is for, and what was designed for it. Four calls, beside the context calls in
 // server.go, because a design is the same kind of thing: text the operator writes about a project,
 // kept by the system rather than in a file somebody has to find.
 //
@@ -87,6 +88,31 @@ func (s *Server) SetDesign(ctx context.Context, req *quaycrewv1.SetDesignRequest
 	}, nil
 }
 
+// ApproveDesign records the operator's word on the design as it stands.
+//
+// It approves the text that is in the store now, and it asks nothing: a call that opened an editor
+// or a question would be approving a text nobody named. A design with no body is refused, because
+// there is nothing to agree to.
+//
+// DeniedToDriver refuses this call to a session, so the word reaches the store only through the
+// operator's own command. That is the boundary that makes the gate real: a session that could
+// approve its own design would be agreeing with itself.
+func (s *Server) ApproveDesign(ctx context.Context, req *quaycrewv1.ApproveDesignRequest) (*quaycrewv1.ApproveDesignResponse, error) {
+	if req.GetProject() == "" {
+		return nil, status.Error(codes.InvalidArgument, "which project: say where with an address")
+	}
+	design, err := s.store.ApproveProjectDesign(ctx, req.GetProject())
+	if errors.Is(err, store.ErrNothingToApprove) {
+		return nil, status.Error(codes.FailedPrecondition,
+			"this project has no design to approve: write one with krewe design set [<address>] --file <path>")
+	}
+	if err != nil {
+		return nil, storeError(err, "project")
+	}
+	s.renderDesignTo(ctx, req.GetProject())
+	return &quaycrewv1.ApproveDesignResponse{Design: design}, nil
+}
+
 // overMark says how long the text is when it is past the mark, and says nothing at all when it is
 // not. It is a warning and never a refusal: the text is already kept.
 func overMark(what string, length, mark int, expected string) []string {
@@ -139,7 +165,7 @@ func (s *Server) renderDesign(ctx context.Context, session *quaycrewv1.Session, 
 		return ""
 	}
 	hasBody := s.writeDesignFile(dir, design.GetBody())
-	return designSummary(project.GetName(), design.GetBrief(), hasBody)
+	return designSummary(project.GetName(), design, hasBody)
 }
 
 // writeDesignFile puts the design body where the model can open it, and says whether it is there to
@@ -172,15 +198,21 @@ func (s *Server) clearDesignFile(dir string) {
 
 // designSummary is the section itself.
 //
+// The approval line is there whenever there is a design to approve, because a session that reads a
+// design has to know whether anybody agreed to it. A project holding a brief and no design has
+// nothing to say about approval, so it says nothing rather than spending a line of a capped section
+// on a word about a document that does not exist.
+//
 // The brief is cut to fit rather than the section being allowed to grow, because the section is read
 // on every exec and the brief is the only part of it whose length nobody controls. A cut line ends
 // with a full stop and nothing else: an ellipsis or a note saying the text was cut would tell the
 // model to go looking for the rest, and the rest is in the design.
-func designSummary(project, brief string, hasBody bool) string {
+func designSummary(project string, design *quaycrewv1.Design, hasBody bool) string {
 	lines := []string{"This project is " + project + "."}
 	if hasBody {
-		lines = append(lines, "Read "+designDir+"/"+designFile+" before you start.")
+		lines = append(lines, approvalLine(design), "Read "+designDir+"/"+designFile+" before you start.")
 	}
+	brief := design.GetBrief()
 	if brief == "" {
 		return strings.Join(lines, "\n")
 	}
@@ -194,6 +226,16 @@ func designSummary(project, brief string, hasBody bool) string {
 	}
 	lines[0] += " It is for: " + cutTo(brief, room)
 	return strings.Join(lines, "\n")
+}
+
+// approvalLine says where the design stands with the operator, in the one line the session reads on
+// every exec. The date and nothing finer: the session decides what to do with the design, and the
+// hour it was approved changes none of that.
+func approvalLine(design *quaycrewv1.Design) string {
+	if !design.GetApproved() {
+		return "The design is not approved yet."
+	}
+	return "The design is approved, on " + design.GetApprovedAt().AsTime().Format("2006-01-02") + "."
 }
 
 // cutTo shortens text to a number of characters, at a word boundary where there is one, and ends it

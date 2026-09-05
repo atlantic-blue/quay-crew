@@ -621,24 +621,31 @@ func (p *Postgres) SetContext(ctx context.Context, scope ContextScope, owner, bo
 // designColumns is what every design read selects, in the order scanDesign reads them. The two are
 // written next to each other because a column added to one and not the other reads as a zero rather
 // than as a failure.
-const designColumns = `project, brief, body, written_by, updated_at`
+const designColumns = `project, brief, body, approved, approved_at, written_by, updated_at`
 
 // scanDesign reads one design row.
 func scanDesign(row pgx.Row) (*quaycrewv1.Design, error) {
 	var (
 		project, brief, body, writtenBy string
+		approved                        bool
+		approvedAt                      *time.Time
 		updatedAt                       time.Time
 	)
-	if err := row.Scan(&project, &brief, &body, &writtenBy, &updatedAt); err != nil {
+	if err := row.Scan(&project, &brief, &body, &approved, &approvedAt, &writtenBy, &updatedAt); err != nil {
 		return nil, err
 	}
-	return &quaycrewv1.Design{
+	design := &quaycrewv1.Design{
 		Project:   project,
 		Brief:     brief,
 		Body:      body,
+		Approved:  approved,
 		WrittenBy: writtenBy,
 		UpdatedAt: timestamppb.New(updatedAt),
-	}, nil
+	}
+	if approvedAt != nil {
+		design.ApprovedAt = timestamppb.New(*approvedAt)
+	}
+	return design, nil
 }
 
 // projectExists says whether the project is there to hang a design on. Every design call asks first,
@@ -696,6 +703,10 @@ func (p *Postgres) SetProjectBrief(ctx context.Context, project, brief string) (
 }
 
 // SetProjectDesign records the design document whole, and who wrote it. It leaves the brief alone.
+//
+// The approval is cleared in the same statement as the body, because approval is a statement about
+// one text. Two statements would leave a moment where the row says approved over a body nobody has
+// read, and a reader in that moment is told the wrong thing.
 func (p *Postgres) SetProjectDesign(ctx context.Context, project, body, writtenBy string) (*quaycrewv1.Design, error) {
 	if err := p.projectExists(ctx, project); err != nil {
 		return nil, err
@@ -703,10 +714,33 @@ func (p *Postgres) SetProjectDesign(ctx context.Context, project, body, writtenB
 	design, err := scanDesign(p.pool.QueryRow(ctx, `
 		insert into project_designs (project, body, written_by) values ($1, $2, $3)
 		on conflict (project) do update set
-			body = excluded.body, written_by = excluded.written_by, updated_at = now()
+			body = excluded.body, written_by = excluded.written_by,
+			approved = false, approved_at = null, updated_at = now()
 		returning `+designColumns, project, body, writtenBy))
 	if err != nil {
 		return nil, fmt.Errorf("set design: %w", err)
+	}
+	return design, nil
+}
+
+// ApproveProjectDesign records the operator's word on the design as it stands.
+//
+// The body is read in the statement that writes the approval, rather than in a read before it, so a
+// design emptied between the two cannot come back approved. A row that is not there, and a row with
+// no body, both return no rows, and both mean there is nothing to approve.
+func (p *Postgres) ApproveProjectDesign(ctx context.Context, project string) (*quaycrewv1.Design, error) {
+	if err := p.projectExists(ctx, project); err != nil {
+		return nil, err
+	}
+	design, err := scanDesign(p.pool.QueryRow(ctx, `
+		update project_designs set approved = true, approved_at = now(), updated_at = now()
+		where project = $1 and body <> ''
+		returning `+designColumns, project))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNothingToApprove
+	}
+	if err != nil {
+		return nil, fmt.Errorf("approve design: %w", err)
 	}
 	return design, nil
 }
